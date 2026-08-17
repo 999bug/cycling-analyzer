@@ -56,3 +56,4 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 提交前缀 `[NF]`/`[BF]`/`[IM]`/`[CU]` + 中文 Subject，**无 AI 署名**
 - 提交身份固定 `999bug <999bug@users.noreply.github.com>`（项目级 git config，勿改）
 - 改动前先读 `docs/PROGRESS.md` 确认现状，避免与进行中的任务冲突
+- **每完成一个功能/阶段必须同步更新 `docs/PROGRESS.md`**（状态与文件清单）再提交代码，保持文档与代码同步

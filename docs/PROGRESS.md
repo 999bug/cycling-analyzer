@@ -1,9 +1,12 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P1 阶段）。
 >
-> 产品规格原文：`个人骑行数据分析网站——Agent 开发规格说明.md`（规格 §N 引用即该文档章节）。
+> **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
+> 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
+>
+> 产品规格原文：`docs/个人骑行数据分析网站——Agent 开发规格说明.md`（规格 §N 引用即该文档章节）。
 
 ---
 
@@ -76,19 +79,24 @@
 
 ---
 
-## 3. 进行中（P1，规格 §38）
+## 3. P1 阶段（规格 §38）进行中
 
-以下任务当前由并行子任务开发中（2026-08-17）：
+### 已完成
+
+| 功能 | 状态 | 文件与说明 |
+|---|---|---|
+| Statistics 统计页（§28） | ✅ Agent G，29/29 测试 | `src/features/statistics/`（statistics.ts 聚合 + RangeSelector + StatisticCards）；`resolveRange`/`buildStatistics` 可注入 now；范围：本周/本月/今年/12 个月/全部/自定义 |
+| 轨迹颜色分析（§16 着色） | ✅ Agent J，32/32 测试 | `src/map/routeColoring.ts`（`buildSegments`/`buildBucketLines`/`getColorForValue`）；ActivityMap 新增 `coloring` prop（'none'\|'speed'\|'heartRate'\|'power'\|'altitude'，默认 none 向后兼容）；>500 段自动 8 桶合并 |
+| 踏频/组合图组件（§17） | ✅ Agent K，24/24 测试 | `src/charts/CadenceChart.tsx`（rpm）；`CombinedChart.tsx`（mode: 'speedHeartRate'\|'powerHeartRate'，双 Y 轴 + 降级）；`buildCombinedSeries` 以首条有效记录为对齐基准；**未挂载详情页**（待 Agent L） |
+
+### 进行中 / 待派发
 
 | 任务 | 负责人 | 状态 | 涉及文件 |
 |---|---|---|---|
-| Statistics 统计页（§28） | Agent G | 🔄 | `src/pages/StatisticsPage.tsx`、`src/features/statistics/` |
 | Calendar 日历页（§29） | Agent H | 🔄 | `src/pages/CalendarPage.tsx`、`src/features/calendar/` |
 | Settings 设置页 + 导出/导入/清空（§27/§32/§33） | Agent I | 🔄 | `src/pages/SettingsPage.tsx`、`src/features/settings/`；**设置 key 规范由 I 定义** |
-| 轨迹颜色分析（§16 着色） | Agent J | 🔄 | `src/map/`（ActivityMap 扩展 `coloring` prop） |
-| 踏频/组合图组件（§17） | Agent K | 🔄 | `src/charts/`（CadenceChart/CombinedChart，未挂载） |
-| FTP/区间/TSS + 详情页集成（§26） | Agent L | ⏳ 待派发 | 依赖 I 的设置格式 + K 的图表组件；独占修改 ActivityDetailPage |
-| 高级数值筛选（§30） | Agent M | ⏳ 待派发 | repository 查询扩展 + ActivityFilters/ActivitiesPage |
+| 高级数值筛选（§30） | Agent M | 🔄 | repository 查询扩展 + ActivityFilters/ActivitiesPage |
+| FTP/区间/TSS + 详情页集成（§26） | Agent L | ⏳ 待派发 | 依赖 I 的设置格式 + K 的图表组件；独占修改 ActivityDetailPage（挂踏频图/组合图 + 着色切换 + 区间分布） |
 
 ---
 
@@ -99,7 +107,9 @@
 - [ ] FTP / 心率区间 / 功率区间分布展示（详情页，待 Agent L）
 - [ ] Normalized Power / Intensity Factor / TSS 计算（待 Agent L）
 - [ ] 轨迹着色模式切换 UI（详情页集成，待 Agent L）
-- [ ] 高级筛选：距离/爬升/功率数值过滤（待 Agent M）
+- [ ] Calendar 日历页（Agent H 进行中）
+- [ ] Settings 设置页 + 导出/导入（Agent I 进行中）
+- [ ] 高级筛选：距离/爬升/功率数值过滤（Agent M 进行中）
 
 ### P2（规格 §39，未开始）
 
