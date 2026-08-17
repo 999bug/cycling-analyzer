@@ -4,9 +4,11 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 // https://vite.dev/config/
-export default defineConfig({
-  // 使用相对路径，兼容 GitHub Pages 子路径部署（https://999bug.github.io/cycling-analyzer/）
-  base: './',
+export default defineConfig(({ command }) => ({
+  // 生产构建必须用绝对 base：404.html 还原深链 URL 后（如 /cycling-analyzer/activities/xxx），
+  // 相对 base './' 会让 ./assets 解析到 /cycling-analyzer/activities/assets 而 404 白屏；
+  // dev 保持 '/'，与 main.tsx 的 ROUTER_BASENAME 规则一致。
+  base: command === 'build' ? '/cycling-analyzer/' : '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -21,4 +23,4 @@ export default defineConfig({
     // e2e/ 为 Playwright 用例（.spec.ts），不走 Vitest
     exclude: ['e2e/**', 'node_modules/**'],
   },
-})
+}))

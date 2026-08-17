@@ -80,7 +80,7 @@
 
 - `.github/workflows/deploy.yml`：push main → lint → test → build → deploy-pages（Node 22）
 - SPA 路由：`public/404.html`（rafgraph 方案）+ main.tsx `basename={import.meta.env.PROD ? '/cycling-analyzer' : '/'}`
-- vite.config：`base: './'`，`@/` → src/ 别名，vitest jsdom + setupFiles
+- vite.config：`base` 按环境区分——build 时绝对路径 `/cycling-analyzer/`、dev 时 `/`（**必须绝对路径**：404.html 的 replaceState 会先把 URL 还原成深链，相对 base `./` 会让 `./assets` 在二级以上路由解析到错误目录导致白屏，v1.4.1 修复）；`@/` → src/ 别名，vitest jsdom + setupFiles
 
 ---
 
