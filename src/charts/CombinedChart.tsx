@@ -116,10 +116,11 @@ function CombinedChart({ mode, records }: CombinedChartProps) {
       hasData={series.length > 0}
       emptyText={meta.emptyText}
       extra={
-        <div className="chart-card__toggle">
+        <div className="chart-card__toggle" role="group" aria-label="横轴切换">
           <button
             type="button"
             className={axisMode === 'distance' ? 'chart-card__toggle--active' : undefined}
+            aria-pressed={axisMode === 'distance'}
             onClick={() => setAxisMode('distance')}
           >
             距离
@@ -127,6 +128,7 @@ function CombinedChart({ mode, records }: CombinedChartProps) {
           <button
             type="button"
             className={axisMode === 'time' ? 'chart-card__toggle--active' : undefined}
+            aria-pressed={axisMode === 'time'}
             onClick={() => setAxisMode('time')}
           >
             时间

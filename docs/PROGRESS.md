@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（E2E 测试完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（a11y 审查完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -154,7 +154,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **年度回顾**（✅ 8/8 测试）：新页面 /year-review（导航「年度回顾」）；`src/features/yearReview/`（yearReview.ts 年份提取/月度聚合/年度范围 + MonthlyDistanceChart 月度距离柱状图）；年度十项指标复用 buildStatistics 自定义范围（YYYY-01-01~12-31）；年份 radio 仅有数据的年份，默认最新年
 - [ ] **性能优化**：页面切换卡顿治理（用户实测反馈），见任务 #18
 - [x] **E2E 测试**（✅ 3/3 通过）：`playwright.config.ts`（webServer 自动起 dev server，workers=1 串行防 IndexedDB 互染）+ `e2e/smoke.spec.ts`：应用加载与导航、各页路由可达、核心链路「导入合成 FIT（tests/fixtures/cycling-gps.fit）→ 列表 → 详情」；`npm run test:e2e` 本地运行（不进 CI deploy）；vitest exclude e2e/ 防 .spec.ts 混入
-- [ ] **a11y 无障碍**：键盘导航/对比度/aria 审查
+- [x] **a11y 无障碍**（✅ 4/4 测试 `tests/a11y.test.tsx`）：列表标题列渲染为真实链接（stopPropagation 防重复导航）；MetricChart/CombinedChart 横轴切换按钮 role=group + aria-pressed；AppLayout 加「跳转到主内容」skip link（聚焦浮出）+ main#main-content + 主导航 aria-label；ImportPanel toggle aria-expanded。既有良好实践保留：表格行 tabIndex+Enter/Space、日历年份按钮 aria-label、趋势图 role=tab、着色切换 aria-pressed、范围选择 radiogroup
 
 ---
 

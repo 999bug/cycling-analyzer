@@ -60,3 +60,21 @@
   overflow-y: auto;
   padding: 24px;
 }
+
+/* skip link（a11y）：默认隐藏，聚焦时浮出到左上角 */
+.app-layout__skip-link {
+  position: absolute;
+  top: -48px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.app-layout__skip-link:focus-visible {
+  top: 8px;
+}

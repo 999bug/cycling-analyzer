@@ -25,13 +25,17 @@ const NAV_ITEMS: NavItem[] = [
 
 /**
  * 应用布局：左侧固定侧边栏 + 右侧主内容区。
+ * 含「跳转到主内容」skip link（a11y：键盘用户免逐项目录导航）。
  */
 function AppLayout() {
   return (
     <div className="app-layout">
+      <a className="app-layout__skip-link" href="#main-content">
+        跳转到主内容
+      </a>
       <aside className="app-layout__sidebar">
         <div className="app-layout__brand">骑行数据</div>
-        <nav className="app-layout__nav">
+        <nav className="app-layout__nav" aria-label="主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -51,7 +55,7 @@ function AppLayout() {
           <ImportPanel />
         </div>
       </aside>
-      <main className="app-layout__content">
+      <main id="main-content" className="app-layout__content" tabIndex={-1}>
         <Outlet />
       </main>
     </div>

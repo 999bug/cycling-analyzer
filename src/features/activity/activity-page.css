@@ -185,3 +185,14 @@
   border-color: var(--primary);
   color: var(--primary);
 }
+
+/* 标题列链接（a11y 真实链接入口）：继承表格文字色，hover 提示可点 */
+.activity-table__title-link {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.activity-table__title-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}

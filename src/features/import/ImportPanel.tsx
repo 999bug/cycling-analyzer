@@ -90,6 +90,7 @@ function ImportPanel() {
       <button
         type="button"
         className="import-panel__toggle"
+        aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         同步骑行数据

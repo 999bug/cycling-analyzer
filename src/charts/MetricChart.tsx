@@ -102,10 +102,11 @@ function MetricChart({
       emptyText={emptyText}
       extra={
         switchable ? (
-          <div className="chart-card__toggle">
+          <div className="chart-card__toggle" role="group" aria-label="横轴切换">
             <button
               type="button"
               className={mode === 'distance' ? 'chart-card__toggle--active' : undefined}
+              aria-pressed={mode === 'distance'}
               onClick={() => setAxisMode('distance')}
             >
               距离
@@ -113,6 +114,7 @@ function MetricChart({
             <button
               type="button"
               className={mode === 'time' ? 'chart-card__toggle--active' : undefined}
+              aria-pressed={mode === 'time'}
               onClick={() => setAxisMode('time')}
             >
               时间

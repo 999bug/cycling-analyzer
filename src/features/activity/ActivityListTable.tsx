@@ -1,7 +1,10 @@
 /**
  * 骑行记录表格（列表页主体，规格 §14 表格列）。
  * 负责列定义、排序表头与行渲染；数据与交互回调由父组件注入。
+ * 整行可点击（鼠标）且可聚焦（键盘 Enter/Space），标题列额外渲染为
+ * 真实链接（a11y：屏幕阅读器/键盘 Tab 有明确的详情入口）。
  */
+import { Link } from 'react-router-dom'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { formatDate, formatDuration, formatElevation } from '@/utils/format'
 import {
@@ -171,7 +174,18 @@ function ActivityListTable({ items, sortBy, sortOrder, onSortChange, onRowClick,
           >
             {columns.map((col) => (
               <td key={col.key} className={col.align === 'right' ? 'activity-table__num' : undefined}>
-                {col.render(item)}
+                {col.key === 'title' ? (
+                  // 标题列渲染为真实链接（a11y）；stopPropagation 避免触发行点击重复导航
+                  <Link
+                    className="activity-table__title-link"
+                    to={`/activities/${item.id}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {col.render(item)}
+                  </Link>
+                ) : (
+                  col.render(item)
+                )}
               </td>
             ))}
           </tr>
