@@ -1,0 +1,46 @@
+/**
+ * 年度回顾页样式：年份选择器 + 月度图容器。
+ * 颜色复用全局 CSS 变量，与统计页风格一致。
+ */
+.year-review__message {
+  color: var(--text-secondary);
+}
+
+.year-review__years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.year-review__year {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.year-review__year:has(input:checked) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.year-review__monthly {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.year-review__monthly-title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}

@@ -8,6 +8,7 @@ import DashboardPage from '@/pages/DashboardPage'
 import HeatmapPage from '@/pages/HeatmapPage'
 import SettingsPage from '@/pages/SettingsPage'
 import StatisticsPage from '@/pages/StatisticsPage'
+import YearReviewPage from '@/pages/YearReviewPage'
 
 /**
  * 应用根组件，仅包含路由表。
@@ -24,6 +25,7 @@ function App() {
         <Route path={ROUTES[4]} element={<CalendarPage />} />
         <Route path={ROUTES[5]} element={<SettingsPage />} />
         <Route path={ROUTES[6]} element={<HeatmapPage />} />
+        <Route path={ROUTES[7]} element={<YearReviewPage />} />
       </Route>
     </Routes>
   )
