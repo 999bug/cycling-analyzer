@@ -1,0 +1,49 @@
+/**
+ * 统计卡片区样式：深色卡片 + 大数字指标。
+ * 颜色复用全局 CSS 变量（--bg-surface / --text / --text-secondary / --border）。
+ */
+.stat-cards {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.stat-cards__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.stat-cards__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-card__value {
+  color: var(--text);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-card__label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 窄屏降为两列，避免数字卡片挤压 */
+@media (max-width: 600px) {
+  .stat-cards__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

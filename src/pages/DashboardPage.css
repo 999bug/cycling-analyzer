@@ -1,0 +1,20 @@
+/**
+ * 仪表盘页面布局：统计卡片三列 + 趋势图。
+ */
+.dashboard__stats {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 24px;
+}
+
+.dashboard__message {
+  margin-top: 24px;
+}
+
+/* 窄屏统计区改为单列，卡片内指标由 StatCards 自行降列 */
+@media (max-width: 900px) {
+  .dashboard__stats {
+    grid-template-columns: 1fr;
+  }
+}

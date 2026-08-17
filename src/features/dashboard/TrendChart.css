@@ -1,0 +1,40 @@
+/**
+ * 距离趋势图样式：粒度 Tab + 图表容器。
+ * 颜色复用全局 CSS 变量（--bg-surface / --text-secondary / --border / --primary）。
+ */
+.trend-chart {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.trend-chart__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.trend-chart__tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 12px;
+}
+
+.trend-chart__tab:hover {
+  color: var(--text);
+}
+
+.trend-chart__tab--active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.trend-chart__plot {
+  height: 280px;
+  width: 100%;
+}
