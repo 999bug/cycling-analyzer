@@ -1,9 +1,12 @@
 /**
  * 赛段匹配纯函数（后续工作项：完整 Segment）。
  *
- * 赛段 = 起点圆 + 终点圆（半径 200m）。轨迹按时间顺序先进入起点圆、
- * 之后再进入终点圆，即记一次成绩：计时 = 两个进入事件的时间差（秒）。
- * 同一活动多次穿过只取首次完整穿越（与 Strava 单次活动单成绩口径一致）。
+ * 赛段 = 起点圆 + 终点圆（半径 200m）。轨迹按时间顺序进入起点圆、
+ * 离开起点圆后再进入终点圆，即记一次成绩：计时 = 两个进入事件的时间差（秒）。
+ * 同一活动多次穿越取最佳成绩（用时最短），与 Strava 单次活动最佳成绩口径一致。
+ *
+ * 环形路线防护：起终点圆重叠（如绕圈骑行起终点同在家门口）时，
+ * 必须离开起点圆后进入终点圆才算完赛，避免"出发即完赛"的虚假成绩。
  */
 import type { ActivityRecord } from '@/types/activity'
 import { haversineMeters } from '@/features/routes/routeGrouping'
@@ -80,55 +83,81 @@ function withinCircle(
 }
 
 /**
- * 匹配单活动的赛段成绩：顺序穿越起点圆 → 终点圆。
+ * 匹配单活动的赛段最佳成绩：进入起点圆 → 离开起点圆 → 进入终点圆。
+ *
+ * 状态机口径：
+ * 1. 等待进入起点圆（刚进入的同一点不判终点，环形路线起点=终点时防止出发即完赛）；
+ * 2. 已进入起点圆：离开起点圆后才允许判终点（环形路线防护）；
+ * 3. 寻找终点：先判终点（回到起点即完赛，终点判定优先），
+ *    未达终点而重新进入起点圆则从最后一次进入重新计时；
+ *    完赛点若同时在起点圆内（环形连续圈）立即作为下一次穿越的计时起点。
  *
  * @param segment 赛段几何
  * @param records 完整逐点数据（按时间升序）
- * @returns 穿越用时（秒）；未完整穿越返回 undefined
+ * @returns 多次穿越的最佳用时（秒）；未完整穿越返回 undefined
  */
 export function matchSegmentEffort(
   segment: SegmentGeometry,
   records: readonly ActivityRecord[],
 ): number | undefined {
   let startTimestamp: number | undefined
+  let leftStartCircle = false
+  let best: number | undefined
 
   for (const record of records) {
     if (record.latitude === undefined || record.longitude === undefined) {
       continue
     }
 
+    const inStart = withinCircle(
+      record.latitude,
+      record.longitude,
+      segment.startLatitude,
+      segment.startLongitude,
+    )
+    const inEnd = withinCircle(
+      record.latitude,
+      record.longitude,
+      segment.endLatitude,
+      segment.endLongitude,
+    )
+
     if (startTimestamp === undefined) {
-      if (
-        withinCircle(
-          record.latitude,
-          record.longitude,
-          segment.startLatitude,
-          segment.startLongitude,
-        )
-      ) {
+      if (inStart) {
         startTimestamp = record.timestamp
+        leftStartCircle = false
       }
       continue
     }
 
-    // 已进入起点圈：寻找晚于起点进入时刻的终点进入点（保证先后顺序）
-    if (
-      record.timestamp > startTimestamp &&
-      withinCircle(
-        record.latitude,
-        record.longitude,
-        segment.endLatitude,
-        segment.endLongitude,
-      )
-    ) {
-      return record.timestamp - startTimestamp
+    if (!leftStartCircle) {
+      if (inStart) {
+        continue
+      }
+      leftStartCircle = true
+      // 离开起点圈的同一点可继续判终点（稀疏记录直接从起点圈跳到终点圈）
+    }
+
+    if (inEnd && record.timestamp > startTimestamp) {
+      const duration = record.timestamp - startTimestamp
+      if (best === undefined || duration < best) {
+        best = duration
+      }
+      startTimestamp = inStart ? record.timestamp : undefined
+      leftStartCircle = false
+      continue
+    }
+
+    if (inStart) {
+      startTimestamp = record.timestamp
+      leftStartCircle = false
     }
   }
-  return undefined
+  return best
 }
 
 /**
- * 构造赛段成绩榜：各活动首次完整穿越的用时，按用时升序（最快在前）。
+ * 构造赛段成绩榜：各活动最佳穿越的用时，按用时升序（最快在前）。
  *
  * @param segment 赛段几何
  * @param inputs 参与匹配的活动列表

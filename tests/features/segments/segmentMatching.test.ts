@@ -1,7 +1,8 @@
 /**
  * 赛段匹配纯函数测试（后续工作项：完整 Segment）。
  *
- * 验证顺序穿越判定（先入起点圈再入终点圈）、计时口径（两进入事件差）、
+ * 验证顺序穿越判定（入起点圈 → 离开起点圈 → 入终点圈）、计时口径（两进入事件差）、
+ * 环形路线防护（离开起点圈后回到起点才完赛）、多圈取最佳、重新进入起点圈重计时、
  * 半径边界、未完整穿越返回 undefined、成绩榜按用时升序。
  */
 import { describe, expect, it } from 'vitest'
@@ -98,10 +99,58 @@ describe('matchSegmentEffort', () => {
   it('半径常量为 200m', () => {
     expect(SEGMENT_RADIUS_METERS).toBe(200)
   })
+
+  it('环形路线（起终点同圆）：离开后再回来记整圈用时，不再出发即完赛', () => {
+    // 起点 = 终点（家门口绕圈）：旧算法出发下一秒就"完赛"
+    const loop: SegmentGeometry = {
+      startLatitude: 31.2,
+      startLongitude: 121.5,
+      endLatitude: 31.2,
+      endLongitude: 121.5,
+    }
+    const records = makeRecords([
+      [0, 31.2001, 121.5001], // 家（两圈重叠，同时在起终点圈内）
+      [60, 31.2005, 121.5005], // 仍在圈内
+      [120, 31.25, 121.55], // 离开
+      [1800, 31.2001, 121.5001], // 绕圈回家 → 完赛，用时 1800s
+      [1860, 31.2002, 121.5002], // 仍在家
+    ])
+    expect(matchSegmentEffort(loop, records)).toBe(1800)
+  })
+
+  it('环形多圈：取最佳圈而非首圈', () => {
+    const loop: SegmentGeometry = {
+      startLatitude: 31.2,
+      startLongitude: 121.5,
+      endLatitude: 31.2,
+      endLongitude: 121.5,
+    }
+    const records = makeRecords([
+      [0, 31.2001, 121.5001], // 起点
+      [10, 31.25, 121.55], // 离开
+      [600, 31.2001, 121.5001], // 第 1 圈 600s（同时是下一圈起点）
+      [610, 31.25, 121.55], // 离开
+      [1050, 31.2001, 121.5001], // 第 2 圈 450s（最佳）
+      [1060, 31.25, 121.55], // 离开
+      [1600, 31.2001, 121.5001], // 第 3 圈 550s
+    ])
+    expect(matchSegmentEffort(loop, records)).toBe(450)
+  })
+
+  it('重新进入起点圈：从最后一次进入重新计时', () => {
+    const records = makeRecords([
+      [0, 31.2001, 121.5001], // 首次进入起点圈
+      [10, 31.25, 121.55], // 离开（未达终点）
+      [900, 31.2001, 121.5001], // 重新进入起点圈 → 重新计时
+      [910, 31.25, 121.55], // 离开
+      [1200, 31.3001, 121.6001], // 进入终点圈 → 1200-900=300
+    ])
+    expect(matchSegmentEffort(SEGMENT, records)).toBe(300)
+  })
 })
 
 describe('buildSegmentLeaderboard', () => {
-  it('各活动首次穿越上榜，按用时升序，无穿越不出现', () => {
+  it('各活动最佳穿越上榜，按用时升序，无穿越不出现', () => {
     const inputs = [
       {
         activityId: 'slow',
