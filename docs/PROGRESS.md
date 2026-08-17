@@ -25,7 +25,7 @@
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
 | P2 阶段 | 规格 §39 高级功能 | 🔄 进行中（功率曲线/个人纪录完成，见 §3.1） |
 
-- 验证：**384/384 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**390/390 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -109,6 +109,7 @@ P1 阶段任务已全部完成，无进行中项。
 | 功率曲线（详情页） | ✅ 12/12 测试 | `src/features/analysis/powerCurve.ts`：能量积分法（p·Δt 前缀和 + 双指针），Δt 钳制 5s 防断档虚计，标准 11 档时长（1s~1h），跨度不足时长无点；`src/charts/PowerCurveChart.tsx`：对数时长轴 LineChart，挂详情页图表区 |
 | 个人纪录（统计页区块） | ✅ 13/13 测试 | `src/features/records/personalRecords.ts`：`buildRideRecords`（最远距离/最长时长/最多爬升，并列保留最早）+ `buildPowerRecords`（合并全活动功率曲线取各时长最佳，5s/1min/5min/20min 四档）；`RecordCards.tsx` 卡片墙（值+日期+详情链接）；统计页底部挂载，全时段口径与范围选择无关，功率纪录异步全量扫描（计算中/失败/无功率数据三态提示） |
 | 训练状态 Fitness/Fatigue（§39） | ✅ 18/18 测试 | `src/features/analysis/trainingStatus.ts`：每日 TSS 聚合 + CTL 42 天/ATL 7 天 EWMA + TSB 前一日口径；**导入时同步算 NP 落库**（importer.ts，摘要含 normalizedPower），历史活动 `backfillNormalizedPower.ts` 幂等回填（repository 新增 `updateNormalizedPower`）；`TrainingStatusSection`（Dashboard：当前值卡 + 90 天三线趋势；无 FTP/无功率引导文案） |
+| 设备统计（§39） | ✅ 6/6 测试 | `src/features/statistics/deviceStats.ts`：按设备分组聚合（次数/距离/时长/爬升/最近骑行，显示名产品名→型号→制造商回退，缺失归「未知设备」）；`DeviceStatsCards` 统计页底部区块（全时段口径）；自行车无独立数据源（FIT 未提取单车字段），设备统计即设备/码表维度 |
 
 ---
 

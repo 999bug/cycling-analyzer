@@ -24,6 +24,8 @@ import {
 } from '@/features/statistics/statistics'
 import RangeSelector from '@/features/statistics/RangeSelector'
 import StatisticCards from '@/features/statistics/StatisticCards'
+import DeviceStatsCards from '@/features/statistics/DeviceStatsCards'
+import { buildDeviceStats } from '@/features/statistics/deviceStats'
 import { buildPowerCurve } from '@/features/analysis/powerCurve'
 import {
   buildPowerRecords,
@@ -96,6 +98,9 @@ function StatisticsPage() {
 
   // 骑行纪录（全时段，与范围选择无关）：摘要就绪后即可计算
   const rideRecords = useMemo(() => buildRideRecords(summaries ?? []), [summaries])
+
+  // 设备统计（全时段，与范围选择无关）：摘要就绪后即可计算
+  const deviceStats = useMemo(() => buildDeviceStats(summaries ?? []), [summaries])
 
   // 功率纪录：扫描全部活动逐点数据合并功率曲线（完成前为 null，失败置 failed）
   const [powerRecords, setPowerRecords] = useState<readonly PowerRecordEntry[] | null>(null)
@@ -177,6 +182,7 @@ function StatisticsPage() {
         powerRecords={powerRecords}
         powerRecordsFailed={powerRecordsFailed}
       />
+      <DeviceStatsCards entries={deviceStats} />
     </>
   )
 }

@@ -1,0 +1,85 @@
+/**
+ * 设备统计区块样式：深色容器 + 设备聚合卡片（两列网格）。
+ * 颜色复用全局 CSS 变量，与 StatisticCards / personalRecords 风格一致。
+ */
+.device-stats {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.device-stats__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.device-stats__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.device-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.device-card__header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.device-card__name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.device-card__count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-card__stats {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.device-card__stat {
+  display: flex;
+  justify-content: space-between;
+}
+
+.device-card__stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.device-card__stat-value {
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-stats__hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 窄屏降为单列，避免设备卡片挤压 */
+@media (max-width: 600px) {
+  .device-stats__grid {
+    grid-template-columns: 1fr;
+  }
+}

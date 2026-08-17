@@ -226,4 +226,36 @@ describe('统计页面', () => {
     expect(powerCard).toHaveAttribute('href', '/activities/act-1')
     expect(within(powerCard as HTMLElement).getByText('300 W')).toBeInTheDocument()
   })
+
+  it('设备统计区块：按设备分组展示聚合指标，无设备信息显示提示', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const today = new Date().toISOString()
+    await repo.addActivities([
+      makeActivity(0, today, 30000, 3600, 200),
+      makeActivity(1, today, 20000, 1800, 100),
+    ])
+    // act-0/act-1 落库后补设备信息（makeActivity 不含 device 字段）
+    await testDb.activities.update('act-0', {
+      device: { productName: 'Edge 840', manufacturer: 'Garmin' },
+    })
+    await testDb.activities.update('act-1', {
+      device: { productName: 'Edge 840', manufacturer: 'Garmin' },
+    })
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const deviceSection = await screen.findByRole('region', { name: '设备统计' })
+    expect(await within(deviceSection).findByText('Edge 840')).toBeInTheDocument()
+    expect(within(deviceSection).getByText('2 次')).toBeInTheDocument()
+    expect(within(deviceSection).getByText('50.00 km')).toBeInTheDocument()
+    expect(within(deviceSection).getByText('01:30:00')).toBeInTheDocument()
+  })
+
+  it('全部活动无设备信息时设备统计区块显示提示', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivities([makeActivity(0, new Date().toISOString())])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const deviceSection = await screen.findByRole('region', { name: '设备统计' })
+    expect(await within(deviceSection).findByText('暂无设备信息')).toBeInTheDocument()
+  })
 })
