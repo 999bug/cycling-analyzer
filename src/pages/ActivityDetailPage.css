@@ -21,6 +21,77 @@
   margin-bottom: 4px;
 }
 
+/* 重命名入口：小字按钮，跟随标题 */
+.activity-detail__rename-trigger {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.activity-detail__rename-trigger:hover {
+  color: var(--text);
+  border-color: var(--text-secondary);
+}
+
+/* 重命名编辑行：输入框 + 保存/取消 */
+.activity-detail__rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.activity-detail__rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 16px;
+}
+
+.activity-detail__rename-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.activity-detail__rename-save,
+.activity-detail__rename-cancel {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.activity-detail__rename-save {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.activity-detail__rename-cancel {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.activity-detail__rename-save:disabled,
+.activity-detail__rename-cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .activity-detail__meta {
   display: flex;
   align-items: center;

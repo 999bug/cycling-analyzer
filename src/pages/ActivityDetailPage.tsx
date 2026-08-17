@@ -158,6 +158,10 @@ function ActivityDetailPage() {
   // 加载出错的活动 ID（切换活动后自动恢复）
   const [errorId, setErrorId] = useState<string>()
   const [deleting, setDeleting] = useState(false)
+  // 重命名编辑态（规格 §31）：editing=编辑中，nameInput=输入值，saving=保存中
+  const [editing, setEditing] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [saving, setSaving] = useState(false)
   // 用户设置（FTP/最大心率等，训练分析依赖；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
   // 轨迹着色模式（规格 §16，默认单色）
@@ -274,6 +278,35 @@ function ActivityDetailPage() {
     }
   }
 
+  /**
+   * 进入重命名编辑态：输入框预填当前自定义名。
+   */
+  function handleStartRename() {
+    setNameInput(activity?.name ?? '')
+    setEditing(true)
+  }
+
+  /**
+   * 保存重命名（规格 §31）：trim 后落库；空名视为清除自定义名，
+   * 恢复「日期 骑行」兜底名（存储空串，展示按 falsy 兜底）。
+   */
+  async function handleSaveName() {
+    if (activity === undefined || saving) {
+      return
+    }
+    const trimmed = nameInput.trim()
+    setSaving(true)
+    try {
+      await repository.updateName(activity.id, trimmed)
+      setActivity({ ...activity, name: trimmed === '' ? undefined : trimmed })
+      setEditing(false)
+    } catch (err: unknown) {
+      console.error('Failed to rename activity', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // 提示态：缺 ID / 出错 / 加载中 / 不存在
   if (id === undefined || errorId === id) {
     return <DetailNotice state="error" />
@@ -296,9 +329,54 @@ function ActivityDetailPage() {
     <div className="activity-detail">
       <header className="activity-detail__header">
         <div>
-          <h1 className="activity-detail__title">
-            {activity.name ?? `${formatDate(activity.startTime)} 骑行`}
-          </h1>
+          {editing ? (
+            <div className="activity-detail__rename">
+              <input
+                className="activity-detail__rename-input"
+                value={nameInput}
+                placeholder={`${formatDate(activity.startTime)} 骑行`}
+                aria-label="活动名称"
+                autoFocus
+                onChange={(event) => setNameInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void handleSaveName()
+                  }
+                  if (event.key === 'Escape') {
+                    setEditing(false)
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="activity-detail__rename-save"
+                onClick={() => void handleSaveName()}
+                disabled={saving}
+              >
+                {saving ? '保存中…' : '保存'}
+              </button>
+              <button
+                type="button"
+                className="activity-detail__rename-cancel"
+                onClick={() => setEditing(false)}
+                disabled={saving}
+              >
+                取消
+              </button>
+            </div>
+          ) : (
+            <h1 className="activity-detail__title">
+              {activity.name || `${formatDate(activity.startTime)} 骑行`}
+              <button
+                type="button"
+                className="activity-detail__rename-trigger"
+                aria-label="重命名"
+                onClick={handleStartRename}
+              >
+                重命名
+              </button>
+            </h1>
+          )}
           <div className="activity-detail__meta">
             <span className="activity-detail__type">{typeLabel}</span>
             <time className="activity-detail__time">{formatDateTime(activity.startTime)}</time>

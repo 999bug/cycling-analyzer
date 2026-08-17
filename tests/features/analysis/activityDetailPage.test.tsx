@@ -280,3 +280,59 @@ describe('活动详情页训练分析集成', () => {
     expect(heartZ1!.querySelector('.zone-row__bar-fill')).toHaveStyle({ width: '25%' })
   })
 })
+
+describe('活动重命名（规格 §31）', () => {
+  let repo: DexieActivityRepository
+  const user = userEvent.setup()
+
+  beforeEach(() => {
+    repo = new DexieActivityRepository(testDb)
+  })
+
+  it('重命名保存后标题与数据库同步更新', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140], { name: '晨骑' }))
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '重命名' }))
+    const input = screen.getByRole('textbox', { name: '活动名称' })
+    await user.clear(input)
+    await user.type(input, '周末拉练')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    // 标题立即更新，数据库同步落库
+    expect(await screen.findByRole('heading', { name: /周末拉练/ })).toBeInTheDocument()
+    expect((await repo.getById('act-1'))?.name).toBe('周末拉练')
+  })
+
+  it('空名保存恢复「日期 骑行」兜底名', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140], { name: '晨骑' }))
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '重命名' }))
+    await user.clear(screen.getByRole('textbox', { name: '活动名称' }))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(await screen.findByRole('heading', { name: /2026-08-01 骑行/ })).toBeInTheDocument()
+    expect((await repo.getById('act-1'))?.name).toBe('')
+  })
+
+  it('Enter 快捷保存，Escape 取消不改名', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140], { name: '晨骑' }))
+    renderPage()
+
+    // Enter 保存
+    await user.click(await screen.findByRole('button', { name: '重命名' }))
+    const input = screen.getByRole('textbox', { name: '活动名称' })
+    await user.clear(input)
+    await user.type(input, '夜骑{Enter}')
+    expect(await screen.findByRole('heading', { name: /夜骑/ })).toBeInTheDocument()
+
+    // Escape 取消：输入新名后不保存，标题保持夜骑
+    await user.click(screen.getByRole('button', { name: '重命名' }))
+    const input2 = screen.getByRole('textbox', { name: '活动名称' })
+    await user.clear(input2)
+    await user.type(input2, '不该出现{Escape}')
+    expect(screen.getByRole('heading', { name: /夜骑/ })).toBeInTheDocument()
+    expect((await repo.getById('act-1'))?.name).toBe('夜骑')
+  })
+})
