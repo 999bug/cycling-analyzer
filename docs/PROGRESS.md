@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（性能压测完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（路线分析完成，P2 全部收尾）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -23,9 +23,9 @@
 | Phase 7 | Dashboard（周/月/总计 + 趋势图） | ✅ 完成 |
 | Phase 8 | GitHub Pages 部署（Actions + SPA 路由） | ✅ 完成 |
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
-| P2 阶段 | 规格 §39 高级功能 | 🔄 进行中（功率曲线/个人纪录完成，见 §3.1） |
+| P2 阶段 | 规格 §39 高级功能 | ✅ 完成（见 §3.1） |
 
-- 验证：**433/433 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**445/445 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -59,7 +59,7 @@
 | 能力 | 位置 | 说明 |
 |---|---|---|
 | Dexie 库 `cycling-data` v1 | `src/storage/db.ts` | 四表：activities（&fingerprint 唯一索引）、activity_records（++id, activityId）、files（主键 fingerprint）、settings（key/value）；**摘要与逐点分表** |
-| 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/deleteActivity/deleteAll/summarizeByRange/listAllSummaries`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit |
+| 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/updateNormalizedPower/deleteActivity/deleteAll/summarizeByRange/listAllSummaries/getRouteEndpoints`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit；getRouteEndpoints 走 activityId 索引 first/last 读取起终点坐标（路线分析用，免全量逐点加载） |
 | 文件台账 | `fileRepository.ts` | recordImported/recordFailed/listAll/get/deleteAll |
 | 设置 | `settingsRepository.ts` | get/set/delete（key/value unknown） |
 
@@ -70,7 +70,8 @@
 | Dashboard | `/` | 本周/本月/总计（次数/距离/时长/爬升）+ 30/90/365 天趋势图；**订阅 importStore 导入后自动刷新** |
 | Activity List | `/activities` | 排序/搜索/月份+类型筛选/分页 20/页；缺失字段 `—`；行点击跳详情 |
 | Activity Detail | `/activities/:id` | 8 指标卡 + Leaflet 轨迹（Douglas-Peucker 抽稀 + 起终点标记 + fitBounds）+ 7 图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
-| Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | ✅ P1 完成（见 §3）；统计页含「个人纪录」区块（P2，见 §3.1） |
+| Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | ✅ P1 完成（见 §3）；统计页含「个人纪录」「设备统计」「路线分析」区块（P2，见 §3.1） |
+| Heatmap 热力图 | `/heatmap` | ✅ P2 完成（见 §3.1：全部轨迹低透明度叠加） |
 
 ### 部署（规格 §34/§35）
 
@@ -100,7 +101,7 @@ P1 阶段任务已全部完成，无进行中项。
 
 ---
 
-## 3.1 P2 阶段（规格 §39）进行中
+## 3.1 P2 阶段（规格 §39）已完成
 
 ### 已完成
 
@@ -113,6 +114,7 @@ P1 阶段任务已全部完成，无进行中项。
 | FTP 自动估算 / VO2Max 估算（§39） | ✅ 10/10 测试 | `src/features/analysis/ftpEstimate.ts`：FTP = 近 90 天 20 分钟最佳功率 × 0.95（取整），VO2Max = 10.8 × 5 分钟最佳功率 ÷ 体重 + 7（1 位小数），非法输入 undefined；设置页 FTP 字段下方估算区块（异步扫描近 90 天含功率活动，`buildPowerCurve(records, [300, 1200])` 跨活动取最佳），「采用」按钮一键保存 FTP；无功率数据/未填体重显示引导文案（不伪造）；`Activity` 领域模型补 `name` 字段（§31，修复详情页改名提交的 tsc 遗漏） |
 | 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后低透明度（0.25）暖红 Polyline 叠加，重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
 | 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
+| 路线分析（§39） | ✅ 12/12 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；repository 新增 `getRouteEndpoints`（activityId 索引 first/last 读取，避免全量逐点加载）；`RouteGroupCards.tsx` 统计页底部区块（路线 N 卡片：次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment（逐点匹配赛段）为后续工作项 |
 
 ---
 
@@ -122,9 +124,9 @@ P1 阶段任务已全部完成，无进行中项。
 
 - [x] FTP / 心率区间 / 功率区间分布展示 + NP/IF/TSS + 着色切换 UI（详情页，Agent L ✅）
 
-### P2（规格 §39，进行中）
+### P2（规格 §39，已全部完成）
 
-- [ ] Segment / 路线分析
+- [x] Segment / 路线分析（✅ 见 §3.1：起终点 500m + 距离 ±10% 贪心聚类，统计页路线卡片；完整 Segment 逐点匹配为后续工作项）
 - [x] 个人纪录（PR）（✅ 见 §3.1：骑行纪录 3 项 + 功率纪录 4 档，统计页区块）
 - [x] 功率曲线（✅ 见 §3.1：详情页 PowerCurveChart，11 档标准时长）
 - [x] FTP 自动估算 / VO2Max 估算（✅ 见 §3.1：设置页估算区块 + 采用按钮）
@@ -140,6 +142,16 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **单位换算显示**（§27 公里/英里、12h/24h）：✅ 已接入显示层（见 §3.1：useUnits hook + 各卡片/表格/图表 distanceUnit prop，详情页 12h 时间）
 - [x] **性能压测**（§44）：✅ `tests/perf/scale.test.ts` 6 例——1000 活动 × 100 逐点灌库（10 万行），分页/筛选查询 <1s，Dashboard/日历/设备聚合纯函数 <1s，单 FIT 解析 <3s，5 万点功率曲线/轨迹抽稀 <2s（宽松上限防量级回归，非精确基准）
 - [ ] **README 完善**（§46）：基础版已写，截图等未补
+
+### P2 之后的后续工作项（规格外延伸，逐项推进）
+
+- [ ] **完整 Segment 赛段**：路线分析已做起终点聚类；逐点匹配赛段（起终点圈定 + 轨迹穿越判定 + 赛段成绩榜）为完整版
+- [ ] **骑行区域统计**：离线网格（如 1km 瓦片）统计骑过的区域覆盖率，配合热力图
+- [ ] **导出 GPX**：单活动轨迹导出标准 GPX，便于跨平台分享
+- [ ] **年度回顾**：年度聚合页（总里程/爬升/次数/月度分布/纪录），数据均可本地聚合
+- [ ] **性能优化**：页面切换卡顿治理（用户实测反馈），见任务 #18
+- [ ] **E2E 测试**（Playwright）：覆盖导入→列表→详情核心链路
+- [ ] **a11y 无障碍**：键盘导航/对比度/aria 审查
 
 ---
 

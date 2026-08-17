@@ -35,6 +35,8 @@ import {
   type PowerRecordEntry,
 } from '@/features/records/personalRecords'
 import RecordCards from '@/features/records/RecordCards'
+import RouteGroupCards from '@/features/routes/RouteGroupCards'
+import { buildRouteGroups, type RouteActivityInput, type RouteGroup } from '@/features/routes/routeGrouping'
 import { useUnits } from '@/hooks/useUnits'
 import '@/pages/StatisticsPage.css'
 
@@ -136,6 +138,50 @@ function StatisticsPage() {
     }
   }, [summaries])
 
+  // 路线分析：扫描全部活动轨迹端点做聚类（完成前为 null，失败置 failed）
+  const [routeGroups, setRouteGroups] = useState<readonly RouteGroup[] | null>(null)
+  const [routeGroupsFailed, setRouteGroupsFailed] = useState(false)
+  useEffect(() => {
+    if (summaries === null || summaries.length === 0) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const items: RouteActivityInput[] = []
+        for (const activity of summaries) {
+          const endpoints = await repository.getRouteEndpoints(activity.id)
+          if (cancelled) {
+            return
+          }
+          items.push({
+            id: activity.id,
+            startTime: activity.startTime,
+            distance: activity.distance,
+            duration: activity.duration,
+            start:
+              endpoints === undefined
+                ? undefined
+                : { latitude: endpoints.startLatitude, longitude: endpoints.startLongitude },
+            end:
+              endpoints === undefined
+                ? undefined
+                : { latitude: endpoints.endLatitude, longitude: endpoints.endLongitude },
+          })
+        }
+        setRouteGroups(buildRouteGroups(items))
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setRouteGroupsFailed(true)
+        }
+        console.error('Failed to scan route groups', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [summaries])
+
   if (error) {
     return (
       <>
@@ -187,6 +233,7 @@ function StatisticsPage() {
         distanceUnit={distanceUnit}
       />
       <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
+      <RouteGroupCards groups={routeGroups} failed={routeGroupsFailed} distanceUnit={distanceUnit} />
     </>
   )
 }

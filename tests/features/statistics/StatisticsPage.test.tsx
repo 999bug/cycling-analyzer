@@ -275,3 +275,57 @@ describe('统计页面', () => {
     expect(await within(deviceSection).findByText('暂无设备信息')).toBeInTheDocument()
   })
 })
+
+describe('路线分析区块（规格 §39）', () => {
+  /**
+   * 构造含起终点坐标的逐点记录（首尾点定组，中间点无关）。
+   *
+   * @param startLat 起点纬度
+   * @param startLng 起点经度
+   * @param endLat 终点纬度
+   * @param endLng 终点经度
+   */
+  function makeTrack(startLat: number, startLng: number, endLat: number, endLng: number) {
+    return [
+      { timestamp: 0, latitude: startLat, longitude: startLng },
+      { timestamp: 1800, latitude: (startLat + endLat) / 2, longitude: (startLng + endLng) / 2 },
+      { timestamp: 3600, latitude: endLat, longitude: endLng },
+    ]
+  }
+
+  it('相似骑行聚类为路线卡片，无坐标活动不参与', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const now = new Date()
+    const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8).toISOString()
+    const afternoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16).toISOString()
+    await repo.addActivities([
+      // 路线 A：两条同起终点、距离相近的骑行（act-1 时间更晚 → 卡片链接到它）
+      { ...makeActivity(0, morning, 30000, 3600, 100), records: makeTrack(31.2, 121.5, 31.3, 121.6) },
+      { ...makeActivity(1, afternoon, 30500, 3500, 100), records: makeTrack(31.2005, 121.5003, 31.3006, 121.6) },
+      // 路线 B：起终点远超 500m 阈值
+      { ...makeActivity(2, morning, 20000, 2400, 100), records: makeTrack(30.2, 120.1, 30.3, 120.2) },
+      // 无坐标活动：不参与分组
+      makeActivity(3, morning, 10000, 1200, 50),
+    ])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const section = await screen.findByRole('region', { name: '路线分析' })
+    // 路线 A 2 次排第一，卡片链接到最近一次骑行详情
+    const firstCard = (await within(section).findByText('路线 1')).closest('a')
+    expect(firstCard).toHaveAttribute('href', '/activities/act-1')
+    expect(within(firstCard as HTMLElement).getByText('2 次')).toBeInTheDocument()
+    expect(within(firstCard as HTMLElement).getByText('30.25 km')).toBeInTheDocument()
+    // 路线 B 1 次排第二
+    expect(within(section).getByText('路线 2')).toBeInTheDocument()
+    expect(within(section).queryByText('路线 3')).not.toBeInTheDocument()
+  })
+
+  it('全部活动无坐标时显示提示', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivities([makeActivity(0, new Date().toISOString())])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const section = await screen.findByRole('region', { name: '路线分析' })
+    expect(await within(section).findByText(/暂无可分组的路线/)).toBeInTheDocument()
+  })
+})

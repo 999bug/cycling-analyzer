@@ -100,6 +100,23 @@ export interface ActivityRangeSummary {
 }
 
 /**
+ * 轨迹首尾坐标（路线分组输入，规格 §39）。
+ */
+export interface RouteEndpoints {
+  /** 起点纬度（十进制度） */
+  startLatitude: number;
+
+  /** 起点经度（十进制度） */
+  startLongitude: number;
+
+  /** 终点纬度（十进制度） */
+  endLatitude: number;
+
+  /** 终点经度（十进制度） */
+  endLongitude: number;
+}
+
+/**
  * 活动仓库接口。
  * Phase 4-7（导入、列表、详情、统计）依赖此接口，不直接触碰 Dexie。
  */
@@ -136,6 +153,16 @@ export interface ActivityRepository {
    * @returns 逐点记录（按存储序返回）
    */
   getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]>;
+
+  /**
+   * 查询活动轨迹的首尾坐标点（路线分组用，规格 §39）。
+   * 只读首/末两条记录，避免为分组全量加载逐点数据；
+   * 首/末记录无坐标时返回 undefined（室内骑行等不参与路线分组）。
+   *
+   * @param activityId 活动 ID
+   * @returns 首尾坐标；缺失时 undefined
+   */
+  getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined>;
 
   /**
    * 列表查询：排序 + 分页 + 月份/类型筛选 + 文本搜索 + 距离/爬升/功率数值筛选。
@@ -259,6 +286,23 @@ export class DexieActivityRepository implements ActivityRepository {
       collection = collection.limit(limit);
     }
     return collection.toArray();
+  }
+
+  async getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined> {
+    const collection = this.db.activity_records.where('activityId').equals(activityId);
+    const [first, last] = await Promise.all([collection.first(), collection.last()]);
+    if (
+      first?.latitude === undefined || first.longitude === undefined ||
+      last?.latitude === undefined || last.longitude === undefined
+    ) {
+      return undefined;
+    }
+    return {
+      startLatitude: first.latitude,
+      startLongitude: first.longitude,
+      endLatitude: last.latitude,
+      endLongitude: last.longitude,
+    };
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {

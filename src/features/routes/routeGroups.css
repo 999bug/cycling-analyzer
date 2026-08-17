@@ -1,0 +1,91 @@
+/**
+ * 路线分析区块样式：深色容器 + 路线卡片（两列网格）。
+ * 颜色复用全局 CSS 变量，与 DeviceStatsCards 风格一致。
+ */
+.route-groups {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.route-groups__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.route-groups__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.route-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.route-card:hover {
+  border-color: var(--primary);
+}
+
+.route-card__header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.route-card__name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.route-card__count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-card__stats {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.route-card__stat {
+  display: flex;
+  justify-content: space-between;
+}
+
+.route-card__stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.route-card__stat-value {
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.route-groups__hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 窄屏降为单列，避免路线卡片挤压 */
+@media (max-width: 600px) {
+  .route-groups__grid {
+    grid-template-columns: 1fr;
+  }
+}
