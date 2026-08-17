@@ -2,7 +2,7 @@
  * 活动详情页（规格 §15/§16/§17/§25/§26/§32）。
  *
  * 布局：标题区（名称/类型/开始时间/删除按钮）→ 9 个指标卡（含标准化功率）→
- * 轨迹着色切换 + 轨迹地图 → 六个图表（速度/心率/踏频/海拔/功率/速度+心率组合）→
+ * 轨迹着色切换 + 轨迹地图 → 七个图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合）→
  * 训练区间区块（心率/功率区间分布 + IF/TSS）。
  * 数据源：activityRepository.getById（摘要）+ getRecords（逐点），
  * 逐点数据按需加载，不参与列表查询。
@@ -38,6 +38,7 @@ import HeartRateChart from '@/charts/HeartRateChart'
 import CadenceChart from '@/charts/CadenceChart'
 import ElevationChart from '@/charts/ElevationChart'
 import PowerChart from '@/charts/PowerChart'
+import PowerCurveChart from '@/charts/PowerCurveChart'
 import CombinedChart from '@/charts/CombinedChart'
 import '@/pages/ActivityDetailPage.css'
 
@@ -349,6 +350,7 @@ function ActivityDetailPage() {
         <CadenceChart records={records} />
         <ElevationChart records={records} />
         <PowerChart records={records} />
+        <PowerCurveChart records={records} />
         <CombinedChart mode="speedHeartRate" records={records} />
       </section>
 

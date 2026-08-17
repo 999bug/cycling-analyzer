@@ -7,8 +7,9 @@
  * 测试数据相对"今天"动态构造（上周日/上月 15 号/去年同日），避免日期漂移。
  */
 import 'fake-indexeddb/auto'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
@@ -27,6 +28,8 @@ const testDb = db
 beforeEach(async () => {
   // 清空活动表而非删除数据库：vi.mock 共享单实例，delete() 后实例不可复用
   await testDb.activities.clear()
+  // 逐点表独立清理：个人纪录的功率纪录扫描读取该表
+  await testDb.activity_records.clear()
 })
 
 afterEach(() => {
@@ -116,7 +119,7 @@ async function seedCrossRangeData(): Promise<void> {
 describe('统计页面', () => {
   it('默认展示本周指标，切换全部/过去 12 个月后指标变化', async () => {
     await seedCrossRangeData()
-    render(<StatisticsPage />)
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
 
     // 默认本周：仅今天的活动
     const weekCount = await screen.findByText('1 次')
@@ -126,9 +129,11 @@ describe('统计页面', () => {
     // 本周唯一活动的极值指标（最快速度 / 最高功率）
     expect(screen.getByText('43.2 km/h')).toBeInTheDocument()
     expect(screen.getByText('300 W')).toBeInTheDocument()
-    // 总距离 = 平均单次距离 = 最长骑行 = 50.00 km（重复文本，断言出现 3 次）
-    expect(screen.getAllByText('50.00 km')).toHaveLength(3)
+    // 总距离 = 平均单次距离 = 最长骑行 = 50.00 km（统计卡 3 次）+ 个人纪录最远距离卡 1 次
+    expect(screen.getAllByText('50.00 km')).toHaveLength(4)
+    // 总爬升 = 单次最大爬升（统计卡 2 次）；个人纪录最多爬升取全时段最大（act-2 的 400 m）
     expect(screen.getAllByText('+300 m')).toHaveLength(2)
+    expect(screen.getByText('+400 m')).toBeInTheDocument()
 
     // 切换全部：五个活动全部计入
     await userEvent.click(screen.getByRole('radio', { name: '全部' }))
@@ -143,7 +148,7 @@ describe('统计页面', () => {
 
   it('自定义范围按起止日期过滤（含边界日），只显示选中范围内的活动', async () => {
     await seedCrossRangeData()
-    render(<StatisticsPage />)
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
     await screen.findByText('1 次')
 
     // 选择自定义并填入"上月 1 号 ~ 上月最后一天"，仅上月 15 号的活动命中
@@ -166,14 +171,14 @@ describe('统计页面', () => {
     const oldRide = new Date(new Date().getFullYear() - 5, 0, 1, 8)
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivities([makeActivity(0, oldRide.toISOString())])
-    render(<StatisticsPage />)
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
 
     // 有数据但本周无活动 → 提示切换时间范围
     expect(await screen.findByText(/暂无骑行记录/)).toBeInTheDocument()
   })
 
   it('无数据时展示导入引导文案', async () => {
-    render(<StatisticsPage />)
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText(/欢迎使用/)).toBeInTheDocument()
     expect(screen.getByText(/同步骑行数据/)).toBeInTheDocument()
@@ -183,8 +188,42 @@ describe('统计页面', () => {
     vi.spyOn(DexieActivityRepository.prototype, 'listAllSummaries').mockRejectedValue(
       new Error('db down'),
     )
-    render(<StatisticsPage />)
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText(/加载失败/)).toBeInTheDocument()
+  })
+
+  it('个人纪录区块：展示全时段骑行纪录与功率纪录（与范围选择无关）', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const today = new Date()
+    const lastWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7, 8)
+    const recordBase = Math.floor(lastWeek.getTime() / 1000)
+    // act-0 今天（在默认本周范围内，无功率逐点）；act-1 上周（范围外，持全部纪录 + 功率逐点）
+    await repo.addActivities([
+      makeActivity(0, today.toISOString(), 20000, 1800, 200),
+      {
+        ...makeActivity(1, lastWeek.toISOString(), 50000, 5400, 300),
+        records: Array.from({ length: 10 }, (_, index) => ({
+          timestamp: recordBase + index,
+          power: 300,
+        })),
+      },
+    ])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    // 默认本周统计卡仅含 act-0（20.00 km）
+    expect(await screen.findByText('1 次')).toBeInTheDocument()
+    const recordsSection = screen.getByRole('region', { name: '个人纪录' })
+
+    // 骑行纪录：最远距离由范围外的 act-1 保持，卡片链接到其详情页
+    const distanceCard = within(recordsSection).getByText('最远距离').closest('a')
+    expect(distanceCard).toHaveAttribute('href', '/activities/act-1')
+    expect(within(distanceCard as HTMLElement).getByText('50.00 km')).toBeInTheDocument()
+
+    // 功率纪录异步扫描完成后展示：10 点 1s 采样恒定 300W → 5 秒功率 300W
+    const powerLabel = await within(recordsSection).findByText('5 秒功率')
+    const powerCard = powerLabel.closest('a')
+    expect(powerCard).toHaveAttribute('href', '/activities/act-1')
+    expect(within(powerCard as HTMLElement).getByText('300 W')).toBeInTheDocument()
   })
 })

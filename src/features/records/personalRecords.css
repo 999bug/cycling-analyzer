@@ -1,0 +1,69 @@
+/**
+ * 个人纪录区块样式：深色卡片 + 大数字纪录墙（7 项，四列网格）。
+ * 颜色复用全局 CSS 变量，与 StatisticCards 风格一致。
+ */
+.personal-records {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.personal-records__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.personal-records__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.record-card {
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.record-card:hover {
+  background: var(--border);
+}
+
+.record-card__value {
+  color: var(--text);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.record-card__label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.record-card__date {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.personal-records__hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  grid-column: 1 / -1;
+}
+
+/* 窄屏降为两列，避免数字卡片挤压 */
+@media (max-width: 600px) {
+  .personal-records__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

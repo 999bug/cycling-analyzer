@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P1 全部完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P2 功率曲线 + 个人纪录完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -23,8 +23,9 @@
 | Phase 7 | Dashboard（周/月/总计 + 趋势图） | ✅ 完成 |
 | Phase 8 | GitHub Pages 部署（Actions + SPA 路由） | ✅ 完成 |
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
+| P2 阶段 | 规格 §39 高级功能 | 🔄 进行中（功率曲线/个人纪录完成，见 §3.1） |
 
-- 验证：**341/341 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**366/366 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -68,8 +69,8 @@
 |---|---|---|
 | Dashboard | `/` | 本周/本月/总计（次数/距离/时长/爬升）+ 30/90/365 天趋势图；**订阅 importStore 导入后自动刷新** |
 | Activity List | `/activities` | 排序/搜索/月份+类型筛选/分页 20/页；缺失字段 `—`；行点击跳详情 |
-| Activity Detail | `/activities/:id` | 8 指标卡 + Leaflet 轨迹（Douglas-Peucker 抽稀 + 起终点标记 + fitBounds）+ 4 图表（速度/心率/海拔/功率，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
-| Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | **P1 进行中**（见 §3） |
+| Activity Detail | `/activities/:id` | 8 指标卡 + Leaflet 轨迹（Douglas-Peucker 抽稀 + 起终点标记 + fitBounds）+ 7 图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
+| Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | ✅ P1 完成（见 §3）；统计页含「个人纪录」区块（P2，见 §3.1） |
 
 ### 部署（规格 §34/§35）
 
@@ -79,7 +80,7 @@
 
 ---
 
-## 3. P1 阶段（规格 §38）进行中
+## 3. P1 阶段（规格 §38）已完成
 
 ### 已完成
 
@@ -99,17 +100,28 @@ P1 阶段任务已全部完成，无进行中项。
 
 ---
 
+## 3.1 P2 阶段（规格 §39）进行中
+
+### 已完成
+
+| 功能 | 状态 | 文件与说明 |
+|---|---|---|
+| 功率曲线（详情页） | ✅ 12/12 测试 | `src/features/analysis/powerCurve.ts`：能量积分法（p·Δt 前缀和 + 双指针），Δt 钳制 5s 防断档虚计，标准 11 档时长（1s~1h），跨度不足时长无点；`src/charts/PowerCurveChart.tsx`：对数时长轴 LineChart，挂详情页图表区 |
+| 个人纪录（统计页区块） | ✅ 13/13 测试 | `src/features/records/personalRecords.ts`：`buildRideRecords`（最远距离/最长时长/最多爬升，并列保留最早）+ `buildPowerRecords`（合并全活动功率曲线取各时长最佳，5s/1min/5min/20min 四档）；`RecordCards.tsx` 卡片墙（值+日期+详情链接）；统计页底部挂载，全时段口径与范围选择无关，功率纪录异步全量扫描（计算中/失败/无功率数据三态提示） |
+
+---
+
 ## 4. 未实现功能（后续工作项）
 
 ### P1 剩余（规格 §38）
 
 - [x] FTP / 心率区间 / 功率区间分布展示 + NP/IF/TSS + 着色切换 UI（详情页，Agent L ✅）
 
-### P2（规格 §39，未开始）
+### P2（规格 §39，进行中）
 
 - [ ] Segment / 路线分析
-- [ ] 个人纪录（PR）
-- [ ] 功率曲线
+- [x] 个人纪录（PR）（✅ 见 §3.1：骑行纪录 3 项 + 功率纪录 4 档，统计页区块）
+- [x] 功率曲线（✅ 见 §3.1：详情页 PowerCurveChart，11 档标准时长）
 - [ ] FTP 自动估算 / VO2Max 估算
 - [ ] Fitness / Fatigue（训练状态）
 - [ ] 骑行区域统计 / 热力图

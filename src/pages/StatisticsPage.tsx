@@ -4,6 +4,8 @@
  * 展示十个统计指标——骑行次数、总距离、总时间、总爬升、平均单次距离、
  * 平均速度、最长骑行、单次最大爬升、最快速度、最高功率，
  * 支持本周/本月/今年/过去 12 个月/全部/自定义六种时间范围。
+ * 下方为「个人纪录」区块（规格 §39 P2）：全时段骑行纪录 + 功率纪录，
+ * 与范围选择无关；功率纪录需扫描全部逐点数据，异步计算。
  *
  * 数据来自活动仓库 listAllSummaries（全量拉取后内存聚合），
  * 由 buildStatistics 纯函数计算，范围切换只重算不重查。
@@ -22,6 +24,15 @@ import {
 } from '@/features/statistics/statistics'
 import RangeSelector from '@/features/statistics/RangeSelector'
 import StatisticCards from '@/features/statistics/StatisticCards'
+import { buildPowerCurve } from '@/features/analysis/powerCurve'
+import {
+  buildPowerRecords,
+  buildRideRecords,
+  POWER_RECORD_DURATIONS,
+  type ActivityPowerCurve,
+  type PowerRecordEntry,
+} from '@/features/records/personalRecords'
+import RecordCards from '@/features/records/RecordCards'
 import '@/pages/StatisticsPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
@@ -83,6 +94,40 @@ function StatisticsPage() {
     [summaries, rangeKey, customRange],
   )
 
+  // 骑行纪录（全时段，与范围选择无关）：摘要就绪后即可计算
+  const rideRecords = useMemo(() => buildRideRecords(summaries ?? []), [summaries])
+
+  // 功率纪录：扫描全部活动逐点数据合并功率曲线（完成前为 null，失败置 failed）
+  const [powerRecords, setPowerRecords] = useState<readonly PowerRecordEntry[] | null>(null)
+  const [powerRecordsFailed, setPowerRecordsFailed] = useState(false)
+  useEffect(() => {
+    if (summaries === null || summaries.length === 0) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const items: ActivityPowerCurve[] = []
+        for (const activity of summaries) {
+          const records = await repository.getRecords(activity.id)
+          if (cancelled) {
+            return
+          }
+          items.push({ activity, curve: buildPowerCurve(records, POWER_RECORD_DURATIONS) })
+        }
+        setPowerRecords(buildPowerRecords(items))
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setPowerRecordsFailed(true)
+        }
+        console.error('Failed to scan power records', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [summaries])
+
   if (error) {
     return (
       <>
@@ -127,6 +172,11 @@ function StatisticsPage() {
       ) : (
         <StatisticCards title={RANGE_LABELS[rangeKey]} metrics={metrics} />
       )}
+      <RecordCards
+        rideRecords={rideRecords}
+        powerRecords={powerRecords}
+        powerRecordsFailed={powerRecordsFailed}
+      />
     </>
   )
 }
