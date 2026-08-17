@@ -46,7 +46,9 @@ function RouteGroupCards({ groups, failed = false, distanceUnit = 'km' }: RouteG
           {groups.map((group, index) => (
             <Link key={group.lastActivityId} className="route-card" to={`/activities/${group.lastActivityId}`}>
               <div className="route-card__header">
-                <span className="route-card__name">路线 {index + 1}</span>
+                <span className="route-card__name" title={group.lastActivityName}>
+                  {group.lastActivityName ?? `路线 ${index + 1}`}
+                </span>
                 <span className="route-card__count">{group.count} 次</span>
               </div>
               <div className="route-card__stats">

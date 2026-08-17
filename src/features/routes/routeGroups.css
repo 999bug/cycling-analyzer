@@ -48,12 +48,19 @@
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
+  /* 长标题缩略显示（flex 子元素需 min-width: 0 才能截断），完整名经 title 悬浮查看 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .route-card__count {
   color: var(--text-secondary);
+  flex-shrink: 0;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  margin-left: 8px;
 }
 
 .route-card__stats {

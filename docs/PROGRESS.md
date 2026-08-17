@@ -117,7 +117,7 @@ P1 阶段任务已全部完成，无进行中项。
 | FTP 自动估算 / VO2Max 估算（§39） | ✅ 10/10 测试 | `src/features/analysis/ftpEstimate.ts`：FTP = 近 90 天 20 分钟最佳功率 × 0.95（取整），VO2Max = 10.8 × 5 分钟最佳功率 ÷ 体重 + 7（1 位小数），非法输入 undefined；设置页 FTP 字段下方估算区块（异步扫描近 90 天含功率活动，`buildPowerCurve(records, [300, 1200])` 跨活动取最佳），「采用」按钮一键保存 FTP；无功率数据/未填体重显示引导文案（不伪造）；`Activity` 领域模型补 `name` 字段（§31，修复详情页改名提交的 tsc 遗漏） |
 | 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后低透明度（0.25）暖红 Polyline 叠加，重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
 | 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
-| 路线分析（§39） | ✅ 12/12 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；端点提取 `extractEndpoints`（统计页合并扫描复用已加载 records）；`RouteGroupCards.tsx` 统计页底部区块（路线 N 卡片：次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment 已完成（见 §4 后续工作项） |
+| 路线分析（§39） | ✅ 13/13 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；端点提取 `extractEndpoints`（统计页合并扫描复用已加载 records）；`RouteGroupCards.tsx` 统计页底部区块（路线卡片以**最近骑行标题**命名——无标题回退「路线 N」，长标题 CSS 缩略 + title 悬浮看全名；次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment 已完成（见 §4 后续工作项） |
 
 ---
 

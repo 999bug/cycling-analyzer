@@ -32,6 +32,9 @@ export interface RouteActivityInput {
   /** 活动 ID */
   id: string
 
+  /** 活动标题（卡片命名用，可为空） */
+  name?: string
+
   /** 开始时间（ISO 8601） */
   startTime: string
 
@@ -67,6 +70,9 @@ export interface RouteGroup {
 
   /** 最近骑行活动 ID（卡片跳转详情用） */
   lastActivityId: string
+
+  /** 最近骑行活动标题（卡片命名用，可为空） */
+  lastActivityName?: string
 }
 
 /** 聚类内部状态：锚点端点 + 成员 */
@@ -150,6 +156,7 @@ function toRouteGroup(group: GroupState): RouteGroup {
     bestDuration: best,
     lastRideTime: last.startTime,
     lastActivityId: last.id,
+    lastActivityName: last.name,
   }
 }
 

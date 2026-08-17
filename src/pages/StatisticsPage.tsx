@@ -169,6 +169,7 @@ function StatisticsPage() {
           const endpoints = extractEndpoints(records)
           routeItems.push({
             id: activity.id,
+            name: activity.name,
             startTime: activity.startTime,
             distance: activity.distance,
             duration: activity.duration,
