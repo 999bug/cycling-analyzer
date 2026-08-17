@@ -89,14 +89,14 @@
 | 轨迹颜色分析（§16 着色） | ✅ Agent J，32/32 测试 | `src/map/routeColoring.ts`（`buildSegments`/`buildBucketLines`/`getColorForValue`）；ActivityMap 新增 `coloring` prop（'none'\|'speed'\|'heartRate'\|'power'\|'altitude'，默认 none 向后兼容）；>500 段自动 8 桶合并 |
 | 踏频/组合图组件（§17） | ✅ Agent K，24/24 测试 | `src/charts/CadenceChart.tsx`（rpm）；`CombinedChart.tsx`（mode: 'speedHeartRate'\|'powerHeartRate'，双 Y 轴 + 降级）；`buildCombinedSeries` 以首条有效记录为对齐基准；**未挂载详情页**（待 Agent L） |
 | Calendar 日历页（§29） | ✅ Agent H，19/19 测试 | `src/features/calendar/`（calendarData 聚合 + CalendarHeatmap）；5 档距离色阶（20/50/100km 阈值）、tooltip（次数/距离/时长/爬升）、年份切换、订阅 importStore 自动刷新；hover-only（§29 未要求点击） |
+| Settings 设置页 + 导出/导入/清空（§27/§32/§33） | ✅ Agent I，34/34 测试 | `src/features/settings/`（settings.ts/exportImport.ts/dataClear.ts）；**key 规范：`'profile'`（UserProfile 对象）+ `'units'`（UnitPreferences），按域合并保存，数据恒存公制**；导出 JSON v1（app/version/activities/records/files/settings），导入按 fingerprint 去重 |
+| 高级数值筛选（§30） | ✅ Agent M，64/64 测试（含 6 新增） | `listActivities` options 新增 min/maxDistance（米）、min/maxElevationGain（米）、min/maxAvgPower（W），AND 组合含边界；**缺失 avgPower 的活动不满足功率条件**；UI 输入 km 自动转米 |
 
-### 进行中 / 待派发
+### 进行中
 
 | 任务 | 负责人 | 状态 | 涉及文件 |
 |---|---|---|---|
-| Settings 设置页 + 导出/导入/清空（§27/§32/§33） | Agent I | 🔄 | `src/pages/SettingsPage.tsx`、`src/features/settings/`；**设置 key 规范由 I 定义** |
-| 高级数值筛选（§30） | Agent M | 🔄 | repository 查询扩展 + ActivityFilters/ActivitiesPage |
-| FTP/区间/TSS + 详情页集成（§26） | Agent L | ⏳ 待派发 | 依赖 I 的设置格式 + K 的图表组件；独占修改 ActivityDetailPage（挂踏频图/组合图 + 着色切换 + 区间分布） |
+| FTP/区间/TSS + 详情页集成（§26） | Agent L | 🔄 | `src/features/analysis/`（NP/IF/TSS/区间纯函数）+ ActivityDetailPage（挂踏频图/组合图 + 着色切换 + 区间分布） |
 
 ---
 
@@ -104,11 +104,7 @@
 
 ### P1 剩余（规格 §38）
 
-- [ ] FTP / 心率区间 / 功率区间分布展示（详情页，待 Agent L）
-- [ ] Normalized Power / Intensity Factor / TSS 计算（待 Agent L）
-- [ ] 轨迹着色模式切换 UI（详情页集成，待 Agent L）
-- [ ] Settings 设置页 + 导出/导入（Agent I 进行中）
-- [ ] 高级筛选：距离/爬升/功率数值过滤（Agent M 进行中）
+- [ ] FTP / 心率区间 / 功率区间分布展示 + NP/IF/TSS + 着色切换 UI（详情页，Agent L 进行中）
 
 ### P2（规格 §39，未开始）
 
