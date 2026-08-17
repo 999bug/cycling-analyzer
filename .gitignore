@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 用户本地真实骑行数据（不进仓库）
+private-fixtures/
