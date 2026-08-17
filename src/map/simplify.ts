@@ -44,14 +44,15 @@ export function simplifyRoute(points: readonly ActivityRecord[], tolerance: numb
 /** 度转弧度 */
 const DEG_TO_RAD = Math.PI / 180
 
-/** 每纬度约 110540 米 */
-const METERS_PER_LAT = 110_540
-
-/** 每经度（赤道）约 111320 米 */
-const METERS_PER_LON = 111_320
+/**
+ * 地球平均半径（米）。
+ * 注意：投影使用「弧度 × 半径」而非「度 × 每度米数」，
+ * 两者混用会引入约 57 倍的距离误差（曾导致抽稀过度）。
+ */
+const EARTH_RADIUS_METERS = 6_371_000
 
 /**
- * 将经纬度投影为局部平面坐标（米）。
+ * 将经纬度投影为局部平面坐标（米，等距方位投影近似）。
  * 经度方向按基准纬度余弦校正，局部范围内近似度足够抽稀使用。
  *
  * @param point 轨迹点
@@ -59,8 +60,8 @@ const METERS_PER_LON = 111_320
  * @returns 平面坐标 [x, y]（米）
  */
 function project(point: RoutePoint, lat0: number): [number, number] {
-  const x = point.longitude * DEG_TO_RAD * Math.cos(lat0) * METERS_PER_LON
-  const y = point.latitude * DEG_TO_RAD * METERS_PER_LAT
+  const x = point.longitude * DEG_TO_RAD * Math.cos(lat0) * EARTH_RADIUS_METERS
+  const y = point.latitude * DEG_TO_RAD * EARTH_RADIUS_METERS
   return [x, y]
 }
 
