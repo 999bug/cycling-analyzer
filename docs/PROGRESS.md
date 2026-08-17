@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P1 阶段）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P1 全部完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -22,9 +22,9 @@
 | Phase 6 | Activity Detail（地图/图表/删除） | ✅ 完成 |
 | Phase 7 | Dashboard（周/月/总计 + 趋势图） | ✅ 完成 |
 | Phase 8 | GitHub Pages 部署（Actions + SPA 路由） | ✅ 完成 |
-| P1 阶段 | 规格 §38 高级功能 | 🔄 进行中（见 §3） |
+| P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
 
-- 验证：**174/174 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**341/341 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -91,12 +91,11 @@
 | Calendar 日历页（§29） | ✅ Agent H，19/19 测试 | `src/features/calendar/`（calendarData 聚合 + CalendarHeatmap）；5 档距离色阶（20/50/100km 阈值）、tooltip（次数/距离/时长/爬升）、年份切换、订阅 importStore 自动刷新；hover-only（§29 未要求点击） |
 | Settings 设置页 + 导出/导入/清空（§27/§32/§33） | ✅ Agent I，34/34 测试 | `src/features/settings/`（settings.ts/exportImport.ts/dataClear.ts）；**key 规范：`'profile'`（UserProfile 对象）+ `'units'`（UnitPreferences），按域合并保存，数据恒存公制**；导出 JSON v1（app/version/activities/records/files/settings），导入按 fingerprint 去重 |
 | 高级数值筛选（§30） | ✅ Agent M，64/64 测试（含 6 新增） | `listActivities` options 新增 min/maxDistance（米）、min/maxElevationGain（米）、min/maxAvgPower（W），AND 组合含边界；**缺失 avgPower 的活动不满足功率条件**；UI 输入 km 自动转米 |
+| 训练分析 + 详情页集成（§26） | ✅ Agent L，41/41 测试 | `src/features/analysis/`（normalizedPower.ts NP 30s 滑动平均 4 次方、intensity.ts IF/TSS、zones.ts 心率 60/70/80/90% + 功率 55/75/90/105% 5 区间，按记录时间间隔累计）；ActivityDetailPage：标准化功率卡 + 踏频图/速度+心率组合图挂载 + 轨迹着色切换（默认/速度/心率/功率/海拔）+ 训练区间区块（区间分布条 + IF/TSS）；**无 FTP/最大心率配置不伪造计算，显示引导文案** |
 
 ### 进行中
 
-| 任务 | 负责人 | 状态 | 涉及文件 |
-|---|---|---|---|
-| FTP/区间/TSS + 详情页集成（§26） | Agent L | 🔄 | `src/features/analysis/`（NP/IF/TSS/区间纯函数）+ ActivityDetailPage（挂踏频图/组合图 + 着色切换 + 区间分布） |
+P1 阶段任务已全部完成，无进行中项。
 
 ---
 
@@ -104,7 +103,7 @@
 
 ### P1 剩余（规格 §38）
 
-- [ ] FTP / 心率区间 / 功率区间分布展示 + NP/IF/TSS + 着色切换 UI（详情页，Agent L 进行中）
+- [x] FTP / 心率区间 / 功率区间分布展示 + NP/IF/TSS + 着色切换 UI（详情页，Agent L ✅）
 
 ### P2（规格 §39，未开始）
 

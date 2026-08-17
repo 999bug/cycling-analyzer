@@ -90,9 +90,42 @@
   color: var(--text-secondary);
 }
 
-/* 地图全宽 */
+/* 地图区：着色切换按钮组 + 地图（规格 §16） */
 .activity-detail__map {
   width: 100%;
+}
+
+.activity-detail__coloring {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.activity-detail__coloring-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.activity-detail__coloring-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.activity-detail__coloring-btn--active {
+  border-color: var(--primary);
+  background-color: rgba(79, 140, 255, 0.15);
+  color: var(--primary);
 }
 
 /* 图表网格（2 列） */
@@ -100,6 +133,86 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+}
+
+/* 训练区间区块（规格 §26） */
+.activity-detail__zones {
+  padding: 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.activity-detail__zones-title {
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.activity-detail__zones-guide {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.activity-detail__zone-group {
+  margin-bottom: 14px;
+}
+
+.activity-detail__zone-group-title {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 区间分布行：名称 + 分布条 + 时长 + 百分比 */
+.zone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.zone-row__label {
+  flex-shrink: 0;
+  width: 96px;
+  color: var(--text);
+}
+
+.zone-row__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background-color: var(--bg);
+  overflow: hidden;
+}
+
+.zone-row__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.zone-row__time {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.zone-row__percent {
+  flex-shrink: 0;
+  width: 40px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* IF/TSS 汇总行 */
+.activity-detail__zones-metrics {
+  display: flex;
+  gap: 20px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* 提示态（加载中/不存在/出错） */
