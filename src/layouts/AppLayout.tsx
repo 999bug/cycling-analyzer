@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/activities', label: '骑行记录' },
   { to: '/statistics', label: '统计' },
   { to: '/calendar', label: '日历' },
+  { to: '/heatmap', label: '热力图' },
   { to: '/settings', label: '设置' },
 ]
 

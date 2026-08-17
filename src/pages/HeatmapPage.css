@@ -1,0 +1,28 @@
+/**
+ * 骑行热力图页样式（规格 §39）。
+ * 地图占满主内容区剩余高度，颜色取自全局 CSS 变量。
+ */
+.heatmap-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.heatmap-page__notice {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.heatmap-page__summary {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* 地图容器：占满剩余高度，圆角与卡片风格一致 */
+.heatmap-page__map {
+  flex: 1;
+  min-height: 480px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}

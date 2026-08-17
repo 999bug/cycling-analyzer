@@ -5,6 +5,7 @@ import ActivitiesPage from '@/pages/ActivitiesPage'
 import ActivityDetailPage from '@/pages/ActivityDetailPage'
 import CalendarPage from '@/pages/CalendarPage'
 import DashboardPage from '@/pages/DashboardPage'
+import HeatmapPage from '@/pages/HeatmapPage'
 import SettingsPage from '@/pages/SettingsPage'
 import StatisticsPage from '@/pages/StatisticsPage'
 
@@ -22,6 +23,7 @@ function App() {
         <Route path={ROUTES[3]} element={<StatisticsPage />} />
         <Route path={ROUTES[4]} element={<CalendarPage />} />
         <Route path={ROUTES[5]} element={<SettingsPage />} />
+        <Route path={ROUTES[6]} element={<HeatmapPage />} />
       </Route>
     </Routes>
   )

@@ -9,4 +9,5 @@ export const ROUTES = [
   '/statistics',
   '/calendar',
   '/settings',
+  '/heatmap',
 ] as const
