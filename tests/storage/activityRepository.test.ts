@@ -223,6 +223,117 @@ describe('DexieActivityRepository', () => {
       const none = await repo.listActivities({ search: '不存在' });
       expect(none.items).toHaveLength(0);
     });
+
+    it('按最小/最大距离筛选（单位米，含边界等于）', async () => {
+      const [short, mid, long] = await seed([
+        { distance: 50000 },
+        { distance: 100000 },
+        { distance: 150000 },
+      ]);
+      // 最小距离含边界：distance = 100000 满足 minDistance = 100000
+      const min = await repo.listActivities({
+        minDistance: 100000,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(min.items.map((a) => a.id)).toEqual([mid.id, long.id]);
+
+      const max = await repo.listActivities({
+        maxDistance: 100000,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(max.items.map((a) => a.id)).toEqual([short.id, mid.id]);
+
+      const both = await repo.listActivities({
+        minDistance: 60000,
+        maxDistance: 140000,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(both.items.map((a) => a.id)).toEqual([mid.id]);
+      expect(both.total).toBe(1);
+    });
+
+    it('按最小爬升/最小平均功率筛选，功率缺失的活动被排除', async () => {
+      // distance 各不相同：保证 distance 升序排序下结果顺序确定
+      const [low, high, noPower] = await seed([
+        { distance: 10000, elevationGain: 500, avgPower: 150 },
+        { distance: 20000, elevationGain: 1200, avgPower: 250 },
+        { distance: 30000, elevationGain: 2000 },
+      ]);
+      const byGain = await repo.listActivities({
+        minElevationGain: 1000,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(byGain.items.map((a) => a.id)).toEqual([high.id, noPower.id]);
+      expect(byGain.items.some((a) => a.id === low.id)).toBe(false);
+
+      // avgPower 缺失（undefined）的活动不满足任何功率条件
+      const byPower = await repo.listActivities({
+        minAvgPower: 200,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(byPower.items.map((a) => a.id)).toEqual([high.id]);
+    });
+
+    it('按最大爬升/最大平均功率筛选（含边界等于）', async () => {
+      // distance 各不相同：保证 distance 升序排序下结果顺序确定
+      const [low, mid, high] = await seed([
+        { distance: 10000, elevationGain: 800, avgPower: 180 },
+        { distance: 20000, elevationGain: 1000, avgPower: 200 },
+        { distance: 30000, elevationGain: 1500, avgPower: 300 },
+      ]);
+      const result = await repo.listActivities({
+        maxElevationGain: 1000,
+        maxAvgPower: 200,
+        sortBy: 'distance',
+        sortOrder: 'asc',
+      });
+      expect(result.items.map((a) => a.id)).toEqual([low.id, mid.id]);
+      expect(result.items.some((a) => a.id === high.id)).toBe(false);
+    });
+
+    it('数值筛选与月份/类型组合（AND 语义）', async () => {
+      const [match, shortDist, wrongMonth] = await seed([
+        {
+          startTime: '2026-08-01T08:00:00.000Z',
+          distance: 120000,
+          activityType: 'cycling',
+        },
+        {
+          startTime: '2026-08-02T08:00:00.000Z',
+          distance: 90000,
+          activityType: 'cycling',
+        },
+        {
+          startTime: '2026-07-15T08:00:00.000Z',
+          distance: 130000,
+          activityType: 'cycling',
+        },
+      ]);
+      const result = await repo.listActivities({
+        month: '2026-08',
+        activityType: 'cycling',
+        minDistance: 100000,
+      });
+      expect(result.items.map((a) => a.id)).toEqual([match.id]);
+      expect(result.total).toBe(1);
+
+      // 数值条件单独使用时不影响其他条件（向后兼容：未传数值字段时不筛选）
+      const all = await repo.listActivities({ month: '2026-08' });
+      expect(all.items.map((a) => a.id)).toEqual([shortDist.id, match.id]);
+      expect(all.items.some((a) => a.id === wrongMonth.id)).toBe(false);
+    });
+
+    it('数值筛选无匹配时返回空结果', async () => {
+      await seed([{ distance: 50000, elevationGain: 300, avgPower: 150 }]);
+      const result = await repo.listActivities({ minDistance: 100000 });
+      expect(result.items).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
   });
 
   describe('updateName / deleteActivity / deleteAll', () => {

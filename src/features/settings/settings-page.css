@@ -1,0 +1,162 @@
+/**
+ * 设置页样式（个人信息表单、单位偏好、数据管理区）。
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），
+ * 深色基调与全局一致；危险操作按钮使用红色强调（规格 §32）。
+ */
+
+/* 页面布局 */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 560px;
+}
+
+/* 设置区块（个人信息 / 单位 / 数据管理） */
+.settings-section {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.settings-section__title {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.settings-section__hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+/* 表单字段行：左侧定宽标签 + 右侧输入 */
+.settings-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-field__label {
+  width: 120px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-field__input,
+.settings-field__select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-field__input {
+  flex: 1;
+}
+
+.settings-field__input--number {
+  flex: 0 1 140px;
+}
+
+.settings-field__select {
+  min-width: 160px;
+}
+
+.settings-field__input:focus,
+.settings-field__select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* 输入后缀单位 */
+.settings-field__unit {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* 表单操作区 */
+.settings-form__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 通用按钮 */
+.settings-button {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.settings-button:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.settings-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 主操作（保存设置） */
+.settings-button--primary {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* 危险操作（清空全部数据，红字红边，规格 §32） */
+.settings-button--danger {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+
+.settings-button--danger:hover:not(:disabled) {
+  background-color: rgba(255, 107, 107, 0.08);
+}
+
+/* 数据管理操作区 */
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* 隐藏的文件选择输入（由「导入数据」按钮触发） */
+.settings-file-input {
+  display: none;
+}
+
+/* 操作结果提示 */
+.settings-message {
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.settings-message--success {
+  background-color: rgba(76, 175, 80, 0.12);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  color: #81c784;
+}
+
+.settings-message--error {
+  background-color: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
+}

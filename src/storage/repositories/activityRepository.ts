@@ -51,6 +51,24 @@ export interface ActivityListOptions {
 
   /** 文本搜索（name/fileName 模糊匹配，忽略大小写） */
   search?: string;
+
+  /** 最小距离（米，undefined = 不限制；规格 §30 数值筛选） */
+  minDistance?: number;
+
+  /** 最大距离（米，undefined = 不限制） */
+  maxDistance?: number;
+
+  /** 最小累计爬升（米，undefined = 不限制） */
+  minElevationGain?: number;
+
+  /** 最大累计爬升（米，undefined = 不限制） */
+  maxElevationGain?: number;
+
+  /** 最小平均功率（W，undefined = 不限制；功率缺失的活动不满足条件） */
+  minAvgPower?: number;
+
+  /** 最大平均功率（W，undefined = 不限制；功率缺失的活动不满足条件） */
+  maxAvgPower?: number;
 }
 
 /**
@@ -120,9 +138,9 @@ export interface ActivityRepository {
   getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]>;
 
   /**
-   * 列表查询：排序 + 分页 + 月份/类型筛选 + 文本搜索。
+   * 列表查询：排序 + 分页 + 月份/类型筛选 + 文本搜索 + 距离/爬升/功率数值筛选。
    *
-   * @param options 查询选项
+   * @param options 查询选项（数值条件均为含边界比较，组合语义为 AND）
    * @returns 当前页摘要与总条数
    */
   listActivities(options?: ActivityListOptions): Promise<ActivityListResult>;
@@ -244,6 +262,12 @@ export class DexieActivityRepository implements ActivityRepository {
       month,
       activityType,
       search,
+      minDistance,
+      maxDistance,
+      minElevationGain,
+      maxElevationGain,
+      minAvgPower,
+      maxAvgPower,
     } = options ?? {};
 
     // 内存过滤：个人本地数据量级小，全量过滤 + 内存排序保证多条件组合正确
@@ -263,6 +287,27 @@ export class DexieActivityRepository implements ActivityRepository {
             (a.name ?? '').toLowerCase().includes(keyword),
         );
       }
+    }
+
+    // 数值范围筛选（单位与领域模型一致：距离米、爬升米、功率 W；含边界，组合为 AND）。
+    // avgPower 为可选字段：缺失的活动不满足任何功率条件（显式排除 undefined）。
+    if (minDistance !== undefined) {
+      items = items.filter((a) => a.distance >= minDistance);
+    }
+    if (maxDistance !== undefined) {
+      items = items.filter((a) => a.distance <= maxDistance);
+    }
+    if (minElevationGain !== undefined) {
+      items = items.filter((a) => a.elevationGain >= minElevationGain);
+    }
+    if (maxElevationGain !== undefined) {
+      items = items.filter((a) => a.elevationGain <= maxElevationGain);
+    }
+    if (minAvgPower !== undefined) {
+      items = items.filter((a) => a.avgPower !== undefined && a.avgPower >= minAvgPower);
+    }
+    if (maxAvgPower !== undefined) {
+      items = items.filter((a) => a.avgPower !== undefined && a.avgPower <= maxAvgPower);
     }
 
     // 排序（startTime 为 ISO 字符串，字典序即时间序；数字字段按值序）

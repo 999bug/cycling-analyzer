@@ -1,7 +1,7 @@
 /**
  * 骑行记录列表页集成测试（规格 §14）。
  * 使用 fake-indexeddb + 真仓库：造 25 条跨月/跨类型数据，
- * 验证排序切换、搜索、月份/类型筛选、分页、空状态与行点击跳转。
+ * 验证排序切换、搜索、月份/类型/数值筛选、分页、空状态与行点击跳转。
  * 日期断言固定 UTC 时区（beforeAll 设置、afterAll 恢复，避免污染共享进程影响其他测试文件）。
  */
 import 'fake-indexeddb/auto'
@@ -248,5 +248,101 @@ describe('骑行记录列表页', () => {
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
     await user.click(screen.getAllByRole('row')[1])
     expect(await screen.findByText('详情页 act-01')).toBeInTheDocument()
+  })
+
+  it('数值筛选：距离/爬升/功率 AND 组合，输入为空不限制', async () => {
+    // 三条活动：a 距离/爬升达标但功率不足；b 距离达标但爬升不足；c 爬升/功率达标但距离不足
+    await repo.addActivities([
+      {
+        id: 'a',
+        fileId: 'file-a',
+        fileName: 'a.fit',
+        fingerprint: 'fp-a',
+        activityType: 'cycling',
+        startTime: '2026-08-03T10:00:00.000Z',
+        endTime: '2026-08-03T12:00:00.000Z',
+        duration: 7200,
+        elapsedTime: 7200,
+        distance: 120000,
+        elevationGain: 1500,
+        avgSpeed: 8,
+        avgHeartRate: 150,
+        avgPower: 180,
+      },
+      {
+        id: 'b',
+        fileId: 'file-b',
+        fileName: 'b.fit',
+        fingerprint: 'fp-b',
+        activityType: 'cycling',
+        startTime: '2026-08-02T10:00:00.000Z',
+        endTime: '2026-08-02T12:00:00.000Z',
+        duration: 7200,
+        elapsedTime: 7200,
+        distance: 120000,
+        elevationGain: 800,
+        avgSpeed: 8,
+        avgHeartRate: 150,
+        avgPower: 250,
+      },
+      {
+        id: 'c',
+        fileId: 'file-c',
+        fileName: 'c.fit',
+        fingerprint: 'fp-c',
+        activityType: 'cycling',
+        startTime: '2026-08-01T10:00:00.000Z',
+        endTime: '2026-08-01T12:00:00.000Z',
+        duration: 7200,
+        elapsedTime: 7200,
+        distance: 90000,
+        elevationGain: 1500,
+        avgSpeed: 8,
+        avgHeartRate: 150,
+        avgPower: 250,
+      },
+    ])
+    renderPage()
+
+    // 初始 3 条数据（表头 + 3 行）
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(4))
+
+    // 最小距离 100 km → 只剩 a、b（120km 达标，90km 被排除）
+    const distanceInput = screen.getByLabelText('距离(km)')
+    await user.type(distanceInput, '100')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3))
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-08-03T10:00:00.000Z')} 骑行`,
+    )
+
+    // 再加最小爬升 1000 m → 只剩 a（b 的 800m 被排除）
+    const elevationInput = screen.getByLabelText('爬升(m)')
+    await user.type(elevationInput, '1000')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2))
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-08-03T10:00:00.000Z')} 骑行`,
+    )
+
+    // 再加最小平均功率 200 W → a 的 180W 被排除，无匹配
+    const powerInput = screen.getByLabelText('平均功率(W)')
+    await user.type(powerInput, '200')
+    expect(await screen.findByText('没有符合筛选条件的记录')).toBeInTheDocument()
+
+    // 清空功率 → 距离 ≥100km 且爬升 ≥1000m → 只剩 a
+    await user.clear(powerInput)
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2))
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-08-03T10:00:00.000Z')} 骑行`,
+    )
+
+    // 清空距离 → 爬升 ≥1000m（功率已清空）→ a、c（c 之前被距离条件排除，现在恢复）
+    await user.clear(distanceInput)
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3))
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-08-03T10:00:00.000Z')} 骑行`,
+    )
+    expect(screen.getAllByRole('row')[2]).toHaveTextContent(
+      `${formatDate('2026-08-01T10:00:00.000Z')} 骑行`,
+    )
   })
 })
