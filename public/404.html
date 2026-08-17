@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>骑行数据</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // MIT License
+      // https://github.com/rafgraph/spa-github-pages
+      //
+      // GitHub Pages 没有 history fallback：直接访问 /activities 等前端路由会 404。
+      // 本脚本把当前 URL 的路径和查询串转换为纯查询串形式，然后重定向浏览器，
+      // 使 GitHub Pages 对根路径返回 index.html，从而加载单页应用。
+      // 例如 https://999bug.github.io/cycling-analyzer/activities?a=b&c=d#qwe
+      // 重定向为 https://999bug.github.io/cycling-analyzer/?/activities&a=b~and~c=d#qwe
+      //
+      // 部署在 Project Pages 子路径（username.github.io/repo-name）下，
+      // pathSegmentsToKeep = 1 保留仓库名前缀 /cycling-analyzer。
+      var pathSegmentsToKeep = 1;
+
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
