@@ -9,6 +9,7 @@ import ActivityFilters from '@/features/activity/ActivityFilters'
 import ActivityListTable, { type SortField, type SortOrder } from '@/features/activity/ActivityListTable'
 import ActivityPagination from '@/features/activity/ActivityPagination'
 import '@/features/activity/activity-page.css'
+import { useUnits } from '@/hooks/useUnits'
 import { db } from '@/storage/db'
 import {
   DexieActivityRepository,
@@ -89,6 +90,8 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
   const [months, setMonths] = useState<string[]>([])
   const [types, setTypes] = useState<string[]>([])
   const [reloadKey, setReloadKey] = useState(0)
+  // 距离显示单位（规格 §27）
+  const { distance: distanceUnit } = useUnits()
 
   // 挂载时从全量数据生成月份/类型筛选选项
   useEffect(() => {
@@ -248,6 +251,7 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
             sortOrder={query.sortOrder}
             onSortChange={handleSortChange}
             onRowClick={handleRowClick}
+            distanceUnit={distanceUnit}
           />
           {totalPages > 1 && (
             <ActivityPagination

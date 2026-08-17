@@ -17,12 +17,17 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { db } from '@/storage/db'
 import {
   formatDate,
-  formatDistance,
   formatDuration,
   formatElevation,
-  formatSpeed,
 } from '@/utils/format'
-import { getSettings, type SettingsData } from '@/features/settings/settings'
+import {
+  formatDistanceByUnit,
+  formatSpeedByUnit,
+  getSettings,
+  type DistanceUnit,
+  type SettingsData,
+  type TimeFormat,
+} from '@/features/settings/settings'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import {
@@ -101,13 +106,27 @@ interface MetricItem {
  * @param iso ISO 8601 时间字符串
  * @returns 本地时区展示字符串，无效输入返回占位符
  */
-function formatDateTime(iso: string): string {
+/**
+ * 本地时区时间格式 'YYYY-MM-DD HH:mm'（24h）或 'YYYY-MM-DD h:mm AM/PM'（12h）。
+ *
+ * @param iso ISO 8601 时间字符串
+ * @param timeFormat 时间格式（缺省 24 小时制，规格 §27）
+ * @returns 本地时区展示字符串，无效输入返回占位符
+ */
+function formatDateTime(iso: string, timeFormat: TimeFormat = '24h'): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {
     return '—'
   }
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  if (timeFormat === '12h') {
+    const hours24 = date.getHours()
+    const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+    const meridiem = hours24 < 12 ? 'AM' : 'PM'
+    return `${datePart} ${hours12}:${pad(date.getMinutes())} ${meridiem}`
+  }
+  return `${datePart} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 /**
@@ -125,17 +144,18 @@ function displayNumber(value: number | undefined, unit: string): string {
 }
 
 /**
- * 组装 8 个指标卡（规格 §15）。
+ * 组装 8 个指标卡（规格 §15；距离/速度按显示单位换算，规格 §27）。
  *
  * @param activity 活动摘要
+ * @param distanceUnit 距离显示单位
  * @returns 指标卡列表
  */
-function buildMetrics(activity: ActivitySummary): MetricItem[] {
+function buildMetrics(activity: ActivitySummary, distanceUnit: DistanceUnit): MetricItem[] {
   return [
-    { label: '距离', value: formatDistance(activity.distance) },
+    { label: '距离', value: formatDistanceByUnit(activity.distance, distanceUnit) },
     { label: '时长', value: formatDuration(activity.duration) },
     { label: '爬升', value: formatElevation(activity.elevationGain) },
-    { label: '平均速度', value: formatSpeed(activity.avgSpeed) },
+    { label: '平均速度', value: formatSpeedByUnit(activity.avgSpeed, distanceUnit) },
     { label: '平均心率', value: displayNumber(activity.avgHeartRate, 'bpm') },
     { label: '平均功率', value: displayNumber(activity.avgPower, 'W') },
     { label: '平均踏频', value: displayNumber(activity.avgCadence, 'rpm') },
@@ -319,9 +339,12 @@ function ActivityDetailPage() {
   }
 
   const typeLabel = ACTIVITY_TYPE_LABELS[activity.activityType] ?? activity.activityType
+  // 单位偏好（设置未加载完成时回退默认公制，规格 §27）
+  const distanceUnit = settings?.units.distance ?? 'km'
+  const timeFormat = settings?.units.timeFormat ?? '24h'
   // 9 个指标卡：基础 8 卡 + 标准化功率（无功率数据/样本不足时显示 '—'）
   const metrics = [
-    ...buildMetrics(activity),
+    ...buildMetrics(activity, distanceUnit),
     { label: '标准化功率', value: displayNumber(normalizedPower, 'W') },
   ]
 
@@ -379,7 +402,7 @@ function ActivityDetailPage() {
           )}
           <div className="activity-detail__meta">
             <span className="activity-detail__type">{typeLabel}</span>
-            <time className="activity-detail__time">{formatDateTime(activity.startTime)}</time>
+            <time className="activity-detail__time">{formatDateTime(activity.startTime, timeFormat)}</time>
           </div>
         </div>
         <button

@@ -5,6 +5,7 @@
  * 每日一格，颜色按当日总距离分 5 档；鼠标移入格子通过原生 title
  * 提示当日聚合详情。年份切换为受控模式（页面持有年份状态）。
  */
+import type { DistanceUnit } from '@/features/settings/settings'
 import type { CalendarData } from './calendarData'
 import {
   buildYearGrid,
@@ -26,6 +27,9 @@ export interface CalendarHeatmapProps {
 
   /** 年份切换回调（上一年/下一年） */
   onYearChange: (year: number) => void
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /** 图例展示档位（少 → 多） */
@@ -34,7 +38,7 @@ const LEGEND_LEVELS: IntensityLevel[] = [0, 1, 2, 3, 4]
 /**
  * 日历热力组件。
  */
-function CalendarHeatmap({ data, year, onYearChange }: CalendarHeatmapProps) {
+function CalendarHeatmap({ data, year, onYearChange, distanceUnit = 'km' }: CalendarHeatmapProps) {
   const grid = buildYearGrid(year, data)
 
   return (
@@ -88,7 +92,7 @@ function CalendarHeatmap({ data, year, onYearChange }: CalendarHeatmapProps) {
               title={
                 cell.summary === null
                   ? undefined
-                  : formatDayTooltip(cell.dateKey, cell.summary)
+                  : formatDayTooltip(cell.dateKey, cell.summary, distanceUnit)
               }
             />
           )

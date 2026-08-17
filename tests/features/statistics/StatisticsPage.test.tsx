@@ -13,6 +13,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { saveSettings } from '@/features/settings/settings'
 import type { Activity } from '@/types/activity'
 import StatisticsPage from '@/pages/StatisticsPage'
 
@@ -30,6 +31,8 @@ beforeEach(async () => {
   await testDb.activities.clear()
   // 逐点表独立清理：个人纪录的功率纪录扫描读取该表
   await testDb.activity_records.clear()
+  // 单位偏好影响显示层（§27）：用例间清理防泄漏
+  await testDb.settings.clear()
 })
 
 afterEach(() => {
@@ -191,6 +194,19 @@ describe('统计页面', () => {
     render(<StatisticsPage />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText(/加载失败/)).toBeInTheDocument()
+  })
+
+  it('英里单位设置后距离/速度按 mi 显示（规格 §27）', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivities([makeActivity(0, new Date().toISOString(), 50000, 3600, 100, 10)])
+    await saveSettings({ units: { distance: 'mi' } })
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    // 50000 m = 31.07 mi：总距离/平均单次/最长骑行/个人纪录最远距离均按英里显示
+    expect((await screen.findAllByText('31.07 mi')).length).toBeGreaterThanOrEqual(3)
+    // 最快速度 10 m/s = 22.4 mph
+    expect(screen.getByText('22.4 mph')).toBeInTheDocument()
+    expect(screen.queryByText('50.00 km')).not.toBeInTheDocument()
   })
 
   it('个人纪录区块：展示全时段骑行纪录与功率纪录（与范围选择无关）', async () => {

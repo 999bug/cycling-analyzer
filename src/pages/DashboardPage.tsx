@@ -14,6 +14,7 @@ import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
 import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
 import { useImportStore } from '@/stores/importStore'
+import { useUnits } from '@/hooks/useUnits'
 import '@/pages/DashboardPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
@@ -27,6 +28,8 @@ function DashboardPage() {
   const [error, setError] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新统计（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 距离显示单位（规格 §27）
+  const { distance: distanceUnit } = useUnits()
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -86,11 +89,11 @@ function DashboardPage() {
     <>
       <h1>仪表盘</h1>
       <div className="dashboard__stats">
-        <StatCards title="本周" summary={data.week} />
-        <StatCards title="本月" summary={data.month} />
-        <StatCards title="总计" summary={data.total} />
+        <StatCards title="本周" summary={data.week} distanceUnit={distanceUnit} />
+        <StatCards title="本月" summary={data.month} distanceUnit={distanceUnit} />
+        <StatCards title="总计" summary={data.total} distanceUnit={distanceUnit} />
       </div>
-      <TrendChart trends={data.trends} />
+      <TrendChart trends={data.trends} distanceUnit={distanceUnit} />
       <TrainingStatusSection />
     </>
   )

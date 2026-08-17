@@ -336,3 +336,55 @@ describe('活动重命名（规格 §31）', () => {
     expect((await repo.getById('act-1'))?.name).toBe('夜骑')
   })
 })
+
+describe('单位偏好显示（规格 §27）', () => {
+  let repo: DexieActivityRepository
+
+  beforeEach(() => {
+    repo = new DexieActivityRepository(testDb)
+    // jsdom 中 getBoundingClientRect 恒为 0，mock 容器尺寸让 Recharts 正常渲染
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 800,
+      height: 220,
+    } as DOMRect)
+  })
+
+  it('英里单位设置后距离/速度按 mi 显示', async () => {
+    // 本地时区 2026-08-01 15:30 构造，距离 16093.44 m = 10.00 mi，平均速度 10 m/s = 22.4 mph
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200], [120, 140], {
+        startTime: new Date(2026, 7, 1, 15, 30).toISOString(),
+        distance: 16093.44,
+      }),
+    )
+    await saveSettings({ units: { distance: 'mi' } })
+    renderPage()
+
+    expect(await screen.findByText('10.00 mi')).toBeInTheDocument()
+    expect(screen.getByText('22.4 mph')).toBeInTheDocument()
+  })
+
+  it('12 小时制设置后开始时间按 12h 显示', async () => {
+    // 本地时区 15:30 → '3:30 PM'（Date 本地方法构造，时区无关）
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200], [120, 140], {
+        startTime: new Date(2026, 7, 1, 15, 30).toISOString(),
+      }),
+    )
+    await saveSettings({ units: { timeFormat: '12h' } })
+    renderPage()
+
+    expect(await screen.findByText(/3:30 PM/)).toBeInTheDocument()
+  })
+
+  it('默认 24 小时制显示', async () => {
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200], [120, 140], {
+        startTime: new Date(2026, 7, 1, 15, 30).toISOString(),
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByText(/15:30/)).toBeInTheDocument()
+  })
+})

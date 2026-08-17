@@ -3,7 +3,12 @@
  * 负责列定义、排序表头与行渲染；数据与交互回调由父组件注入。
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
-import { formatDate, formatDistance, formatDuration, formatElevation, formatSpeed } from '@/utils/format'
+import { formatDate, formatDuration, formatElevation } from '@/utils/format'
+import {
+  formatDistanceByUnit,
+  formatSpeedByUnit,
+  type DistanceUnit,
+} from '@/features/settings/settings'
 
 /** 可排序字段（与仓库 listActivities 的 sortBy 一致） */
 export type SortField = 'startTime' | 'distance' | 'duration'
@@ -26,6 +31,9 @@ interface ActivityListTableProps {
 
   /** 行点击回调（传入活动 ID，跳转详情页） */
   onRowClick: (id: string) => void
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /** 列定义：标题、可排序字段、对齐方式与单元格渲染 */
@@ -38,59 +46,67 @@ interface Column {
   render: (item: ActivitySummary) => string
 }
 
-const COLUMNS: Column[] = [
-  {
-    key: 'startTime',
-    label: '日期',
-    sortBy: 'startTime',
-    align: 'left',
-    render: (item) => formatDate(item.startTime),
-  },
-  {
-    key: 'title',
-    label: '标题',
-    align: 'left',
-    render: (item) => item.name ?? `${formatDate(item.startTime)} 骑行`,
-  },
-  {
-    key: 'distance',
-    label: '距离',
-    sortBy: 'distance',
-    align: 'right',
-    render: (item) => formatDistance(item.distance),
-  },
-  {
-    key: 'duration',
-    label: '时长',
-    sortBy: 'duration',
-    align: 'right',
-    render: (item) => formatDuration(item.duration),
-  },
-  {
-    key: 'elevation',
-    label: '爬升',
-    align: 'right',
-    render: (item) => formatElevation(item.elevationGain),
-  },
-  {
-    key: 'speed',
-    label: '平均速度',
-    align: 'right',
-    render: (item) => formatSpeed(item.avgSpeed),
-  },
-  {
-    key: 'heartRate',
-    label: '平均心率',
-    align: 'right',
-    render: (item) => formatMetric(item.avgHeartRate, 'bpm'),
-  },
-  {
-    key: 'power',
-    label: '平均功率',
-    align: 'right',
-    render: (item) => formatMetric(item.avgPower, 'W'),
-  },
-]
+/**
+ * 构建列定义（距离/速度按显示单位格式化）。
+ *
+ * @param distanceUnit 距离显示单位
+ * @returns 列定义列表
+ */
+function buildColumns(distanceUnit: DistanceUnit): Column[] {
+  return [
+    {
+      key: 'startTime',
+      label: '日期',
+      sortBy: 'startTime',
+      align: 'left',
+      render: (item) => formatDate(item.startTime),
+    },
+    {
+      key: 'title',
+      label: '标题',
+      align: 'left',
+      render: (item) => item.name ?? `${formatDate(item.startTime)} 骑行`,
+    },
+    {
+      key: 'distance',
+      label: '距离',
+      sortBy: 'distance',
+      align: 'right',
+      render: (item) => formatDistanceByUnit(item.distance, distanceUnit),
+    },
+    {
+      key: 'duration',
+      label: '时长',
+      sortBy: 'duration',
+      align: 'right',
+      render: (item) => formatDuration(item.duration),
+    },
+    {
+      key: 'elevation',
+      label: '爬升',
+      align: 'right',
+      render: (item) => formatElevation(item.elevationGain),
+    },
+    {
+      key: 'speed',
+      label: '平均速度',
+      align: 'right',
+      render: (item) => formatSpeedByUnit(item.avgSpeed, distanceUnit),
+    },
+    {
+      key: 'heartRate',
+      label: '平均心率',
+      align: 'right',
+      render: (item) => formatMetric(item.avgHeartRate, 'bpm'),
+    },
+    {
+      key: 'power',
+      label: '平均功率',
+      align: 'right',
+      render: (item) => formatMetric(item.avgPower, 'W'),
+    },
+  ]
+}
 
 /**
  * 格式化心率/功率等数值指标（无效值显示占位符）。
@@ -106,12 +122,13 @@ function formatMetric(value: number | null | undefined, unit: string): string {
 /**
  * 骑行记录表格。
  */
-function ActivityListTable({ items, sortBy, sortOrder, onSortChange, onRowClick }: ActivityListTableProps) {
+function ActivityListTable({ items, sortBy, sortOrder, onSortChange, onRowClick, distanceUnit = 'km' }: ActivityListTableProps) {
+  const columns = buildColumns(distanceUnit)
   return (
     <table className="activity-table">
       <thead>
         <tr>
-          {COLUMNS.map((col) => {
+          {columns.map((col) => {
             const sortField = col.sortBy
             return (
               <th key={col.key} className={col.align === 'right' ? 'activity-table__num' : undefined}>
@@ -152,7 +169,7 @@ function ActivityListTable({ items, sortBy, sortOrder, onSortChange, onRowClick 
               }
             }}
           >
-            {COLUMNS.map((col) => (
+            {columns.map((col) => (
               <td key={col.key} className={col.align === 'right' ? 'activity-table__num' : undefined}>
                 {col.render(item)}
               </td>

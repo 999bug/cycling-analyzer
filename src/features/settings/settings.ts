@@ -164,6 +164,26 @@ export function formatDistanceByUnit(meters: number | null | undefined, unit: Di
   return `${convertDistance(meters, 'km').toFixed(2)} km`
 }
 
+/** 1 m/s 对应的英里每小时 */
+const MPS_TO_MPH = 2.23694
+
+/**
+ * 按单位格式化速度（显示层）：距离单位决定速度单位（km/h 或 mph）。
+ *
+ * @param mps 速度（m/s，可为空）
+ * @param unit 距离显示单位
+ * @returns 格式化字符串，如 '24.5 km/h' / '15.2 mph' / '—'
+ */
+export function formatSpeedByUnit(mps: number | null | undefined, unit: DistanceUnit): string {
+  if (typeof mps !== 'number' || !Number.isFinite(mps)) {
+    return '—'
+  }
+  if (unit === 'mi') {
+    return `${(mps * MPS_TO_MPH).toFixed(1)} mph`
+  }
+  return `${(mps * 3.6).toFixed(1)} km/h`
+}
+
 /**
  * 将未知值收窄为记录类型（仅合并纯对象，防御脏数据/结构损坏）。
  *

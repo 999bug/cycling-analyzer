@@ -7,7 +7,8 @@
  * 每张卡片链接到达成纪录的活动详情页。
  */
 import { Link } from 'react-router-dom'
-import { formatDate, formatDistance, formatDuration, formatElevation } from '@/utils/format'
+import { formatDate, formatDuration, formatElevation } from '@/utils/format'
+import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import type { PowerRecordEntry, RideRecordEntry } from '@/features/records/personalRecords'
 import '@/features/records/personalRecords.css'
 
@@ -23,6 +24,9 @@ export interface RecordCardsProps {
 
   /** 功率纪录扫描是否失败（true 时显示失败提示） */
   powerRecordsFailed?: boolean
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /** 骑行纪录标签映射 */
@@ -61,15 +65,16 @@ interface RecordCardItem {
 }
 
 /**
- * 骑行纪录值格式化（单位与领域模型一致）。
+ * 骑行纪录值格式化（单位与领域模型一致；距离按显示单位换算）。
  *
  * @param entry 骑行纪录
+ * @param distanceUnit 距离显示单位
  * @returns 格式化展示值
  */
-function formatRideValue(entry: RideRecordEntry): string {
+function formatRideValue(entry: RideRecordEntry, distanceUnit: DistanceUnit): string {
   switch (entry.key) {
     case 'distance':
-      return formatDistance(entry.value)
+      return formatDistanceByUnit(entry.value, distanceUnit)
     case 'duration':
       return formatDuration(entry.value)
     case 'elevationGain':
@@ -82,11 +87,11 @@ function formatRideValue(entry: RideRecordEntry): string {
  *
  * @param props 组件参数
  */
-function RecordCards({ rideRecords, powerRecords, powerRecordsFailed = false }: RecordCardsProps) {
+function RecordCards({ rideRecords, powerRecords, powerRecordsFailed = false, distanceUnit = 'km' }: RecordCardsProps) {
   const rideItems: RecordCardItem[] = rideRecords.map((entry) => ({
     key: entry.key,
     label: RIDE_RECORD_LABELS[entry.key],
-    value: formatRideValue(entry),
+    value: formatRideValue(entry, distanceUnit),
     activityId: entry.activityId,
     startTime: entry.startTime,
   }))

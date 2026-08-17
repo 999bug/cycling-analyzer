@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（P2 骑行热力图完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（单位换算显示完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -25,7 +25,7 @@
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
 | P2 阶段 | 规格 §39 高级功能 | 🔄 进行中（功率曲线/个人纪录完成，见 §3.1） |
 
-- 验证：**408/408 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**415/415 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -112,6 +112,7 @@ P1 阶段任务已全部完成，无进行中项。
 | 设备统计（§39） | ✅ 6/6 测试 | `src/features/statistics/deviceStats.ts`：按设备分组聚合（次数/距离/时长/爬升/最近骑行，显示名产品名→型号→制造商回退，缺失归「未知设备」）；`DeviceStatsCards` 统计页底部区块（全时段口径）；自行车无独立数据源（FIT 未提取单车字段），设备统计即设备/码表维度 |
 | FTP 自动估算 / VO2Max 估算（§39） | ✅ 10/10 测试 | `src/features/analysis/ftpEstimate.ts`：FTP = 近 90 天 20 分钟最佳功率 × 0.95（取整），VO2Max = 10.8 × 5 分钟最佳功率 ÷ 体重 + 7（1 位小数），非法输入 undefined；设置页 FTP 字段下方估算区块（异步扫描近 90 天含功率活动，`buildPowerCurve(records, [300, 1200])` 跨活动取最佳），「采用」按钮一键保存 FTP；无功率数据/未填体重显示引导文案（不伪造）；`Activity` 领域模型补 `name` 字段（§31，修复详情页改名提交的 tsc 遗漏） |
 | 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后低透明度（0.25）暖红 Polyline 叠加，重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
+| 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
 
 ---
 
@@ -136,7 +137,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **修改活动名称 UI**（§31）：✅ 详情页标题区内联改名（重命名→输入→保存/取消，Enter 保存/Esc 取消，空名恢复「日期 骑行」兜底名）
 - [ ] **保存原始 FIT 文件开关**（§19）：可配置（默认不保存），未实现
 - [ ] **浅色主题**（§36）：CSS 变量已预留，仅深色基调
-- [ ] **单位换算显示**（§27 公里/英里、12h/24h）：设置项进行中（Agent I），页面换算显示未接入
+- [x] **单位换算显示**（§27 公里/英里、12h/24h）：✅ 已接入显示层（见 §3.1：useUnits hook + 各卡片/表格/图表 distanceUnit prop，详情页 12h 时间）
 - [ ] **性能压测**（§44）：分页/Worker 已实现，未对 1000 activity 量级实测
 - [ ] **README 完善**（§46）：基础版已写，截图等未补
 

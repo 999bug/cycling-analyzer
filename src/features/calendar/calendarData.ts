@@ -11,7 +11,8 @@
  * - 未来活动（startTime 晚于 now）不进入聚合
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
-import { formatDistance, formatDuration, formatElevation } from '@/utils/format'
+import { formatDuration, formatElevation } from '@/utils/format'
+import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 
 /** 档位 2 距离阈值：20 km（米） */
 export const LEVEL_2_DISTANCE = 20_000
@@ -163,14 +164,19 @@ export function intensityLevel(distanceMeters: number): IntensityLevel {
 
 /**
  * 生成格子工具提示文本（规格 §29）：
- * 日期 / 次数 / 距离 / 时长 / 爬升，数值复用 utils/format 的统一格式化。
+ * 日期 / 次数 / 距离 / 时长 / 爬升，数值复用统一格式化（距离按显示单位换算）。
  *
  * @param dateKey 本地日期键（YYYY-MM-DD）
  * @param summary 当日聚合
+ * @param distanceUnit 距离显示单位（缺省公里）
  * @returns 如 "2026-08-16 / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m"
  */
-export function formatDayTooltip(dateKey: string, summary: DayActivitySummary): string {
-  return `${dateKey} / ${summary.count} 次骑行 / ${formatDistance(summary.distance)} / ${formatDuration(summary.duration)} / ${formatElevation(summary.elevationGain)}`
+export function formatDayTooltip(
+  dateKey: string,
+  summary: DayActivitySummary,
+  distanceUnit: DistanceUnit = 'km',
+): string {
+  return `${dateKey} / ${summary.count} 次骑行 / ${formatDistanceByUnit(summary.distance, distanceUnit)} / ${formatDuration(summary.duration)} / ${formatElevation(summary.elevationGain)}`
 }
 
 /**

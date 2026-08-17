@@ -35,6 +35,7 @@ import {
   type PowerRecordEntry,
 } from '@/features/records/personalRecords'
 import RecordCards from '@/features/records/RecordCards'
+import { useUnits } from '@/hooks/useUnits'
 import '@/pages/StatisticsPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
@@ -64,6 +65,8 @@ function StatisticsPage() {
   const [error, setError] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新统计（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 距离显示单位（规格 §27）
+  const { distance: distanceUnit } = useUnits()
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -175,14 +178,15 @@ function StatisticsPage() {
       {metrics.count === 0 ? (
         <p className="statistics__message">该时间范围内暂无骑行记录，请切换时间范围。</p>
       ) : (
-        <StatisticCards title={RANGE_LABELS[rangeKey]} metrics={metrics} />
+        <StatisticCards title={RANGE_LABELS[rangeKey]} metrics={metrics} distanceUnit={distanceUnit} />
       )}
       <RecordCards
         rideRecords={rideRecords}
         powerRecords={powerRecords}
         powerRecordsFailed={powerRecordsFailed}
+        distanceUnit={distanceUnit}
       />
-      <DeviceStatsCards entries={deviceStats} />
+      <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
     </>
   )
 }

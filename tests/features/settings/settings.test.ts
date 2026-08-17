@@ -12,6 +12,7 @@ import {
   UNITS_KEY,
   convertDistance,
   formatDistanceByUnit,
+  formatSpeedByUnit,
   getSettings,
   saveSettings,
 } from '@/features/settings/settings'
@@ -123,5 +124,19 @@ describe('单位换算', () => {
     expect(formatDistanceByUnit(undefined, 'mi')).toBe('—')
     expect(formatDistanceByUnit(Number.NaN, 'km')).toBe('—')
     expect(formatDistanceByUnit(Number.POSITIVE_INFINITY, 'mi')).toBe('—')
+  })
+
+  it('formatSpeedByUnit：公里模式显示 km/h', () => {
+    expect(formatSpeedByUnit(10, 'km')).toBe('36.0 km/h')
+  })
+
+  it('formatSpeedByUnit：英里模式显示 mph', () => {
+    // 10 m/s × 2.23694 ≈ 22.4 mph
+    expect(formatSpeedByUnit(10, 'mi')).toBe('22.4 mph')
+  })
+
+  it('formatSpeedByUnit：无效输入返回占位符', () => {
+    expect(formatSpeedByUnit(undefined, 'km')).toBe('—')
+    expect(formatSpeedByUnit(Number.NaN, 'mi')).toBe('—')
   })
 })

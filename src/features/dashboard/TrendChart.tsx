@@ -14,12 +14,19 @@ import {
   YAxis,
 } from 'recharts'
 import type { TrendSeries } from '@/features/dashboard/statistics'
-import { formatDistance } from '@/utils/format'
+import {
+  convertDistance,
+  formatDistanceByUnit,
+  type DistanceUnit,
+} from '@/features/settings/settings'
 import '@/features/dashboard/TrendChart.css'
 
 interface TrendChartProps {
   /** 各粒度趋势序列 */
   trends: TrendSeries
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /** 粒度切换选项 */
@@ -53,7 +60,7 @@ const TOOLTIP_STYLE = {
  *
  * @param props 趋势序列
  */
-function TrendChart({ trends }: TrendChartProps) {
+function TrendChart({ trends, distanceUnit = 'km' }: TrendChartProps) {
   const [rangeKey, setRangeKey] = useState<RangeKey>('days30')
   const data = trends[rangeKey]
 
@@ -90,7 +97,7 @@ function TrendChart({ trends }: TrendChartProps) {
               minTickGap={32}
             />
             <YAxis
-              tickFormatter={formatDistanceTick}
+              tickFormatter={(meters: number) => formatDistanceTick(meters, distanceUnit)}
               tick={TICK_STYLE}
               tickLine={false}
               axisLine={false}
@@ -98,7 +105,7 @@ function TrendChart({ trends }: TrendChartProps) {
             />
             <Tooltip
               contentStyle={TOOLTIP_STYLE}
-              formatter={(value) => [formatDistance(Number(value)), '距离']}
+              formatter={(value) => [formatDistanceByUnit(Number(value), distanceUnit), '距离']}
               labelFormatter={(label) => `日期 ${label}`}
             />
             <Bar dataKey="distance" fill="var(--primary)" radius={[2, 2, 0, 0]} maxBarSize={18} />
@@ -119,12 +126,14 @@ function formatDateTick(date: string): string {
 }
 
 /**
- * 距离刻度显示：米 → 整公里。
+ * 距离刻度显示：米 → 当前单位整数（公里显示 '82k'，英里显示 '51mi'）。
  *
  * @param meters 距离（米）
+ * @param unit 距离显示单位
  */
-function formatDistanceTick(meters: number): string {
-  return `${Math.round(meters / 1000)}k`
+function formatDistanceTick(meters: number, unit: DistanceUnit): string {
+  const value = Math.round(convertDistance(meters, unit))
+  return unit === 'mi' ? `${value}mi` : `${value}k`
 }
 
 export default TrendChart

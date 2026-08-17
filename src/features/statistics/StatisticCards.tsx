@@ -5,7 +5,12 @@
  * 平均速度、最长骑行、单次最大爬升、最快速度、最高功率，
  * 大数字卡片风格，颜色复用全局 CSS 变量。
  */
-import { formatDistance, formatDuration, formatElevation, formatSpeed } from '@/utils/format'
+import { formatDuration, formatElevation } from '@/utils/format'
+import {
+  formatDistanceByUnit,
+  formatSpeedByUnit,
+  type DistanceUnit,
+} from '@/features/settings/settings'
 import type { StatisticsMetrics } from '@/features/statistics/statistics'
 import '@/features/statistics/StatisticCards.css'
 
@@ -15,6 +20,9 @@ interface StatisticCardsProps {
 
   /** 统计指标 */
   metrics: StatisticsMetrics
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /**
@@ -22,17 +30,17 @@ interface StatisticCardsProps {
  *
  * @param props 范围标题与聚合指标
  */
-function StatisticCards({ title, metrics }: StatisticCardsProps) {
+function StatisticCards({ title, metrics, distanceUnit = 'km' }: StatisticCardsProps) {
   const stats = [
     { label: '骑行次数', value: `${metrics.count} 次` },
-    { label: '总距离', value: formatDistance(metrics.totalDistance) },
+    { label: '总距离', value: formatDistanceByUnit(metrics.totalDistance, distanceUnit) },
     { label: '总时间', value: formatDuration(metrics.totalDuration) },
     { label: '总爬升', value: formatElevation(metrics.totalElevationGain) },
-    { label: '平均单次距离', value: formatDistance(metrics.avgRideDistance) },
-    { label: '平均速度', value: formatSpeed(metrics.avgSpeed) },
-    { label: '最长骑行', value: formatDistance(metrics.longestRide) },
+    { label: '平均单次距离', value: formatDistanceByUnit(metrics.avgRideDistance, distanceUnit) },
+    { label: '平均速度', value: formatSpeedByUnit(metrics.avgSpeed, distanceUnit) },
+    { label: '最长骑行', value: formatDistanceByUnit(metrics.longestRide, distanceUnit) },
     { label: '单次最大爬升', value: formatElevation(metrics.maxElevationGain) },
-    { label: '最快速度', value: formatSpeed(metrics.maxSpeed) },
+    { label: '最快速度', value: formatSpeedByUnit(metrics.maxSpeed, distanceUnit) },
     { label: '最高功率', value: `${Math.round(metrics.maxPower)} W` },
   ]
 

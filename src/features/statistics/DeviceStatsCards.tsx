@@ -5,7 +5,8 @@
  * 全部活动都无设备信息时显示「暂无设备信息」提示而非空卡片墙（不伪造，规格 §25）；
  * 部分活动有设备信息时，无设备信息的活动归入「未知设备」卡片一并展示。
  */
-import { formatDate, formatDistance, formatDuration, formatElevation } from '@/utils/format'
+import { formatDate, formatDuration, formatElevation } from '@/utils/format'
+import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import {
   UNKNOWN_DEVICE_NAME,
   type DeviceStatsEntry,
@@ -18,6 +19,9 @@ import '@/features/statistics/DeviceStatsCards.css'
 export interface DeviceStatsCardsProps {
   /** 设备统计条目（buildDeviceStats 输出，已按活动次数降序） */
   entries: readonly DeviceStatsEntry[]
+
+  /** 距离显示单位（缺省公里，规格 §27） */
+  distanceUnit?: DistanceUnit
 }
 
 /**
@@ -25,7 +29,7 @@ export interface DeviceStatsCardsProps {
  *
  * @param props 组件参数
  */
-function DeviceStatsCards({ entries }: DeviceStatsCardsProps) {
+function DeviceStatsCards({ entries, distanceUnit = 'km' }: DeviceStatsCardsProps) {
   const hasKnownDevice = entries.some((entry) => entry.deviceName !== UNKNOWN_DEVICE_NAME)
 
   return (
@@ -34,7 +38,7 @@ function DeviceStatsCards({ entries }: DeviceStatsCardsProps) {
       {hasKnownDevice ? (
         <div className="device-stats__grid">
           {entries.map((entry) => (
-            <DeviceCard key={entry.deviceName} entry={entry} />
+            <DeviceCard key={entry.deviceName} entry={entry} distanceUnit={distanceUnit} />
           ))}
         </div>
       ) : (
@@ -48,10 +52,11 @@ function DeviceStatsCards({ entries }: DeviceStatsCardsProps) {
  * 单张设备卡片：显示名 + 次数 + 聚合指标 + 最近骑行日期。
  *
  * @param entry 设备统计条目
+ * @param distanceUnit 距离显示单位
  */
-function DeviceCard({ entry }: { entry: DeviceStatsEntry }) {
+function DeviceCard({ entry, distanceUnit }: { entry: DeviceStatsEntry; distanceUnit: DistanceUnit }) {
   const stats = [
-    { label: '总距离', value: formatDistance(entry.totalDistance) },
+    { label: '总距离', value: formatDistanceByUnit(entry.totalDistance, distanceUnit) },
     { label: '总时长', value: formatDuration(entry.totalDuration) },
     { label: '总爬升', value: formatElevation(entry.totalElevationGain) },
     { label: '最近骑行', value: formatDate(entry.lastRideTime) },

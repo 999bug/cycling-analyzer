@@ -13,6 +13,7 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import CalendarHeatmap from '@/features/calendar/CalendarHeatmap'
 import { buildCalendarData, type CalendarData } from '@/features/calendar/calendarData'
 import { useImportStore } from '@/stores/importStore'
+import { useUnits } from '@/hooks/useUnits'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
 const repository = new DexieActivityRepository(db)
@@ -27,6 +28,8 @@ function CalendarPage() {
   const [year, setYear] = useState(() => new Date().getFullYear())
   // 订阅导入结果：数据导入完成后自动刷新日历（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 距离显示单位（规格 §27，格子 tooltip）
+  const { distance: distanceUnit } = useUnits()
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -85,7 +88,7 @@ function CalendarPage() {
   return (
     <>
       <h1>日历</h1>
-      <CalendarHeatmap data={data} year={year} onYearChange={setYear} />
+      <CalendarHeatmap data={data} year={year} onYearChange={setYear} distanceUnit={distanceUnit} />
     </>
   )
 }
