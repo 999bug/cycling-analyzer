@@ -5,12 +5,13 @@
  * 与 30/90/365 天距离趋势图。数据来自活动仓库 listAllSummaries，
  * 由 buildDashboardData 纯函数聚合，空数据时展示导入引导文案。
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { buildDashboardData, type DashboardData } from '@/features/dashboard/statistics'
 import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
+import { useImportStore } from '@/stores/importStore'
 import '@/pages/DashboardPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
@@ -22,8 +23,10 @@ const repository = new DexieActivityRepository(db)
 function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState(false)
+  // 订阅导入结果：数据导入完成后自动刷新统计（规格 §8）
+  const importSummary = useImportStore((s) => s.summary)
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     let cancelled = false
     repository
       .listAllSummaries()
@@ -42,6 +45,11 @@ function DashboardPage() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const cancel = reload()
+    return cancel
+  }, [reload, importSummary])
 
   if (error) {
     return (

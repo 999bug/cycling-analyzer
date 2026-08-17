@@ -13,6 +13,7 @@ import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { db } from '@/storage/db'
 import {
+  formatDate,
   formatDistance,
   formatDuration,
   formatElevation,
@@ -33,7 +34,7 @@ const repository = new DexieActivityRepository(db)
 const SIMPLIFY_TOLERANCE_METERS = 5
 
 /** 无标题活动的默认名称 */
-const DEFAULT_ACTIVITY_NAME = '未命名骑行'
+/** 默认活动名：日期 + 骑行（规格 §31） */
 
 /** 删除确认文案 */
 const DELETE_CONFIRM_TEXT = '确定删除这次骑行？删除后将从本地数据库中移除'
@@ -200,7 +201,9 @@ function ActivityDetailPage() {
     <div className="activity-detail">
       <header className="activity-detail__header">
         <div>
-          <h1 className="activity-detail__title">{activity.name ?? DEFAULT_ACTIVITY_NAME}</h1>
+          <h1 className="activity-detail__title">
+            {activity.name ?? `${formatDate(activity.startTime)} 骑行`}
+          </h1>
           <div className="activity-detail__meta">
             <span className="activity-detail__type">{typeLabel}</span>
             <time className="activity-detail__time">{formatDateTime(activity.startTime)}</time>
