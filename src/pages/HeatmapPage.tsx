@@ -6,12 +6,13 @@
  * 轨迹抽稀复用 Douglas-Peucker（simplifyRoute），加载期间显示进度，
  * 无坐标数据时显示引导文案（不伪造）。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { simplifyRoute } from '@/map/simplify'
+import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -98,6 +99,9 @@ function HeatmapPage() {
     }
   }, [])
 
+  // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
+  const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])
+
   return (
     <div className="heatmap-page">
       <h1>骑行热力图</h1>
@@ -108,7 +112,10 @@ function HeatmapPage() {
       )}
       {state === 'ready' && (
         <>
-          <p className="heatmap-page__summary">共 {tracks.length} 条轨迹，骑得越多的路段颜色越深</p>
+          <p className="heatmap-page__summary">
+            共 {tracks.length} 条轨迹，已探索 {coverage.cellCount} 个 1km 网格（约{' '}
+            {coverage.areaKm2} km²），骑得越多的路段颜色越深
+          </p>
           <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

@@ -98,6 +98,8 @@ describe('骑行热力图页', () => {
     const { container } = render(<HeatmapPage />)
 
     expect(await screen.findByText(/共 2 条轨迹/)).toBeInTheDocument()
+    // 区域覆盖统计：两条轨迹分属不同城市，网格数 ≥ 2
+    expect(screen.getByText(/已探索 \d+ 个 1km 网格（约 [\d.]+ km²）/)).toBeInTheDocument()
     // Leaflet 地图容器已渲染
     expect(container.querySelector('.leaflet-container')).not.toBeNull()
   })
