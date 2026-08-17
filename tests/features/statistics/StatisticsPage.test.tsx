@@ -320,6 +320,26 @@ describe('路线分析区块（规格 §39）', () => {
     expect(within(section).queryByText('路线 3')).not.toBeInTheDocument()
   })
 
+  it('路线卡片显示最近骑行标题，无标题回退路线序号', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const now = new Date()
+    const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8).toISOString()
+    const afternoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16).toISOString()
+    await repo.addActivities([
+      { ...makeActivity(0, morning, 30000, 3600, 100), records: makeTrack(31.2, 121.5, 31.3, 121.6) },
+      { ...makeActivity(1, afternoon, 30500, 3500, 100), records: makeTrack(31.2005, 121.5003, 31.3006, 121.6) },
+    ])
+    // 卡片命名取最近一次骑行（act-1 时间更晚）的标题
+    await testDb.activities.update('act-1', { name: '周末环阳澄湖绿道超长骑行名称测试' })
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const section = await screen.findByRole('region', { name: '路线分析' })
+    const nameEl = await within(section).findByText('周末环阳澄湖绿道超长骑行名称测试')
+    // 完整标题经 title 悬浮查看（CSS 负责缩略显示）
+    expect(nameEl).toHaveAttribute('title', '周末环阳澄湖绿道超长骑行名称测试')
+    expect(nameEl.closest('a')).toHaveAttribute('href', '/activities/act-1')
+  })
+
   it('全部活动无坐标时显示提示', async () => {
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivities([makeActivity(0, new Date().toISOString())])
