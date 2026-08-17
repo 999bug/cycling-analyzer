@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import {
   buildCalendarData,
+  buildMonthLabels,
   buildYearGrid,
   formatDayTooltip,
   intensityLevel,
@@ -217,5 +218,24 @@ describe('formatDayTooltip 工具提示', () => {
     })
 
     expect(text).toBe('2026-08-16 / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m')
+  })
+})
+
+describe('buildMonthLabels 月份标签', () => {
+  it('一年 12 个标签，定位到每月 1 日所在周', () => {
+    const grid = buildYearGrid(2026, new Map())
+    const labels = buildMonthLabels(grid)
+    expect(labels).toHaveLength(12)
+    // 2026-01-01（周四）在首周 → 1月 在第 0 周
+    expect(labels[0]).toEqual({ weekIndex: 0, label: '1月' })
+    // 2026-02-01 是周日，恰为新一周起点：距首周周日 2025-12-28 共 35 天 → 第 5 周
+    expect(labels[1]).toEqual({ weekIndex: 5, label: '2月' })
+    // 标签月份递增 1..12，周下标严格递增
+    expect(labels.map((label) => label.label)).toEqual(
+      Array.from({ length: 12 }, (_, index) => `${index + 1}月`),
+    )
+    for (let index = 1; index < labels.length; index++) {
+      expect(labels[index].weekIndex).toBeGreaterThan(labels[index - 1].weekIndex)
+    }
   })
 })

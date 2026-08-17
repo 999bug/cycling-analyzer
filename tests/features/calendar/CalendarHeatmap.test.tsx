@@ -8,7 +8,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import CalendarHeatmap from '@/features/calendar/CalendarHeatmap'
-import { buildCalendarData, buildYearGrid } from '@/features/calendar/calendarData'
+import { buildCalendarData, buildYearGrid, localDateKey } from '@/features/calendar/calendarData'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 
 /** 固定参考时间：2026-08-17 12:00 本地时间 */
@@ -142,5 +142,63 @@ describe('骑行日历热力组件', () => {
 
     await user.click(screen.getByRole('button', { name: '上一年' }))
     expect(onYearChange).toHaveBeenCalledWith(2025)
+  })
+
+  it('渲染 12 个月份标签与隔行星期标签', () => {
+    const { container } = render(
+      <CalendarHeatmap data={new Map()} year={YEAR} onYearChange={() => {}} />,
+    )
+
+    const monthLabels = container.querySelectorAll('.calendar-heatmap__month-label')
+    expect(monthLabels).toHaveLength(12)
+    expect(monthLabels[0]).toHaveTextContent('1月')
+    // 星期标签隔行显示（一/三/五）
+    expect(screen.getByText('一')).toBeInTheDocument()
+    expect(screen.getByText('三')).toBeInTheDocument()
+    expect(screen.getByText('五')).toBeInTheDocument()
+  })
+
+  it('今天格子高亮；点击有骑行格子触发 onDaySelect，无骑行格子不可点', async () => {
+    const user = userEvent.setup()
+    const data = buildCalendarData([summary('a1', iso(2026, 8, 16, 8), 50000, 5400, 300)], NOW)
+    const onDaySelect = vi.fn()
+    const { container } = render(
+      <CalendarHeatmap
+        data={data}
+        year={YEAR}
+        onYearChange={() => {}}
+        onDaySelect={onDaySelect}
+        selectedDate="2026-08-16"
+      />,
+    )
+
+    // 今天（真实当前日期）带高亮类
+    const todayCell = container.querySelector(`[data-date="${localDateKey(new Date())}"]`)
+    expect(todayCell).toHaveClass('calendar-heatmap__cell--today')
+
+    // 有骑行的格子可点击且带选中态
+    const cell = screen.getByRole('button', { name: '查看 2026-08-16 骑行' })
+    expect(cell).toHaveClass('calendar-heatmap__cell--selected')
+    await user.click(cell)
+    expect(onDaySelect).toHaveBeenCalledWith('2026-08-16')
+
+    // 无骑行格子不渲染按钮语义
+    expect(container.querySelector('[data-date="2026-08-13"]')).not.toHaveAttribute('role')
+  })
+
+  it('非当年显示「回到今年」按钮，点击切回当前年', async () => {
+    const user = userEvent.setup()
+    const onYearChange = vi.fn()
+    const currentYear = new Date().getFullYear()
+    const { rerender } = render(
+      <CalendarHeatmap data={new Map()} year={currentYear - 1} onYearChange={onYearChange} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '回到今年' }))
+    expect(onYearChange).toHaveBeenCalledWith(currentYear)
+
+    // 当年不显示该按钮
+    rerender(<CalendarHeatmap data={new Map()} year={currentYear} onYearChange={onYearChange} />)
+    expect(screen.queryByRole('button', { name: '回到今年' })).not.toBeInTheDocument()
   })
 })

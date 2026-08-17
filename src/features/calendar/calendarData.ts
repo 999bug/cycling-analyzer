@@ -180,12 +180,40 @@ export function formatDayTooltip(
 }
 
 /**
+ * 月份标签（横排布局用）：每周一列，该周含当年某月 1 日时标记「M月」。
+ */
+export interface MonthLabel {
+  /** 周（列）下标，从 0 开始 */
+  weekIndex: number
+
+  /** 标签文本（如 "3月"） */
+  label: string
+}
+
+/**
+ * 计算年网格的月份标签位置（对齐 GitHub 贡献图：每月 1 日所在周的列上方标注）。
+ *
+ * @param grid 年网格（buildYearGrid 输出）
+ * @returns 月份标签列表（按周下标升序，一年 12 个）
+ */
+export function buildMonthLabels(grid: CalendarCell[][]): MonthLabel[] {
+  const labels: MonthLabel[] = []
+  grid.forEach((week, weekIndex) => {
+    const firstOfMonth = week.find((cell) => cell.inYear && cell.dateKey.endsWith('-01'))
+    if (firstOfMonth !== undefined) {
+      labels.push({ weekIndex, label: `${Number(firstOfMonth.dateKey.slice(5, 7))}月` })
+    }
+  })
+  return labels
+}
+
+/**
  * 本地时区日期键（YYYY-MM-DD，两位补零）。
  *
  * @param date 日期
  * @returns 如 "2026-08-17"
  */
-function localDateKey(date: Date): string {
+export function localDateKey(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }

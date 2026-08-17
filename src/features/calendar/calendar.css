@@ -1,16 +1,19 @@
 /**
- * 骑行日历热力组件样式（规格 §29）。
+ * 骑行日历热力组件样式（规格 §29）：GitHub 贡献图横排布局。
+ * 每周一列、每天一行；月份标签行与网格共用同一列宽变量保证对齐。
  * 颜色档位用组件级 CSS 变量色阶（深色基调、绿色系随强度增亮），
  * 基础色复用全局变量（--bg-surface / --border / --text-secondary / --primary）。
  */
 
-/* 颜色档位色阶：0 无骑行 ~ 4 最高强度（每日 ≥100 km） */
+/* 颜色档位色阶：0 无骑行 ~ 4 最高强度（每日 ≥100 km）；格子尺寸变量供标签行对齐 */
 .calendar-heatmap {
   --cal-level-0: #1e2228;
   --cal-level-1: #123d2f;
   --cal-level-2: #1a5c40;
   --cal-level-3: #23804f;
   --cal-level-4: #34a86b;
+  --cal-cell: 14px;
+  --cal-gap: 3px;
 }
 
 /* 整体容器（深色卡片，与统计卡片风格一致） */
@@ -18,13 +21,14 @@
   display: inline-flex;
   flex-direction: column;
   gap: 12px;
+  max-width: 100%;
   padding: 16px 20px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 12px;
 }
 
-/* 头部：年份切换按钮 + 图例 */
+/* 头部：年份切换按钮 + 回到今年 + 图例 */
 .calendar-heatmap__header {
   display: flex;
   align-items: center;
@@ -58,6 +62,22 @@
   color: var(--primary);
 }
 
+/* 切换到非当年时出现，一键回到今年 */
+.calendar-heatmap__today {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.calendar-heatmap__today:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* 图例（右对齐） */
 .calendar-heatmap__legend {
   display: flex;
@@ -80,18 +100,63 @@
   outline: none;
 }
 
-/* 网格：自动流按 7 列逐行排列 */
+/* 横向滚动容器：窄屏兜底（53 列全宽约 940px） */
+.calendar-heatmap__scroller {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+/* 月份标签行：列宽与网格一致（inline style 注入列数），标签定位到当月首周列 */
+.calendar-heatmap__months {
+  display: grid;
+  column-gap: var(--cal-gap);
+  height: 16px;
+  margin-bottom: 4px;
+  /* 与 __body 中星期标签列同宽偏移，保持列对齐 */
+  margin-left: calc(16px + 6px);
+}
+
+.calendar-heatmap__month-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+/* 主体：星期标签列 + 网格 */
+.calendar-heatmap__body {
+  display: flex;
+  gap: 6px;
+}
+
+/* 星期标签：7 行与网格行高一致，隔行显示（一/三/五） */
+.calendar-heatmap__weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, var(--cal-cell));
+  row-gap: var(--cal-gap);
+  width: 16px;
+}
+
+.calendar-heatmap__weekday {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: var(--cal-cell);
+  text-align: center;
+}
+
+/* 网格：列流向（每周一列），7 行（周日~周六） */
 .calendar-heatmap__grid {
   display: grid;
-  grid-template-columns: repeat(7, 14px);
-  column-gap: 4px;
-  row-gap: 4px;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, var(--cal-cell));
+  gap: var(--cal-gap);
 }
 
 /* 单格 */
 .calendar-heatmap__cell {
-  width: 14px;
-  height: 14px;
+  width: var(--cal-cell);
+  height: var(--cal-cell);
   border-radius: 3px;
   background-color: var(--cal-level-0);
 }
@@ -117,9 +182,101 @@
   opacity: 0.35;
 }
 
+/* 有骑行的格子可点击（当日活动面板入口） */
+.calendar-heatmap__cell--clickable {
+  cursor: pointer;
+}
+
 .calendar-heatmap__cell:hover {
   outline: 1px solid var(--text-secondary);
   outline-offset: 1px;
+}
+
+/* 今天：主题色描边常显 */
+.calendar-heatmap__cell--today {
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* 选中（当日活动面板展开中） */
+.calendar-heatmap__cell--selected {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* 当日活动面板（点击格子展开） */
+.calendar-day-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  max-width: 640px;
+  padding: 16px 20px;
+}
+
+.calendar-day-panel__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.calendar-day-panel__title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.calendar-day-panel__close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.calendar-day-panel__close:hover {
+  color: var(--text);
+}
+
+.calendar-day-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-day-panel__item {
+  align-items: baseline;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+}
+
+.calendar-day-panel__item:hover {
+  border-color: var(--primary);
+}
+
+.calendar-day-panel__name {
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-day-panel__meta {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
 }
 
 /* 页面级消息（空/加载/错误） */

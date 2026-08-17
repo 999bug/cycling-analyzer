@@ -6,8 +6,9 @@
  * 测试数据围绕"今天"动态构造，避免日期漂移。
  */
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
@@ -114,6 +115,40 @@ describe('骑行日历页面', () => {
 
     await user.click(screen.getByRole('button', { name: '上一年' }))
     expect(screen.getByText(String(year))).toBeInTheDocument()
+  })
+
+  it('点击格子展开当日活动面板：活动链接跳详情，可关闭', async () => {
+    const user = userEvent.setup()
+    const repo = new DexieActivityRepository(testDb)
+    const today = new Date()
+    const morning = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+    await repo.addActivities([
+      makeActivity(0, morning, 50000, 5400, 300),
+      makeActivity(1, today.toISOString(), 30000, 3600, 100),
+    ])
+    // 有标题的活动面板显示标题，无标题回退文件名
+    await testDb.activities.update('act-1', { name: '傍晚恢复骑' })
+    render(<CalendarPage />, { wrapper: MemoryRouter })
+
+    const dateKey = formatDate(morning)
+    await user.click(await screen.findByRole('button', { name: `查看 ${dateKey} 骑行` }))
+
+    const panel = await screen.findByRole('region', { name: '当日骑行' })
+    expect(within(panel).getByText(`${dateKey} 骑行`)).toBeInTheDocument()
+    expect(within(panel).getByText('傍晚恢复骑').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/act-1',
+    )
+    expect(within(panel).getByText('ride-0.fit').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/act-0',
+    )
+    // 面板展示距离与时长
+    expect(within(panel).getByText(/50\.00 km/)).toBeInTheDocument()
+    expect(within(panel).getByText(/01:30:00/)).toBeInTheDocument()
+
+    await user.click(within(panel).getByRole('button', { name: '关闭当日面板' }))
+    expect(screen.queryByRole('region', { name: '当日骑行' })).not.toBeInTheDocument()
   })
 
   it('无数据时展示导入引导文案', async () => {
