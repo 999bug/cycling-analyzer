@@ -119,7 +119,7 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
       center={start}
       zoom={14}
       bounds={latLngs}
-      scrollWheelZoom={false}
+      scrollWheelZoom
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
