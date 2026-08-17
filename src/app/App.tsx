@@ -1,15 +1,29 @@
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { ROUTES } from '@/app/router'
 import AppLayout from '@/layouts/AppLayout'
 import ActivitiesPage from '@/pages/ActivitiesPage'
-import ActivityDetailPage from '@/pages/ActivityDetailPage'
-import CalendarPage from '@/pages/CalendarPage'
 import DashboardPage from '@/pages/DashboardPage'
-import HeatmapPage from '@/pages/HeatmapPage'
-import SegmentsPage from '@/pages/SegmentsPage'
-import SettingsPage from '@/pages/SettingsPage'
-import StatisticsPage from '@/pages/StatisticsPage'
-import YearReviewPage from '@/pages/YearReviewPage'
+
+// 路由级代码分割（性能优化）：重依赖页面按需加载，
+// Leaflet 只在详情/热力图 chunk、Recharts 按需进入各页面 chunk，
+// 首屏只下载布局 + 仪表盘 + 列表
+const ActivityDetailPage = lazy(() => import('@/pages/ActivityDetailPage'))
+const CalendarPage = lazy(() => import('@/pages/CalendarPage'))
+const HeatmapPage = lazy(() => import('@/pages/HeatmapPage'))
+const SegmentsPage = lazy(() => import('@/pages/SegmentsPage'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'))
+const YearReviewPage = lazy(() => import('@/pages/YearReviewPage'))
+
+/**
+ * 懒加载页面容器：chunk 下载期间显示轻量占位。
+ *
+ * @param props 子元素（懒加载页面组件）
+ */
+function LazyPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<p>页面加载中…</p>}>{children}</Suspense>
+}
 
 /**
  * 应用根组件，仅包含路由表。
@@ -21,13 +35,13 @@ function App() {
       <Route element={<AppLayout />}>
         <Route path={ROUTES[0]} element={<DashboardPage />} />
         <Route path={ROUTES[1]} element={<ActivitiesPage />} />
-        <Route path={ROUTES[2]} element={<ActivityDetailPage />} />
-        <Route path={ROUTES[3]} element={<StatisticsPage />} />
-        <Route path={ROUTES[4]} element={<CalendarPage />} />
-        <Route path={ROUTES[5]} element={<SettingsPage />} />
-        <Route path={ROUTES[6]} element={<HeatmapPage />} />
-        <Route path={ROUTES[7]} element={<YearReviewPage />} />
-        <Route path={ROUTES[8]} element={<SegmentsPage />} />
+        <Route path={ROUTES[2]} element={<LazyPage><ActivityDetailPage /></LazyPage>} />
+        <Route path={ROUTES[3]} element={<LazyPage><StatisticsPage /></LazyPage>} />
+        <Route path={ROUTES[4]} element={<LazyPage><CalendarPage /></LazyPage>} />
+        <Route path={ROUTES[5]} element={<LazyPage><SettingsPage /></LazyPage>} />
+        <Route path={ROUTES[6]} element={<LazyPage><HeatmapPage /></LazyPage>} />
+        <Route path={ROUTES[7]} element={<LazyPage><YearReviewPage /></LazyPage>} />
+        <Route path={ROUTES[8]} element={<LazyPage><SegmentsPage /></LazyPage>} />
       </Route>
     </Routes>
   )

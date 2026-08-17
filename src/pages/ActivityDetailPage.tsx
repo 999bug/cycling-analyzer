@@ -32,6 +32,7 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
+import { downsampleRecords } from '@/charts/downsample'
 import {
   calculateHeartRateZones,
   calculatePowerZones,
@@ -244,6 +245,10 @@ function ActivityDetailPage() {
     () => simplifyRoute(records, SIMPLIFY_TOLERANCE_METERS),
     [records],
   )
+
+  // 图表渲染抽稀（性能优化）：万级逐点等距降到 1000 内，SVG 节点数可控；
+  // NP/区间/功率曲线/地图/GPX 等计算与导出仍用完整 records
+  const chartRecords = useMemo(() => downsampleRecords(records), [records])
 
   // 训练分析（渲染层调用纯函数，规格 §26）：标准化功率 + 区间分布 + IF/TSS
   const normalizedPower = useMemo(() => calculateNormalizedPower(records), [records])
@@ -521,13 +526,13 @@ function ActivityDetailPage() {
       </section>
 
       <section className="activity-detail__charts" aria-label="活动图表">
-        <SpeedChart records={records} />
-        <HeartRateChart records={records} />
-        <CadenceChart records={records} />
-        <ElevationChart records={records} />
-        <PowerChart records={records} />
+        <SpeedChart records={chartRecords} />
+        <HeartRateChart records={chartRecords} />
+        <CadenceChart records={chartRecords} />
+        <ElevationChart records={chartRecords} />
+        <PowerChart records={chartRecords} />
         <PowerCurveChart records={records} />
-        <CombinedChart mode="speedHeartRate" records={records} />
+        <CombinedChart mode="speedHeartRate" records={chartRecords} />
       </section>
 
       <TrainingZonesSection

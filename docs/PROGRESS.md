@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（a11y 审查完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（性能优化完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -59,7 +59,7 @@
 | 能力 | 位置 | 说明 |
 |---|---|---|
 | Dexie 库 `cycling-data` v2 | `src/storage/db.ts` | 五表：activities（&fingerprint 唯一索引）、activity_records（++id, activityId）、files（主键 fingerprint）、settings（key/value）、segments（v2 新增，++id 自增）；**摘要与逐点分表** |
-| 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/updateNormalizedPower/deleteActivity/deleteAll/summarizeByRange/listAllSummaries/getRouteEndpoints`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit；getRouteEndpoints 走 activityId 索引 first/last 读取起终点坐标（路线分析用，免全量逐点加载） |
+| 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/updateNormalizedPower/deleteActivity/deleteAll/summarizeByRange/listAllSummaries`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit |
 | 文件台账 | `fileRepository.ts` | recordImported/recordFailed/listAll/get/deleteAll |
 | 设置 | `settingsRepository.ts` | get/set/delete（key/value unknown） |
 | 赛段 | `segmentRepository.ts` | addSegment/listSegments/deleteSegment（v2 表） |
@@ -117,7 +117,7 @@ P1 阶段任务已全部完成，无进行中项。
 | FTP 自动估算 / VO2Max 估算（§39） | ✅ 10/10 测试 | `src/features/analysis/ftpEstimate.ts`：FTP = 近 90 天 20 分钟最佳功率 × 0.95（取整），VO2Max = 10.8 × 5 分钟最佳功率 ÷ 体重 + 7（1 位小数），非法输入 undefined；设置页 FTP 字段下方估算区块（异步扫描近 90 天含功率活动，`buildPowerCurve(records, [300, 1200])` 跨活动取最佳），「采用」按钮一键保存 FTP；无功率数据/未填体重显示引导文案（不伪造）；`Activity` 领域模型补 `name` 字段（§31，修复详情页改名提交的 tsc 遗漏） |
 | 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后低透明度（0.25）暖红 Polyline 叠加，重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
 | 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
-| 路线分析（§39） | ✅ 12/12 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；repository 新增 `getRouteEndpoints`（activityId 索引 first/last 读取，避免全量逐点加载）；`RouteGroupCards.tsx` 统计页底部区块（路线 N 卡片：次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment（逐点匹配赛段）为后续工作项 |
+| 路线分析（§39） | ✅ 12/12 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；端点提取 `extractEndpoints`（统计页合并扫描复用已加载 records）；`RouteGroupCards.tsx` 统计页底部区块（路线 N 卡片：次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment 已完成（见 §4 后续工作项） |
 
 ---
 
@@ -152,7 +152,12 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **完整 Segment 赛段**（✅ 21/21 测试）：Dexie v2 新增 segments 表（++id）；`segmentMatching.ts` 起终点圆（半径 200m）顺序穿越匹配（先入起点圈再入终点圈，计时=两进入事件秒差，单活动取首次完整穿越）+ 成绩榜按用时升序；详情页「设为赛段」按钮（首尾坐标点创建，无坐标禁用）；新页面 /segments（导航「赛段」）：卡片展示参与次数/最佳成绩（链接最快骑行详情）/删除；清空数据同步清 segments；导出 JSON 附带 segments（可选字段，v1 旧文件兼容，导入按名称+起终点判重）
 - [x] **骑行区域统计**（✅ 7/7 测试）：`src/features/heatmap/gridCoverage.ts`：0.01°（约 1km）离线网格覆盖统计（同格去重，面积按网格中心纬度 cos 修正经度收缩）；热力图页摘要行展示「已探索 N 个 1km 网格（约 M km²）」
 - [x] **年度回顾**（✅ 8/8 测试）：新页面 /year-review（导航「年度回顾」）；`src/features/yearReview/`（yearReview.ts 年份提取/月度聚合/年度范围 + MonthlyDistanceChart 月度距离柱状图）；年度十项指标复用 buildStatistics 自定义范围（YYYY-01-01~12-31）；年份 radio 仅有数据的年份，默认最新年
-- [ ] **性能优化**：页面切换卡顿治理（用户实测反馈），见任务 #18
+- [x] **性能优化**（✅ 任务 #18，用户反馈卡顿治理，7/7 新增测试）：
+  - **扫描合并 + 模块级缓存**：统计页功率纪录/路线分析两轮全量逐点扫描合并为一轮，结果按活动集合指纹（`scanCache.ts` summariesScanKey = 数量|总距离|最新时间，逐点导入后不可变故安全）缓存，离开再回来秒开；热力图轨迹、赛段成绩榜同款缓存
+  - **详情页图表抽稀**：`charts/downsample.ts` 等距抽稀至 1000 点（保首尾），7 图表中 6 个喂抽稀数据；NP/区间/功率曲线/地图/GPX 仍用完整数据（精度不损）
+  - **路由级代码分割**：App.tsx 除仪表盘/列表外全部 React.lazy（Leaflet 153KB 只随详情/热力图 chunk）
+  - **fitsdk 移出主包**：错误类拆至 `fit/decoder/errors.ts`（fitDecoder 再导出兼容），importer 主线程降级改动态 import parseTask；主包 1019KB→628KB（gzip 250KB→190KB），fitsdk 391KB 只随 worker/降级 chunk
+  - 死代码清理：getRouteEndpoints（合并扫描后被 extractEndpoints 取代）从仓库接口删除
 - [x] **E2E 测试**（✅ 3/3 通过）：`playwright.config.ts`（webServer 自动起 dev server，workers=1 串行防 IndexedDB 互染）+ `e2e/smoke.spec.ts`：应用加载与导航、各页路由可达、核心链路「导入合成 FIT（tests/fixtures/cycling-gps.fit）→ 列表 → 详情」；`npm run test:e2e` 本地运行（不进 CI deploy）；vitest exclude e2e/ 防 .spec.ts 混入
 - [x] **a11y 无障碍**（✅ 4/4 测试 `tests/a11y.test.tsx`）：列表标题列渲染为真实链接（stopPropagation 防重复导航）；MetricChart/CombinedChart 横轴切换按钮 role=group + aria-pressed；AppLayout 加「跳转到主内容」skip link（聚焦浮出）+ main#main-content + 主导航 aria-label；ImportPanel toggle aria-expanded。既有良好实践保留：表格行 tabIndex+Enter/Space、日历年份按钮 aria-label、趋势图 role=tab、着色切换 aria-pressed、范围选择 radiogroup
 

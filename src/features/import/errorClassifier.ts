@@ -9,7 +9,7 @@
  * 分类在 worker 内执行（解析失败的消息无需跨线程传 Error 对象），
  * 主线程与 worker 共用本模块。
  */
-import { CorruptedFitError, NotFitFileError } from '@/fit/decoder/fitDecoder'
+import { CorruptedFitError, NotFitFileError } from '@/fit/decoder/errors'
 
 /**
  * 将未知错误分类为可展示的文案。

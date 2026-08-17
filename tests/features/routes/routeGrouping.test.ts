@@ -9,6 +9,7 @@ import {
   ROUTE_DISTANCE_TOLERANCE,
   ROUTE_PROXIMITY_METERS,
   buildRouteGroups,
+  extractEndpoints,
   haversineMeters,
   type RouteActivityInput,
 } from '@/features/routes/routeGrouping'
@@ -142,5 +143,26 @@ describe('buildRouteGroups', () => {
   it('阈值常量口径：500 米 / ±10%', () => {
     expect(ROUTE_PROXIMITY_METERS).toBe(500)
     expect(ROUTE_DISTANCE_TOLERANCE).toBe(0.1)
+  })
+})
+
+describe('extractEndpoints（性能优化：合并扫描用）', () => {
+  it('提取首尾坐标点，跳过无坐标记录', () => {
+    const endpoints = extractEndpoints([
+      { timestamp: 0 },
+      { timestamp: 1, latitude: 31.2, longitude: 121.5 },
+      { timestamp: 2, latitude: 31.25, longitude: 121.55 },
+      { timestamp: 3, latitude: 31.3, longitude: 121.6 },
+      { timestamp: 4 },
+    ])
+    expect(endpoints).toEqual({
+      start: { latitude: 31.2, longitude: 121.5 },
+      end: { latitude: 31.3, longitude: 121.6 },
+    })
+  })
+
+  it('无坐标记录返回 undefined', () => {
+    expect(extractEndpoints([{ timestamp: 0 }])).toBeUndefined()
+    expect(extractEndpoints([])).toBeUndefined()
   })
 })

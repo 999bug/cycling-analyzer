@@ -7,30 +7,10 @@
  * 注意：Decoder 的 isFIT/checkIntegrity 会消费 Stream，必须在 read 之前调用。
  */
 import { Decoder, Stream } from '@garmin/fitsdk'
+import { CorruptedFitError, NotFitFileError } from '@/fit/decoder/errors'
 
-/** FIT 解析错误基类 */
-export class FitParseError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'FitParseError'
-  }
-}
-
-/** 不是有效的 FIT 文件 */
-export class NotFitFileError extends FitParseError {
-  constructor() {
-    super('Not a valid FIT file')
-    this.name = 'NotFitFileError'
-  }
-}
-
-/** FIT 完整性校验失败（CRC 错误） */
-export class CorruptedFitError extends FitParseError {
-  constructor() {
-    super('FIT file CRC check failed')
-    this.name = 'CorruptedFitError'
-  }
-}
+// 错误类从 errors.ts 移出（避免错误类引用把 fitsdk 拉进主包），此处再导出保持兼容
+export { CorruptedFitError, FitParseError, NotFitFileError } from '@/fit/decoder/errors'
 
 /**
  * 解码后的逐点记录（时间已转 Unix 秒，位置仍为半周，其余为物理单位）。

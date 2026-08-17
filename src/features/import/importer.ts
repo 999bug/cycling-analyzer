@@ -17,7 +17,7 @@ import { DexieActivityRepository, type ActivityRepository } from '@/storage/repo
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { db } from '@/storage/db'
 import { computeFingerprint } from '@/utils/fingerprint'
-import { parseFitBytes, type ParseFileFn } from '@/fit/worker/parseTask'
+import type { ParseFileFn } from '@/fit/worker/parseTask'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
@@ -160,12 +160,17 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
 
 /**
  * 按环境选择默认解析器：浏览器走 worker，测试环境（jsdom 无 Worker）走主线程。
+ * 主线程降级用动态 import（性能优化）：@garmin/fitsdk 只随 worker chunk
+ * 或降级路径按需加载，不进首屏主包。
  */
 function createDefaultParser(): ParseFileFn {
   if (typeof Worker !== 'undefined') {
     return createWorkerParser()
   }
-  return async (input) => parseFitBytes(input)
+  return async (input) => {
+    const { parseFitBytes } = await import('@/fit/worker/parseTask')
+    return parseFitBytes(input)
+  }
 }
 
 /**

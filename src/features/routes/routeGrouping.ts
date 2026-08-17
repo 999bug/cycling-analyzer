@@ -5,8 +5,9 @@
  * 且距离与组均值相似（±10%）的活动归入同一条"路线"；都不满足时新建路线。
  * 组锚点取首个成员的端点（常骑路线起点稳定，锚点漂移小）。
  *
- * 完整 Segment（赛段匹配/成绩排行）不在本期范围，见 PROGRESS.md 后续工作项。
+ * Segment 赛段（穿越匹配/成绩榜）见 features/segments/segmentMatching.ts。
  */
+import type { ActivityRecord } from '@/types/activity'
 
 /** 起终点判定半径（米）：同一路线的起终点允许的定位漂移 */
 export const ROUTE_PROXIMITY_METERS = 500
@@ -168,4 +169,32 @@ export function haversineMeters(a: RouteEndpoint, b: RouteEndpoint): number {
   const h =
     sinLat * sinLat + Math.cos(toRad(a.latitude)) * Math.cos(toRad(b.latitude)) * sinLng * sinLng
   return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(h))
+}
+
+/**
+ * 从完整逐点数据提取起终点坐标（性能优化：统计页合并扫描时，
+ * 已加载的 records 直接提取，免 getRouteEndpoints 二次索引读）。
+ *
+ * @param records 完整逐点数据（按时间升序）
+ * @returns 起终点坐标；无任何坐标点返回 undefined
+ */
+export function extractEndpoints(
+  records: readonly ActivityRecord[],
+): { start: RouteEndpoint; end: RouteEndpoint } | undefined {
+  let start: RouteEndpoint | undefined
+  let end: RouteEndpoint | undefined
+  for (const record of records) {
+    if (record.latitude === undefined || record.longitude === undefined) {
+      continue
+    }
+    const point = { latitude: record.latitude, longitude: record.longitude }
+    if (start === undefined) {
+      start = point
+    }
+    end = point
+  }
+  if (start === undefined || end === undefined) {
+    return undefined
+  }
+  return { start, end }
 }

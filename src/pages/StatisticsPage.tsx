@@ -36,12 +36,29 @@ import {
 } from '@/features/records/personalRecords'
 import RecordCards from '@/features/records/RecordCards'
 import RouteGroupCards from '@/features/routes/RouteGroupCards'
-import { buildRouteGroups, type RouteActivityInput, type RouteGroup } from '@/features/routes/routeGrouping'
+import {
+  buildRouteGroups,
+  extractEndpoints,
+  type RouteActivityInput,
+  type RouteGroup,
+} from '@/features/routes/routeGrouping'
+import { summariesScanKey } from '@/storage/scanCache'
 import { useUnits } from '@/hooks/useUnits'
 import '@/pages/StatisticsPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
 const repository = new DexieActivityRepository(db)
+
+/**
+ * 全量逐点扫描模块级缓存（性能优化）：key = summariesScanKey。
+ * 统计页每次挂载都扫描全部逐点会明显卡顿；逐点导入后不可变，
+ * 活动集合指纹变化（导入/删除/清空）时自动失效重扫。
+ */
+let recordScanCache: {
+  key: string
+  powerRecords: readonly PowerRecordEntry[]
+  routeGroups: readonly RouteGroup[]
+} | null = null
 
 /**
  * 生成自定义范围默认值：本月 1 号至今天（本地时区 YYYY-MM-DD）。
@@ -107,80 +124,78 @@ function StatisticsPage() {
   // 设备统计（全时段，与范围选择无关）：摘要就绪后即可计算
   const deviceStats = useMemo(() => buildDeviceStats(summaries ?? []), [summaries])
 
-  // 功率纪录：扫描全部活动逐点数据合并功率曲线（完成前为 null，失败置 failed）
-  const [powerRecords, setPowerRecords] = useState<readonly PowerRecordEntry[] | null>(null)
-  const [powerRecordsFailed, setPowerRecordsFailed] = useState(false)
+  // 功率纪录 + 路线分析：合并为一次全量逐点扫描（性能优化）。
+  // 渲染期派生优先读模块级缓存（离开页面再回来秒开）；
+  // setState 只在异步扫描完成后发生，缓存命中不触发级联渲染
+  const [scanState, setScanState] = useState<{
+    key: string
+    powerRecords: readonly PowerRecordEntry[]
+    routeGroups: readonly RouteGroup[]
+  } | null>(null)
+  const [scanFailed, setScanFailed] = useState(false)
+
+  const scanKey = summaries !== null && summaries.length > 0 ? summariesScanKey(summaries) : null
+  const scanResult =
+    scanKey === null
+      ? null
+      : scanState?.key === scanKey
+        ? scanState
+        : recordScanCache?.key === scanKey
+          ? recordScanCache
+          : null
+  const powerRecords = scanResult?.powerRecords ?? null
+  const routeGroups = scanResult?.routeGroups ?? null
+
   useEffect(() => {
-    if (summaries === null || summaries.length === 0) {
+    if (scanKey === null || summaries === null || summaries.length === 0) {
       return
     }
+    if (scanResult !== null) {
+      // 命中本次扫描结果或模块级缓存：无需重扫
+      return
+    }
+
     let cancelled = false
     void (async () => {
       try {
-        const items: ActivityPowerCurve[] = []
+        const powerItems: ActivityPowerCurve[] = []
+        const routeItems: RouteActivityInput[] = []
         for (const activity of summaries) {
           const records = await repository.getRecords(activity.id)
           if (cancelled) {
             return
           }
-          items.push({ activity, curve: buildPowerCurve(records, POWER_RECORD_DURATIONS) })
-        }
-        setPowerRecords(buildPowerRecords(items))
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setPowerRecordsFailed(true)
-        }
-        console.error('Failed to scan power records', err)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [summaries])
-
-  // 路线分析：扫描全部活动轨迹端点做聚类（完成前为 null，失败置 failed）
-  const [routeGroups, setRouteGroups] = useState<readonly RouteGroup[] | null>(null)
-  const [routeGroupsFailed, setRouteGroupsFailed] = useState(false)
-  useEffect(() => {
-    if (summaries === null || summaries.length === 0) {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const items: RouteActivityInput[] = []
-        for (const activity of summaries) {
-          const endpoints = await repository.getRouteEndpoints(activity.id)
-          if (cancelled) {
-            return
-          }
-          items.push({
+          powerItems.push({ activity, curve: buildPowerCurve(records, POWER_RECORD_DURATIONS) })
+          const endpoints = extractEndpoints(records)
+          routeItems.push({
             id: activity.id,
             startTime: activity.startTime,
             distance: activity.distance,
             duration: activity.duration,
-            start:
-              endpoints === undefined
-                ? undefined
-                : { latitude: endpoints.startLatitude, longitude: endpoints.startLongitude },
-            end:
-              endpoints === undefined
-                ? undefined
-                : { latitude: endpoints.endLatitude, longitude: endpoints.endLongitude },
+            start: endpoints?.start,
+            end: endpoints?.end,
           })
         }
-        setRouteGroups(buildRouteGroups(items))
+        const next = {
+          key: scanKey,
+          powerRecords: buildPowerRecords(powerItems),
+          routeGroups: buildRouteGroups(routeItems),
+        }
+        recordScanCache = next
+        if (!cancelled) {
+          setScanState(next)
+        }
       } catch (err: unknown) {
         if (!cancelled) {
-          setRouteGroupsFailed(true)
+          setScanFailed(true)
         }
-        console.error('Failed to scan route groups', err)
+        console.error('Failed to scan activity records', err)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [summaries])
+  }, [summaries, scanKey, scanResult])
 
   if (error) {
     return (
@@ -229,11 +244,11 @@ function StatisticsPage() {
       <RecordCards
         rideRecords={rideRecords}
         powerRecords={powerRecords}
-        powerRecordsFailed={powerRecordsFailed}
+        powerRecordsFailed={scanFailed}
         distanceUnit={distanceUnit}
       />
       <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
-      <RouteGroupCards groups={routeGroups} failed={routeGroupsFailed} distanceUnit={distanceUnit} />
+      <RouteGroupCards groups={routeGroups} failed={scanFailed} distanceUnit={distanceUnit} />
     </>
   )
 }

@@ -13,6 +13,7 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { simplifyRoute } from '@/map/simplify'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
+import { summariesScanKey } from '@/storage/scanCache'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -32,6 +33,12 @@ const TRACK_OPACITY = 0.25
 
 /** 活动仓库单例（页面模块只加载一次） */
 const repository = new DexieActivityRepository(db)
+
+/**
+ * 轨迹扫描模块级缓存（性能优化）：key = summariesScanKey。
+ * 全量轨迹加载+抽稀成本高，活动集合指纹不变时直接复用（离开再回来秒开）。
+ */
+let trackScanCache: { key: string; tracks: LatLng[][] } | null = null
 
 /** 加载状态：loading / empty（无轨迹）/ ready / error */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'
@@ -68,9 +75,19 @@ function HeatmapPage() {
 
     /**
      * 汇总全部活动的抽稀轨迹（无坐标的活动自动剔除）。
+     * 命中模块级缓存时跳过全量扫描（性能优化）。
      */
     async function loadTracks() {
       const summaries = await repository.listAllSummaries()
+      const scanKey = summariesScanKey(summaries)
+      if (trackScanCache !== null && trackScanCache.key === scanKey) {
+        if (!cancelled) {
+          setTracks(trackScanCache.tracks)
+          setState(trackScanCache.tracks.length > 0 ? 'ready' : 'empty')
+        }
+        return
+      }
+
       const loaded: LatLng[][] = []
       for (const summary of summaries) {
         const records = await repository.getRecords(summary.id)
@@ -82,6 +99,7 @@ function HeatmapPage() {
           return
         }
       }
+      trackScanCache = { key: scanKey, tracks: loaded }
       if (!cancelled) {
         setTracks(loaded)
         setState(loaded.length > 0 ? 'ready' : 'empty')

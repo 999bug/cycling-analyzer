@@ -16,6 +16,7 @@ import {
   type SegmentEffort,
 } from '@/features/segments/segmentMatching'
 import { useImportStore } from '@/stores/importStore'
+import { summariesScanKey } from '@/storage/scanCache'
 import '@/pages/SegmentsPage.css'
 
 /** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
@@ -23,6 +24,13 @@ const activityRepository = new DexieActivityRepository(db)
 
 /** 赛段仓库单例 */
 const segmentRepository = new DexieSegmentRepository(db)
+
+/**
+ * 成绩榜模块级缓存（性能优化）：key = 活动集合指纹 + 赛段 ID 列表。
+ * 赛段创建后不可变（无编辑入口），活动逐点导入后不可变，
+ * 两者任一变化（导入/删除活动、增删赛段）都会改变 key 自动失效。
+ */
+let leaderboardCache: { key: string; boards: ReadonlyMap<number, SegmentEffort[]> } | null = null
 
 /** 加载状态：loading / ready / error */
 type LoadState = 'loading' | 'ready' | 'error'
@@ -52,8 +60,17 @@ function SegmentsPage() {
           return
         }
 
-        // 扫描全部活动轨迹：每个赛段独立匹配成绩榜
+        // 扫描全部活动轨迹：每个赛段独立匹配成绩榜（命中缓存跳过全量扫描）
         const summaries = await activityRepository.listAllSummaries()
+        const cacheKey = `${summariesScanKey(summaries)}#${allSegments.map((segment) => segment.id ?? 0).join(',')}`
+        if (leaderboardCache !== null && leaderboardCache.key === cacheKey) {
+          if (!cancelled) {
+            setLeaderboards(leaderboardCache.boards)
+            setState('ready')
+          }
+          return
+        }
+
         const inputs: SegmentActivityInput[] = []
         for (const summary of summaries) {
           const records = await activityRepository.getRecords(summary.id)
@@ -67,6 +84,7 @@ function SegmentsPage() {
         for (const segment of allSegments) {
           boards.set(segment.id ?? 0, buildSegmentLeaderboard(segment, inputs))
         }
+        leaderboardCache = { key: cacheKey, boards }
         if (!cancelled) {
           setLeaderboards(boards)
           setState('ready')
