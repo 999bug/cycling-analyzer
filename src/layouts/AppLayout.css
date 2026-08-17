@@ -51,6 +51,10 @@
   color: var(--primary);
 }
 
+.app-layout__sidebar-footer {
+  margin-top: auto;
+}
+
 .app-layout__content {
   flex: 1;
   overflow-y: auto;

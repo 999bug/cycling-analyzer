@@ -1,0 +1,143 @@
+/**
+ * 导入入口面板样式（侧边栏底部）。
+ * 颜色取自全局 CSS 变量，与 AppLayout 视觉一致。
+ */
+.import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.import-panel button {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.import-panel button:hover {
+  border-color: var(--primary);
+}
+
+.import-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.import-panel__toggle {
+  border-color: rgba(79, 140, 255, 0.5);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.import-panel__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-panel__dropzone {
+  padding: 14px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-panel__dropzone--active {
+  border-color: var(--primary);
+  color: var(--text);
+  background-color: rgba(79, 140, 255, 0.1);
+}
+
+.import-panel__hidden-input {
+  display: none;
+}
+
+.import-panel__notice {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-panel__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-panel__progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--border);
+  overflow: hidden;
+}
+
+.import-panel__progress-fill {
+  height: 100%;
+  background-color: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.import-panel__progress-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-panel__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-panel__result-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.import-panel__summary-text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-panel__dismiss {
+  padding: 0 6px !important;
+  line-height: 20px;
+  font-size: 14px;
+}
+
+.import-panel__failures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+}
+
+.import-panel__failure {
+  font-size: 12px;
+  color: #e57373;
+  word-break: break-all;
+}
+
+.import-panel__failure-name {
+  display: block;
+  color: var(--text);
+}
+
+.import-panel__error {
+  font-size: 12px;
+  color: #e57373;
+}

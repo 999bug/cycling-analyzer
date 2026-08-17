@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import ImportPanel from '@/features/import/ImportPanel'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -43,6 +44,9 @@ function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        <div className="app-layout__sidebar-footer">
+          <ImportPanel />
+        </div>
       </aside>
       <main className="app-layout__content">
         <Outlet />
