@@ -25,3 +25,7 @@ dist-ssr
 
 # 用户本地真实骑行数据（不进仓库）
 private-fixtures/
+
+# Playwright E2E 产物
+test-results/
+playwright-report/

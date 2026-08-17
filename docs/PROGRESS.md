@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（完整 Segment 赛段完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（E2E 测试完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -153,7 +153,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **骑行区域统计**（✅ 7/7 测试）：`src/features/heatmap/gridCoverage.ts`：0.01°（约 1km）离线网格覆盖统计（同格去重，面积按网格中心纬度 cos 修正经度收缩）；热力图页摘要行展示「已探索 N 个 1km 网格（约 M km²）」
 - [x] **年度回顾**（✅ 8/8 测试）：新页面 /year-review（导航「年度回顾」）；`src/features/yearReview/`（yearReview.ts 年份提取/月度聚合/年度范围 + MonthlyDistanceChart 月度距离柱状图）；年度十项指标复用 buildStatistics 自定义范围（YYYY-01-01~12-31）；年份 radio 仅有数据的年份，默认最新年
 - [ ] **性能优化**：页面切换卡顿治理（用户实测反馈），见任务 #18
-- [ ] **E2E 测试**（Playwright）：覆盖导入→列表→详情核心链路
+- [x] **E2E 测试**（✅ 3/3 通过）：`playwright.config.ts`（webServer 自动起 dev server，workers=1 串行防 IndexedDB 互染）+ `e2e/smoke.spec.ts`：应用加载与导航、各页路由可达、核心链路「导入合成 FIT（tests/fixtures/cycling-gps.fit）→ 列表 → 详情」；`npm run test:e2e` 本地运行（不进 CI deploy）；vitest exclude e2e/ 防 .spec.ts 混入
 - [ ] **a11y 无障碍**：键盘导航/对比度/aria 审查
 
 ---
@@ -189,6 +189,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 ```bash
 npm run dev        # 本地开发
 npm run test       # 测试（vitest run）
+npm run test:e2e   # E2E（Playwright，首次需 npx playwright install chromium）
 npm run lint       # ESLint
 npm run build      # tsc + vite build
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
