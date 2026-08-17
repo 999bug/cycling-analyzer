@@ -144,7 +144,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **浅色主题**（§36）：✅ `:root[data-theme='light']` 变量覆盖 + 设置页「外观」区块切换即存；设置新增 appearance 域（`theme: dark|light`，默认深色）；`theme.ts`（applyTheme/initTheme/switchTheme），main.tsx 启动恢复，清空数据复位深色
 - [x] **单位换算显示**（§27 公里/英里、12h/24h）：✅ 已接入显示层（见 §3.1：useUnits hook + 各卡片/表格/图表 distanceUnit prop，详情页 12h 时间）
 - [x] **性能压测**（§44）：✅ `tests/perf/scale.test.ts` 6 例——1000 活动 × 100 逐点灌库（10 万行），分页/筛选查询 <1s，Dashboard/日历/设备聚合纯函数 <1s，单 FIT 解析 <3s，5 万点功率曲线/轨迹抽稀 <2s（宽松上限防量级回归，非精确基准）
-- [ ] **README 完善**（§46）：基础版已写，截图等未补
+- [x] **README 完善**（§46）：✅ 功能清单已补齐（新页面/训练分析/数据管理/E2E 命令），截图等未补
 
 ### P2 之后的后续工作项（规格外延伸，逐项推进）
 
