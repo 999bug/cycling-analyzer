@@ -30,6 +30,7 @@ import {
 } from '@/features/settings/settings'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
+import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import {
   calculateHeartRateZones,
   calculatePowerZones,
@@ -298,11 +299,32 @@ function ActivityDetailPage() {
     }
   }
 
+  // 是否存在可导出的轨迹点（无坐标活动禁用导出，规格 §25 不伪造）
+  const hasTrack = useMemo(
+    () =>
+      records.some((record) => record.latitude !== undefined && record.longitude !== undefined),
+    [records],
+  )
+
+  /**
+   * 导出 GPX：完整逐点轨迹 → GPX 1.1 文件下载（后续工作项：导出 GPX）。
+   */
+  function handleExportGpx() {
+    if (activity === undefined) {
+      return
+    }
+    const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
+    const gpx = buildGpx(trackName, records)
+    if (gpx === undefined) {
+      return
+    }
+    downloadGpx(buildGpxFileName(activity.fileName), gpx)
+  }
+
   /**
    * 进入重命名编辑态：输入框预填当前自定义名。
    */
-  function handleStartRename() {
-    setNameInput(activity?.name ?? '')
+  function handleStartRename() {    setNameInput(activity?.name ?? '')
     setEditing(true)
   }
 
@@ -405,14 +427,25 @@ function ActivityDetailPage() {
             <time className="activity-detail__time">{formatDateTime(activity.startTime, timeFormat)}</time>
           </div>
         </div>
-        <button
-          type="button"
-          className="activity-detail__delete"
-          onClick={handleDelete}
-          disabled={deleting}
-        >
-          {deleting ? '删除中…' : '删除活动'}
-        </button>
+        <div className="activity-detail__actions">
+          <button
+            type="button"
+            className="activity-detail__export"
+            onClick={handleExportGpx}
+            disabled={!hasTrack}
+            title={hasTrack ? undefined : '该活动无轨迹坐标，无法导出'}
+          >
+            导出 GPX
+          </button>
+          <button
+            type="button"
+            className="activity-detail__delete"
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? '删除中…' : '删除活动'}
+          </button>
+        </div>
       </header>
 
       <section className="activity-detail__stats" aria-label="活动指标">

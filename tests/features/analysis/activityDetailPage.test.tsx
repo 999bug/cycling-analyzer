@@ -388,3 +388,41 @@ describe('单位偏好显示（规格 §27）', () => {
     expect(await screen.findByText(/15:30/)).toBeInTheDocument()
   })
 })
+
+describe('导出 GPX（后续工作项）', () => {
+  let repo: DexieActivityRepository
+
+  beforeEach(() => {
+    repo = new DexieActivityRepository(testDb)
+  })
+
+  it('含坐标活动：点击导出 GPX 触发下载', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140]))
+    // jsdom 未实现 createObjectURL/revokeObjectURL：注入桩；拦截 a.click 防导航
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:mock'),
+      configurable: true,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: '导出 GPX' })
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+
+    expect(URL.createObjectURL).toHaveBeenCalledOnce()
+    expect(clickSpy).toHaveBeenCalledOnce()
+  })
+
+  it('无坐标活动：导出按钮禁用', async () => {
+    await repo.addActivity(
+      makeActivity('act-1', [100], [120], { records: [{ timestamp: 0, power: 100 }] }),
+    )
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '导出 GPX' })).toBeDisabled()
+  })
+})

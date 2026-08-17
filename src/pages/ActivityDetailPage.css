@@ -111,6 +111,36 @@
   font-size: 14px;
 }
 
+/* 标题区右侧操作按钮组（导出/删除） */
+.activity-detail__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.activity-detail__export {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.activity-detail__export:hover {
+  background-color: var(--bg-surface);
+  border-color: var(--text-secondary);
+}
+
+.activity-detail__export:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .activity-detail__delete {
   flex-shrink: 0;
   padding: 8px 16px;
