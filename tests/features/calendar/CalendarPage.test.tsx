@@ -70,9 +70,11 @@ describe('骑行日历页面', () => {
     const repo = new DexieActivityRepository(testDb)
     const today = new Date()
     // 今天两次骑行：50000 + 77400 m → 4 档（127.40 km）
+    // 取今天零点与当前时刻：保证是"已过去"的时间，不被聚合的未来活动过滤排除
+    // （固定写 8 点/10 点会在 10 点前运行测试时落入未来，CI 为 UTC 时区必现）
     const startTimes = [
-      new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8).toISOString(),
-      new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10).toISOString(),
+      new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString(),
+      today.toISOString(),
     ]
     await repo.addActivities([
       makeActivity(0, startTimes[0], 50000, 5400, 300),
