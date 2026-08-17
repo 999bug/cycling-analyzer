@@ -1,0 +1,187 @@
+/**
+ * 骑行记录列表页样式（筛选栏、表格、分页条、空/加载/错误状态）。
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深色基调与全局一致。
+ */
+
+/* 页面布局 */
+.activity-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 筛选栏 */
+.activity-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.activity-filters__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.activity-filters__input,
+.activity-filters__select {
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.activity-filters__input:focus,
+.activity-filters__select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* 表格 */
+.activity-table {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+.activity-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.activity-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.activity-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.activity-table__row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.activity-table__row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.activity-table__row:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.activity-table__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+}
+
+.activity-table__sort:hover {
+  color: var(--text);
+}
+
+.activity-table__sort--active {
+  color: var(--primary);
+}
+
+.activity-table__arrow {
+  font-size: 12px;
+}
+
+/* 分页条 */
+.activity-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.activity-pagination__button {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.activity-pagination__button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.activity-pagination__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.activity-pagination__info {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* 空/加载/错误状态 */
+.activity-page__empty,
+.activity-page__loading,
+.activity-page__error {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.activity-page__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.activity-page__retry {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-page__retry:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
