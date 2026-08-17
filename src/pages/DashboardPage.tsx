@@ -2,7 +2,8 @@
  * 仪表盘页面（规格 §13）。
  *
  * 展示本周/本月/总计四项指标（骑行次数、骑行距离、骑行时间、累计爬升）
- * 与 30/90/365 天距离趋势图。数据来自活动仓库 listAllSummaries，
+ * 与 30/90/365 天距离趋势图，底部为训练状态区块（CTL/ATL/TSB，规格 §39）。
+ * 数据来自活动仓库 listAllSummaries，
  * 由 buildDashboardData 纯函数聚合，空数据时展示导入引导文案。
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -11,6 +12,7 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { buildDashboardData, type DashboardData } from '@/features/dashboard/statistics'
 import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
+import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
 import { useImportStore } from '@/stores/importStore'
 import '@/pages/DashboardPage.css'
 
@@ -89,6 +91,7 @@ function DashboardPage() {
         <StatCards title="总计" summary={data.total} />
       </div>
       <TrendChart trends={data.trends} />
+      <TrainingStatusSection />
     </>
   )
 }

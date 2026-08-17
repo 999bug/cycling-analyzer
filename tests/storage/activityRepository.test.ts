@@ -345,6 +345,14 @@ describe('DexieActivityRepository', () => {
       expect((await repo.getById(activity.id))?.name).toBe('环湖拉练');
     });
 
+    it('updateNormalizedPower 回填标准化功率', async () => {
+      const activity = makeActivity();
+      await repo.addActivity(activity);
+      await repo.updateNormalizedPower(activity.id, 233);
+
+      expect((await repo.getById(activity.id))?.normalizedPower).toBe(233);
+    });
+
     it('deleteActivity 级联删除逐点记录', async () => {
       const activity = makeActivity({ records: [makeRecord(1), makeRecord(2)] });
       await repo.addActivity(activity);

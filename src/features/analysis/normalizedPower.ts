@@ -12,7 +12,7 @@
 import type { ActivityRecord } from '@/types/activity'
 
 /** 滑动平均窗口（秒）：标准 NP 算法固定窗口 */
-const NP_WINDOW_SECONDS = 30
+export const NP_WINDOW_SECONDS = 30
 
 /**
  * 计算标准化功率（NP）。

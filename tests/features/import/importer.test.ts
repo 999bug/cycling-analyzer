@@ -83,6 +83,14 @@ describe('importFiles 导入执行器', () => {
     expect(record).toMatchObject({ fileName: 'cycling-gps.fit', status: 'imported' });
   });
 
+  it('含功率的 FIT 导入时同步计算 NP 落库（训练状态免全量扫描）', async () => {
+    await importFiles([makeImportFile('cycling-gps.fit')], { activityRepository, fileRepository });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.normalizedPower).toBeDefined();
+    expect(activity.normalizedPower).toBeGreaterThan(0);
+  });
+
   it('内容指纹重复的文件跳过（规格 §9），不重复入库', async () => {
     const entry = makeImportFile('cycling-gps.fit');
     await importFiles([entry], { activityRepository, fileRepository });

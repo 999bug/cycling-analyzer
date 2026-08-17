@@ -18,6 +18,7 @@ import { DexieFileRepository, type FileRepository } from '@/storage/repositories
 import { db } from '@/storage/db'
 import { computeFingerprint } from '@/utils/fingerprint'
 import { parseFitBytes, type ParseFileFn } from '@/fit/worker/parseTask'
+import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
 import { createWorkerParser } from './parseClient'
@@ -124,6 +125,12 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         skipped++
       } else {
         const activity = await parser({ fileName: entry.name, bytes: content, fingerprint })
+        // 导入时顺带计算 NP 落库（原始派生值、与 FTP 无关）：
+        // 训练状态等全量聚合直接读摘要，避免每次全量扫描逐点数据
+        const normalizedPower = calculateNormalizedPower(activity.records ?? [])
+        if (normalizedPower !== undefined) {
+          activity.normalizedPower = normalizedPower
+        }
         await activityRepository.addActivity(activity, matchTitle(entry.path, entry.name, titles))
         await fileRepository.recordImported(fingerprint, entry.name, content.byteLength)
         newImported++

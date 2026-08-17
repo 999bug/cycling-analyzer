@@ -1,0 +1,66 @@
+/**
+ * 训练状态区块样式：深色卡片 + 三值卡片 + 负荷趋势图。
+ * 颜色复用全局 CSS 变量，与 StatCards/TrendChart 风格一致。
+ */
+.training-status {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.training-status__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.training-status__message {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.training-status__cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 12px;
+}
+
+.training-status__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.training-status__value {
+  color: var(--text);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.training-status__value--positive {
+  color: #34c759;
+}
+
+.training-status__value--negative {
+  color: #ff9f0a;
+}
+
+.training-status__label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.training-status__legend {
+  color: var(--text-secondary);
+  display: flex;
+  font-size: 12px;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}

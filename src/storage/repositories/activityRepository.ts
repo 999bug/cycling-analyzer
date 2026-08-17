@@ -166,6 +166,14 @@ export interface ActivityRepository {
   updateName(id: string, name: string): Promise<void>;
 
   /**
+   * 更新活动的标准化功率（历史活动 NP 回填；导入时计算，老数据按需补算）。
+   *
+   * @param id 活动 ID
+   * @param normalizedPower 标准化功率（W）
+   */
+  updateNormalizedPower(id: string, normalizedPower: number): Promise<void>;
+
+  /**
    * 删除活动（连同逐点记录，事务级联删除）。
    *
    * @param id 活动 ID
@@ -339,6 +347,10 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async updateName(id: string, name: string): Promise<void> {
     await this.db.activities.update(id, { name });
+  }
+
+  async updateNormalizedPower(id: string, normalizedPower: number): Promise<void> {
+    await this.db.activities.update(id, { normalizedPower });
   }
 
   async deleteActivity(id: string): Promise<void> {
