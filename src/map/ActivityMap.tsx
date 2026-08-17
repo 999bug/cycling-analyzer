@@ -3,12 +3,19 @@
  *
  * react-leaflet 绘制轨迹 Polyline + 起点/终点 CircleMarker，
  * 地图自动 fitBounds 到轨迹范围。
- * MVP 只实现默认单色轨迹；按速度/心率/功率/海拔着色为 P1 功能。
+ * 默认单色轨迹；coloring 指定时按速度/心率/功率/海拔分段着色。
  */
 import { useEffect, useMemo } from 'react'
 import { CircleMarker, MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RoutePoint } from '@/types/activity'
+import {
+  buildBucketLines,
+  buildSegments,
+  getMetricValue,
+  type ColoringMode,
+  type ColoredLine,
+} from '@/map/routeColoring'
 import '@/map/ActivityMap.css'
 
 /** 一条可绘制轨迹至少需要 2 个点 */
@@ -27,11 +34,20 @@ const ROUTE_COLOR = '#4f8cff'
 const ROUTE_WEIGHT = 4
 
 /**
+ * 精确着色（每段一条 Polyline）的最大段数。
+ * 超过后分桶合并，避免大量 Leaflet 图层导致渲染卡顿。
+ */
+const MAX_DETAILED_SEGMENTS = 500
+
+/**
  * 地图组件 props。
  */
 export interface ActivityMapProps {
   /** 轨迹点（已抽稀），少于 2 点或无坐标时显示占位提示 */
   points: RoutePoint[]
+
+  /** 轨迹着色模式：'none'（默认）单色轨迹；其余按指标分段着色 */
+  coloring?: ColoringMode | 'none'
 }
 
 /**
@@ -57,12 +73,38 @@ function FitBounds({ points }: { points: RoutePoint[] }) {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
   // 经纬度元组列表：Polyline / CircleMarker 共用
   const latLngs = useMemo(
     () => points.map((point) => [point.latitude, point.longitude] as [number, number]),
     [points],
   )
+
+  // 着色模式下是否具备该指标数据（全部缺失时回退单色轨迹）
+  const hasMetricData = useMemo(() => {
+    if (coloring === 'none') {
+      return false
+    }
+    return points.some((point) => getMetricValue(point, coloring) !== undefined)
+  }, [points, coloring])
+
+  // 着色折线：段数少时逐段精确着色（每条线段一条 Polyline）；
+  // 段数多时分桶合并，同桶相邻段共一条 Polyline，降低图层数
+  const coloredLines = useMemo<ColoredLine[]>(() => {
+    if (coloring === 'none' || !hasMetricData) {
+      return []
+    }
+    if (points.length - 1 <= MAX_DETAILED_SEGMENTS) {
+      return buildSegments(points, coloring).map((segment) => ({
+        color: segment.color,
+        positions: [
+          [segment.lat1, segment.lng1],
+          [segment.lat2, segment.lng2],
+        ],
+      }))
+    }
+    return buildBucketLines(points, coloring)
+  }, [points, coloring, hasMetricData])
 
   if (points.length < MIN_POINTS) {
     return <div className="activity-map activity-map--empty">该活动没有坐标轨迹</div>
@@ -83,7 +125,15 @@ function ActivityMap({ points }: ActivityMapProps) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />
+      {hasMetricData
+        ? coloredLines.map((line, index) => (
+            <Polyline
+              key={index}
+              positions={line.positions}
+              pathOptions={{ color: line.color, weight: ROUTE_WEIGHT }}
+            />
+          ))
+        : <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />}
       <CircleMarker center={start} radius={6} pathOptions={{ color: START_COLOR, fillColor: START_COLOR, fillOpacity: 1 }} />
       <CircleMarker center={end} radius={6} pathOptions={{ color: END_COLOR, fillColor: END_COLOR, fillOpacity: 1 }} />
       <FitBounds points={points} />

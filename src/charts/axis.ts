@@ -36,3 +36,18 @@ export function formatAxisDistance(meters: number): string {
   }
   return `${(meters / 1000).toFixed(1)} km`
 }
+
+/**
+ * 数值显示：速度 m/s → km/h（1 位小数），其余取整。
+ * 单指标图与组合图共用（Y 轴刻度 / Tooltip 数值）。
+ *
+ * @param value 原始数值（m/s 或其他）
+ * @param unit 单位（km/h 时触发换算）
+ * @param suffix 是否附带单位后缀
+ * @returns 展示字符串
+ */
+export function formatValue(value: number, unit: string, withSuffix: boolean): string {
+  const num = unit === 'km/h' ? value * 3.6 : value
+  const text = unit === 'km/h' ? num.toFixed(1) : String(Math.round(num))
+  return withSuffix ? `${text} ${unit}` : text
+}

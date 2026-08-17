@@ -21,7 +21,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { ActivityRecord } from '@/types/activity'
-import { formatAxisDistance, formatAxisTime } from '@/charts/axis'
+import { formatAxisDistance, formatAxisTime, formatValue } from '@/charts/axis'
 import ChartCard from '@/charts/ChartCard'
 import type { ChartSeriesPoint, MetricField, XAxisMode } from '@/charts/series'
 import { buildSeries } from '@/charts/series'
@@ -68,20 +68,6 @@ const AXIS_TICK_COLOR = 'var(--text-secondary)'
 
 /** 深色主题下网格线颜色 */
 const GRID_COLOR = 'var(--border)'
-
-/**
- * 数值显示：速度 m/s → km/h（1 位小数），其余取整。
- *
- * @param value 原始数值（m/s 或其他）
- * @param unit 单位（km/h 时触发换算）
- * @param suffix 是否附带单位后缀
- * @returns 展示字符串
- */
-function formatValue(value: number, unit: string, withSuffix: boolean): string {
-  const num = unit === 'km/h' ? value * 3.6 : value
-  const text = unit === 'km/h' ? num.toFixed(1) : String(Math.round(num))
-  return withSuffix ? `${text} ${unit}` : text
-}
 
 /**
  * 共享指标图表。

@@ -55,3 +55,64 @@ export function buildSeries(
     timestamp: record.timestamp,
   }))
 }
+
+/** 组合图第一指标字段（速度或功率） */
+export type CombinedPrimaryField = 'speed' | 'power'
+
+/**
+ * 组合图数据点：primary（速度/功率）与 heartRate 共用同一个 x，
+ * 双 Y 轴序列在时间/距离轴上严格对齐。
+ * 指标缺失时为 undefined（区别于 0），由图表层按序列单独降级。
+ */
+export interface CombinedSeriesPoint {
+  /** X 轴取值（time 模式：秒；distance 模式：米） */
+  x: number
+
+  /** 第一指标取值（速度 m/s 或功率 W） */
+  primary: number | undefined
+
+  /** 心率取值（bpm） */
+  heartRate: number | undefined
+
+  /** 原始时间戳（Unix 秒，Tooltip 展示用） */
+  timestamp: number
+}
+
+/**
+ * 构建组合序列（速度/功率 + 心率）。
+ * 与 buildSeries 不同：两条序列共用同一基准（首条任一指标有效的记录），
+ * 逐点一一对应，不会因各自独立过滤导致 x 轴错位；
+ * 单条序列缺失的点保留为 undefined，由图表层决定渲染哪一侧。
+ *
+ * @param records 逐点记录
+ * @param primary 第一指标字段
+ * @param mode X 轴模式
+ * @returns 按时间升序的组合数据点（双指标均无有效数据时为空数组）
+ */
+export function buildCombinedSeries(
+  records: readonly ActivityRecord[],
+  primary: CombinedPrimaryField,
+  mode: XAxisMode,
+): CombinedSeriesPoint[] {
+  const sorted = [...records].sort((a, b) => a.timestamp - b.timestamp)
+
+  // 至少一个指标有效，且 distance 模式下需有累计距离（保证 x 有定义）
+  const valid = sorted.filter(
+    (record) =>
+      (record[primary] !== undefined || record.heartRate !== undefined) &&
+      (mode !== 'distance' || record.distance !== undefined),
+  )
+
+  if (valid.length === 0) {
+    return []
+  }
+
+  const baseTime = valid[0].timestamp
+  const baseDistance = mode === 'distance' ? valid[0].distance! : 0
+  return valid.map((record) => ({
+    x: mode === 'time' ? record.timestamp - baseTime : record.distance! - baseDistance,
+    primary: record[primary],
+    heartRate: record.heartRate,
+    timestamp: record.timestamp,
+  }))
+}
