@@ -28,10 +28,24 @@ import {
   parseExportBundle,
 } from '@/features/settings/exportImport'
 import { clearAllData } from '@/features/settings/dataClear'
+import { buildPowerCurve } from '@/features/analysis/powerCurve'
+import {
+  ESTIMATE_WINDOW_DAYS,
+  FTP_POWER_DURATION_SECONDS,
+  VO2MAX_POWER_DURATION_SECONDS,
+  estimateFtp,
+  estimateVo2max,
+} from '@/features/analysis/ftpEstimate'
 import '@/features/settings/settings-page.css'
 
 /** 清空确认文案（规格 §32 二次确认） */
 const CLEAR_ALL_CONFIRM_TEXT = '确定清空全部本地数据？此操作不可恢复'
+
+/** 一天的毫秒数（估算窗口换算） */
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/** FTP/VO2Max 估算状态（loading=扫描中，noPower=近 90 天无功率数据） */
+type EstimateStatus = 'loading' | 'noPower' | 'ready' | 'error'
 
 /** 操作结果提示 */
 type FormMessage = { type: 'success' | 'error'; text: string }
@@ -87,6 +101,12 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   const [importing, setImporting] = useState(false)
   const [clearing, setClearing] = useState(false)
 
+  // FTP/VO2Max 估算（规格 §39）：近 90 天功率数据异步扫描
+  const [estimateStatus, setEstimateStatus] = useState<EstimateStatus>('loading')
+  const [ftpEstimate, setFtpEstimate] = useState<number>()
+  const [vo2maxEstimate, setVo2maxEstimate] = useState<number>()
+  const [adopting, setAdopting] = useState(false)
+
   // 加载设置并回填表单（规格 §27 默认公制）
   useEffect(() => {
     let cancelled = false
@@ -114,6 +134,90 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       cancelled = true
     }
   }, [context.settingsRepository])
+
+  // FTP/VO2Max 估算：扫描近 90 天含功率的活动，取 5 分钟/20 分钟最佳功率
+  useEffect(() => {
+    let cancelled = false
+
+    /**
+     * 扫描近 90 天功率数据并计算估算值（体重取自已保存设置）。
+     */
+    async function scanBestPowers() {
+      const cutoffIso = new Date(Date.now() - ESTIMATE_WINDOW_DAYS * MS_PER_DAY).toISOString()
+      const [settingsData, summaries] = await Promise.all([
+        getSettings(context.settingsRepository),
+        context.activityRepository.listAllSummaries(),
+      ])
+      const powered = summaries.filter(
+        (summary) => summary.avgPower !== undefined && summary.startTime >= cutoffIso,
+      )
+
+      // 合并各活动的 5 分钟/20 分钟最佳功率（跨活动取最大）
+      const best = new Map<number, number>()
+      for (const summary of powered) {
+        const records = await context.activityRepository.getRecords(summary.id)
+        const curve = buildPowerCurve(records, [
+          VO2MAX_POWER_DURATION_SECONDS,
+          FTP_POWER_DURATION_SECONDS,
+        ])
+        for (const point of curve) {
+          const current = best.get(point.duration)
+          if (current === undefined || point.power > current) {
+            best.set(point.duration, point.power)
+          }
+        }
+        if (cancelled) {
+          return
+        }
+      }
+
+      if (cancelled) {
+        return
+      }
+      const ftp = estimateFtp(best.get(FTP_POWER_DURATION_SECONDS))
+      const vo2max = estimateVo2max(
+        best.get(VO2MAX_POWER_DURATION_SECONDS),
+        settingsData.profile.weightKg,
+      )
+      if (ftp === undefined && vo2max === undefined) {
+        setEstimateStatus('noPower')
+        return
+      }
+      setFtpEstimate(ftp)
+      setVo2maxEstimate(vo2max)
+      setEstimateStatus('ready')
+    }
+
+    scanBestPowers().catch((error: unknown) => {
+      if (!cancelled) {
+        setEstimateStatus('error')
+      }
+      console.error('Failed to estimate FTP/VO2Max', error)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [context.activityRepository, context.settingsRepository])
+
+  /**
+   * 采用估算 FTP：立即保存到设置并回填输入框。
+   */
+  async function handleAdoptFtp() {
+    if (ftpEstimate === undefined || adopting) {
+      return
+    }
+    setAdopting(true)
+    try {
+      await saveSettings({ profile: { ftp: ftpEstimate } }, context.settingsRepository)
+      setFtp(String(ftpEstimate))
+      setMessage({ type: 'success', text: `已采用估算 FTP：${ftpEstimate} W` })
+    } catch (error) {
+      console.error('Failed to adopt estimated FTP', error)
+      setMessage({ type: 'error', text: '保存失败，请重试' })
+    } finally {
+      setAdopting(false)
+    }
+  }
 
   /**
    * 保存设置（个人信息 + 单位，合并保存不丢未修改字段）。
@@ -294,6 +398,43 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 onChange={(event) => setFtp(event.target.value)}
               />
               <span className="settings-field__unit">W</span>
+            </div>
+            <div className="settings-estimate" aria-label="训练估算">
+              {estimateStatus === 'loading' && (
+                <p className="settings-estimate__text">正在根据近 90 天的骑行数据估算…</p>
+              )}
+              {estimateStatus === 'noPower' && (
+                <p className="settings-estimate__text">
+                  近 90 天没有功率数据，导入含功率计的骑行后可估算 FTP 与 VO2Max
+                </p>
+              )}
+              {estimateStatus === 'error' && (
+                <p className="settings-estimate__text">估算失败，请刷新重试</p>
+              )}
+              {estimateStatus === 'ready' && (
+                <>
+                  {ftpEstimate !== undefined && (
+                    <p className="settings-estimate__text">
+                      估算 FTP：{ftpEstimate} W（近 90 天 20 分钟最佳功率 × 0.95）
+                      <button
+                        type="button"
+                        className="settings-button settings-estimate__adopt"
+                        onClick={handleAdoptFtp}
+                        disabled={adopting}
+                      >
+                        {adopting ? '采用中…' : '采用'}
+                      </button>
+                    </p>
+                  )}
+                  {vo2maxEstimate !== undefined ? (
+                    <p className="settings-estimate__text">
+                      估算 VO2Max：{vo2maxEstimate} ml/kg/min（5 分钟最佳功率 ÷ 体重）
+                    </p>
+                  ) : (
+                    <p className="settings-estimate__text">填写并保存体重后可估算 VO2Max</p>
+                  )}
+                </>
+              )}
             </div>
             <div className="settings-field">
               <label className="settings-field__label" htmlFor="settings-profile-max-hr">

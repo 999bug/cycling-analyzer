@@ -22,6 +22,9 @@ export interface Activity {
   /** 活动唯一标识（导入时生成） */
   id: string
 
+  /** 活动标题（Strava CSV 还原或用户重命名，规格 §31；可为空） */
+  name?: string
+
   /** 源 FIT 文件标识 */
   fileId: string
 

@@ -86,6 +86,27 @@
   flex-shrink: 0;
 }
 
+/* FTP/VO2Max 估算区块（个人信息区内，FTP 字段下方） */
+.settings-estimate {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.settings-estimate__text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+/* 「采用」按钮：跟随估算文案的小按钮 */
+.settings-estimate__adopt {
+  margin-left: 10px;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
 /* 表单操作区 */
 .settings-form__actions {
   display: flex;
