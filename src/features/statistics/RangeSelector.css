@@ -1,0 +1,68 @@
+/**
+ * 范围选择器样式：pill 风格单选组 + 自定义日期输入。
+ * 颜色复用全局 CSS 变量（--bg-surface / --border / --primary / --text）。
+ */
+.range-selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.range-selector__option {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* 选中态：主色描边 + 高亮文字 */
+.range-selector__option:has(input:checked) {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+/* 键盘聚焦时显示外圈，保持可访问性 */
+.range-selector__option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 隐藏原生 radio 并铺满整个 pill：视觉由 label 呈现，点击任意位置均命中（保持可聚焦） */
+.range-selector__option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+}
+
+.range-selector__custom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 4px;
+}
+
+.range-selector__date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.range-selector__date input {
+  color-scheme: dark;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 13px;
+}

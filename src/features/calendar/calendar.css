@@ -1,0 +1,128 @@
+/**
+ * 骑行日历热力组件样式（规格 §29）。
+ * 颜色档位用组件级 CSS 变量色阶（深色基调、绿色系随强度增亮），
+ * 基础色复用全局变量（--bg-surface / --border / --text-secondary / --primary）。
+ */
+
+/* 颜色档位色阶：0 无骑行 ~ 4 最高强度（每日 ≥100 km） */
+.calendar-heatmap {
+  --cal-level-0: #1e2228;
+  --cal-level-1: #123d2f;
+  --cal-level-2: #1a5c40;
+  --cal-level-3: #23804f;
+  --cal-level-4: #34a86b;
+}
+
+/* 整体容器（深色卡片，与统计卡片风格一致） */
+.calendar-heatmap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* 头部：年份切换按钮 + 图例 */
+.calendar-heatmap__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-heatmap__year {
+  min-width: 56px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.calendar-heatmap__nav {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.calendar-heatmap__nav:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* 图例（右对齐） */
+.calendar-heatmap__legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.calendar-heatmap__legend-text {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 图例色块不与真实格子区分交互（无 hover 高亮） */
+.calendar-heatmap__cell--legend {
+  cursor: default;
+}
+
+.calendar-heatmap__cell--legend:hover {
+  outline: none;
+}
+
+/* 网格：自动流按 7 列逐行排列 */
+.calendar-heatmap__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 14px);
+  column-gap: 4px;
+  row-gap: 4px;
+}
+
+/* 单格 */
+.calendar-heatmap__cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background-color: var(--cal-level-0);
+}
+
+.calendar-heatmap__cell--level-1 {
+  background-color: var(--cal-level-1);
+}
+
+.calendar-heatmap__cell--level-2 {
+  background-color: var(--cal-level-2);
+}
+
+.calendar-heatmap__cell--level-3 {
+  background-color: var(--cal-level-3);
+}
+
+.calendar-heatmap__cell--level-4 {
+  background-color: var(--cal-level-4);
+}
+
+/* 跨年边缘格子淡化，弱化非当年日期 */
+.calendar-heatmap__cell--outside {
+  opacity: 0.35;
+}
+
+.calendar-heatmap__cell:hover {
+  outline: 1px solid var(--text-secondary);
+  outline-offset: 1px;
+}
+
+/* 页面级消息（空/加载/错误） */
+.calendar-page__message {
+  margin-top: 24px;
+}
