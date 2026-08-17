@@ -19,6 +19,9 @@ export type DistanceUnit = 'km' | 'mi'
 /** 时间格式（仅影响显示） */
 export type TimeFormat = '24h' | '12h'
 
+/** 主题（规格 §36，默认深色） */
+export type Theme = 'dark' | 'light'
+
 /**
  * 个人信息（规格 §27）。
  * 数字字段单位：体重 kg、身高 cm、FTP/心率 bpm 用 W/bpm。
@@ -52,6 +55,12 @@ export interface UnitPreferences {
   timeFormat: TimeFormat
 }
 
+/** 外观偏好（规格 §36） */
+export interface AppearancePreferences {
+  /** 主题（默认深色） */
+  theme: Theme
+}
+
 /** 完整设置数据（getSettings 返回） */
 export interface SettingsData {
   /** 个人信息 */
@@ -59,6 +68,9 @@ export interface SettingsData {
 
   /** 单位偏好 */
   units: UnitPreferences
+
+  /** 外观偏好 */
+  appearance: AppearancePreferences
 }
 
 /** 设置保存片段（按域合并保存，未提供的字段保留原值） */
@@ -68,6 +80,9 @@ export interface SettingsPatch {
 
   /** 单位偏好（可只传需更新的字段） */
   units?: Partial<UnitPreferences>
+
+  /** 外观偏好（可只传需更新的字段） */
+  appearance?: Partial<AppearancePreferences>
 }
 
 /** profile 设置键（settings 表） */
@@ -76,8 +91,14 @@ export const PROFILE_KEY = 'profile'
 /** units 设置键（settings 表） */
 export const UNITS_KEY = 'units'
 
+/** appearance 设置键（settings 表） */
+export const APPEARANCE_KEY = 'appearance'
+
 /** 默认单位偏好（规格 §27 默认全公制） */
 export const DEFAULT_UNITS: UnitPreferences = { distance: 'km', timeFormat: '24h' }
+
+/** 默认外观偏好（规格 §36 默认深色） */
+export const DEFAULT_APPEARANCE: AppearancePreferences = { theme: 'dark' }
 
 /** 默认个人信息（全字段未设置） */
 export const DEFAULT_PROFILE: UserProfile = {}
@@ -97,13 +118,15 @@ const defaultSettingsRepository = new DexieSettingsRepository(db)
 export async function getSettings(
   settingsRepository: SettingsRepository = defaultSettingsRepository,
 ): Promise<SettingsData> {
-  const [profileRaw, unitsRaw] = await Promise.all([
+  const [profileRaw, unitsRaw, appearanceRaw] = await Promise.all([
     settingsRepository.get(PROFILE_KEY),
     settingsRepository.get(UNITS_KEY),
+    settingsRepository.get(APPEARANCE_KEY),
   ])
   return {
     profile: { ...DEFAULT_PROFILE, ...asRecord(profileRaw) },
     units: { ...DEFAULT_UNITS, ...asRecord(unitsRaw) },
+    appearance: { ...DEFAULT_APPEARANCE, ...asRecord(appearanceRaw) },
   }
 }
 
@@ -124,6 +147,9 @@ export async function saveSettings(
   }
   if (patch.units !== undefined) {
     await settingsRepository.set(UNITS_KEY, { ...current.units, ...patch.units })
+  }
+  if (patch.appearance !== undefined) {
+    await settingsRepository.set(APPEARANCE_KEY, { ...current.appearance, ...patch.appearance })
   }
 }
 

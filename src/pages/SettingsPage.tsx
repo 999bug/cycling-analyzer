@@ -18,8 +18,10 @@ import {
   getSettings,
   saveSettings,
   type DistanceUnit,
+  type Theme,
   type TimeFormat,
 } from '@/features/settings/settings'
+import { switchTheme, applyTheme } from '@/features/settings/theme'
 import {
   defaultExportFilename,
   downloadJson,
@@ -94,6 +96,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>(DEFAULT_UNITS.distance)
   const [timeFormat, setTimeFormat] = useState<TimeFormat>(DEFAULT_UNITS.timeFormat)
 
+  // 外观偏好（主题切换立即生效并保存，规格 §36）
+  const [theme, setTheme] = useState<Theme>('dark')
+
   // 操作状态
   const [message, setMessage] = useState<FormMessage | null>(null)
   const [saving, setSaving] = useState(false)
@@ -123,6 +128,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         setRestingHeartRate(numberToString(data.profile.restingHeartRate))
         setDistanceUnit(data.units.distance)
         setTimeFormat(data.units.timeFormat)
+        setTheme(data.appearance.theme)
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -326,7 +332,24 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   }
 
   /**
-   * 清空后重置表单为默认值（规格 §27 默认公制）。
+   * 切换主题：立即应用到文档并持久化（无需点「保存设置」）。
+   *
+   * @param event 选择事件
+   */
+  async function handleThemeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const next = event.target.value as Theme
+    setTheme(next)
+    try {
+      await switchTheme(next, context.settingsRepository)
+      setMessage({ type: 'success', text: next === 'light' ? '已切换为浅色主题' : '已切换为深色主题' })
+    } catch (error) {
+      console.error('Failed to switch theme', error)
+      setMessage({ type: 'error', text: '主题保存失败，请重试' })
+    }
+  }
+
+  /**
+   * 清空后重置表单为默认值（规格 §27 默认公制；主题复位深色，规格 §36）。
    */
   function resetForm() {
     setNickname('')
@@ -337,6 +360,8 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setRestingHeartRate('')
     setDistanceUnit(DEFAULT_UNITS.distance)
     setTimeFormat(DEFAULT_UNITS.timeFormat)
+    setTheme('dark')
+    applyTheme('dark')
   }
 
   return (
@@ -505,6 +530,27 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
           </button>
         </div>
       </form>
+
+      <section className="settings-section" aria-label="外观">
+        <h2 className="settings-section__title">外观</h2>
+        <p className="settings-section__hint">主题切换后立即生效并自动保存。</p>
+        <div className="settings-fields">
+          <div className="settings-field">
+            <label className="settings-field__label" htmlFor="settings-appearance-theme">
+              主题
+            </label>
+            <select
+              id="settings-appearance-theme"
+              className="settings-field__select"
+              value={theme}
+              onChange={handleThemeChange}
+            >
+              <option value="dark">深色</option>
+              <option value="light">浅色</option>
+            </select>
+          </div>
+        </div>
+      </section>
 
       <section className="settings-section" aria-label="数据管理">
         <h2 className="settings-section__title">数据管理</h2>

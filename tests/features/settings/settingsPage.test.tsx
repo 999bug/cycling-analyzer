@@ -229,3 +229,37 @@ function makeActivity(id: string, fingerprint: string, overrides: Partial<Activi
     ...overrides,
   }
 }
+
+describe('设置页主题切换（规格 §36）', () => {
+  const user = userEvent.setup()
+
+  it('默认渲染深色主题选项', async () => {
+    render(<SettingsPage />)
+
+    expect(await screen.findByLabelText('主题')).toHaveValue('dark')
+  })
+
+  it('切换浅色主题：立即应用并持久化', async () => {
+    render(<SettingsPage />)
+    const select = await screen.findByLabelText('主题')
+
+    await user.selectOptions(select, 'light')
+
+    expect(await screen.findByText('已切换为浅色主题')).toBeInTheDocument()
+    expect(document.documentElement.dataset.theme).toBe('light')
+    const settings = await getSettings()
+    expect(settings.appearance.theme).toBe('light')
+
+    // 清理：避免 jsdom 文档状态泄漏到本文件其他用例
+    delete document.documentElement.dataset.theme
+  })
+
+  it('预置浅色主题后渲染回填', async () => {
+    await saveSettings({ appearance: { theme: 'light' } })
+    render(<SettingsPage />)
+
+    // 设置异步加载后回填，等待值更新（避免与初始 dark 竞态）
+    const select = await screen.findByLabelText('主题')
+    await waitFor(() => expect(select).toHaveValue('light'))
+  })
+})

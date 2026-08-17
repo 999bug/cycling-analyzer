@@ -11,6 +11,16 @@
   --border: #2a2e35;
 }
 
+/* 浅色主题（规格 §36）：覆盖 CSS 变量，组件无需改动 */
+:root[data-theme='light'] {
+  --bg: #f5f6f8;
+  --bg-surface: #ffffff;
+  --text: #1a1d21;
+  --text-secondary: #5f6368;
+  --primary: #2f6fdd;
+  --border: #d8dce2;
+}
+
 /* reset */
 *,
 *::before,
