@@ -30,6 +30,23 @@
   color: var(--primary);
 }
 
+/* 分享图入口：与年份选项同行，靠右对齐 */
+.year-review__share {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: auto;
+  padding: 6px 12px;
+}
+
+.year-review__share:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .year-review__monthly {
   background: var(--bg-surface);
   border: 1px solid var(--border);

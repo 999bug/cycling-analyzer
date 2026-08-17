@@ -14,6 +14,7 @@ import {
 import { buildStatistics, resolveRange } from '@/features/statistics/statistics'
 import StatisticCards from '@/features/statistics/StatisticCards'
 import MonthlyDistanceChart from '@/features/yearReview/MonthlyDistanceChart'
+import ShareCardModal from '@/features/yearReview/ShareCardModal'
 import { buildMonthlyDistances, extractYears, yearRange } from '@/features/yearReview/yearReview'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
@@ -30,6 +31,8 @@ function YearReviewPage() {
   const [error, setError] = useState(false)
   // 选中年份（null = 未选择，数据就绪后取最新年份）
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  // 分享图弹窗开关（社交分享）
+  const [showShare, setShowShare] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
   // 距离显示单位（规格 §27）
@@ -123,12 +126,28 @@ function YearReviewPage() {
             {year} 年
           </label>
         ))}
+        <button
+          className="year-review__share"
+          onClick={() => setShowShare(true)}
+          type="button"
+        >
+          生成分享图
+        </button>
       </div>
       <StatisticCards title={`${currentYear} 年`} metrics={metrics} distanceUnit={distanceUnit} />
       <section className="year-review__monthly" aria-label="月度距离">
         <h2 className="year-review__monthly-title">月度距离</h2>
         <MonthlyDistanceChart months={months} distanceUnit={distanceUnit} />
       </section>
+      {showShare && (
+        <ShareCardModal
+          distanceUnit={distanceUnit}
+          metrics={metrics}
+          months={months}
+          onClose={() => setShowShare(false)}
+          year={currentYear}
+        />
+      )}
     </>
   )
 }

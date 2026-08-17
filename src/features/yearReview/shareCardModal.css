@@ -1,0 +1,68 @@
+/**
+ * 年度分享图弹窗样式：居中浮层 + canvas 预览 + 操作按钮。
+ * 颜色复用全局 CSS 变量。
+ */
+.share-modal__overlay {
+  align-items: center;
+  background: rgb(0 0 0 / 60%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 1000;
+}
+
+.share-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 40%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 90vh;
+  max-width: 90vw;
+  padding: 20px;
+}
+
+.share-modal__canvas {
+  border-radius: 8px;
+  display: block;
+  max-height: calc(90vh - 120px);
+  max-width: min(480px, calc(90vw - 40px));
+  width: 100%;
+}
+
+.share-modal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.share-modal__download,
+.share-modal__close {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 20px;
+}
+
+.share-modal__download {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.share-modal__download:hover {
+  opacity: 0.9;
+}
+
+.share-modal__close {
+  background: transparent;
+  color: var(--text);
+}
+
+.share-modal__close:hover {
+  background: var(--bg-surface);
+}
