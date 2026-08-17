@@ -56,6 +56,9 @@ export interface ImportOptions {
 
   /** 进度回调（每处理完一个文件调用一次，current 从 1 开始） */
   onProgress?: (current: number, total: number) => void
+
+  /** 是否在台账中保存原始 FIT 字节（规格 §19，默认不保存） */
+  saveOriginalFit?: boolean
 }
 
 /**
@@ -132,7 +135,13 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
           activity.normalizedPower = normalizedPower
         }
         await activityRepository.addActivity(activity, matchTitle(entry.path, entry.name, titles))
-        await fileRepository.recordImported(fingerprint, entry.name, content.byteLength)
+        // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
+        await fileRepository.recordImported(
+          fingerprint,
+          entry.name,
+          content.byteLength,
+          options.saveOriginalFit === true ? content : undefined,
+        )
         newImported++
       }
     } catch (error) {

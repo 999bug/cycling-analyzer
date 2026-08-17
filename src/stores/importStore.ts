@@ -6,6 +6,7 @@
  */
 import { create } from 'zustand'
 import { importFiles, type FailedItem, type ImportFile, type ImportOptions, type ImportSummary } from '@/features/import/importer'
+import { getSettings } from '@/features/settings/settings'
 
 /**
  * 导入进度。
@@ -75,8 +76,15 @@ export const useImportStore = create<ImportStoreState>()((set, get) => ({
       progress: { current: 0, total: files.length },
     })
     try {
+      // 读取「保存原始 FIT 文件」偏好（规格 §19）：options 显式传入时优先（测试注入）
+      let saveOriginalFit = options?.saveOriginalFit
+      if (saveOriginalFit === undefined) {
+        const settings = await getSettings()
+        saveOriginalFit = settings.import.saveOriginalFit
+      }
       const summary = await importFiles(files, {
         ...options,
+        saveOriginalFit,
         onProgress: (current, total) => set({ progress: { current, total } }),
       })
       set({

@@ -9,7 +9,7 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { DexieFileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository } from '@/storage/repositories/settingsRepository'
 import { clearAllData } from '@/features/settings/dataClear'
-import { DEFAULT_APPEARANCE, DEFAULT_UNITS, getSettings, saveSettings } from '@/features/settings/settings'
+import { DEFAULT_APPEARANCE, DEFAULT_IMPORT, DEFAULT_UNITS, getSettings, saveSettings } from '@/features/settings/settings'
 
 describe('clearAllData', () => {
   let db: CyclingDatabase
@@ -49,11 +49,12 @@ describe('clearAllData', () => {
     await clearAllData({ db, activityRepository: activityRepo, fileRepository: fileRepo })
 
     expect(await activityRepo.countActivities()).toBe(0)
-    // 读回各域默认值（规格 §27 默认公制 + §36 默认深色主题）
+    // 读回各域默认值（规格 §27 默认公制 + §36 默认深色主题 + §19 默认不保存原始文件）
     expect(await getSettings(settingsRepo)).toEqual({
       profile: {},
       units: DEFAULT_UNITS,
       appearance: DEFAULT_APPEARANCE,
+      import: DEFAULT_IMPORT,
     })
   })
 })

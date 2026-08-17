@@ -95,6 +95,18 @@ describe('设置读写', () => {
     expect(settings.profile).toEqual({})
     expect(settings.units).toEqual(DEFAULT_UNITS)
   })
+
+  it('导入偏好（§19）：默认不保存原始文件，保存后可读回且不影响其他域', async () => {
+    // 默认值
+    expect((await getSettings(repo)).import.saveOriginalFit).toBe(false)
+
+    await saveSettings({ units: { distance: 'mi' } }, repo)
+    await saveSettings({ import: { saveOriginalFit: true } }, repo)
+
+    const settings = await getSettings(repo)
+    expect(settings.import.saveOriginalFit).toBe(true)
+    expect(settings.units.distance).toBe('mi')
+  })
 })
 
 describe('单位换算', () => {

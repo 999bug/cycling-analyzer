@@ -86,6 +86,16 @@
   flex-shrink: 0;
 }
 
+/* 复选框标签（原始 FIT 文件开关） */
+.settings-field__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 /* FTP/VO2Max 估算区块（个人信息区内，FTP 字段下方） */
 .settings-estimate {
   margin-top: 10px;

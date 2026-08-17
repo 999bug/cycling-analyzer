@@ -61,6 +61,12 @@ export interface AppearancePreferences {
   theme: Theme
 }
 
+/** 导入偏好（规格 §19） */
+export interface ImportPreferences {
+  /** 是否保存原始 FIT 文件字节（默认不保存，占用浏览器存储空间） */
+  saveOriginalFit: boolean
+}
+
 /** 完整设置数据（getSettings 返回） */
 export interface SettingsData {
   /** 个人信息 */
@@ -71,6 +77,9 @@ export interface SettingsData {
 
   /** 外观偏好 */
   appearance: AppearancePreferences
+
+  /** 导入偏好 */
+  import: ImportPreferences
 }
 
 /** 设置保存片段（按域合并保存，未提供的字段保留原值） */
@@ -83,6 +92,9 @@ export interface SettingsPatch {
 
   /** 外观偏好（可只传需更新的字段） */
   appearance?: Partial<AppearancePreferences>
+
+  /** 导入偏好（可只传需更新的字段） */
+  import?: Partial<ImportPreferences>
 }
 
 /** profile 设置键（settings 表） */
@@ -94,11 +106,17 @@ export const UNITS_KEY = 'units'
 /** appearance 设置键（settings 表） */
 export const APPEARANCE_KEY = 'appearance'
 
+/** import 设置键（settings 表） */
+export const IMPORT_KEY = 'import'
+
 /** 默认单位偏好（规格 §27 默认全公制） */
 export const DEFAULT_UNITS: UnitPreferences = { distance: 'km', timeFormat: '24h' }
 
 /** 默认外观偏好（规格 §36 默认深色） */
 export const DEFAULT_APPEARANCE: AppearancePreferences = { theme: 'dark' }
+
+/** 默认导入偏好（规格 §19 默认不保存原始文件） */
+export const DEFAULT_IMPORT: ImportPreferences = { saveOriginalFit: false }
 
 /** 默认个人信息（全字段未设置） */
 export const DEFAULT_PROFILE: UserProfile = {}
@@ -118,15 +136,17 @@ const defaultSettingsRepository = new DexieSettingsRepository(db)
 export async function getSettings(
   settingsRepository: SettingsRepository = defaultSettingsRepository,
 ): Promise<SettingsData> {
-  const [profileRaw, unitsRaw, appearanceRaw] = await Promise.all([
+  const [profileRaw, unitsRaw, appearanceRaw, importRaw] = await Promise.all([
     settingsRepository.get(PROFILE_KEY),
     settingsRepository.get(UNITS_KEY),
     settingsRepository.get(APPEARANCE_KEY),
+    settingsRepository.get(IMPORT_KEY),
   ])
   return {
     profile: { ...DEFAULT_PROFILE, ...asRecord(profileRaw) },
     units: { ...DEFAULT_UNITS, ...asRecord(unitsRaw) },
     appearance: { ...DEFAULT_APPEARANCE, ...asRecord(appearanceRaw) },
+    import: { ...DEFAULT_IMPORT, ...asRecord(importRaw) },
   }
 }
 
@@ -150,6 +170,9 @@ export async function saveSettings(
   }
   if (patch.appearance !== undefined) {
     await settingsRepository.set(APPEARANCE_KEY, { ...current.appearance, ...patch.appearance })
+  }
+  if (patch.import !== undefined) {
+    await settingsRepository.set(IMPORT_KEY, { ...current.import, ...patch.import })
   }
 }
 

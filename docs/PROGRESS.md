@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（浅色主题完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（保存原始 FIT 开关完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -25,7 +25,7 @@
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
 | P2 阶段 | 规格 §39 高级功能 | 🔄 进行中（功率曲线/个人纪录完成，见 §3.1） |
 
-- 验证：**422/422 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**427/427 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -135,7 +135,7 @@ P1 阶段任务已全部完成，无进行中项。
 ### 其他未实现（规格内遗漏项）
 
 - [x] **修改活动名称 UI**（§31）：✅ 详情页标题区内联改名（重命名→输入→保存/取消，Enter 保存/Esc 取消，空名恢复「日期 骑行」兜底名）
-- [ ] **保存原始 FIT 文件开关**（§19）：可配置（默认不保存），未实现
+- [x] **保存原始 FIT 文件开关**（§19）：✅ FileEntity 加非索引 `data?: ArrayBuffer`（Dexie 非索引字段免升版本）；设置新增 import 域（`saveOriginalFit` 默认 false）；importStore 导入前读偏好 → importer 落库解压后字节；设置页「导入」区块开关即存；导出 JSON 剥离 data 字段
 - [x] **浅色主题**（§36）：✅ `:root[data-theme='light']` 变量覆盖 + 设置页「外观」区块切换即存；设置新增 appearance 域（`theme: dark|light`，默认深色）；`theme.ts`（applyTheme/initTheme/switchTheme），main.tsx 启动恢复，清空数据复位深色
 - [x] **单位换算显示**（§27 公里/英里、12h/24h）：✅ 已接入显示层（见 §3.1：useUnits hook + 各卡片/表格/图表 distanceUnit prop，详情页 12h 时间）
 - [ ] **性能压测**（§44）：分页/Worker 已实现，未对 1000 activity 量级实测

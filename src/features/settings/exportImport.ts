@@ -149,9 +149,22 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
     exportedAt: now.toISOString(),
     activities: summaries,
     records: records.map(stripRecordId),
-    files,
+    // 剥离原始 FIT 字节（规格 §19）：ArrayBuffer 不可 JSON 序列化且体积大
+    files: files.map(stripFileData),
     settings,
   }
+}
+
+/**
+ * 剥离台账记录中的原始 FIT 字节字段。
+ *
+ * @param file 台账记录
+ * @returns 不含 data 字段的台账记录
+ */
+function stripFileData(file: FileEntity): FileEntity {
+  const { data, ...rest } = file
+  void data
+  return rest
 }
 
 /**

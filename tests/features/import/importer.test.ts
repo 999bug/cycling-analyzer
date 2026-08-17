@@ -91,6 +91,29 @@ describe('importFiles 导入执行器', () => {
     expect(activity.normalizedPower).toBeGreaterThan(0);
   });
 
+  it('开启「保存原始 FIT 文件」时台账落库解压后原始字节（规格 §19）', async () => {
+    const bytes = readFixtureBytes('cycling-gps.fit');
+    await importFiles([makeImportFile('cycling-gps.fit')], {
+      activityRepository,
+      fileRepository,
+      saveOriginalFit: true,
+    });
+
+    const fingerprint = await computeFingerprint(bytes);
+    const record = await fileRepository.get(fingerprint);
+    expect(record?.data).toBeDefined();
+    expect(record?.data?.byteLength).toBe(bytes.byteLength);
+  });
+
+  it('默认不保存原始 FIT 字节（规格 §19）', async () => {
+    await importFiles([makeImportFile('cycling-gps.fit')], { activityRepository, fileRepository });
+
+    const fingerprint = await computeFingerprint(readFixtureBytes('cycling-gps.fit'));
+    const record = await fileRepository.get(fingerprint);
+    expect(record?.status).toBe('imported');
+    expect(record?.data).toBeUndefined();
+  });
+
   it('内容指纹重复的文件跳过（规格 §9），不重复入库', async () => {
     const entry = makeImportFile('cycling-gps.fit');
     await importFiles([entry], { activityRepository, fileRepository });

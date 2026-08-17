@@ -263,3 +263,20 @@ describe('设置页主题切换（规格 §36）', () => {
     await waitFor(() => expect(select).toHaveValue('light'))
   })
 })
+
+describe('设置页原始 FIT 文件开关（规格 §19）', () => {
+  const user = userEvent.setup()
+
+  it('默认未勾选，开启后立即持久化', async () => {
+    render(<SettingsPage />)
+
+    const checkbox = await screen.findByRole('checkbox', { name: '保存原始 FIT 文件' })
+    expect(checkbox).not.toBeChecked()
+
+    await user.click(checkbox)
+
+    expect(await screen.findByText(/已开启/)).toBeInTheDocument()
+    const settings = await getSettings()
+    expect(settings.import.saveOriginalFit).toBe(true)
+  })
+})

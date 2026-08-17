@@ -99,6 +99,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   // 外观偏好（主题切换立即生效并保存，规格 §36）
   const [theme, setTheme] = useState<Theme>('dark')
 
+  // 导入偏好（保存原始 FIT 文件开关，规格 §19 默认不保存）
+  const [saveOriginalFit, setSaveOriginalFit] = useState(false)
+
   // 操作状态
   const [message, setMessage] = useState<FormMessage | null>(null)
   const [saving, setSaving] = useState(false)
@@ -129,6 +132,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         setDistanceUnit(data.units.distance)
         setTimeFormat(data.units.timeFormat)
         setTheme(data.appearance.theme)
+        setSaveOriginalFit(data.import.saveOriginalFit)
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -349,6 +353,23 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   }
 
   /**
+   * 切换「保存原始 FIT 文件」：立即持久化（规格 §19）。
+   *
+   * @param event 选择事件
+   */
+  async function handleSaveOriginalFitChange(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.checked
+    setSaveOriginalFit(next)
+    try {
+      await saveSettings({ import: { saveOriginalFit: next } }, context.settingsRepository)
+      setMessage({ type: 'success', text: next ? '已开启：后续导入将保存原始 FIT 文件' : '已关闭：不再保存原始 FIT 文件' })
+    } catch (error) {
+      console.error('Failed to save import preferences', error)
+      setMessage({ type: 'error', text: '保存失败，请重试' })
+    }
+  }
+
+  /**
    * 清空后重置表单为默认值（规格 §27 默认公制；主题复位深色，规格 §36）。
    */
   function resetForm() {
@@ -362,6 +383,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTimeFormat(DEFAULT_UNITS.timeFormat)
     setTheme('dark')
     applyTheme('dark')
+    setSaveOriginalFit(false)
   }
 
   return (
@@ -548,6 +570,26 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
               <option value="dark">深色</option>
               <option value="light">浅色</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section" aria-label="导入">
+        <h2 className="settings-section__title">导入</h2>
+        <p className="settings-section__hint">
+          开启后导入的原始 FIT 字节会保存在浏览器本地（占用存储空间），默认不保存。
+        </p>
+        <div className="settings-fields">
+          <div className="settings-field">
+            <span className="settings-field__label">原始文件</span>
+            <label className="settings-field__checkbox">
+              <input
+                type="checkbox"
+                checked={saveOriginalFit}
+                onChange={handleSaveOriginalFitChange}
+              />
+              保存原始 FIT 文件
+            </label>
           </div>
         </div>
       </section>

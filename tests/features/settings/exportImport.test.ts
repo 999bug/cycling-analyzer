@@ -82,6 +82,23 @@ describe('数据导出', () => {
     expect(bundle.settings).toContainEqual({ key: PROFILE_KEY, value: { nickname: '晨骑爱好者', ftp: 250 } })
   })
 
+  it('台账原始 FIT 字节不进入导出（规格 §19/§33）', async () => {
+    await fileRepo.recordImported('fp-1', 'ride-1.fit', 1024, new Uint8Array([1, 2, 3]).buffer)
+
+    const bundle = await exportData({
+      db,
+      activityRepository: activityRepo,
+      fileRepository: fileRepo,
+      settingsRepository: settingsRepo,
+      now: new Date('2026-08-17T12:00:00.000Z'),
+    })
+
+    expect(bundle.files).toHaveLength(1)
+    expect(bundle.files[0]).not.toHaveProperty('data')
+    // 可 JSON 序列化（ArrayBuffer 会导致内容丢失）
+    expect(() => JSON.stringify(bundle)).not.toThrow()
+  })
+
   it('逐点记录分批读取：批大小小于记录数时仍导出全部', async () => {
     const activity = makeActivity('act-1', 'fp-1', {
       records: [makeRecord(1), makeRecord(2), makeRecord(3), makeRecord(4), makeRecord(5)],

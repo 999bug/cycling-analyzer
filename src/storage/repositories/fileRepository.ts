@@ -17,8 +17,9 @@ export interface FileRepository {
    * @param fingerprint 文件 SHA-256 指纹
    * @param fileName 源文件名
    * @param fileSize 文件大小（字节）
+   * @param data 原始 FIT 字节（规格 §19 可选保存，缺省不存）
    */
-  recordImported(fingerprint: string, fileName: string, fileSize: number): Promise<void>;
+  recordImported(fingerprint: string, fileName: string, fileSize: number, data?: ArrayBuffer): Promise<void>;
 
   /**
    * 记录一次失败导入（文件大小未知时记为 0）。
@@ -60,13 +61,15 @@ export class DexieFileRepository implements FileRepository {
     this.db = db;
   }
 
-  async recordImported(fingerprint: string, fileName: string, fileSize: number): Promise<void> {
+  async recordImported(fingerprint: string, fileName: string, fileSize: number, data?: ArrayBuffer): Promise<void> {
     await this.db.files.put({
       fingerprint,
       fileName,
       fileSize,
       importedAt: new Date().toISOString(),
       status: 'imported',
+      // 仅开启「保存原始 FIT 文件」时传入；undefined 不写入该字段
+      ...(data !== undefined ? { data } : {}),
     });
   }
 

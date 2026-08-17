@@ -140,6 +140,12 @@ export interface FileEntity {
 
   /** 失败原因（status 为 failed 时提供） */
   errorMessage?: string;
+
+  /**
+   * 原始 FIT 字节（规格 §19 可选保存，默认不存）。
+   * 非索引字段，Dexie 无需升版本即可读写；导出 JSON 时剥离（不可序列化）。
+   */
+  data?: ArrayBuffer;
 }
 
 /**
