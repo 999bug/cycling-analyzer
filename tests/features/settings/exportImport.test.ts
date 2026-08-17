@@ -333,3 +333,88 @@ function makeActivity(id: string, fingerprint: string, overrides: Partial<Activi
 function makeRecord(timestamp: number): ActivityRecord {
   return { timestamp, latitude: 39.9, longitude: 116.4, altitude: 50, speed: 8.3 }
 }
+
+describe('赛段导出导入（后续工作项：完整 Segment）', () => {
+  let sourceDb: CyclingDatabase
+  let targetDb: CyclingDatabase
+
+  beforeEach(() => {
+    // 独立库名：fake-indexeddb 按库名共享数据，同名会读到对方的写入
+    sourceDb = new CyclingDatabase(`segments-export-src-${crypto.randomUUID()}`)
+    targetDb = new CyclingDatabase(`segments-export-dst-${crypto.randomUUID()}`)
+  })
+
+  afterEach(async () => {
+    await sourceDb.delete()
+    await targetDb.delete()
+  })
+
+  /** 源库写入一条赛段并导出 */
+  async function exportWithSegment(): Promise<ExportBundle> {
+    await sourceDb.segments.add({
+      name: '滨江线',
+      startLatitude: 31.2,
+      startLongitude: 121.5,
+      endLatitude: 31.3,
+      endLongitude: 121.6,
+      sourceActivityId: 'act-1',
+      createdAt: '2026-08-17T08:00:00',
+    })
+    return exportData({
+      db: sourceDb,
+      activityRepository: new DexieActivityRepository(sourceDb),
+      fileRepository: new DexieFileRepository(sourceDb),
+      settingsRepository: new DexieSettingsRepository(sourceDb),
+      now: new Date('2026-08-17T12:00:00.000Z'),
+    })
+  }
+
+  it('赛段随导出包携带（无自增主键），导入后落库', async () => {
+    const bundle = await exportWithSegment()
+
+    expect(bundle.segments).toHaveLength(1)
+    expect(bundle.segments?.[0]).toMatchObject({ name: '滨江线', startLatitude: 31.2 })
+    expect(bundle.segments?.[0]).not.toHaveProperty('id')
+
+    await importBundle(bundle, {
+      db: targetDb,
+      activityRepository: new DexieActivityRepository(targetDb),
+      settingsRepository: new DexieSettingsRepository(targetDb),
+    })
+
+    const segments = await targetDb.segments.toArray()
+    expect(segments).toHaveLength(1)
+    expect(segments[0]).toMatchObject({ name: '滨江线', endLatitude: 31.3 })
+    expect(segments[0].id).toBeGreaterThan(0)
+  })
+
+  it('重复导入相同赛段判重跳过', async () => {
+    const bundle = await exportWithSegment()
+    const options = {
+      db: targetDb,
+      activityRepository: new DexieActivityRepository(targetDb),
+      settingsRepository: new DexieSettingsRepository(targetDb),
+    }
+    await importBundle(bundle, options)
+    await importBundle(bundle, options)
+
+    expect(await targetDb.segments.toArray()).toHaveLength(1)
+  })
+
+  it('v1 旧文件无 segments 字段仍可导入', async () => {
+    const legacy = await exportData({
+      db: sourceDb,
+      activityRepository: new DexieActivityRepository(sourceDb),
+      fileRepository: new DexieFileRepository(sourceDb),
+      settingsRepository: new DexieSettingsRepository(sourceDb),
+    })
+    delete legacy.segments
+
+    const summary = await importBundle(legacy, {
+      db: targetDb,
+      activityRepository: new DexieActivityRepository(targetDb),
+      settingsRepository: new DexieSettingsRepository(targetDb),
+    })
+    expect(summary).toEqual({ newImported: 0, skipped: 0 })
+  })
+})

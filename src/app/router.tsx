@@ -11,4 +11,5 @@ export const ROUTES = [
   '/settings',
   '/heatmap',
   '/year-review',
+  '/segments',
 ] as const

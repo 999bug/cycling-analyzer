@@ -1,0 +1,90 @@
+/**
+ * 赛段卡片样式：两列网格，深色容器复用全局 CSS 变量。
+ */
+.segment-cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.segment-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.segment-card__header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.segment-card__name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.segment-card__delete {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 10px;
+}
+
+.segment-card__delete:hover {
+  border-color: #ff453a;
+  color: #ff453a;
+}
+
+.segment-card__stats {
+  display: flex;
+  gap: 32px;
+}
+
+.segment-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.segment-card__stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.segment-card__stat-value {
+  color: var(--text);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-card__best {
+  color: var(--primary);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.segment-card__best:hover {
+  text-decoration: underline;
+}
+
+.segment-card__hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* 窄屏降为单列 */
+@media (max-width: 600px) {
+  .segment-cards {
+    grid-template-columns: 1fr;
+  }
+}

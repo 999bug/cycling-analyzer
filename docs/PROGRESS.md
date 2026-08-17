@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（骑行区域统计完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（完整 Segment 赛段完成）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -58,10 +58,11 @@
 
 | 能力 | 位置 | 说明 |
 |---|---|---|
-| Dexie 库 `cycling-data` v1 | `src/storage/db.ts` | 四表：activities（&fingerprint 唯一索引）、activity_records（++id, activityId）、files（主键 fingerprint）、settings（key/value）；**摘要与逐点分表** |
+| Dexie 库 `cycling-data` v2 | `src/storage/db.ts` | 五表：activities（&fingerprint 唯一索引）、activity_records（++id, activityId）、files（主键 fingerprint）、settings（key/value）、segments（v2 新增，++id 自增）；**摘要与逐点分表** |
 | 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/updateNormalizedPower/deleteActivity/deleteAll/summarizeByRange/listAllSummaries/getRouteEndpoints`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit；getRouteEndpoints 走 activityId 索引 first/last 读取起终点坐标（路线分析用，免全量逐点加载） |
 | 文件台账 | `fileRepository.ts` | recordImported/recordFailed/listAll/get/deleteAll |
 | 设置 | `settingsRepository.ts` | get/set/delete（key/value unknown） |
+| 赛段 | `segmentRepository.ts` | addSegment/listSegments/deleteSegment（v2 表） |
 
 ### 页面（规格 §13/§14/§15/§16/§17）
 
@@ -73,6 +74,7 @@
 | Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | ✅ P1 完成（见 §3）；统计页含「个人纪录」「设备统计」「路线分析」区块（P2，见 §3.1） |
 | Heatmap 热力图 | `/heatmap` | ✅ P2 完成（见 §3.1：全部轨迹低透明度叠加） |
 | Year Review 年度回顾 | `/year-review` | ✅ 后续项完成（见 §4：年份切换 + 年度指标 + 月度距离图） |
+| Segments 赛段 | `/segments` | ✅ 后续项完成（见 §4：起终点圆穿越匹配 + 成绩榜） |
 
 ### 部署（规格 §34/§35）
 
@@ -147,7 +149,7 @@ P1 阶段任务已全部完成，无进行中项。
 ### P2 之后的后续工作项（规格外延伸，逐项推进）
 
 - [x] **导出 GPX**（✅ 7/7 测试）：`src/features/activity/gpxExport.ts`（GPX 1.1 构造：trkpt 7 位坐标 + ele + time，XML 转义，无坐标返回 undefined 不伪造；文件名去 .fit/.fit.gz 后缀）；详情页标题区「导出 GPX」按钮（无轨迹坐标禁用），Blob 下载
-- [ ] **完整 Segment 赛段**：路线分析已做起终点聚类；逐点匹配赛段（起终点圈定 + 轨迹穿越判定 + 赛段成绩榜）为完整版
+- [x] **完整 Segment 赛段**（✅ 21/21 测试）：Dexie v2 新增 segments 表（++id）；`segmentMatching.ts` 起终点圆（半径 200m）顺序穿越匹配（先入起点圈再入终点圈，计时=两进入事件秒差，单活动取首次完整穿越）+ 成绩榜按用时升序；详情页「设为赛段」按钮（首尾坐标点创建，无坐标禁用）；新页面 /segments（导航「赛段」）：卡片展示参与次数/最佳成绩（链接最快骑行详情）/删除；清空数据同步清 segments；导出 JSON 附带 segments（可选字段，v1 旧文件兼容，导入按名称+起终点判重）
 - [x] **骑行区域统计**（✅ 7/7 测试）：`src/features/heatmap/gridCoverage.ts`：0.01°（约 1km）离线网格覆盖统计（同格去重，面积按网格中心纬度 cos 修正经度收缩）；热力图页摘要行展示「已探索 N 个 1km 网格（约 M km²）」
 - [x] **年度回顾**（✅ 8/8 测试）：新页面 /year-review（导航「年度回顾」）；`src/features/yearReview/`（yearReview.ts 年份提取/月度聚合/年度范围 + MonthlyDistanceChart 月度距离柱状图）；年度十项指标复用 buildStatistics 自定义范围（YYYY-01-01~12-31）；年份 radio 仅有数据的年份，默认最新年
 - [ ] **性能优化**：页面切换卡顿治理（用户实测反馈），见任务 #18

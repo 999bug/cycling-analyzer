@@ -426,3 +426,40 @@ describe('导出 GPX（后续工作项）', () => {
     expect(await screen.findByRole('button', { name: '导出 GPX' })).toBeDisabled()
   })
 })
+
+describe('设为赛段（后续工作项：完整 Segment）', () => {
+  let repo: DexieActivityRepository
+
+  beforeEach(async () => {
+    repo = new DexieActivityRepository(testDb)
+    // 赛段表独立清理：创建断言依赖表计数
+    await testDb.segments.clear()
+  })
+
+  it('含坐标活动：点击设为赛段落库并跳转', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140]))
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: '设为赛段' })
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+
+    // 落库一条赛段：起终点取首尾坐标点（makeActivity 首点 31.2/121.5）
+    const segments = await testDb.segments.toArray()
+    expect(segments).toHaveLength(1)
+    expect(segments[0]).toMatchObject({
+      startLatitude: 31.2,
+      startLongitude: 121.5,
+      sourceActivityId: 'act-1',
+    })
+  })
+
+  it('无坐标活动：设为赛段按钮禁用', async () => {
+    await repo.addActivity(
+      makeActivity('act-1', [100], [120], { records: [{ timestamp: 0, power: 100 }] }),
+    )
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: '设为赛段' })).toBeDisabled()
+  })
+})

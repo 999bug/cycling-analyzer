@@ -1,0 +1,6 @@
+/**
+ * 赛段页样式。
+ */
+.segments-page__message {
+  color: var(--text-secondary);
+}

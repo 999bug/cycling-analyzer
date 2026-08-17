@@ -10,6 +10,7 @@
  *   "records": [ActivityRecordEntity] // 逐点记录（含 activityId，无自增主键 id）
  *   "files": [FileEntity]            // 导入文件台账
  *   "settings": [SettingsEntry]      // 设置键值对，导入时按 key 合并
+ *   "segments": [SegmentEntity]      // 赛段（可选，v1 旧文件可缺省；无自增主键 id）
  * }
  *
  * 导入策略：
@@ -22,7 +23,7 @@
  * 故本模块直接使用数据库表完成这两类合并，其余读写走仓库。
  */
 import type { Activity, ActivityRecord } from '@/types/activity'
-import type { ActivityEntity, ActivityRecordEntity, CyclingDatabase, FileEntity, SettingsEntry } from '@/storage/db'
+import type { ActivityEntity, ActivityRecordEntity, CyclingDatabase, FileEntity, SegmentEntity, SettingsEntry } from '@/storage/db'
 import { db } from '@/storage/db'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
@@ -68,6 +69,9 @@ export interface ExportBundle {
 
   /** 设置键值对 */
   settings: SettingsEntry[]
+
+  /** 赛段（可选：v1 旧导出文件无此字段；无自增主键 id） */
+  segments?: Array<Omit<SegmentEntity, 'id'>>
 }
 
 /** 导出选项 */
@@ -128,10 +132,11 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
     now = new Date(),
   } = options
 
-  const [summaries, files, settings] = await Promise.all([
+  const [summaries, files, settings, segments] = await Promise.all([
     activityRepository.listAllSummaries(),
     fileRepository.listAll(),
     dbInstance.settings.toArray(),
+    dbInstance.segments.toArray(),
   ])
 
   // 逐活动分批读取逐点记录，并补上 activityId（getRecords 返回的领域记录不含归属）
@@ -152,6 +157,7 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
     // 剥离原始 FIT 字节（规格 §19）：ArrayBuffer 不可 JSON 序列化且体积大
     files: files.map(stripFileData),
     settings,
+    segments: segments.map(stripSegmentId),
   }
 }
 
@@ -164,6 +170,18 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
 function stripFileData(file: FileEntity): FileEntity {
   const { data, ...rest } = file
   void data
+  return rest
+}
+
+/**
+ * 剥离赛段的自增主键（导入时由 Dexie 重新生成）。
+ *
+ * @param segment 赛段实体（含自增 id）
+ * @returns 不含 id 的赛段
+ */
+function stripSegmentId(segment: SegmentEntity): Omit<SegmentEntity, 'id'> {
+  const rest = { ...segment }
+  delete rest.id
   return rest
 }
 
@@ -240,6 +258,24 @@ export async function importBundle(bundle: ExportBundle, options: ImportOptions 
     await settingsRepository.set(entry.key, entry.value)
   }
 
+  // segments 合并（v1 旧文件可缺省）：同名同起终点坐标的赛段判重跳过
+  if (bundle.segments !== undefined && bundle.segments.length > 0) {
+    const existingSegments = await dbInstance.segments.toArray()
+    for (const segment of bundle.segments) {
+      const duplicated = existingSegments.some(
+        (item) =>
+          item.name === segment.name &&
+          item.startLatitude === segment.startLatitude &&
+          item.startLongitude === segment.startLongitude &&
+          item.endLatitude === segment.endLatitude &&
+          item.endLongitude === segment.endLongitude,
+      )
+      if (!duplicated) {
+        await dbInstance.segments.add(segment)
+      }
+    }
+  }
+
   return { newImported, skipped }
 }
 
@@ -288,7 +324,9 @@ function isExportBundle(value: unknown): value is ExportBundle {
     Array.isArray(candidate.activities) &&
     Array.isArray(candidate.records) &&
     Array.isArray(candidate.files) &&
-    Array.isArray(candidate.settings)
+    Array.isArray(candidate.settings) &&
+    // segments 为可选字段（v1 旧文件无），存在时必须是数组
+    (candidate.segments === undefined || Array.isArray(candidate.segments))
   )
 }
 

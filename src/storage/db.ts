@@ -16,8 +16,8 @@ import type { ActivityRecord, DeviceInfo } from '@/types/activity';
 /** 数据库名称 */
 export const DB_NAME = 'cycling-data';
 
-/** 数据库版本号 */
-export const DB_VERSION = 1;
+/** 数据库版本号（v2：新增 segments 赛段表） */
+export const DB_VERSION = 2;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -160,6 +160,38 @@ export interface SettingsEntry {
 }
 
 /**
+ * 赛段实体（segments 表，后续工作项：完整 Segment）。
+ *
+ * 赛段 = 起点圆 + 终点圆（半径见 segmentMatching.SEGMENT_RADIUS_METERS），
+ * 轨迹顺序穿越两圆即记一次成绩（计时取两进入事件间的秒数）。
+ */
+export interface SegmentEntity {
+  /** 自增主键（写库时由 Dexie 生成） */
+  id?: number;
+
+  /** 赛段名称（默认取来源活动名） */
+  name: string;
+
+  /** 起点纬度（十进制度） */
+  startLatitude: number;
+
+  /** 起点经度（十进制度） */
+  startLongitude: number;
+
+  /** 终点纬度（十进制度） */
+  endLatitude: number;
+
+  /** 终点经度（十进制度） */
+  endLongitude: number;
+
+  /** 来源活动 ID（从哪次骑行创建） */
+  sourceActivityId: string;
+
+  /** 创建时间（ISO 8601） */
+  createdAt: string;
+}
+
+/**
  * cycling-data 数据库（规格 §18）。
  *
  * 索引设计：
@@ -185,6 +217,9 @@ export class CyclingDatabase extends Dexie {
   /** 设置表 */
   declare settings: EntityTable<SettingsEntry, 'key'>;
 
+  /** 赛段表（v2 新增） */
+  declare segments: EntityTable<SegmentEntity, 'id'>;
+
   /**
    * 构造数据库实例。
    *
@@ -192,11 +227,15 @@ export class CyclingDatabase extends Dexie {
    */
   constructor(name: string = DB_NAME) {
     super(name);
-    this.version(DB_VERSION).stores({
+    this.version(1).stores({
       activities: 'id, &fingerprint, startTime, activityType',
       activity_records: '++id, activityId',
       files: 'fingerprint',
       settings: 'key',
+    });
+    // v2：新增赛段表（既有表结构不变，无需重复声明）
+    this.version(2).stores({
+      segments: '++id',
     });
   }
 }

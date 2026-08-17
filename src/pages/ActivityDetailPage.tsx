@@ -31,6 +31,7 @@ import {
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
+import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import {
   calculateHeartRateZones,
   calculatePowerZones,
@@ -50,6 +51,9 @@ import '@/pages/ActivityDetailPage.css'
 
 /** 活动仓库单例（页面模块只加载一次） */
 const repository = new DexieActivityRepository(db)
+
+/** 赛段仓库单例（「设为赛段」创建入口） */
+const segmentRepository = new DexieSegmentRepository(db)
 
 /** 轨迹抽稀阈值（米）：GPS 噪声级，保留骑行路线形状 */
 const SIMPLIFY_TOLERANCE_METERS = 5
@@ -322,6 +326,35 @@ function ActivityDetailPage() {
   }
 
   /**
+   * 设为赛段（后续工作项：完整 Segment）：以本骑行首尾坐标点创建
+   * 起终点圆赛段，名称取活动标题，创建后跳转赛段页查看成绩榜。
+   */
+  function handleCreateSegment() {
+    if (activity === undefined || !hasTrack) {
+      return
+    }
+    const coordPoints = records.filter(
+      (record) => record.latitude !== undefined && record.longitude !== undefined,
+    )
+    const first = coordPoints[0]
+    const last = coordPoints[coordPoints.length - 1]
+    segmentRepository
+      .addSegment({
+        name: activity.name || `${formatDate(activity.startTime)} 骑行`,
+        startLatitude: first.latitude ?? 0,
+        startLongitude: first.longitude ?? 0,
+        endLatitude: last.latitude ?? 0,
+        endLongitude: last.longitude ?? 0,
+        sourceActivityId: activity.id,
+        createdAt: new Date().toISOString(),
+      })
+      .then(() => navigate('/segments'))
+      .catch((err: unknown) => {
+        console.error('Failed to create segment', err)
+      })
+  }
+
+  /**
    * 进入重命名编辑态：输入框预填当前自定义名。
    */
   function handleStartRename() {    setNameInput(activity?.name ?? '')
@@ -436,6 +469,15 @@ function ActivityDetailPage() {
             title={hasTrack ? undefined : '该活动无轨迹坐标，无法导出'}
           >
             导出 GPX
+          </button>
+          <button
+            type="button"
+            className="activity-detail__export"
+            onClick={handleCreateSegment}
+            disabled={!hasTrack}
+            title={hasTrack ? '以本骑行起终点创建赛段' : '该活动无轨迹坐标，无法创建赛段'}
+          >
+            设为赛段
           </button>
           <button
             type="button"
