@@ -1,6 +1,6 @@
 /**
  * 骑行记录列表页（Phase 5，规格 §14）。
- * 数据来自活动仓库的分页查询，支持排序、搜索、月份/类型筛选与分页浏览；
+ * 数据来自活动仓库的分页查询，支持排序、搜索、月份/类型/数值（距离/爬升/功率）筛选与分页浏览；
  * 行点击跳转详情页。repository 支持测试注入（缺省使用全局数据库实例）。
  */
 import { useEffect, useMemo, useState } from 'react'
@@ -19,13 +19,23 @@ import {
 /** 每页条数（规格 §14 分页） */
 const PAGE_SIZE = 20
 
-/** 列表查询参数（驱动数据加载 effect） */
+/**
+ * 列表查询参数（驱动数据加载 effect）。
+ * 数值筛选字段与仓库 options 同名字段（单位：距离米、爬升米、功率 W），
+ * undefined = 不限制；因此 query 可直接展开传给 listActivities。
+ */
 interface QueryState {
   sortBy: SortField
   sortOrder: SortOrder
   month: string
   activityType: string
   search: string
+  /** 最小距离（米，undefined = 不限制） */
+  minDistance?: number
+  /** 最小累计爬升（米，undefined = 不限制） */
+  minElevationGain?: number
+  /** 最小平均功率（W，undefined = 不限制） */
+  minAvgPower?: number
   offset: number
 }
 
@@ -36,6 +46,25 @@ const DEFAULT_QUERY: QueryState = {
   activityType: '',
   search: '',
   offset: 0,
+}
+
+/**
+ * 解析数值筛选输入：空字符串 = 无限制（返回 undefined）；非数字或负数 = 无效（返回 undefined）。
+ * 调用方通过 raw.trim() 是否为空区分"无限制"与"无效"两种情况。
+ *
+ * @param raw 输入框原始字符串
+ * @returns 有效数值，空或非法输入返回 undefined
+ */
+function parseNumericFilter(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (trimmed === '') {
+    return undefined
+  }
+  const value = Number(trimmed)
+  if (!Number.isFinite(value) || value < 0) {
+    return undefined
+  }
+  return value
 }
 
 interface ActivitiesPageProps {
@@ -139,6 +168,24 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
     setQuery((prev) => ({ ...prev, search, offset: 0 }))
   }
 
+  // 数值筛选变更：解析输入（空 = 不限制，非法 = 忽略本次变更），回到第一页
+  function handleNumericChange(
+    field: 'minDistance' | 'minElevationGain' | 'minAvgPower',
+    toQuery: (value: number) => number,
+  ) {
+    return (raw: string) => {
+      const value = parseNumericFilter(raw)
+      if (value === undefined && raw.trim() !== '') {
+        return
+      }
+      setQuery((prev) => ({
+        ...prev,
+        [field]: value === undefined ? undefined : toQuery(value),
+        offset: 0,
+      }))
+    }
+  }
+
   function handlePrevPage() {
     setQuery((prev) => ({ ...prev, offset: Math.max(0, prev.offset - PAGE_SIZE) }))
   }
@@ -153,7 +200,13 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
 
   const page = Math.floor(query.offset / PAGE_SIZE) + 1
   const totalPages = Math.ceil(result.total / PAGE_SIZE)
-  const hasFilter = query.search !== '' || query.month !== '' || query.activityType !== ''
+  const hasFilter =
+    query.search !== '' ||
+    query.month !== '' ||
+    query.activityType !== '' ||
+    query.minDistance !== undefined ||
+    query.minElevationGain !== undefined ||
+    query.minAvgPower !== undefined
 
   return (
     <div className="activity-page">
@@ -164,9 +217,15 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
         month={query.month}
         activityType={query.activityType}
         search={query.search}
+        minDistanceKm={query.minDistance === undefined ? '' : String(query.minDistance / 1000)}
+        minElevationGain={query.minElevationGain === undefined ? '' : String(query.minElevationGain)}
+        minAvgPower={query.minAvgPower === undefined ? '' : String(query.minAvgPower)}
         onMonthChange={handleMonthChange}
         onTypeChange={handleTypeChange}
         onSearchChange={handleSearchChange}
+        onMinDistanceChange={handleNumericChange('minDistance', (km) => Math.round(km * 1000))}
+        onMinElevationGainChange={handleNumericChange('minElevationGain', (m) => m)}
+        onMinAvgPowerChange={handleNumericChange('minAvgPower', (w) => w)}
       />
       {error ? (
         <div className="activity-page__error">
