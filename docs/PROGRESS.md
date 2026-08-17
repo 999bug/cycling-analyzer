@@ -1,0 +1,159 @@
+# 项目进度与功能状态
+
+> 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17。
+>
+> 产品规格原文：`个人骑行数据分析网站——Agent 开发规格说明.md`（规格 §N 引用即该文档章节）。
+
+---
+
+## 1. 阶段总览
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| Phase 1 | 项目初始化（Vite/React/TS/ESLint/Prettier/Vitest/路由/Layout） | ✅ 完成 |
+| Phase 2 | FIT Parser（Decoder/Normalizer/Calculator/Fingerprint/Strava CSV） | ✅ 完成 |
+| Phase 3 | IndexedDB 存储层（Dexie 四表 + Repository） | ✅ 完成 |
+| Phase 4 | FIT 导入流程（目录扫描/gzip/去重/Worker/进度/失败重试） | ✅ 完成 |
+| Phase 5 | Activity List（列表/排序/搜索/筛选/分页） | ✅ 完成 |
+| Phase 6 | Activity Detail（地图/图表/删除） | ✅ 完成 |
+| Phase 7 | Dashboard（周/月/总计 + 趋势图） | ✅ 完成 |
+| Phase 8 | GitHub Pages 部署（Actions + SPA 路由） | ✅ 完成 |
+| P1 阶段 | 规格 §38 高级功能 | 🔄 进行中（见 §3） |
+
+- 验证：**174/174 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
+
+---
+
+## 2. 已完成功能清单（按规格章节）
+
+### 核心链路（规格 §5/§8/§42）
+
+| 能力 | 位置 | 说明 |
+|---|---|---|
+| FIT 识别/CRC 校验 | `src/fit/decoder/fitDecoder.ts` | `isFitFile` / `checkFitIntegrity` / `decodeFit`；非 FIT 与损坏抛 `NotFitFileError` / `CorruptedFitError`；**Stream 必须 read 前校验** |
+| FIT 消息提取 | 同上 | recordMesgs/sessionMesgs/lapMesgs/activityMesgs → 领域中间结构（时间转 Unix 秒，位置保留半周） |
+| 标准化 | `src/fit/normalizer/normalizer.ts` | `normalizeActivity(fit, { id, fileName, fingerprint })`；半周→十进制度、Date→ISO、缺失字段 undefined |
+| 统计计算 | `src/fit/calculator/calculator.ts` | `calculateSummary(records, session?)`；距离取末点累计、爬升=相邻正增量、平均速度=距离/时长；缺失 ≠ 0 |
+| 指纹 | `src/utils/fingerprint.ts` | `computeFingerprint(bytes)` SHA-256，去重依据（**基于解压后内容**） |
+| Strava 标题还原 | `src/features/import/stravaExport.ts` | `parseStravaActivitiesCsv`（跨行引号/BOM 兼容），按文件名匹配 |
+
+### 导入（规格 §6/§7/§9/§21/§22/§23/§24）
+
+| 能力 | 位置 | 说明 |
+|---|---|---|
+| 三入口 | `src/features/import/ImportPanel.tsx` | 目录（showDirectoryPicker）/ 文件（webkitdirectory 回退）/ 拖拽；挂在 AppLayout 侧边栏底部 |
+| 扫描 | `scanner.ts` | 递归 `*.fit` 与 `*.fit.gz`（Strava 导出 gzip） |
+| gzip | `gzip.ts` | fflate 解压（jsdom/浏览器双环境一致） |
+| 导入执行 | `importer.ts` | `importFiles(files, options)` → 解压→指纹→去重→worker 解析→标题还原→入库；返回 { total, newImported, skipped, failed, failedItems } |
+| Worker | `src/fit/worker/parseWorker.ts` + `parseClient.ts` | 每批一个 worker，jsdom 自动降级主线程 |
+| 进度/失败 | `src/stores/importStore.ts`（zustand） | 进度条、失败台账（fileName+原因）、重试失败文件 |
+
+### 存储（规格 §18/§45）
+
+| 能力 | 位置 | 说明 |
+|---|---|---|
+| Dexie 库 `cycling-data` v1 | `src/storage/db.ts` | 四表：activities（&fingerprint 唯一索引）、activity_records（++id, activityId）、files（主键 fingerprint）、settings（key/value）；**摘要与逐点分表** |
+| 活动仓库 | `src/storage/repositories/activityRepository.ts` | `addActivity/addActivities/getById/getRecords/listActivities/countActivities/existsByFingerprint/updateName/deleteActivity/deleteAll/summarizeByRange/listAllSummaries`；listActivities 支持 sortBy(startTime/distance/duration)/month('2026-08')/activityType/search/offset/limit |
+| 文件台账 | `fileRepository.ts` | recordImported/recordFailed/listAll/get/deleteAll |
+| 设置 | `settingsRepository.ts` | get/set/delete（key/value unknown） |
+
+### 页面（规格 §13/§14/§15/§16/§17）
+
+| 页面 | 路由 | 能力 |
+|---|---|---|
+| Dashboard | `/` | 本周/本月/总计（次数/距离/时长/爬升）+ 30/90/365 天趋势图；**订阅 importStore 导入后自动刷新** |
+| Activity List | `/activities` | 排序/搜索/月份+类型筛选/分页 20/页；缺失字段 `—`；行点击跳详情 |
+| Activity Detail | `/activities/:id` | 8 指标卡 + Leaflet 轨迹（Douglas-Peucker 抽稀 + 起终点标记 + fitBounds）+ 4 图表（速度/心率/海拔/功率，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
+| Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | **P1 进行中**（见 §3） |
+
+### 部署（规格 §34/§35）
+
+- `.github/workflows/deploy.yml`：push main → lint → test → build → deploy-pages（Node 22）
+- SPA 路由：`public/404.html`（rafgraph 方案）+ main.tsx `basename={import.meta.env.PROD ? '/cycling-analyzer' : '/'}`
+- vite.config：`base: './'`，`@/` → src/ 别名，vitest jsdom + setupFiles
+
+---
+
+## 3. 进行中（P1，规格 §38）
+
+以下任务当前由并行子任务开发中（2026-08-17）：
+
+| 任务 | 负责人 | 状态 | 涉及文件 |
+|---|---|---|---|
+| Statistics 统计页（§28） | Agent G | 🔄 | `src/pages/StatisticsPage.tsx`、`src/features/statistics/` |
+| Calendar 日历页（§29） | Agent H | 🔄 | `src/pages/CalendarPage.tsx`、`src/features/calendar/` |
+| Settings 设置页 + 导出/导入/清空（§27/§32/§33） | Agent I | 🔄 | `src/pages/SettingsPage.tsx`、`src/features/settings/`；**设置 key 规范由 I 定义** |
+| 轨迹颜色分析（§16 着色） | Agent J | 🔄 | `src/map/`（ActivityMap 扩展 `coloring` prop） |
+| 踏频/组合图组件（§17） | Agent K | 🔄 | `src/charts/`（CadenceChart/CombinedChart，未挂载） |
+| FTP/区间/TSS + 详情页集成（§26） | Agent L | ⏳ 待派发 | 依赖 I 的设置格式 + K 的图表组件；独占修改 ActivityDetailPage |
+| 高级数值筛选（§30） | Agent M | ⏳ 待派发 | repository 查询扩展 + ActivityFilters/ActivitiesPage |
+
+---
+
+## 4. 未实现功能（后续工作项）
+
+### P1 剩余（规格 §38）
+
+- [ ] FTP / 心率区间 / 功率区间分布展示（详情页，待 Agent L）
+- [ ] Normalized Power / Intensity Factor / TSS 计算（待 Agent L）
+- [ ] 轨迹着色模式切换 UI（详情页集成，待 Agent L）
+- [ ] 高级筛选：距离/爬升/功率数值过滤（待 Agent M）
+
+### P2（规格 §39，未开始）
+
+- [ ] Segment / 路线分析
+- [ ] 个人纪录（PR）
+- [ ] 功率曲线
+- [ ] FTP 自动估算 / VO2Max 估算
+- [ ] Fitness / Fatigue（训练状态）
+- [ ] 骑行区域统计 / 热力图
+- [ ] 设备统计 / 自行车统计
+
+### 其他未实现（规格内遗漏项）
+
+- [ ] **修改活动名称 UI**（§31）：存储层 `updateName` 已实现，详情页/列表页无改名入口
+- [ ] **保存原始 FIT 文件开关**（§19）：可配置（默认不保存），未实现
+- [ ] **浅色主题**（§36）：CSS 变量已预留，仅深色基调
+- [ ] **单位换算显示**（§27 公里/英里、12h/24h）：设置项进行中（Agent I），页面换算显示未接入
+- [ ] **性能压测**（§44）：分页/Worker 已实现，未对 1000 activity 量级实测
+- [ ] **README 完善**（§46）：基础版已写，截图等未补
+
+---
+
+## 5. 架构与接口约定（agent 工作须知）
+
+### 模块边界（规格 §42，硬约束）
+
+```
+FIT Decoder → Normalizer → Calculator → Storage Repository → UI
+```
+
+- React 组件**禁止**直接调用 `@garmin/fitsdk`
+- UI 只依赖 `src/types/activity.ts` 领域模型与 storage repository 接口
+- 新增功能先定位到对应层，跨层直接调用视为违规
+
+### 测试约定
+
+- Vitest + jsdom；DB 测试用 `fake-indexeddb`（tests/setup.ts 已全局注册）+ 真 Dexie 实例注入
+- FIT 样例在 `tests/fixtures/`（Garmin 官方公开样例 + 合成带 GPS 文件，`generate-samples.mjs` 可复现）
+- 用户真实数据在 `private-fixtures/`（**gitignored，严禁提交**）
+- 关键规则：纯函数优先可测；组件渲染测试用 MemoryRouter 包裹；页面数据加载支持注入
+
+### 代码规范（全局 CLAUDE.md）
+
+- 注释中文；日志/异常消息英文；React 组件 `function` 声明；`@/` 别名导入
+- 提交信息 `[NF]`/`[BF]`/`[IM]`/`[CU]` 前缀 + 中文 Subject；**无 AI 署名**
+- 提交身份固定为 `999bug <999bug@users.noreply.github.com>`（项目级 git config 已设，勿改）
+- 完成后执行 `codegraph sync`
+
+### 常用命令
+
+```bash
+npm run dev        # 本地开发
+npm run test       # 测试（vitest run）
+npm run lint       # ESLint
+npm run build      # tsc + vite build
+node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
+```

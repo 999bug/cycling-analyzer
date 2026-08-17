@@ -7,13 +7,16 @@
 ## 当前进度
 
 - [x] Phase 1：项目初始化（Vite + React + TypeScript + ESLint + Prettier + Vitest、基础路由与布局骨架）
-- [ ] Phase 2：FIT Parser
-- [ ] Phase 3：IndexedDB
-- [ ] Phase 4：Import
-- [ ] Phase 5：Activity List
-- [ ] Phase 6：Activity Detail
-- [ ] Phase 7：Dashboard
-- [ ] Phase 8：GitHub Pages
+- [x] Phase 2：FIT Parser（Decoder/Normalizer/Calculator/Fingerprint/Strava 标题还原）
+- [x] Phase 3：IndexedDB（Dexie 四表 + Repository）
+- [x] Phase 4：Import（目录/文件/拖拽三入口、gzip、去重、Web Worker、失败重试）
+- [x] Phase 5：Activity List（排序/搜索/筛选/分页）
+- [x] Phase 6：Activity Detail（地图轨迹/速度心率海拔功率图/删除）
+- [x] Phase 7：Dashboard（周/月/总计统计 + 30/90/365 天趋势）
+- [x] Phase 8：GitHub Pages（Actions 自动部署 + SPA 路由）
+- [ ] P1：统计页 / 日历 / 设置 / 轨迹着色 / FTP·区间·训练负荷 / 高级筛选（进行中）
+
+> 详细功能状态（已实现/未实现清单、架构接口、agent 工作须知）见 [docs/PROGRESS.md](docs/PROGRESS.md)。
 
 ## 技术栈
 
