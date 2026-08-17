@@ -1,0 +1,52 @@
+/**
+ * 全局样式：CSS 变量色板、reset、基础布局。
+ * 深色为默认基调；后续浅色主题通过覆盖 :root 变量实现。
+ */
+:root {
+  --bg: #121417;
+  --bg-surface: #1b1e23;
+  --text: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --primary: #4f8cff;
+  --border: #2a2e35;
+}
+
+/* reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+p {
+  color: var(--text-secondary);
+}
