@@ -86,10 +86,13 @@ function withinCircle(
  * 匹配单活动的赛段最佳成绩：进入起点圆 → 离开起点圆 → 进入终点圆。
  *
  * 状态机口径：
- * 1. 等待进入起点圆（刚进入的同一点不判终点，环形路线起点=终点时防止出发即完赛）；
- * 2. 已进入起点圆：离开起点圆后才允许判终点（环形路线防护）；
- * 3. 寻找终点：先判终点（回到起点即完赛，终点判定优先），
- *    未达终点而重新进入起点圆则从最后一次进入重新计时；
+ * 1. 起点圆内（含初次进入、圈内停留、重新进入）：持续刷新计时起点，
+ *    以离开圈前的最后一个圈内点为计时起点——扣除出发前停留/热身时间
+ *    （「设为赛段」以骑行起终点建段，家门口环形路线开机停留不应计入成绩）；
+ * 2. 离开起点圆后才允许判终点（环形路线防护：起终点同圆时防止出发即完赛）；
+ *    两圆相交/同心（圆心距 < 2R）时「离开」指离开两圆并集：出起点圈但仍在
+ *    终点圈内的点不判完赛，防止出发第一步撞终点圈产生秒级虚假成绩；
+ * 3. 寻找终点：先判终点（终点判定优先），未达终点而重新进入起点圆则重新计时；
  *    完赛点若同时在起点圆内（环形连续圈）立即作为下一次穿越的计时起点。
  *
  * @param segment 赛段几何
@@ -100,6 +103,14 @@ export function matchSegmentEffort(
   segment: SegmentGeometry,
   records: readonly ActivityRecord[],
 ): number | undefined {
+  // 两圆相交/同心（圆心距小于直径）时，出起点圈的点可能仍落在终点圈内
+  const circlesOverlap =
+    haversineMeters(
+      { latitude: segment.startLatitude, longitude: segment.startLongitude },
+      { latitude: segment.endLatitude, longitude: segment.endLongitude },
+    ) <
+    2 * SEGMENT_RADIUS_METERS
+
   let startTimestamp: number | undefined
   let leftStartCircle = false
   let best: number | undefined
@@ -122,23 +133,25 @@ export function matchSegmentEffort(
       segment.endLongitude,
     )
 
-    if (startTimestamp === undefined) {
-      if (inStart) {
-        startTimestamp = record.timestamp
-        leftStartCircle = false
-      }
-      continue
-    }
-
     if (!leftStartCircle) {
       if (inStart) {
+        // 圈内最后一点才是计时起点：停留/热身时间随刷新自然扣除
+        startTimestamp = record.timestamp
+        continue
+      }
+      if (startTimestamp === undefined) {
+        continue
+      }
+      if (circlesOverlap && inEnd) {
+        // 相交圆：出起点圈但仍在终点圈内 = 未离开并集，等真正离开
         continue
       }
       leftStartCircle = true
-      // 离开起点圈的同一点可继续判终点（稀疏记录直接从起点圈跳到终点圈）
+      // 独立圆：离开起点圈的同一点可继续判终点（稀疏记录直接从起点圈跳到终点圈）
     }
 
-    if (inEnd && record.timestamp > startTimestamp) {
+    // startTimestamp 在 leftStartCircle=true 时必已定义，显式判断仅为通过 TS 窄化
+    if (inEnd && startTimestamp !== undefined && record.timestamp > startTimestamp) {
       const duration = record.timestamp - startTimestamp
       if (best === undefined || duration < best) {
         best = duration
