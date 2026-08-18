@@ -1,7 +1,7 @@
 /**
  * 活动详情页（规格 §15/§16/§17/§25/§26/§32）。
  *
- * 布局：标题区（名称/类型/开始时间/删除按钮）→ 9 个指标卡（含标准化功率）→
+ * 布局：标题区（名称/类型/开始时间/删除按钮）→ 指标卡（距离/运动时长/总时长/爬升/累计下降等 12 项）→
  * 轨迹着色切换 + 轨迹地图 → 七个图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合）→
  * 训练区间区块（心率/功率区间分布 + IF/TSS）。
  * 数据源：activityRepository.getById（摘要）+ getRecords（逐点），
@@ -150,7 +150,8 @@ function displayNumber(value: number | undefined, unit: string): string {
 }
 
 /**
- * 组装 8 个指标卡（规格 §15；距离/速度按显示单位换算，规格 §27）。
+ * 组装指标卡（规格 §15；距离/速度按显示单位换算，规格 §27）。
+ * 时长区分运动时长（计时）与总时长（含暂停），爬升/下降成对展示。
  *
  * @param activity 活动摘要
  * @param distanceUnit 距离显示单位
@@ -159,8 +160,11 @@ function displayNumber(value: number | undefined, unit: string): string {
 function buildMetrics(activity: ActivitySummary, distanceUnit: DistanceUnit): MetricItem[] {
   return [
     { label: '距离', value: formatDistanceByUnit(activity.distance, distanceUnit) },
-    { label: '时长', value: formatDuration(activity.duration) },
+    { label: '运动时长', value: formatDuration(activity.duration) },
+    { label: '总时长', value: formatDuration(activity.elapsedTime) },
     { label: '爬升', value: formatElevation(activity.elevationGain) },
+    // 下降用无符号整数米（「累计下降」标签已表方向，formatElevation 的 + 号会误导）
+    { label: '累计下降', value: displayNumber(activity.elevationLoss, 'm') },
     { label: '平均速度', value: formatSpeedByUnit(activity.avgSpeed, distanceUnit) },
     { label: '平均心率', value: displayNumber(activity.avgHeartRate, 'bpm') },
     { label: '平均功率', value: displayNumber(activity.avgPower, 'W') },
@@ -402,7 +406,7 @@ function ActivityDetailPage() {
   // 单位偏好（设置未加载完成时回退默认公制，规格 §27）
   const distanceUnit = settings?.units.distance ?? 'km'
   const timeFormat = settings?.units.timeFormat ?? '24h'
-  // 9 个指标卡：基础 8 卡 + 标准化功率（无功率数据/样本不足时显示 '—'）
+  // 指标卡：基础 10 卡（运动时长/总时长/累计下降等）+ 标准化功率（无功率数据/样本不足时显示 '—'）
   const metrics = [
     ...buildMetrics(activity, distanceUnit),
     { label: '标准化功率', value: displayNumber(normalizedPower, 'W') },
