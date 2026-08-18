@@ -10,6 +10,7 @@ import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import HeatmapPage from '@/pages/HeatmapPage'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
@@ -29,9 +30,13 @@ beforeEach(async () => {
   // 清空各表而非删除数据库：vi.mock 共享单实例，delete() 后实例不可复用
   await testDb.activities.clear()
   await testDb.activity_records.clear()
+  // 数据源复位：默认有效源为本地
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -123,5 +128,42 @@ describe('骑行热力图页', () => {
     render(<HeatmapPage />)
 
     expect(await screen.findByText('加载失败，请刷新重试')).toBeInTheDocument()
+  })
+
+  it('作者模式使用 CI 预计算轨迹（不经本地全量扫描）', async () => {
+    // 本地库放一条含坐标活动：author 分支不应读到它
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivity(makeActivity('local-1', makeTrackRecords(31.2, 121.5, 20)))
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('author-data/precomputed/tracks.json')) {
+          return new Response(
+            JSON.stringify({
+              toleranceMeters: 10,
+              tracks: [
+                [
+                  [40.0, 116.3],
+                  [40.01, 116.31],
+                ],
+                [
+                  [39.9, 116.4],
+                  [39.91, 116.41],
+                ],
+              ],
+            }),
+            { status: 200 },
+          )
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+    render(<HeatmapPage />)
+
+    // 2 条作者轨迹（本地那条不计入）
+    expect(await screen.findByText(/共 2 条轨迹/)).toBeInTheDocument()
   })
 })

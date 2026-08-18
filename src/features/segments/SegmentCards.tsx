@@ -23,8 +23,8 @@ export interface SegmentCardsProps {
   /** 成绩扫描是否失败 */
   failed?: boolean
 
-  /** 删除回调 */
-  onDelete: (id: number) => void
+  /** 删除回调（作者模式只读，不传则隐藏删除按钮） */
+  onDelete?: (id: number) => void
 }
 
 /**
@@ -43,14 +43,16 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete }: Segm
           <div key={id} className="segment-card">
             <div className="segment-card__header">
               <span className="segment-card__name">{segment.name}</span>
-              <button
-                type="button"
-                className="segment-card__delete"
-                aria-label={`删除赛段 ${segment.name}`}
-                onClick={() => onDelete(id)}
-              >
-                删除
-              </button>
+              {onDelete !== undefined && (
+                <button
+                  type="button"
+                  className="segment-card__delete"
+                  aria-label={`删除赛段 ${segment.name}`}
+                  onClick={() => onDelete(id)}
+                >
+                  删除
+                </button>
+              )}
             </div>
             {failed ? (
               <p className="segment-card__hint">成绩计算失败</p>

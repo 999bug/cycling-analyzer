@@ -44,6 +44,8 @@ import {
 import { summariesScanKey } from '@/storage/scanCache'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/pages/StatisticsPage.css'
 
 /**
@@ -83,6 +85,8 @@ function StatisticsPage() {
   const importSummary = useImportStore((s) => s.summary)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
   const repository = useActivityRepository()
+  // 当前数据源（作者源功率纪录/路线分组为 CI 预计算产物，分支见下）
+  const source = useDataSourceStore(selectEffectiveSource)
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -157,6 +161,20 @@ function StatisticsPage() {
     let cancelled = false
     void (async () => {
       try {
+        if (source === 'author') {
+          // 作者源：CI 预计算产物直接填充（免全量逐点下载）
+          const [powerRecords, routeGroups] = await Promise.all([
+            defaultSnapshotClient.getPowerRecords(),
+            defaultSnapshotClient.getRouteGroups(),
+          ])
+          const next = { key: scanKey, powerRecords, routeGroups }
+          recordScanCache = next
+          if (!cancelled) {
+            setScanState(next)
+          }
+          return
+        }
+
         const powerItems: ActivityPowerCurve[] = []
         const routeItems: RouteActivityInput[] = []
         for (const activity of summaries) {
@@ -195,7 +213,7 @@ function StatisticsPage() {
     return () => {
       cancelled = true
     }
-  }, [summaries, scanKey, scanResult, repository])
+  }, [summaries, scanKey, scanResult, repository, source])
 
   if (error) {
     return (

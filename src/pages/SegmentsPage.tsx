@@ -15,8 +15,10 @@ import {
   type SegmentEffort,
 } from '@/features/segments/segmentMatching'
 import { useImportStore } from '@/stores/importStore'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { summariesScanKey } from '@/storage/scanCache'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/pages/SegmentsPage.css'
 
 /** 赛段仓库单例 */
@@ -43,11 +45,33 @@ function SegmentsPage() {
   const importSummary = useImportStore((s) => s.summary)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
   const activityRepository = useActivityRepository()
+  // 当前数据源（作者源赛段与成绩榜为 CI 预计算产物，分支见下）
+  const source = useDataSourceStore(selectEffectiveSource)
 
   const reload = useCallback(() => {
     let cancelled = false
     void (async () => {
       try {
+        if (source === 'author') {
+          // 作者源：赛段定义与成绩榜均为 CI 预计算产物（免全量逐点下载）；
+          // 快照缺赛段文件时回退空列表空榜（显示空态）
+          const [authorSegments, results] = await Promise.all([
+            defaultSnapshotClient.getSegments().catch(() => [] as SegmentEntity[]),
+            defaultSnapshotClient.getSegmentResults().catch(() => ({}) as Record<string, SegmentEffort[]>),
+          ])
+          if (cancelled) {
+            return
+          }
+          const boards = new Map<number, SegmentEffort[]>()
+          for (const [key, efforts] of Object.entries(results)) {
+            boards.set(Number(key), efforts)
+          }
+          setSegments(authorSegments)
+          setLeaderboards(boards)
+          setState('ready')
+          return
+        }
+
         const allSegments = await segmentRepository.listSegments()
         if (cancelled) {
           return
@@ -98,7 +122,7 @@ function SegmentsPage() {
     return () => {
       cancelled = true
     }
-  }, [activityRepository])
+  }, [activityRepository, source])
 
   useEffect(() => {
     const cancel = reload()
@@ -126,14 +150,16 @@ function SegmentsPage() {
       {state === 'loading' && <p className="segments-page__message">赛段加载中…</p>}
       {state === 'ready' && segments !== null && segments.length === 0 && (
         <p className="segments-page__message">
-          还没有赛段。打开任意骑行详情页，点击「设为赛段」即可把该骑行的起终点创建为赛段。
+          {source === 'author'
+            ? '作者尚未创建赛段。'
+            : '还没有赛段。打开任意骑行详情页，点击「设为赛段」即可把该骑行的起终点创建为赛段。'}
         </p>
       )}
       {state === 'ready' && segments !== null && segments.length > 0 && (
         <SegmentCards
           segments={segments}
           leaderboards={leaderboards}
-          onDelete={handleDelete}
+          onDelete={source === 'local' ? handleDelete : undefined}
         />
       )}
     </>

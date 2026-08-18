@@ -8,10 +8,11 @@ import 'fake-indexeddb/auto'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { Activity, ActivityRecord } from '@/types/activity'
 import SegmentsPage from '@/pages/SegmentsPage'
 
@@ -19,6 +20,25 @@ import SegmentsPage from '@/pages/SegmentsPage'
 vi.mock('@/storage/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/storage/db')>()
   return { ...actual, db: new actual.CyclingDatabase() }
+})
+
+/** 作者快照客户端假实现（无缓存，各用例独立配置；vi.hoisted 因 vi.mock 提升到文件顶部） */
+const mockSnapshotClient = vi.hoisted(() => ({
+  getManifest: vi.fn(),
+  getActivities: vi.fn(),
+  getRecords: vi.fn(),
+  getProfile: vi.fn(),
+  getSegments: vi.fn(async () => [] as unknown[]),
+  getTracks: vi.fn(),
+  getSegmentResults: vi.fn(async () => ({}) as Record<string, unknown[]>),
+  getRouteGroups: vi.fn(),
+  getPowerRecords: vi.fn(),
+}))
+
+// 页面经 defaultSnapshotClient 读快照：mock 为可控假实现（默认实现有模块级缓存会跨用例污染）
+vi.mock('@/storage/authorData/snapshotClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/storage/authorData/snapshotClient')>()
+  return { ...actual, defaultSnapshotClient: mockSnapshotClient }
 })
 
 /** 测试数据库实例（vi.mock 注入，页面与测试共享） */
@@ -29,6 +49,13 @@ beforeEach(async () => {
   await testDb.activities.clear()
   await testDb.activity_records.clear()
   await testDb.segments.clear()
+  // 数据源复位：默认有效源为本地
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 /**
@@ -115,5 +142,45 @@ describe('赛段页面', () => {
     await userEvent.click(within(card).getByRole('button', { name: '删除赛段 待删赛段' }))
 
     expect(await screen.findByText(/还没有赛段/)).toBeInTheDocument()
+  })
+
+  it('作者模式展示快照赛段与预计算成绩榜，无删除按钮', async () => {
+    mockSnapshotClient.getSegments.mockResolvedValue([
+      {
+        id: 1,
+        name: '温榆河绕圈',
+        startLatitude: 40.0,
+        startLongitude: 116.5,
+        endLatitude: 40.1,
+        endLongitude: 116.6,
+        sourceActivityId: 'author-1',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+    ])
+    mockSnapshotClient.getSegmentResults.mockResolvedValue({
+      '1': [
+        { activityId: 'author-1', startTime: '2026-08-01T08:00:00.000Z', durationSeconds: 600 },
+        { activityId: 'author-2', startTime: '2026-08-02T08:00:00.000Z', durationSeconds: 700 },
+      ],
+    })
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    const card = (await screen.findByText('温榆河绕圈')).closest('.segment-card') as HTMLElement
+    expect(within(card).getByText('2 次')).toBeInTheDocument()
+    // 最佳成绩链接作者活动详情
+    const best = within(card).getByText('00:10:00')
+    expect(best.closest('a')).toHaveAttribute('href', '/activities/author-1')
+    // 只读：无删除按钮
+    expect(within(card).queryByRole('button', { name: /删除赛段/ })).not.toBeInTheDocument()
+  })
+
+  it('作者模式快照缺赛段文件时显示空态（不报错）', async () => {
+    mockSnapshotClient.getSegments.mockRejectedValue(new Error('HTTP 404'))
+    mockSnapshotClient.getSegmentResults.mockRejectedValue(new Error('HTTP 404'))
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByText('作者尚未创建赛段。')).toBeInTheDocument()
   })
 })

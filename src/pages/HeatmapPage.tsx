@@ -19,6 +19,8 @@ import {
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -74,6 +76,8 @@ function HeatmapPage() {
   const wrapperRef = useRef<HTMLDivElement>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
   const repository = useActivityRepository()
+  // 当前数据源（作者源轨迹为 CI 预计算产物，分支见下）
+  const source = useDataSourceStore(selectEffectiveSource)
 
   // 加载全部活动轨迹：摘要列表 → 逐活动加载逐点 → 抽稀取坐标
   useEffect(() => {
@@ -84,6 +88,16 @@ function HeatmapPage() {
      * 命中模块级缓存时跳过全量扫描（性能优化）。
      */
     async function loadTracks() {
+      if (source === 'author') {
+        // 作者源：CI 预计算抽稀轨迹（免全量逐点下载，约 25MB → 百 KB 级）
+        const file = await defaultSnapshotClient.getTracks()
+        if (!cancelled) {
+          setTracks(file.tracks)
+          setState(file.tracks.length > 0 ? 'ready' : 'empty')
+        }
+        return
+      }
+
       const summaries = await repository.listAllSummaries()
       const scanKey = summariesScanKey(summaries)
       if (trackScanCache !== null && trackScanCache.key === scanKey) {
@@ -121,7 +135,7 @@ function HeatmapPage() {
     return () => {
       cancelled = true
     }
-  }, [repository])
+  }, [repository, source])
 
   // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
   const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])

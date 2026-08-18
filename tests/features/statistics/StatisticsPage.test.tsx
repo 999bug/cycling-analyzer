@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { saveSettings } from '@/features/settings/settings'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { Activity } from '@/types/activity'
 import StatisticsPage from '@/pages/StatisticsPage'
 
@@ -21,6 +22,25 @@ import StatisticsPage from '@/pages/StatisticsPage'
 vi.mock('@/storage/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/storage/db')>()
   return { ...actual, db: new actual.CyclingDatabase() }
+})
+
+/** 作者快照客户端假实现（无缓存，各用例独立配置；vi.hoisted 因 vi.mock 提升到文件顶部） */
+const mockSnapshotClient = vi.hoisted(() => ({
+  getManifest: vi.fn(),
+  getActivities: vi.fn(async () => [] as unknown[]),
+  getRecords: vi.fn(),
+  getProfile: vi.fn(),
+  getSegments: vi.fn(),
+  getTracks: vi.fn(),
+  getSegmentResults: vi.fn(),
+  getRouteGroups: vi.fn(async () => [] as unknown[]),
+  getPowerRecords: vi.fn(async () => [] as unknown[]),
+}))
+
+// 统计页 author 分支经 defaultSnapshotClient 读预计算产物：mock 为可控假实现
+vi.mock('@/storage/authorData/snapshotClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/storage/authorData/snapshotClient')>()
+  return { ...actual, defaultSnapshotClient: mockSnapshotClient }
 })
 
 /** 测试数据库实例（vi.mock 注入，页面与测试共享） */
@@ -33,6 +53,12 @@ beforeEach(async () => {
   await testDb.activity_records.clear()
   // 单位偏好影响显示层（§27）：用例间清理防泄漏
   await testDb.settings.clear()
+  // 数据源复位：默认有效源为本地
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
+  mockSnapshotClient.getActivities.mockResolvedValue([])
+  mockSnapshotClient.getRouteGroups.mockResolvedValue([])
+  mockSnapshotClient.getPowerRecords.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -347,5 +373,52 @@ describe('路线分析区块（规格 §39）', () => {
 
     const section = await screen.findByRole('region', { name: '路线分析' })
     expect(await within(section).findByText(/暂无可分组的路线/)).toBeInTheDocument()
+  })
+
+  it('作者模式使用 CI 预计算功率纪录与路线分组（不经本地扫描）', async () => {
+    // 本地库放一条更高功率活动：author 分支不应扫描到它
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivity(
+      makeActivity(99, new Date().toISOString(), 50000, 5400, 300, 12, 999),
+    )
+
+    mockSnapshotClient.getActivities.mockResolvedValue([
+      {
+        id: 'author-1',
+        fileId: 'author-1',
+        fileName: 'author-1.fit.gz',
+        fingerprint: 'fp-author-1',
+        activityType: 'cycling',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        duration: 3600,
+        elapsedTime: 3600,
+        distance: 30000,
+        elevationGain: 200,
+        avgPower: 250,
+      },
+    ])
+    mockSnapshotClient.getPowerRecords.mockResolvedValue([
+      { duration: 300, power: 320, activityId: 'author-1', startTime: new Date().toISOString() },
+    ])
+    mockSnapshotClient.getRouteGroups.mockResolvedValue([
+      {
+        activities: [],
+        count: 3,
+        avgDistance: 30000,
+        bestDuration: 3500,
+        lastRideTime: new Date().toISOString(),
+        lastActivityId: 'author-1',
+      },
+    ])
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    // 功率纪录来自快照（320 W），本地 999 W 活动不参与
+    expect(await screen.findByText('320 W')).toBeInTheDocument()
+    expect(screen.queryByText('999 W')).not.toBeInTheDocument()
+    // 路线分组来自快照（骑行 3 次）
+    const routes = await screen.findByRole('region', { name: '路线分析' })
+    expect(await within(routes).findByText(/3 次/)).toBeInTheDocument()
   })
 })
