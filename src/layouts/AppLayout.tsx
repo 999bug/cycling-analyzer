@@ -35,7 +35,14 @@ function AppLayout() {
       </a>
       <aside className="app-layout__sidebar">
         <Link className="app-layout__brand" to="/" title="回到仪表盘首页">
-          <span className="app-layout__brand-name">骑记</span>
+          <span className="app-layout__brand-row">
+            <img
+              className="app-layout__brand-logo"
+              src={`${import.meta.env.BASE_URL}ride.png`}
+              alt="骑记 logo"
+            />
+            <span className="app-layout__brand-name">骑记</span>
+          </span>
           <span className="app-layout__brand-en">Ride Insight</span>
           <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
         </Link>
