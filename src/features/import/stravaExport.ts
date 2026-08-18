@@ -103,3 +103,44 @@ function parseCsvRows(text: string): string[][] {
   }
   return rows
 }
+
+/**
+ * 从 Strava 元数据构建"文件名 → 标题"查找表。
+ * 同时索引完整相对路径与纯文件名，覆盖选择导出根目录 / 子目录两种场景；
+ * 标题为空的记录不参与还原。
+ *
+ * @param stravaCsv 活动 ID → 元数据映射（可为空）
+ * @returns 文件名/相对路径 → 标题查找表
+ */
+export function buildStravaTitleLookup(
+  stravaCsv: Map<string, StravaActivityMeta> | undefined,
+): Map<string, string> {
+  const titles = new Map<string, string>()
+  for (const meta of stravaCsv?.values() ?? []) {
+    if (!meta.name) {
+      continue
+    }
+    titles.set(meta.fileName, meta.name)
+    const slash = meta.fileName.lastIndexOf('/')
+    if (slash >= 0) {
+      titles.set(meta.fileName.slice(slash + 1), meta.name)
+    }
+  }
+  return titles
+}
+
+/**
+ * 按文件匹配 Strava 标题：相对路径精确匹配优先，纯文件名回退。
+ *
+ * @param path 文件相对路径
+ * @param name 纯文件名
+ * @param titles 文件名 → 标题查找表
+ * @returns 匹配到的标题（可空），未匹配时 undefined
+ */
+export function matchStravaTitle(
+  path: string,
+  name: string,
+  titles: Map<string, string>,
+): string | undefined {
+  return titles.get(path) ?? titles.get(name)
+}

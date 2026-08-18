@@ -22,7 +22,11 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
 import { createWorkerParser } from './parseClient'
-import type { StravaActivityMeta } from './stravaExport'
+import {
+  buildStravaTitleLookup,
+  matchStravaTitle,
+  type StravaActivityMeta,
+} from './stravaExport'
 
 /**
  * 待导入的单个文件（由扫描结果归一化而来）。
@@ -111,7 +115,7 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
     activityRepository = defaultActivityRepository,
     fileRepository = defaultFileRepository,
   } = options
-  const titles = buildTitleLookup(options.stravaCsv)
+  const titles = buildStravaTitleLookup(options.stravaCsv)
   const failedItems: FailedItem[] = []
   let newImported = 0
   let skipped = 0
@@ -134,7 +138,7 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         if (normalizedPower !== undefined) {
           activity.normalizedPower = normalizedPower
         }
-        await activityRepository.addActivity(activity, matchTitle(entry.path, entry.name, titles))
+        await activityRepository.addActivity(activity, matchStravaTitle(entry.path, entry.name, titles))
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
         await fileRepository.recordImported(
           fingerprint,
@@ -171,36 +175,4 @@ function createDefaultParser(): ParseFileFn {
     const { parseFitBytes } = await import('@/fit/worker/parseTask')
     return parseFitBytes(input)
   }
-}
-
-/**
- * 从 Strava 元数据构建"文件名 → 标题"查找表。
- * 同时索引完整相对路径与纯文件名，覆盖选择导出根目录 / 子目录两种场景；
- * 标题为空的记录不参与还原。
- */
-function buildTitleLookup(stravaCsv: Map<string, StravaActivityMeta> | undefined): Map<string, string> {
-  const titles = new Map<string, string>()
-  for (const meta of stravaCsv?.values() ?? []) {
-    if (!meta.name) {
-      continue
-    }
-    titles.set(meta.fileName, meta.name)
-    const slash = meta.fileName.lastIndexOf('/')
-    if (slash >= 0) {
-      titles.set(meta.fileName.slice(slash + 1), meta.name)
-    }
-  }
-  return titles
-}
-
-/**
- * 按文件匹配 Strava 标题：相对路径精确匹配优先，纯文件名回退。
- *
- * @param path 文件相对路径
- * @param name 纯文件名
- * @param titles 文件名 → 标题查找表
- * @returns 匹配到的标题（可空），未匹配时 undefined
- */
-function matchTitle(path: string, name: string, titles: Map<string, string>): string | undefined {
-  return titles.get(path) ?? titles.get(name)
 }
