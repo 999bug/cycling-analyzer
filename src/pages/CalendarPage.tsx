@@ -10,11 +10,9 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { db } from '@/storage/db'
-import {
-  DexieActivityRepository,
-  type ActivitySummary,
-} from '@/storage/repositories/activityRepository'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import CalendarHeatmap from '@/features/calendar/CalendarHeatmap'
 import { buildCalendarData, localDateKey, type CalendarData } from '@/features/calendar/calendarData'
 import { formatDuration } from '@/utils/format'
@@ -22,8 +20,8 @@ import { formatDistanceByUnit } from '@/features/settings/settings'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 
-/** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发） */
+const repository = sourceActivityRepository
 
 /**
  * 骑行日历页面。
@@ -37,6 +35,8 @@ function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   // 订阅导入结果：数据导入完成后自动刷新日历（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 数据源切换后重新加载
+  const source = useDataSourceStore(selectEffectiveSource)
   // 距离显示单位（规格 §27，格子 tooltip 与面板）
   const { distance: distanceUnit } = useUnits()
 
@@ -58,7 +58,7 @@ function CalendarPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [source])
 
   useEffect(() => {
     const cancel = reload()

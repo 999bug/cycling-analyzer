@@ -12,8 +12,9 @@
  * 空数据时展示导入引导文案，范围内无活动时提示切换范围。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { db } from '@/storage/db'
-import { DexieActivityRepository, type ActivitySummary } from '@/storage/repositories/activityRepository'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import { useImportStore } from '@/stores/importStore'
 import {
   buildStatistics,
@@ -46,8 +47,8 @@ import { summariesScanKey } from '@/storage/scanCache'
 import { useUnits } from '@/hooks/useUnits'
 import '@/pages/StatisticsPage.css'
 
-/** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发） */
+const repository = sourceActivityRepository
 
 /**
  * 全量逐点扫描模块级缓存（性能优化）：key = summariesScanKey。
@@ -84,6 +85,8 @@ function StatisticsPage() {
   const [error, setError] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新统计（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 数据源切换后重新加载
+  const source = useDataSourceStore(selectEffectiveSource)
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -105,7 +108,7 @@ function StatisticsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [source])
 
   useEffect(() => {
     const cancel = reload()
@@ -196,7 +199,7 @@ function StatisticsPage() {
     return () => {
       cancelled = true
     }
-  }, [summaries, scanKey, scanResult])
+  }, [summaries, scanKey, scanResult, source])
 
   if (error) {
     return (

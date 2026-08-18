@@ -6,11 +6,9 @@
  * 数据来自活动仓库 listAllSummaries，订阅 importStore 导入后自动刷新。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { db } from '@/storage/db'
-import {
-  DexieActivityRepository,
-  type ActivitySummary,
-} from '@/storage/repositories/activityRepository'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import { buildStatistics, resolveRange } from '@/features/statistics/statistics'
 import StatisticCards from '@/features/statistics/StatisticCards'
 import MonthlyDistanceChart from '@/features/yearReview/MonthlyDistanceChart'
@@ -20,8 +18,8 @@ import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 import '@/pages/YearReviewPage.css'
 
-/** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发） */
+const repository = sourceActivityRepository
 
 /**
  * 年度回顾页面。
@@ -35,6 +33,8 @@ function YearReviewPage() {
   const [showShare, setShowShare] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 数据源切换后重新加载
+  const source = useDataSourceStore(selectEffectiveSource)
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -56,7 +56,7 @@ function YearReviewPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [source])
 
   useEffect(() => {
     const cancel = reload()

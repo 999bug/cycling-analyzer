@@ -10,10 +10,10 @@ import ActivityListTable, { type SortField, type SortOrder } from '@/features/ac
 import ActivityPagination from '@/features/activity/ActivityPagination'
 import '@/features/activity/activity-page.css'
 import { useUnits } from '@/hooks/useUnits'
-import { db } from '@/storage/db'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import {
-  DexieActivityRepository,
-  type ActivityRepository,
+  type ActivityReadRepository,
   type ActivitySummary,
 } from '@/storage/repositories/activityRepository'
 
@@ -69,8 +69,8 @@ function parseNumericFilter(raw: string): number | undefined {
 }
 
 interface ActivitiesPageProps {
-  /** 活动仓库（测试注入用；缺省使用全局数据库） */
-  repository?: ActivityRepository
+  /** 活动仓库（测试注入用；缺省经门面按当前数据源分发） */
+  repository?: ActivityReadRepository
 }
 
 /**
@@ -78,7 +78,9 @@ interface ActivitiesPageProps {
  */
 function ActivitiesPage({ repository }: ActivitiesPageProps) {
   const navigate = useNavigate()
-  const repo = useMemo(() => repository ?? new DexieActivityRepository(db), [repository])
+  const repo = useMemo(() => repository ?? sourceActivityRepository, [repository])
+  // 数据源切换后重新加载（使用默认门面时生效；测试注入仓库时无实际影响）
+  const source = useDataSourceStore(selectEffectiveSource)
 
   const [query, setQuery] = useState<QueryState>(DEFAULT_QUERY)
   const [result, setResult] = useState<{ items: ActivitySummary[]; total: number }>({
@@ -117,7 +119,7 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
     return () => {
       cancelled = true
     }
-  }, [repo])
+  }, [repo, source])
 
   // 查询参数变化时重新加载列表（排序/筛选/翻页均通过 setQuery 触发）
   useEffect(() => {
@@ -143,7 +145,7 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
     return () => {
       cancelled = true
     }
-  }, [query, repo, reloadKey])
+  }, [query, repo, reloadKey, source])
 
   // 查询进行中：最近一次完成的结果对应的查询参数不是当前查询
   const loading = error === null && settledQuery !== query

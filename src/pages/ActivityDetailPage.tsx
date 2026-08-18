@@ -15,6 +15,8 @@ import type { ActivityRecord } from '@/types/activity'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { db } from '@/storage/db'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import {
   formatDate,
   formatDuration,
@@ -55,8 +57,11 @@ import PowerCurveChart from '@/charts/PowerCurveChart'
 import CombinedChart from '@/charts/CombinedChart'
 import '@/pages/ActivityDetailPage.css'
 
-/** 活动仓库单例（页面模块只加载一次） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发，读取走这里） */
+const repository = sourceActivityRepository
+
+/** 本地库仓库（删除/重命名等写操作永远只进本地库） */
+const localRepository = new DexieActivityRepository(db)
 
 /** 赛段仓库单例（「设为赛段」创建入口） */
 const segmentRepository = new DexieSegmentRepository(db)
@@ -187,11 +192,11 @@ function ActivityDetailPage() {
 
   const [activity, setActivity] = useState<ActivitySummary>()
   const [records, setRecords] = useState<ActivityRecord[]>([])
-  // 已完成加载的活动 ID：与当前路由 ID 比对派生 loading/ready 状态，
-  // 避免在 effect 内同步 setState 触发级联渲染
-  const [loadedId, setLoadedId] = useState<string>()
-  // 加载出错的活动 ID（切换活动后自动恢复）
-  const [errorId, setErrorId] = useState<string>()
+  // 已完成加载的「数据源:活动ID」键：与当前键比对派生 loading/ready 状态，
+  // 避免在 effect 内同步 setState 触发级联渲染；切源后旧源数据不外漏
+  const [loadedKey, setLoadedKey] = useState<string>()
+  // 加载出错的键（切换活动或数据源后自动恢复）
+  const [errorKey, setErrorKey] = useState<string>()
   const [deleting, setDeleting] = useState(false)
   // 重命名编辑态（规格 §31）：editing=编辑中，nameInput=输入值，saving=保存中
   const [editing, setEditing] = useState(false)
@@ -203,12 +208,17 @@ function ActivityDetailPage() {
   const [history, setHistory] = useState<ActivitySummary[]>()
   // 轨迹着色模式（规格 §16，默认单色）
   const [coloring, setColoring] = useState<'none' | ColoringMode>('none')
+  // 当前数据源（切换后重新加载；只读模式控制见渲染分支）
+  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前加载键：数据源 + 活动 ID（切源视作换了活动）
+  const loadKey = `${source}:${id}`
 
-  // 加载摘要与逐点数据（切换活动 ID 时重新加载，旧请求通过 cancelled 丢弃）
+  // 加载摘要与逐点数据（切换活动 ID 或数据源时重新加载，旧请求通过 cancelled 丢弃）
   useEffect(() => {
     if (id === undefined) {
       return
     }
+    const key = `${source}:${id}`
     let cancelled = false
     repository
       .getById(id)
@@ -217,26 +227,29 @@ function ActivityDetailPage() {
           return
         }
         if (summary === undefined) {
-          setLoadedId(id)
+          // 当前源不存在该活动：清空旧状态，避免渲染上一个源/活动的数据
+          setActivity(undefined)
+          setRecords([])
+          setLoadedKey(key)
           return
         }
         setActivity(summary)
         return repository.getRecords(id).then((list) => {
           if (!cancelled) {
             setRecords(list)
-            setLoadedId(id)
+            setLoadedKey(key)
           }
         })
       })
       .catch(() => {
         if (!cancelled) {
-          setErrorId(id)
+          setErrorKey(key)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, source])
 
   // 加载用户设置（FTP/最大心率等，训练分析依赖；组件挂载时读取一次）
   useEffect(() => {
@@ -349,7 +362,7 @@ function ActivityDetailPage() {
     }
     setDeleting(true)
     try {
-      await repository.deleteActivity(activity.id)
+      await localRepository.deleteActivity(activity.id)
       navigate('/activities')
     } catch {
       setDeleting(false)
@@ -425,7 +438,7 @@ function ActivityDetailPage() {
     const trimmed = nameInput.trim()
     setSaving(true)
     try {
-      await repository.updateName(activity.id, trimmed)
+      await localRepository.updateName(activity.id, trimmed)
       setActivity({ ...activity, name: trimmed === '' ? undefined : trimmed })
       setEditing(false)
     } catch (err: unknown) {
@@ -436,10 +449,10 @@ function ActivityDetailPage() {
   }
 
   // 提示态：缺 ID / 出错 / 加载中 / 不存在
-  if (id === undefined || errorId === id) {
+  if (id === undefined || errorKey === loadKey) {
     return <DetailNotice state="error" />
   }
-  if (loadedId !== id) {
+  if (loadedKey !== loadKey) {
     return <DetailNotice state="loading" />
   }
   if (activity === undefined) {

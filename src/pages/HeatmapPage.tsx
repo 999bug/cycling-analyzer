@@ -10,8 +10,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { db } from '@/storage/db'
-import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { simplifyRoute } from '@/map/simplify'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { summariesScanKey } from '@/storage/scanCache'
@@ -37,8 +37,8 @@ const TRACK_WEIGHT = 3
 /** 热力线透明度（低透明度叠加，重合越多越深；单条轨迹也要清晰可见） */
 const TRACK_OPACITY = 0.45
 
-/** 活动仓库单例（页面模块只加载一次） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发） */
+const repository = sourceActivityRepository
 
 /**
  * 轨迹扫描模块级缓存（性能优化）：key = summariesScanKey。
@@ -76,6 +76,8 @@ function HeatmapPage() {
   const [tracks, setTracks] = useState<LatLng[][]>([])
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
+  // 数据源切换后重新加载
+  const source = useDataSourceStore(selectEffectiveSource)
 
   // 加载全部活动轨迹：摘要列表 → 逐活动加载逐点 → 抽稀取坐标
   useEffect(() => {
@@ -123,7 +125,7 @@ function HeatmapPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [source])
 
   // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
   const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])

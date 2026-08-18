@@ -16,6 +16,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { getSettings } from '@/features/settings/settings'
@@ -28,8 +30,11 @@ import {
 import { useImportStore } from '@/stores/importStore'
 import '@/features/dashboard/TrainingStatusSection.css'
 
-/** 活动仓库单例（测试可 mock @/storage/db 注入独立数据库） */
-const repository = new DexieActivityRepository(db)
+/** 当前数据源的活动仓库（门面按有效源分发） */
+const repository = sourceActivityRepository
+
+/** 本地库仓库（NP 回填是写操作，仅本地源执行） */
+const localRepository = new DexieActivityRepository(db)
 
 /** 趋势图高度（px） */
 const CHART_HEIGHT = 240
@@ -70,6 +75,8 @@ function TrainingStatusSection() {
   const [points, setPoints] = useState<readonly TrainingStatusPoint[]>([])
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
+  // 数据源切换后重新加载
+  const source = useDataSourceStore(selectEffectiveSource)
 
   useEffect(() => {
     let cancelled = false
@@ -84,8 +91,11 @@ function TrainingStatusSection() {
           setState('noFtp')
           return
         }
-        // 历史活动 NP 回填（幂等，无待回填时秒过），随后基于摘要直接聚合
-        await backfillNormalizedPower(repository)
+        // 历史活动 NP 回填（幂等，无待回填时秒过），随后基于摘要直接聚合；
+        // 回填是写操作，仅本地源执行（快照摘要构建时已含 NP）
+        if (source === 'local') {
+          await backfillNormalizedPower(localRepository)
+        }
         const summaries = await repository.listAllSummaries()
         if (cancelled) {
           return
@@ -107,7 +117,7 @@ function TrainingStatusSection() {
     return () => {
       cancelled = true
     }
-  }, [importSummary])
+  }, [importSummary, source])
 
   return (
     <section className="training-status" aria-label="训练状态">
