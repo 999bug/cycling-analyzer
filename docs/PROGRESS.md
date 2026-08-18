@@ -96,7 +96,7 @@
 | Calendar 日历页（§29） | ✅ Agent H，24/24 测试 | `src/features/calendar/`（calendarData 聚合 + CalendarHeatmap）；**GitHub 贡献图横排布局（每周一列/每天一行）+ 月份标签（buildMonthLabels 定位每月 1 日所在列）+ 隔行星期标签 + 今天高亮 + 「回到今年」**；5 档距离色阶（20/50/100km 阈值）、tooltip（次数/距离/时长/爬升）、年份切换、订阅 importStore 自动刷新；**点击有骑行格子展开当日活动面板（活动列表跳详情）** |
 | Settings 设置页 + 导出/导入/清空（§27/§32/§33） | ✅ Agent I，34/34 测试 | `src/features/settings/`（settings.ts/exportImport.ts/dataClear.ts）；**key 规范：`'profile'`（UserProfile 对象）+ `'units'`（UnitPreferences），按域合并保存，数据恒存公制**；导出 JSON v1（app/version/activities/records/files/settings），导入按 fingerprint 去重 |
 | 高级数值筛选（§30） | ✅ Agent M，64/64 测试（含 6 新增） | `listActivities` options 新增 min/maxDistance（米）、min/maxElevationGain（米）、min/maxAvgPower（W），AND 组合含边界；**缺失 avgPower 的活动不满足功率条件**；UI 输入 km 自动转米 |
-| 训练分析 + 详情页集成（§26） | ✅ Agent L，41/41 测试 | `src/features/analysis/`（normalizedPower.ts NP 30s 滑动平均 4 次方、intensity.ts IF/TSS、zones.ts 心率 60/70/80/90% + 功率 55/75/90/105% 5 区间，按记录时间间隔累计）；ActivityDetailPage：标准化功率卡 + 踏频图/速度+心率组合图挂载 + 轨迹着色切换（默认/速度/心率/功率/海拔）+ 训练区间区块（区间分布条 + IF/TSS）；**无 FTP/最大心率配置不伪造计算，显示引导文案** |
+| 训练分析 + 详情页集成（§26） | ✅ Agent L，41/41 测试 | `src/features/analysis/`（normalizedPower.ts NP 30s 滑动平均 4 次方、intensity.ts IF/TSS、zones.ts 心率 60/70/80/90% + 功率 55/75/90/105% 5 区间，按记录时间间隔累计）；ActivityDetailPage：标准化功率卡 + 踏频图/速度+心率组合图挂载 + 轨迹着色切换（默认/速度/心率/功率/海拔）+ 训练区间区块（区间分布条 + IF/TSS）；**无 FTP/最大心率配置不伪造计算，显示引导文案**；**区间区块附「计算方式说明」折叠块**（原生 details：心率按最大心率 60/70/80/90%、功率按 FTP 55/75/90/105%、NP=30s 滑动平均四次方均值开四次方、IF=NP÷FTP、TSS=时长×IF²×100÷3600） |
 
 ### 进行中
 

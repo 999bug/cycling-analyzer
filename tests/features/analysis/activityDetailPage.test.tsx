@@ -189,6 +189,18 @@ describe('活动详情页训练分析集成', () => {
     expect(screen.queryByText('功率区间')).not.toBeInTheDocument()
   })
 
+  it('训练区间区块展示「计算方式说明」折叠块（含区间边界与 IF/TSS 公式）', async () => {
+    await repo.addActivity(makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130]))
+    renderPage()
+
+    const zonesSection = await screen.findByRole('region', { name: '训练区间' })
+    expect(within(zonesSection).getByText('计算方式说明')).toBeInTheDocument()
+    expect(within(zonesSection).getByText(/心率区间：按最大心率百分比划分/)).toBeInTheDocument()
+    expect(within(zonesSection).getByText(/功率区间：按 FTP 百分比划分/)).toBeInTheDocument()
+    expect(within(zonesSection).getByText(/强度因子（IF）= NP ÷ FTP/)).toBeInTheDocument()
+    expect(within(zonesSection).getByText(/训练压力分数（TSS）=/)).toBeInTheDocument()
+  })
+
   it('配置 FTP/最大心率后显示心率与功率区间分布（区间归属正确）', async () => {
     // maxHR=180、ftp=200。记录：hr=[120,150,180,120,150]、power=[100,110,150,210,100]
     // 段归属（归当前记录值）：

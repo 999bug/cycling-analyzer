@@ -621,6 +621,16 @@ function TrainingZonesSection({
       ) : (
         <p className="activity-detail__zones-guide">{ZONES_GUIDE_TEXT}</p>
       )}
+      <details className="activity-detail__zones-help">
+        <summary>计算方式说明</summary>
+        <ul>
+          <li>心率区间：按最大心率百分比划分（&lt;60% / 60-70% / 70-80% / 80-90% / ≥90%），按逐点时间间隔累计各区时长</li>
+          <li>功率区间：按 FTP 百分比划分（&lt;55% / 55-75% / 75-90% / 90-105% / ≥105%）</li>
+          <li>标准化功率（NP）：30 秒滑动平均的四次方均值再开四次方，反映体感强度而非简单平均</li>
+          <li>强度因子（IF）= NP ÷ FTP</li>
+          <li>训练压力分数（TSS）= 时长（秒）× IF² × 100 ÷ 3600，以 IF=1 骑行 1 小时为 100 分</li>
+        </ul>
+      </details>
     </section>
   )
 }
