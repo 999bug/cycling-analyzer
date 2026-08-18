@@ -5,11 +5,23 @@
 ![GitHub Actions](https://github.com/999bug/cycling-analyzer/actions/workflows/deploy.yml/badge.svg)
 ![Release](https://img.shields.io/github/v/release/999bug/cycling-analyzer)
 
-一个纯前端、个人使用、数据完全本地化的骑行数据分析网站（**Strava Lite**）。
+一个纯前端骑行数据分析网站（**Strava Lite**）：默认展示作者 Saul 公开发布的骑行数据（只读），你也可以导入自己的 `.fit` 文件——你的数据只保存在浏览器本地（IndexedDB），不上传任何服务器。
 
-将 Garmin / Wahoo / COROS 等设备产生的 `.fit` 骑行文件导入浏览器，在本地完成 FIT 解析、数据统计、轨迹展示、骑行记录管理和历史趋势分析。所有数据只保存在浏览器本地（IndexedDB），不上传任何服务器。
+将 Garmin / Wahoo / COROS 等设备产生的 `.fit` 骑行文件导入浏览器，在本地完成 FIT 解析、数据统计、轨迹展示、骑行记录管理和历史趋势分析。
 
 **在线地址**：https://999bug.github.io/cycling-analyzer/
+
+## 作者数据（Saul 的骑行）
+
+- 站点默认展示作者 **Saul** 的骑行数据（侧栏「Saul 的数据 / 我的数据」切换器）
+- 作者数据由 CI 把仓库内 `author-data/fit/` 的 FIT 文件解析为静态快照（`public/author-data/`），随站点发布，**只读**
+- 跨活动全量扫描类功能（热力图轨迹、赛段成绩榜、功率纪录、路线分组）为构建时预计算产物，访客端无需下载全部逐点数据
+- 作者更新数据：向 `author-data/fit/` 提交 `.fit`/`.fit.gz` 文件（可选同步更新 `activities.csv` 以还原 Strava 标题），push 后 CI 自动重建快照
+
+### 隐私说明
+
+- **作者**：`author-data/` 下的 FIT 原始文件与生成的快照（含 GPS 轨迹）随站点**公开可下载**——这是有意为之的公开分享
+- **访客**：你导入的数据只存于当前浏览器的 IndexedDB，与作者数据完全隔离，永不离开你的设备
 
 ## 主要功能
 
@@ -64,7 +76,7 @@ npm run build
 ## 测试
 
 ```bash
-npm run test          # 单元/集成测试（Vitest，490+ 用例）
+npm run test          # 单元/集成测试（Vitest，610+ 用例）
 npm run test:e2e      # E2E 测试（Playwright，首次需 npx playwright install chromium）
 # 单文件测试
 npx vitest run tests/fit/decoder.test.ts
@@ -72,7 +84,7 @@ npx vitest run tests/fit/decoder.test.ts
 
 ## 部署
 
-推送 main 分支自动触发 GitHub Actions：lint → test → build → 部署到 GitHub Pages。
+推送 main 分支自动触发 GitHub Actions：lint → test → 构建作者数据快照（`npm run build:author-data`）→ build → 部署到 GitHub Pages。
 
 ## FIT 解析说明
 
@@ -80,7 +92,8 @@ npx vitest run tests/fit/decoder.test.ts
 
 ## 数据隐私说明
 
-- 所有骑行数据只保存在用户自己的浏览器本地（IndexedDB），**不上传任何服务器**
+- **作者数据公开**：`author-data/` 内 FIT 原始文件与生成快照（含 GPS 轨迹）公开可下载
+- **访客数据本地**：访客导入的骑行数据只保存在自己的浏览器本地（IndexedDB），**不上传任何服务器**
 - 原始 FIT 文件不上传，可随时导出备份
 - 地图服务使用 OpenStreetMap 公开瓦片，仅加载地图数据，不发送用户骑行数据
 - 无账号、无登录、无后端

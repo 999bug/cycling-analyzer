@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev        # 本地开发（默认 5173 端口）
-npm run test       # 全量测试（vitest run，174+ 用例）
+npm run test       # 全量测试（vitest run，610+ 用例）
 npx vitest run tests/fit/decoder.test.ts   # 单文件测试
 npm run lint       # ESLint（flat config）
 npm run build      # tsc -b + vite build（产出 dist/）
@@ -42,6 +42,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - **Strava 标题还原**：CSV 文件名匹配（`src/features/import/stravaExport.ts`），跨行引号感知
 - **SPA 路由**：`main.tsx` basename 生产 `/cycling-analyzer`、dev `/`；`public/404.html` 处理深链接
 - **导入在 Web Worker 解析**（jsdom 自动降级主线程），失败进台账可重试
+- **双数据源**：`dataSourceStore` 管理「作者的数据（CI 构建的静态快照，只读）/ 我的数据（本地 IndexedDB）」；组件统一经 `useActivityRepository()` 获取当前源的仓库，训练配置经 `getEffectiveProfile(source)` 随源切换；作者源下写操作 UI 一律隐藏
 
 ### 测试约定
 

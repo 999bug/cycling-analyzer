@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-17（性能优化完成）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（作者数据快照）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -24,8 +24,9 @@
 | Phase 8 | GitHub Pages 部署（Actions + SPA 路由） | ✅ 完成 |
 | P1 阶段 | 规格 §38 高级功能 | ✅ 完成（见 §3） |
 | P2 阶段 | 规格 §39 高级功能 | ✅ 完成（见 §3.1） |
+| 作者数据快照 | 数据源抽象 + CI 构建时快照 + 数据源切换 + 作者数据只读 | ✅ 完成（见 §3.2） |
 
-- 验证：**445/445 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**610/610 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -63,6 +64,7 @@
 | 文件台账 | `fileRepository.ts` | recordImported/recordFailed/listAll/get/deleteAll |
 | 设置 | `settingsRepository.ts` | get/set/delete（key/value unknown） |
 | 赛段 | `segmentRepository.ts` | addSegment/listSegments/deleteSegment（v2 表） |
+| 数据源分发 | `src/storage/sourceActivityRepository.ts` + `src/hooks/useActivityRepository.ts` | `getActivityRepository(source)` 按源返回本地 Dexie 仓库或作者快照仓库（模块级单例，源切换引用变化驱动各页面 effect 重载）；组件统一经 `useActivityRepository()` 获取 |
 
 ### 页面（规格 §13/§14/§15/§16/§17）
 
@@ -78,7 +80,7 @@
 
 ### 部署（规格 §34/§35）
 
-- `.github/workflows/deploy.yml`：push main → lint → test → build → deploy-pages（Node 22）
+- `.github/workflows/deploy.yml`：push main → lint → test → **build:author-data（作者数据快照）** → build → deploy-pages（Node 22）
 - SPA 路由：`public/404.html`（rafgraph 方案）+ main.tsx `basename={import.meta.env.PROD ? '/cycling-analyzer' : '/'}`
 - vite.config：`base` 按环境区分——build 时绝对路径 `/cycling-analyzer/`、dev 时 `/`（**必须绝对路径**：404.html 的 replaceState 会先把 URL 还原成深链，相对 base `./` 会让 `./assets` 在二级以上路由解析到错误目录导致白屏，v1.4.1 修复）；`@/` → src/ 别名，vitest jsdom + setupFiles
 
@@ -118,6 +120,28 @@ P1 阶段任务已全部完成，无进行中项。
 | 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后 **紫色 `#9333ea`、宽 3px、透明度 0.45** Polyline 叠加（OSM 浅色瓦片高对比，与详情页轨迹主蓝 `#4f8cff` 明显区分），重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
 | 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
 | 路线分析（§39） | ✅ 13/13 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；端点提取 `extractEndpoints`（统计页合并扫描复用已加载 records）；`RouteGroupCards.tsx` 统计页底部区块（路线卡片以**最近骑行标题**命名——无标题回退「路线 N」，长标题 CSS 缩略 + title 悬浮看全名；次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment 已完成（见 §4 后续工作项） |
+
+---
+
+## 3.2 作者数据快照（规格外：作者数据公开发布）已完成
+
+> 设计文档：`docs/superpowers/specs/2026-08-18-author-data-snapshot-design.md`；计划：`docs/superpowers/plans/2026-08-18-author-data-snapshot.md`
+
+站点默认展示作者 Saul 公开发布的骑行数据（只读），访客可切回「我的数据」导入自己的 FIT（数据仍仅存其浏览器 IndexedDB，两源完全隔离）。
+
+| 能力 | 位置 | 说明 |
+|---|---|---|
+| 快照构建脚本 | `scripts/buildAuthorData.ts`（`npm run build:author-data`，tsx） | 解析 `author-data/fit/` 下 `.fit`/`.fit.gz` → 输出 `public/author-data/`：manifest.json / activities.json / records/\<id\>.json / profile.json / segments.json + **预计算** precomputed/{tracks,segment-results,route-groups,power-records}.json（跨活动全量扫描类功能免访客端逐点下载）；产物 gitignored，CI 重建 |
+| 快照客户端 | `src/storage/snapshot/snapshotClient.ts` | `SnapshotClient` 接口 9 方法 + `createSnapshotClient`（Map 缓存 + fetch `${BASE_URL}author-data/...`）+ `defaultSnapshotClient` 单例；404/失败优雅回退 |
+| 作者仓库 | `src/storage/repositories/authorActivityRepository.ts` | `AuthorActivityRepository` 实现只读接口，数据来自快照客户端 |
+| 数据源状态 | `src/stores/dataSourceStore.ts` | `source`（persist key `cycling-data-source`，partialize 仅 source）/ `authorAvailable`（initDataSource 探测 manifest 翻牌）/ `authorName`；`selectEffectiveSource` 作者不可用时回退 local |
+| 切换器 + 提示条 | `src/components/DataSourceSwitcher.tsx` / `AuthorBanner.tsx` | 侧栏分段控件（作者档带「作者」徽章，未发布时禁用）；作者模式下页面顶部只读提示条（可关闭，localStorage 记忆） |
+| 训练配置随源 | `src/features/settings/effectiveProfile.ts` | `getEffectiveProfile(source)`：作者源读快照 profile.json（失败回退 {}），本地源读 settings.profile；详情页/训练状态接入 |
+| 只读约束 | 详情页/赛段页/设置页 | 作者模式隐藏重命名、删除、设为赛段、赛段删除等写操作（GPX 导出保留）；设置页导出/清空仅作用于「我的数据」并有文案说明 |
+| 导入联动 | `src/stores/importStore.ts` | 导入完成有新活动（`newImported > 0`）时自动切回「我的数据」 |
+| CI 接入 | `.github/workflows/deploy.yml` | Test 与 Build 之间插入 `Build author data` 步骤，快照随 dist 发布 |
+
+**作者更新数据流程**：向 `author-data/fit/` 提交 `.fit`/`.fit.gz`（可选同步 `activities.csv` 还原 Strava 标题、填写 `author-data/profile.json` 的 FTP/最大心率/体重以启用作者模式训练状态与区间分析），push 后 CI 自动重建快照。
 
 ---
 
@@ -182,6 +206,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - React 组件**禁止**直接调用 `@garmin/fitsdk`
 - UI 只依赖 `src/types/activity.ts` 领域模型与 storage repository 接口
 - 新增功能先定位到对应层，跨层直接调用视为违规
+- **双数据源**：组件不直接 new 仓库，统一经 `useActivityRepository()` 按当前数据源（`dataSourceStore`）取本地 Dexie 仓库或作者快照仓库；作者源只读，写操作 UI 必须按源隐藏（规格外设计文档 §6.3）
 
 ### 测试约定
 
