@@ -166,6 +166,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **地图全屏查看 + 缩放控件右下角 + 起终点标识区分**（✅ 8/8 测试）：`src/map/mapFullscreen.tsx`——FullscreenSync（fullscreenchange → `map.invalidateSize()` 防瓦片错位）、ZoomControlBottomRight（+/− 统一右下角，`map.zoomControl.setPosition`）、MapFullscreenButton（右上角悬浮按钮，Fullscreen API 作用于相对定位包裹层，Esc 退出按钮图标同步还原）；详情页轨迹图与热力图共用接入；终点标记改**黑白格完赛旗**（divIcon + CSS `repeating-conic-gradient` 棋盘格），起点保留绿色圆点
 - [x] **品牌焕新：骑记 Ride Insight**（✅ 品牌区单测 + e2e 同步）：侧边栏品牌区更名「骑记 / Ride Insight」+ 副标题「看懂你的每一次骑行」；主题色对齐 logo——深色主题 `--primary` 荧光绿 `#b8e62e`、浅色主题深蓝 `#0d3b4c`（荧光绿白底对比度不足），新增 `--on-primary`（主色按钮文字色）；原 `#4f8cff` rgba 硬编码统一改 `color-mix(in srgb, var(--primary) …)` 随主题自适应；index.html/404.html 标题、分享图品牌行/落款/文件名/主色同步；logo 图标 `public/ride.png`（用户提供）接入侧边栏品牌区 + favicon（`import.meta.env.BASE_URL` 拼接适配子路径部署）
 - [x] **详情页分段详情 splits**（✅ 10/10 测试）：`splits.ts` 按累计里程等长切片（段末取首个达段长记录，段距离按实际值；末段不足一段按实际距离收尾；用时/平均速度/平均心率逐段输出，心率缺失不伪造）；`SplitsSection.tsx` 默认 5 公里、可选 1/10/100/200 公里，表格列 段/距离/用时/时速/平均心率，随单位偏好换算，长表格滚动 + 表头 sticky；详情页挂载于图表区与训练区间之间（完整逐点数据）
+- [x] **详情页训练效果栏**（✅ 4/4 组件测试 + 解码链路 18/18）：FIT 协议核实（官方 SDK 21.171 cpp 头文件为准）——单次有氧 TE = session `totalTrainingEffect`（字段 24）、无氧 TE = session `totalAnaerobicTrainingEffect`（字段 137），协议中不存在独立的 aerobic/anaerobic 字段号；decoder 按官方字段提取（SDK 21.213 原生支持，无需补丁）→ normalizer → Activity/ActivityEntity → repository 全链路落库；`trainingEffect.ts` 分档文案（Garmin 口径：<1 无效果/<2 恢复/<3 维持/<4 改善/<5 大幅提高/否则极限）；`TrainingEffectSection` 两行进度条渲染（有氧绿 `#22c55e`、无氧橙 `#f97316`，比例=值/5，progressbar 语义完整），单项缺失显示 —、两项均缺失区块不渲染（不伪造；用户现有 dabuziduo 设备数据不含 TE 字段，故历史活动不显示该栏）
 
 ---
 

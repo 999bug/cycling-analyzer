@@ -129,6 +129,14 @@ describe('fitDecoder 解码', () => {
     expect(session.totalElapsedTime).toBe(600)
     expect(session.startTime).toBe(1735689600)
   })
+
+  it('会话提取训练效果字段（合成样例：有氧 3.2 / 无氧 1.1）', () => {
+    const fit = decodeFit(readFixtureBytes('cycling-gps.fit'))
+    const session = fit.sessions[0]
+
+    expect(session.aerobicTrainingEffect).toBeCloseTo(3.2, 5)
+    expect(session.anaerobicTrainingEffect).toBeCloseTo(1.1, 5)
+  })
 })
 
 describe('fitDecoder 错误处理', () => {

@@ -58,6 +58,8 @@ export function normalizeActivity(fit: DecodedFitFile, meta: NormalizeMeta): Act
     maxCadence: summary.maxCadence,
     avgPower: summary.avgPower,
     maxPower: summary.maxPower,
+    aerobicTrainingEffect: session?.aerobicTrainingEffect,
+    anaerobicTrainingEffect: session?.anaerobicTrainingEffect,
     device: toDeviceInfo(fit.device),
     records,
   }

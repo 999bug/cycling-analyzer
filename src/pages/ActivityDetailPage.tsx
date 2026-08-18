@@ -32,6 +32,7 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import SplitsSection from '@/features/activity/SplitsSection'
+import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import { downsampleRecords } from '@/charts/downsample'
 import {
@@ -554,6 +555,11 @@ function ActivityDetailPage() {
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />
+
+      <TrainingEffectSection
+        aerobic={activity.aerobicTrainingEffect}
+        anaerobic={activity.anaerobicTrainingEffect}
+      />
 
       <TrainingZonesSection
         heartRateZones={heartRateZones}

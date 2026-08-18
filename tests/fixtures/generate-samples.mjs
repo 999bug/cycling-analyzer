@@ -100,6 +100,9 @@ function writeMetaMessages(encoder, { sport, withHeartRate, withPower }) {
     avgPower: withPower ? 208 : undefined,
     maxPower: withPower ? 254 : undefined,
     totalCalories: withHeartRate ? 456 : undefined,
+    // 官方 FIT 协议：单次有氧 TE = totalTrainingEffect（字段 24），无氧 TE = totalAnaerobicTrainingEffect（字段 137）
+    totalTrainingEffect: withHeartRate ? 3.2 : undefined,
+    totalAnaerobicTrainingEffect: withHeartRate ? 1.1 : undefined,
     sport,
     subSport: 'generic',
     numLaps: 1,

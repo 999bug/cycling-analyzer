@@ -94,6 +94,12 @@ export interface Activity {
   /** 功能阈值功率（W，后续版本计算） */
   ftp?: number
 
+  /** 有氧训练效果（0-5，设备 session 提供，缺失为 undefined） */
+  aerobicTrainingEffect?: number
+
+  /** 无氧训练效果（0-5，设备 session 提供，缺失为 undefined） */
+  anaerobicTrainingEffect?: number
+
   /** 设备信息 */
   device?: DeviceInfo
 

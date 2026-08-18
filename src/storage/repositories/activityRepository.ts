@@ -426,6 +426,8 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     normalizedPower: activity.normalizedPower,
     trainingLoad: activity.trainingLoad,
     ftp: activity.ftp,
+    aerobicTrainingEffect: activity.aerobicTrainingEffect,
+    anaerobicTrainingEffect: activity.anaerobicTrainingEffect,
     device: activity.device,
   };
 }

@@ -1,0 +1,49 @@
+/**
+ * 训练效果区块样式。
+ * 卡片式容器 + 两行「标签 + 数值文案 + 进度条」。
+ */
+.training-effect {
+  padding: 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.training-effect__title {
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.training-effect__row {
+  display: grid;
+  grid-template-columns: 48px 140px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.training-effect__row + .training-effect__row {
+  border-top: 1px solid var(--border);
+}
+
+.training-effect__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.training-effect__value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.training-effect__bar {
+  height: 8px;
+  border-radius: 4px;
+  background-color: var(--bg);
+  overflow: hidden;
+}
+
+.training-effect__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}

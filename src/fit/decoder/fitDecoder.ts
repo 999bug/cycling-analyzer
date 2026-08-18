@@ -84,6 +84,10 @@ export interface RawFitSession {
   subSport?: string
   /** 圈数 */
   numLaps?: number
+  /** 有氧训练效果（0-5，来自 session 的 totalTrainingEffect 字段，Garmin TE 指标） */
+  aerobicTrainingEffect?: number
+  /** 无氧训练效果（0-5，来自 session 的 totalAnaerobicTrainingEffect 字段，Garmin TE 指标） */
+  anaerobicTrainingEffect?: number
 }
 
 /**
@@ -288,6 +292,10 @@ function toSessions(mesgs: Record<string, unknown>[]): RawFitSession[] {
     sport: typeof mesg.sport === 'string' ? mesg.sport : undefined,
     subSport: typeof mesg.subSport === 'string' ? mesg.subSport : undefined,
     numLaps: asNumber(mesg.numLaps),
+    // 官方 FIT 协议：session 24 = total_training_effect（即单次有氧 TE），
+    // 137 = total_anaerobic_training_effect（即单次无氧 TE），均为 uint8 scale 10
+    aerobicTrainingEffect: asNumber(mesg.totalTrainingEffect),
+    anaerobicTrainingEffect: asNumber(mesg.totalAnaerobicTrainingEffect),
   }))
 }
 
