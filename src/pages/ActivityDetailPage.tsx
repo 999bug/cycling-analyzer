@@ -29,7 +29,9 @@ import {
   type DistanceUnit,
   type SettingsData,
   type TimeFormat,
+  type UserProfile,
 } from '@/features/settings/settings'
+import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
@@ -199,8 +201,10 @@ function ActivityDetailPage() {
   const [editing, setEditing] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [saving, setSaving] = useState(false)
-  // 用户设置（FTP/最大心率等，训练分析依赖；undefined = 尚未加载完成）
+  // 用户设置（单位/时间格式等本地显示偏好；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
+  // 训练配置（随数据源：作者模式用快照 profile，本地模式用访客设置）
+  const [profile, setProfile] = useState<UserProfile>()
   // 历史活动摘要（成就检测输入；undefined = 尚未加载完成）
   const [history, setHistory] = useState<ActivitySummary[]>()
   // 轨迹着色模式（规格 §16，默认单色）
@@ -250,7 +254,7 @@ function ActivityDetailPage() {
     }
   }, [id, source, repository])
 
-  // 加载用户设置（FTP/最大心率等，训练分析依赖；组件挂载时读取一次）
+  // 加载用户设置（单位/时间格式等本地显示偏好；组件挂载时读取一次）
   useEffect(() => {
     let cancelled = false
     getSettings().then((data) => {
@@ -262,6 +266,19 @@ function ActivityDetailPage() {
       cancelled = true
     }
   }, [])
+
+  // 加载训练配置（随数据源切换重新加载；失败回退空配置，训练区块显示引导）
+  useEffect(() => {
+    let cancelled = false
+    getEffectiveProfile(source).then((data) => {
+      if (!cancelled) {
+        setProfile(data)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [source])
 
   // 加载历史活动摘要（成就检测输入；失败不阻断详情页，成就栏仅静默缺席）
   useEffect(() => {
@@ -316,8 +333,8 @@ function ActivityDetailPage() {
   }, [records])
 
   // 用户配置（设置未加载完成时为 undefined）：IF/TSS/区间分布均依赖它们
-  const ftp = settings?.profile.ftp
-  const maxHeartRate = settings?.profile.maxHeartRate
+  const ftp = profile?.ftp
+  const maxHeartRate = profile?.maxHeartRate
 
   // 强度因子（IF）：FTP 存在且可算出 NP 时才有意义
   const intensityFactor = useMemo(() => {

@@ -7,10 +7,11 @@
  */
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { saveSettings } from '@/features/settings/settings'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { Activity } from '@/types/activity'
 import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
 
@@ -28,6 +29,13 @@ beforeEach(async () => {
   await testDb.activities.clear()
   await testDb.activity_records.clear()
   await testDb.settings.clear()
+  // 数据源复位：默认有效源为本地
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 /**
@@ -110,5 +118,38 @@ describe('TrainingStatusSection', () => {
     expect(await screen.findByText('体能（CTL）')).toBeInTheDocument()
     // NP 已回填落库
     expect((await repo.getById('legacy'))?.normalizedPower).toBeCloseTo(150, 6)
+  })
+
+  it('作者模式用快照 profile 的 FTP（访客无需配置），且不回填本地库', async () => {
+    // 本地库遗留一条无 NP 活动：author 模式不回填（写操作仅本地源）
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivity(makeActivity('legacy', { avgPower: 145 }))
+
+    // 快照：一条含 NP 的活动 + 作者 FTP 200
+    const authorSummary: Record<string, unknown> = {
+      ...makeActivity('author-1', { normalizedPower: 200 }),
+    }
+    delete authorSummary.records
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('author-data/activities.json')) {
+          return new Response(JSON.stringify([authorSummary]), { status: 200 })
+        }
+        if (url.includes('author-data/profile.json')) {
+          return new Response(JSON.stringify({ ftp: 200 }), { status: 200 })
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+
+    render(<TrainingStatusSection />)
+
+    // IF = 200/200 = 1 → 显示卡片（FTP 来自快照而非本地设置）
+    expect(await screen.findByText('体能（CTL）')).toBeInTheDocument()
+    // 本地库活动未被回填
+    expect((await repo.getById('legacy'))?.normalizedPower).toBeUndefined()
   })
 })

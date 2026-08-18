@@ -19,7 +19,7 @@ import {
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
-import { getSettings } from '@/features/settings/settings'
+import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
 import { backfillNormalizedPower } from '@/features/analysis/backfillNormalizedPower'
 import {
   buildDailyTss,
@@ -81,8 +81,9 @@ function TrainingStatusSection() {
     let cancelled = false
     void (async () => {
       try {
-        const settings = await getSettings()
-        const ftp = settings.profile.ftp
+        // 训练配置随源：作者模式用快照 profile（访客无配置也能看训练状态）
+        const profile = await getEffectiveProfile(source)
+        const ftp = profile.ftp
         if (cancelled) {
           return
         }
