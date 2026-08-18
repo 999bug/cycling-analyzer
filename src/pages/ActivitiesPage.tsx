@@ -1,17 +1,16 @@
 /**
  * 骑行记录列表页（Phase 5，规格 §14）。
  * 数据来自活动仓库的分页查询，支持排序、搜索、月份/类型/数值（距离/爬升/功率）筛选与分页浏览；
- * 行点击跳转详情页。repository 支持测试注入（缺省使用全局数据库实例）。
+ * 行点击跳转详情页。repository 支持测试注入（缺省使用当前数据源仓库）。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ActivityFilters from '@/features/activity/ActivityFilters'
 import ActivityListTable, { type SortField, type SortOrder } from '@/features/activity/ActivityListTable'
 import ActivityPagination from '@/features/activity/ActivityPagination'
 import '@/features/activity/activity-page.css'
 import { useUnits } from '@/hooks/useUnits'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import {
   type ActivityReadRepository,
   type ActivitySummary,
@@ -78,9 +77,9 @@ interface ActivitiesPageProps {
  */
 function ActivitiesPage({ repository }: ActivitiesPageProps) {
   const navigate = useNavigate()
-  const repo = useMemo(() => repository ?? sourceActivityRepository, [repository])
-  // 数据源切换后重新加载（使用默认门面时生效；测试注入仓库时无实际影响）
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 缺省使用当前数据源的仓库（源切换 → 实例变化 → 重新加载）；测试可注入
+  const sourceRepository = useActivityRepository()
+  const repo = repository ?? sourceRepository
 
   const [query, setQuery] = useState<QueryState>(DEFAULT_QUERY)
   const [result, setResult] = useState<{ items: ActivitySummary[]; total: number }>({
@@ -119,7 +118,7 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
     return () => {
       cancelled = true
     }
-  }, [repo, source])
+  }, [repo])
 
   // 查询参数变化时重新加载列表（排序/筛选/翻页均通过 setQuery 触发）
   useEffect(() => {
@@ -145,7 +144,7 @@ function ActivitiesPage({ repository }: ActivitiesPageProps) {
     return () => {
       cancelled = true
     }
-  }, [query, repo, reloadKey, source])
+  }, [query, repo, reloadKey])
 
   // 查询进行中：最近一次完成的结果对应的查询参数不是当前查询
   const loading = error === null && settledQuery !== query

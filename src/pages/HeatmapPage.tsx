@@ -10,8 +10,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { simplifyRoute } from '@/map/simplify'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { summariesScanKey } from '@/storage/scanCache'
@@ -20,6 +18,7 @@ import {
   MapFullscreenButton,
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -37,8 +36,8 @@ const TRACK_WEIGHT = 3
 /** 热力线透明度（低透明度叠加，重合越多越深；单条轨迹也要清晰可见） */
 const TRACK_OPACITY = 0.45
 
-/** 当前数据源的活动仓库（门面按有效源分发） */
-const repository = sourceActivityRepository
+/** 经纬度元组（Leaflet 坐标） */
+type LatLng = [number, number]
 
 /**
  * 轨迹扫描模块级缓存（性能优化）：key = summariesScanKey。
@@ -48,9 +47,6 @@ let trackScanCache: { key: string; tracks: LatLng[][] } | null = null
 
 /** 加载状态：loading / empty（无轨迹）/ ready / error */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'
-
-/** 经纬度元组（Leaflet 坐标） */
-type LatLng = [number, number]
 
 /**
  * 自动适配视野子组件：把所有轨迹点纳入地图视野。
@@ -76,8 +72,8 @@ function HeatmapPage() {
   const [tracks, setTracks] = useState<LatLng[][]>([])
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
-  // 数据源切换后重新加载
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const repository = useActivityRepository()
 
   // 加载全部活动轨迹：摘要列表 → 逐活动加载逐点 → 抽稀取坐标
   useEffect(() => {
@@ -125,7 +121,7 @@ function HeatmapPage() {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [repository])
 
   // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
   const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])

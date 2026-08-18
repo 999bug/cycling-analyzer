@@ -15,8 +15,8 @@ import type { ActivityRecord } from '@/types/activity'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { db } from '@/storage/db'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import {
   formatDate,
   formatDuration,
@@ -56,9 +56,6 @@ import PowerChart from '@/charts/PowerChart'
 import PowerCurveChart from '@/charts/PowerCurveChart'
 import CombinedChart from '@/charts/CombinedChart'
 import '@/pages/ActivityDetailPage.css'
-
-/** 当前数据源的活动仓库（门面按有效源分发，读取走这里） */
-const repository = sourceActivityRepository
 
 /** 本地库仓库（删除/重命名等写操作永远只进本地库） */
 const localRepository = new DexieActivityRepository(db)
@@ -210,6 +207,8 @@ function ActivityDetailPage() {
   const [coloring, setColoring] = useState<'none' | ColoringMode>('none')
   // 当前数据源（切换后重新加载；只读模式控制见渲染分支）
   const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（随源联动的单例实例）
+  const repository = useActivityRepository()
   // 当前加载键：数据源 + 活动 ID（切源视作换了活动）
   const loadKey = `${source}:${id}`
 
@@ -249,7 +248,7 @@ function ActivityDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [id, source])
+  }, [id, source, repository])
 
   // 加载用户设置（FTP/最大心率等，训练分析依赖；组件挂载时读取一次）
   useEffect(() => {
@@ -283,7 +282,7 @@ function ActivityDetailPage() {
     return () => {
       cancelled = true
     }
-  }, [activity])
+  }, [activity, repository])
 
   // 轨迹抽稀：逐点数据变化时重算（详情页仅此一处消费 records 全量）
   const routePoints = useMemo(

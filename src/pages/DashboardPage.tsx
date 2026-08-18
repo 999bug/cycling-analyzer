@@ -7,18 +7,14 @@
  * 由 buildDashboardData 纯函数聚合，空数据时展示导入引导文案。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { buildDashboardData, type DashboardData } from '@/features/dashboard/statistics'
 import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
 import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import '@/pages/DashboardPage.css'
-
-/** 当前数据源的活动仓库（门面按有效源分发：作者快照 / 本地库） */
-const repository = sourceActivityRepository
 
 /**
  * 仪表盘页面。
@@ -28,8 +24,8 @@ function DashboardPage() {
   const [error, setError] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新统计（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
-  // 数据源切换后重新加载（作者快照 / 我的数据）
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const repository = useActivityRepository()
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -51,7 +47,7 @@ function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [repository])
 
   useEffect(() => {
     const cancel = reload()

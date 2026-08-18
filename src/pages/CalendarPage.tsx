@@ -10,8 +10,6 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import CalendarHeatmap from '@/features/calendar/CalendarHeatmap'
 import { buildCalendarData, localDateKey, type CalendarData } from '@/features/calendar/calendarData'
@@ -19,9 +17,7 @@ import { formatDuration } from '@/utils/format'
 import { formatDistanceByUnit } from '@/features/settings/settings'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
-
-/** 当前数据源的活动仓库（门面按有效源分发） */
-const repository = sourceActivityRepository
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 
 /**
  * 骑行日历页面。
@@ -35,8 +31,8 @@ function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   // 订阅导入结果：数据导入完成后自动刷新日历（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
-  // 数据源切换后重新加载
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const repository = useActivityRepository()
   // 距离显示单位（规格 §27，格子 tooltip 与面板）
   const { distance: distanceUnit } = useUnits()
 
@@ -58,7 +54,7 @@ function CalendarPage() {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [repository])
 
   useEffect(() => {
     const cancel = reload()

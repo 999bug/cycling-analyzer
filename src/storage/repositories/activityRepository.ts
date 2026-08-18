@@ -102,7 +102,7 @@ export interface ActivityRangeSummary {
 /**
  * 活动仓库读取接口（规格 §18/§45）。
  * 作者数据快照（只读，fetch 实现）与 Dexie 本地实现共用此接口，
- * UI 经数据源门面按当前源分发，见 src/storage/sourceActivityRepository.ts。
+ * UI 经 useActivityRepository hook 按当前源取实例（src/hooks/useActivityRepository.ts）。
  */
 export interface ActivityReadRepository {
   /**

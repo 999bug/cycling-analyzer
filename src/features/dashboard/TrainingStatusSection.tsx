@@ -16,7 +16,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
@@ -28,10 +27,8 @@ import {
   type TrainingStatusPoint,
 } from '@/features/analysis/trainingStatus'
 import { useImportStore } from '@/stores/importStore'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import '@/features/dashboard/TrainingStatusSection.css'
-
-/** 当前数据源的活动仓库（门面按有效源分发） */
-const repository = sourceActivityRepository
 
 /** 本地库仓库（NP 回填是写操作，仅本地源执行） */
 const localRepository = new DexieActivityRepository(db)
@@ -75,7 +72,9 @@ function TrainingStatusSection() {
   const [points, setPoints] = useState<readonly TrainingStatusPoint[]>([])
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
-  // 数据源切换后重新加载
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const repository = useActivityRepository()
+  // 数据源（NP 回填仅本地源执行）
   const source = useDataSourceStore(selectEffectiveSource)
 
   useEffect(() => {
@@ -117,7 +116,7 @@ function TrainingStatusSection() {
     return () => {
       cancelled = true
     }
-  }, [importSummary, source])
+  }, [importSummary, source, repository])
 
   return (
     <section className="training-status" aria-label="训练状态">

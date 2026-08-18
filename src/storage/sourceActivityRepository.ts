@@ -1,12 +1,13 @@
 /**
- * 数据源门面（规格见 docs/superpowers/specs/2026-08-18-author-data-snapshot-design.md §5.3）。
+ * 数据源分发（规格见 docs/superpowers/specs/2026-08-18-author-data-snapshot-design.md §5.3）。
  *
- * 读取调用按**调用时**的当前有效数据源分发：
+ * getActivityRepository() 按**调用时**的当前有效数据源返回实现：
  * - author → AuthorActivityRepository（只读快照，fetch + 内存索引）
  * - local  → DexieActivityRepository（本地 IndexedDB，现有实现）
  *
- * 只暴露读取接口：导入/删除/改名等写操作永远直连 Dexie 本地仓库，
- * 不经过本门面（作者数据只读，UI 在作者模式下隐藏写入口）。
+ * 组件请使用 @/hooks/useActivityRepository（源切换时返回不同实例，
+ * 作为 effect 依赖驱动重新加载）；本文件函数供非组件场景与测试。
+ * 写操作（导入/删除/改名等）永远直连 Dexie 本地仓库，不经此分发。
  */
 import { db } from '@/storage/db'
 import {
@@ -24,24 +25,12 @@ const localRepository = new DexieActivityRepository(db)
 const authorRepository = new AuthorActivityRepository(defaultSnapshotClient)
 
 /**
- * 取当前有效源的仓库实现。
+ * 取指定有效源的仓库实现。
+ *
+ * @param source 有效数据源（默认读 store 当前值）
  */
-function current(): ActivityReadRepository {
-  return selectEffectiveSource(useDataSourceStore.getState()) === 'author'
-    ? authorRepository
-    : localRepository
-}
-
-/**
- * 按当前数据源分发的活动仓库（读取）。页面/区块统一经此访问活动数据，
- * 并订阅 useDataSourceStore 的 source/authorAvailable 变化触发重新加载。
- */
-export const sourceActivityRepository: ActivityReadRepository = {
-  getById: (id) => current().getById(id),
-  getRecords: (id, options) => current().getRecords(id, options),
-  listActivities: (options) => current().listActivities(options),
-  countActivities: () => current().countActivities(),
-  existsByFingerprint: (fingerprint) => current().existsByFingerprint(fingerprint),
-  summarizeByRange: (startTime, endTime) => current().summarizeByRange(startTime, endTime),
-  listAllSummaries: () => current().listAllSummaries(),
+export function getActivityRepository(
+  source: 'author' | 'local' = selectEffectiveSource(useDataSourceStore.getState()),
+): ActivityReadRepository {
+  return source === 'author' ? authorRepository : localRepository
 }

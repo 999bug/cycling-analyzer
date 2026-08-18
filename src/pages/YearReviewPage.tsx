@@ -6,8 +6,6 @@
  * 数据来自活动仓库 listAllSummaries，订阅 importStore 导入后自动刷新。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import { buildStatistics, resolveRange } from '@/features/statistics/statistics'
 import StatisticCards from '@/features/statistics/StatisticCards'
@@ -16,10 +14,8 @@ import ShareCardModal from '@/features/yearReview/ShareCardModal'
 import { buildMonthlyDistances, extractYears, yearRange } from '@/features/yearReview/yearReview'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import '@/pages/YearReviewPage.css'
-
-/** 当前数据源的活动仓库（门面按有效源分发） */
-const repository = sourceActivityRepository
 
 /**
  * 年度回顾页面。
@@ -33,8 +29,8 @@ function YearReviewPage() {
   const [showShare, setShowShare] = useState(false)
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
-  // 数据源切换后重新加载
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const repository = useActivityRepository()
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -56,7 +52,7 @@ function YearReviewPage() {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [repository])
 
   useEffect(() => {
     const cancel = reload()

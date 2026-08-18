@@ -1,10 +1,10 @@
 /**
- * 数据源门面测试：按 store 当前有效源分发读取调用。
+ * 数据源分发测试：按 store 当前有效源返回对应实现。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
+import { getActivityRepository } from '@/storage/sourceActivityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 
 /** 作者快照中的一条摘要（经由 fetch mock 提供） */
@@ -22,7 +22,7 @@ const AUTHOR_SUMMARY = {
   elevationGain: 500,
 }
 
-describe('sourceActivityRepository 门面', () => {
+describe('getActivityRepository 分发', () => {
   let db: CyclingDatabase
 
   beforeEach(async () => {
@@ -53,7 +53,7 @@ describe('sourceActivityRepository 门面', () => {
   })
 
   it('有效源为 local 时读取本地库', async () => {
-    const summaries = await sourceActivityRepository.listAllSummaries()
+    const summaries = await getActivityRepository().listAllSummaries()
     expect(summaries.map((a) => a.id)).toEqual(['local-1'])
   })
 
@@ -70,13 +70,13 @@ describe('sourceActivityRepository 门面', () => {
     )
     useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
 
-    const summaries = await sourceActivityRepository.listAllSummaries()
+    const summaries = await getActivityRepository().listAllSummaries()
     expect(summaries.map((a) => a.id)).toEqual(['author-1'])
   })
 
   it('用户选择 author 但快照不可用时回退本地', async () => {
     useDataSourceStore.setState({ source: 'author', authorAvailable: false })
-    const summaries = await sourceActivityRepository.listAllSummaries()
+    const summaries = await getActivityRepository().listAllSummaries()
     expect(summaries.map((a) => a.id)).toEqual(['local-1'])
   })
 })

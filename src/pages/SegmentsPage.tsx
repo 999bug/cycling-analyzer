@@ -7,8 +7,6 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { db, type SegmentEntity } from '@/storage/db'
-import { sourceActivityRepository } from '@/storage/sourceActivityRepository'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import SegmentCards from '@/features/segments/SegmentCards'
 import {
@@ -18,10 +16,8 @@ import {
 } from '@/features/segments/segmentMatching'
 import { useImportStore } from '@/stores/importStore'
 import { summariesScanKey } from '@/storage/scanCache'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import '@/pages/SegmentsPage.css'
-
-/** 当前数据源的活动仓库（门面按有效源分发） */
-const activityRepository = sourceActivityRepository
 
 /** 赛段仓库单例 */
 const segmentRepository = new DexieSegmentRepository(db)
@@ -45,8 +41,8 @@ function SegmentsPage() {
   const [state, setState] = useState<LoadState>('loading')
   // 订阅导入结果：导入新活动后重算成绩（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
-  // 数据源切换后重新加载
-  const source = useDataSourceStore(selectEffectiveSource)
+  // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
+  const activityRepository = useActivityRepository()
 
   const reload = useCallback(() => {
     let cancelled = false
@@ -102,7 +98,7 @@ function SegmentsPage() {
     return () => {
       cancelled = true
     }
-  }, [source])
+  }, [activityRepository])
 
   useEffect(() => {
     const cancel = reload()
