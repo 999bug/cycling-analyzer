@@ -164,6 +164,7 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **品牌区回首页 + 数值单位同行**（纯 UI 调整）：AppLayout 品牌区改 `<Link>` 回仪表盘首页；仪表盘/统计页指标卡数值 `white-space: nowrap`，修复窄卡数值与单位（km/m）折行
 - [x] **详情页指标卡扩充**：运动时长/总时长分列 + 新增累计下降（elevationLoss，缺失显示 — 不伪造），基础 10 卡，功率活动追加标准化功率
 - [x] **地图全屏查看 + 缩放控件右下角 + 起终点标识区分**（✅ 8/8 测试）：`src/map/mapFullscreen.tsx`——FullscreenSync（fullscreenchange → `map.invalidateSize()` 防瓦片错位）、ZoomControlBottomRight（+/− 统一右下角，`map.zoomControl.setPosition`）、MapFullscreenButton（右上角悬浮按钮，Fullscreen API 作用于相对定位包裹层，Esc 退出按钮图标同步还原）；详情页轨迹图与热力图共用接入；终点标记改**黑白格完赛旗**（divIcon + CSS `repeating-conic-gradient` 棋盘格），起点保留绿色圆点
+- [x] **品牌焕新：骑记 Ride Insight**（✅ 品牌区单测 + e2e 同步）：侧边栏品牌区更名「骑记 / Ride Insight」+ 副标题「看懂你的每一次骑行」；主题色对齐 logo——深色主题 `--primary` 荧光绿 `#b8e62e`、浅色主题深蓝 `#0d3b4c`（荧光绿白底对比度不足），新增 `--on-primary`（主色按钮文字色）；原 `#4f8cff` rgba 硬编码统一改 `color-mix(in srgb, var(--primary) …)` 随主题自适应；index.html/404.html 标题、分享图品牌行/落款/文件名/主色同步；**logo 图片文件待用户提供后接入（侧边栏 + favicon）**
 
 ---
 

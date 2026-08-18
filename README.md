@@ -1,4 +1,6 @@
-# 骑行数据（Cycling Analyzer）
+# 骑记 Ride Insight（Cycling Analyzer）
+
+> 看懂你的每一次骑行
 
 ![GitHub Actions](https://github.com/999bug/cycling-analyzer/actions/workflows/deploy.yml/badge.svg)
 ![Release](https://img.shields.io/github/v/release/999bug/cycling-analyzer)

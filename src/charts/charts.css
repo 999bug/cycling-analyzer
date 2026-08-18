@@ -61,7 +61,7 @@
 }
 
 .chart-card__toggle button.chart-card__toggle--active {
-  background-color: rgba(79, 140, 255, 0.15);
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
   border-color: var(--primary);
   color: var(--primary);
 }

@@ -51,7 +51,7 @@
 .share-modal__download {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .share-modal__download:hover {

@@ -148,7 +148,7 @@
 .settings-button--primary {
   background-color: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* 危险操作（清空全部数据，红字红边，规格 §32） */

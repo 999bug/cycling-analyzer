@@ -1,23 +1,26 @@
 /**
  * 全局样式：CSS 变量色板、reset、基础布局。
- * 深色为默认基调；后续浅色主题通过覆盖 :root 变量实现。
+ * 深色为默认基调；浅色主题通过覆盖 :root 变量实现。
+ * 品牌色对齐 logo：荧光绿 #b8e62e（深色主题主色）+ 深蓝 #0d3b4c（浅色主题主色/荧光绿上的文字色）。
  */
 :root {
   --bg: #121417;
   --bg-surface: #1b1e23;
   --text: #e8eaed;
   --text-secondary: #9aa0a6;
-  --primary: #4f8cff;
+  --primary: #b8e62e;
+  --on-primary: #0d3b4c;
   --border: #2a2e35;
 }
 
-/* 浅色主题（规格 §36）：覆盖 CSS 变量，组件无需改动 */
+/* 浅色主题（规格 §36）：覆盖 CSS 变量，组件无需改动；荧光绿在白底对比度不足，主色换深蓝 */
 :root[data-theme='light'] {
   --bg: #f5f6f8;
   --bg-surface: #ffffff;
   --text: #1a1d21;
   --text-secondary: #5f6368;
-  --primary: #2f6fdd;
+  --primary: #0d3b4c;
+  --on-primary: #ffffff;
   --border: #d8dce2;
 }
 

@@ -97,6 +97,17 @@ describe('布局 skip link', () => {
   })
 })
 
+describe('品牌区', () => {
+  it('展示骑记 / Ride Insight / 副标题，链接回仪表盘首页', () => {
+    render(<AppLayout />, { wrapper: MemoryRouter })
+
+    const brand = screen.getByRole('link', { name: /骑记/ })
+    expect(brand).toHaveAttribute('href', '/')
+    expect(screen.getByText('Ride Insight')).toBeInTheDocument()
+    expect(screen.getByText('看懂你的每一次骑行')).toBeInTheDocument()
+  })
+})
+
 describe('导入面板 toggle', () => {
   it('aria-expanded 随展开状态切换', async () => {
     render(<ImportPanel />)

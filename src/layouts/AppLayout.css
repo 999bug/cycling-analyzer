@@ -18,16 +18,33 @@
 }
 
 .app-layout__brand {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 8px 12px 20px;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
   text-decoration: none;
   border-radius: 8px;
 }
 
-.app-layout__brand:hover {
+.app-layout__brand-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.app-layout__brand-en {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+}
+
+.app-layout__brand-tagline {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.app-layout__brand:hover .app-layout__brand-name {
   color: var(--primary);
 }
 
@@ -54,7 +71,7 @@
 }
 
 .app-layout__nav-item--active {
-  background-color: rgba(79, 140, 255, 0.15);
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
   color: var(--primary);
 }
 
@@ -77,7 +94,7 @@
   padding: 8px 16px;
   border-radius: 8px;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   text-decoration: none;
   transition: top 0.15s ease;
 }

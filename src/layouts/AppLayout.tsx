@@ -35,7 +35,9 @@ function AppLayout() {
       </a>
       <aside className="app-layout__sidebar">
         <Link className="app-layout__brand" to="/" title="回到仪表盘首页">
-          骑行数据
+          <span className="app-layout__brand-name">骑记</span>
+          <span className="app-layout__brand-en">Ride Insight</span>
+          <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
         </Link>
         <nav className="app-layout__nav" aria-label="主导航">
           {NAV_ITEMS.map((item) => (
