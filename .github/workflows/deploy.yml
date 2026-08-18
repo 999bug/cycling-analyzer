@@ -42,6 +42,11 @@ jobs:
       - name: Test
         run: npm run test
 
+      # 作者数据快照：解析 author-data/fit/ 下的 FIT 文件生成 public/author-data/，
+      # 必须在 Build 前执行（快照随 dist 一起发布）
+      - name: Build author data
+        run: npm run build:author-data
+
       - name: Build
         run: npm run build
 
