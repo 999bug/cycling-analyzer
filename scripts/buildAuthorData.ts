@@ -122,7 +122,7 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
       activity = parseFitBytes({ fileName: file.name, bytes: content, fingerprint })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to parse author FIT file ${file.relPath}: ${reason}`)
+      throw new Error(`Failed to parse author FIT file ${file.relPath}: ${reason}`, { cause: error })
     }
     // 确定性 ID = 内容指纹（覆盖 parseFitBytes 的随机 UUID），重建深链不变
     const normalizedPower = calculateNormalizedPower(activity.records ?? [])
