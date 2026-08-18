@@ -28,14 +28,14 @@ const HEATMAP_SIMPLIFY_TOLERANCE_METERS = 10
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_TRACK_POINTS = 2
 
-/** 热力线颜色（天空蓝，与轨迹路线的主蓝 #4f8cff 区分；低透明度叠加后加深形成热力感） */
-const TRACK_COLOR = '#38bdf8'
+/** 热力线颜色（紫色，OSM 浅色瓦片上对比度高，与轨迹路线主蓝 #4f8cff 明显区分） */
+const TRACK_COLOR = '#9333ea'
 
-/** 热力线宽（像素） */
-const TRACK_WEIGHT = 2
+/** 热力线宽（像素）：略粗保证远景缩放时可见 */
+const TRACK_WEIGHT = 3
 
-/** 热力线透明度（低透明度叠加，重合越多越深） */
-const TRACK_OPACITY = 0.25
+/** 热力线透明度（低透明度叠加，重合越多越深；单条轨迹也要清晰可见） */
+const TRACK_OPACITY = 0.45
 
 /** 活动仓库单例（页面模块只加载一次） */
 const repository = new DexieActivityRepository(db)
