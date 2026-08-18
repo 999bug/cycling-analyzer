@@ -1,0 +1,82 @@
+/**
+ * 分段详情区块样式。
+ * 卡片式容器 + 段长切换按钮组（风格同轨迹着色切换）+ 可滚动表格。
+ */
+.splits-section {
+  padding: 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.splits-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.splits-section__title {
+  font-size: 16px;
+}
+
+.splits-section__toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.splits-section__toggle-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.splits-section__toggle-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.splits-section__toggle-btn--active {
+  border-color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
+/* 长表格滚动（1km 段长时百公里可达百行） */
+.splits-section__scroller {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.splits-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.splits-table th,
+.splits-table td {
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.splits-table thead th {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+
+.splits-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}

@@ -31,6 +31,7 @@ import {
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
+import SplitsSection from '@/features/activity/SplitsSection'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import { downsampleRecords } from '@/charts/downsample'
 import {
@@ -551,6 +552,8 @@ function ActivityDetailPage() {
         <PowerCurveChart records={records} />
         <CombinedChart mode="speedHeartRate" records={chartRecords} />
       </section>
+
+      <SplitsSection records={records} distanceUnit={distanceUnit} />
 
       <TrainingZonesSection
         heartRateZones={heartRateZones}
