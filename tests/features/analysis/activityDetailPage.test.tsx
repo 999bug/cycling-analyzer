@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { saveSettings } from '@/features/settings/settings'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import ActivityDetailPage from '@/pages/ActivityDetailPage'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
@@ -31,9 +32,13 @@ beforeEach(async () => {
   await testDb.activities.clear()
   await testDb.activity_records.clear()
   await testDb.settings.clear()
+  // 数据源复位：默认有效源为本地（作者快照探测成功前的状态）
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -571,5 +576,49 @@ describe('成就栏（刷新纪录检测）', () => {
 
     expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '本次成就' })).not.toBeInTheDocument()
+  })
+})
+
+describe('作者模式只读（规格 §6.3）', () => {
+  it('隐藏删除/重命名/设为赛段按钮，保留导出 GPX', async () => {
+    const activity = makeActivity('act-1', [100, 200, 300], [120, 140, 160])
+    // 快照数据经 fetch stub 提供（作者仓库只读快照）
+    const summary: Record<string, unknown> = { ...activity }
+    delete summary.records
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('author-data/activities.json')) {
+          return new Response(JSON.stringify([summary]), { status: 200 })
+        }
+        if (url.includes('author-data/records/act-1.json')) {
+          return new Response(
+            JSON.stringify({ activityId: 'act-1', records: activity.records }),
+            { status: 200 },
+          )
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
+    renderPage()
+
+    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '删除活动' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '重命名' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '设为赛段' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出 GPX' })).toBeInTheDocument()
+  })
+
+  it('本地模式显示删除/重命名/设为赛段按钮', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivity(makeActivity('act-1', [100, 200, 300], [120, 140, 160]))
+    renderPage()
+
+    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '删除活动' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重命名' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '设为赛段' })).toBeInTheDocument()
   })
 })

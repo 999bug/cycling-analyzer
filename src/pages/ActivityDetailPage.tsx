@@ -510,14 +510,16 @@ function ActivityDetailPage() {
           ) : (
             <h1 className="activity-detail__title">
               {activity.name || `${formatDate(activity.startTime)} 骑行`}
-              <button
-                type="button"
-                className="activity-detail__rename-trigger"
-                aria-label="重命名"
-                onClick={handleStartRename}
-              >
-                重命名
-              </button>
+              {source === 'local' && (
+                <button
+                  type="button"
+                  className="activity-detail__rename-trigger"
+                  aria-label="重命名"
+                  onClick={handleStartRename}
+                >
+                  重命名
+                </button>
+              )}
             </h1>
           )}
           <div className="activity-detail__meta">
@@ -535,23 +537,27 @@ function ActivityDetailPage() {
           >
             导出 GPX
           </button>
-          <button
-            type="button"
-            className="activity-detail__export"
-            onClick={handleCreateSegment}
-            disabled={!hasTrack}
-            title={hasTrack ? '以本骑行起终点创建赛段' : '该活动无轨迹坐标，无法创建赛段'}
-          >
-            设为赛段
-          </button>
-          <button
-            type="button"
-            className="activity-detail__delete"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            {deleting ? '删除中…' : '删除活动'}
-          </button>
+          {source === 'local' && (
+            <>
+              <button
+                type="button"
+                className="activity-detail__export"
+                onClick={handleCreateSegment}
+                disabled={!hasTrack}
+                title={hasTrack ? '以本骑行起终点创建赛段' : '该活动无轨迹坐标，无法创建赛段'}
+              >
+                设为赛段
+              </button>
+              <button
+                type="button"
+                className="activity-detail__delete"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? '删除中…' : '删除活动'}
+              </button>
+            </>
+          )}
         </div>
       </header>
 

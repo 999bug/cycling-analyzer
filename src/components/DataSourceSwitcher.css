@@ -1,0 +1,56 @@
+/**
+ * 数据源切换器样式：分段控件两档（作者数据 / 我的数据）。
+ * 颜色取自全局 CSS 变量，激活档用主色淡底。
+ */
+.data-source-switcher {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 4px 12px;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.data-source-switcher__button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.data-source-switcher__button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.data-source-switcher__button--active {
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.data-source-switcher__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 「作者」徽章：标识该档为作者发布的只读数据 */
+.data-source-switcher__badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  font-size: 11px;
+  font-weight: 600;
+}

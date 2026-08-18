@@ -17,6 +17,7 @@ import {
   type ExportBundle,
 } from '@/features/settings/exportImport'
 import { getSettings, saveSettings } from '@/features/settings/settings'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { Activity } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -34,6 +35,9 @@ beforeEach(async () => {
   await testDb.activity_records.clear()
   await testDb.files.clear()
   await testDb.settings.clear()
+  // 数据源复位（「关于」区块作者名依赖 store）
+  localStorage.clear()
+  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })
 
 afterEach(() => {
@@ -72,6 +76,19 @@ describe('设置页', () => {
     expect(screen.getByRole('button', { name: '导出数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导入数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '清空全部本地数据' })).toBeInTheDocument()
+  })
+
+  it('「关于」区块说明作者数据与本地隐私（含作者名）', async () => {
+    useDataSourceStore.setState({ authorName: 'Saul' })
+    render(<SettingsPage />)
+
+    const about = screen.getByRole('region', { name: '关于' })
+    expect(about).toHaveTextContent('Saul')
+    expect(about).toHaveTextContent('只读')
+    expect(about).toHaveTextContent('不会上传')
+    // 两处数据源提示文案
+    expect(screen.getByText(/训练配置仅作用于「我的数据」/)).toBeInTheDocument()
+    expect(screen.getByText(/导出\/清空仅作用于「我的数据」/)).toBeInTheDocument()
   })
 
   it('预置设置后渲染回填（昵称/体重/英里/12 小时制）', async () => {

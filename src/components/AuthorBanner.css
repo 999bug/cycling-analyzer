@@ -1,0 +1,37 @@
+/**
+ * 作者模式横幅样式：主内容区顶部的只读提示条。
+ * 颜色取自全局 CSS 变量，主色淡底区别于页面内容。
+ */
+.author-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 10px;
+}
+
+.author-banner__text {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.author-banner__close {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.author-banner__close:hover {
+  color: var(--text);
+  background-color: rgba(255, 255, 255, 0.06);
+}

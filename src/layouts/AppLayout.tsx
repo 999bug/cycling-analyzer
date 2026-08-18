@@ -1,5 +1,7 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import ImportPanel from '@/features/import/ImportPanel'
+import DataSourceSwitcher from '@/components/DataSourceSwitcher'
+import AuthorBanner from '@/components/AuthorBanner'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -46,6 +48,7 @@ function AppLayout() {
           <span className="app-layout__brand-en">Ride Insight</span>
           <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
         </Link>
+        <DataSourceSwitcher />
         <nav className="app-layout__nav" aria-label="主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink
@@ -67,6 +70,7 @@ function AppLayout() {
         </div>
       </aside>
       <main id="main-content" className="app-layout__content" tabIndex={-1}>
+        <AuthorBanner />
         <Outlet />
       </main>
     </div>

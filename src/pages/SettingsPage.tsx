@@ -22,6 +22,7 @@ import {
   type TimeFormat,
 } from '@/features/settings/settings'
 import { switchTheme, applyTheme } from '@/features/settings/theme'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import {
   defaultExportFilename,
   downloadJson,
@@ -72,6 +73,8 @@ interface SettingsPageProps {
  */
 function SettingsPage({ db: dbProp, activityRepository, fileRepository, settingsRepository }: SettingsPageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 作者显示名（「关于」区块；未探测到时回退「作者」）
+  const authorName = useDataSourceStore((s) => s.authorName)
 
   // 页面依赖上下文：优先注入值，缺省使用全局数据库单例
   const context = useMemo(
@@ -393,6 +396,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       <form className="settings-form" onSubmit={handleSubmit}>
         <section className="settings-section" aria-label="个人信息">
           <h2 className="settings-section__title">个人信息</h2>
+          <p className="settings-section__hint">
+            训练配置仅作用于「我的数据」；查看作者数据时使用作者发布的配置。
+          </p>
           <div className="settings-fields">
             <div className="settings-field">
               <label className="settings-field__label" htmlFor="settings-profile-nickname">
@@ -596,7 +602,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
 
       <section className="settings-section" aria-label="数据管理">
         <h2 className="settings-section__title">数据管理</h2>
-        <p className="settings-section__hint">导出 JSON 备份可迁移到其他设备；导入会合并到当前数据。</p>
+        <p className="settings-section__hint">
+          导出 JSON 备份可迁移到其他设备；导入会合并到当前数据。
+          导出/清空仅作用于「我的数据」，不影响作者发布的数据。
+        </p>
         <div className="settings-actions">
           <button type="button" className="settings-button" onClick={handleExport} disabled={exporting}>
             {exporting ? '导出中…' : '导出数据'}
@@ -639,6 +648,15 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
           {message.text}
         </p>
       )}
+
+      <section className="settings-section" aria-label="关于">
+        <h2 className="settings-section__title">关于</h2>
+        <p className="settings-section__hint">
+          本站为 {authorName ?? '作者'} 的公开骑行数据站点：默认展示作者发布的数据（只读快照）。
+          你可以通过左侧「同步骑行数据」导入自己的 FIT 文件——
+          你的数据仅保存在当前浏览器本地（IndexedDB），不会上传。
+        </p>
+      </section>
     </div>
   )
 }

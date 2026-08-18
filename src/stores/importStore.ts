@@ -7,6 +7,7 @@
 import { create } from 'zustand'
 import { importFiles, type FailedItem, type ImportFile, type ImportOptions, type ImportSummary } from '@/features/import/importer'
 import { getSettings } from '@/features/settings/settings'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 
 /**
  * 导入进度。
@@ -93,6 +94,10 @@ export const useImportStore = create<ImportStoreState>()((set, get) => ({
           summary.failedItems.some((item: FailedItem) => item.fileName === entry.name),
         ),
       })
+      // 导入进本地库后自动切到「我的数据」：访客导入即见其数据
+      if (summary.newImported > 0) {
+        useDataSourceStore.getState().setSource('local')
+      }
       return summary
     } catch (error) {
       set({ errors: [error instanceof Error ? error.message : String(error)] })
