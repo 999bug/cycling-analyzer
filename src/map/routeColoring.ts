@@ -112,6 +112,17 @@ const COLOR_RAMPS: Record<ColoringMode, ColorRamp> = {
   altitude: jetRamp,
 }
 
+/** 图例渐变停点：与 jetRamp 同源采样，保证图例与轨迹颜色严格一致 */
+const LEGEND_GRADIENT_STOPS: readonly number[] = [0, 0.25, 0.5, 0.75, 1]
+
+/**
+ * 着色图例的 CSS 渐变（linear-gradient，左低右高）。
+ * 由 jetRamp 采样生成，修改色阶时图例自动跟随，不会漂移。
+ */
+export const COLORING_LEGEND_GRADIENT = `linear-gradient(to right, ${LEGEND_GRADIENT_STOPS.map(
+  (t) => `${jetRamp(t)} ${t * 100}%`,
+).join(', ')})`
+
 /**
  * 读取点的指标值。
  *

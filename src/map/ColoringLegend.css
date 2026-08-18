@@ -1,0 +1,23 @@
+/**
+ * 轨迹着色图例样式。
+ * 渐变条占满剩余宽度，端点值不换行。
+ */
+.coloring-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.coloring-legend__bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.coloring-legend__value {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}

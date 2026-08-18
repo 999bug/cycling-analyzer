@@ -91,7 +91,7 @@
 | 功能 | 状态 | 文件与说明 |
 |---|---|---|
 | Statistics 统计页（§28） | ✅ Agent G，29/29 测试 | `src/features/statistics/`（statistics.ts 聚合 + RangeSelector + StatisticCards）；`resolveRange`/`buildStatistics` 可注入 now；范围：本周/本月/今年/12 个月/全部/自定义 |
-| 轨迹颜色分析（§16 着色） | ✅ Agent J，32/32 测试 | `src/map/routeColoring.ts`（`buildSegments`/`buildBucketLines`/`getColorForValue`）；ActivityMap 新增 `coloring` prop（'none'\|'speed'\|'heartRate'\|'power'\|'altitude'，默认 none 向后兼容）；>500 段自动 8 桶合并 |
+| 轨迹颜色分析（§16 着色） | ✅ Agent J，32/32 测试 + 图例 6/6 | `src/map/routeColoring.ts`（`buildSegments`/`buildBucketLines`/`getColorForValue`）；ActivityMap 新增 `coloring` prop（'none'\|'speed'\|'heartRate'\|'power'\|'altitude'，默认 none 向后兼容）；>500 段自动 8 桶合并；**`ColoringLegend.tsx` 图例：开启着色时显示 jetRamp 同源渐变条（COLORING_LEGEND_GRADIENT 采样生成防漂移）+ 值域端点（速度随单位偏好 km/h/mph，海拔数据 min-max，其余固定物理域），指标全缺失不渲染** |
 | 踏频/组合图组件（§17） | ✅ Agent K，24/24 测试 | `src/charts/CadenceChart.tsx`（rpm）；`CombinedChart.tsx`（mode: 'speedHeartRate'\|'powerHeartRate'，双 Y 轴 + 降级）；`buildCombinedSeries` 以首条有效记录为对齐基准；**未挂载详情页**（待 Agent L） |
 | Calendar 日历页（§29） | ✅ Agent H，24/24 测试 | `src/features/calendar/`（calendarData 聚合 + CalendarHeatmap）；**GitHub 贡献图横排布局（每周一列/每天一行）+ 月份标签（buildMonthLabels 定位每月 1 日所在列）+ 隔行星期标签 + 今天高亮 + 「回到今年」**；5 档距离色阶（20/50/100km 阈值）、tooltip（次数/距离/时长/爬升）、年份切换、订阅 importStore 自动刷新；**点击有骑行格子展开当日活动面板（活动列表跳详情）** |
 | Settings 设置页 + 导出/导入/清空（§27/§32/§33） | ✅ Agent I，34/34 测试 | `src/features/settings/`（settings.ts/exportImport.ts/dataClear.ts）；**key 规范：`'profile'`（UserProfile 对象）+ `'units'`（UnitPreferences），按域合并保存，数据恒存公制**；导出 JSON v1（app/version/activities/records/files/settings），导入按 fingerprint 去重 |

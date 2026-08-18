@@ -41,6 +41,7 @@ import {
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
 import ActivityMap from '@/map/ActivityMap'
+import ColoringLegend from '@/map/ColoringLegend'
 import SpeedChart from '@/charts/SpeedChart'
 import HeartRateChart from '@/charts/HeartRateChart'
 import CadenceChart from '@/charts/CadenceChart'
@@ -526,6 +527,9 @@ function ActivityDetailPage() {
             </button>
           ))}
         </div>
+        {coloring !== 'none' && (
+          <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
+        )}
         <ActivityMap points={routePoints} coloring={coloring} />
       </section>
 
