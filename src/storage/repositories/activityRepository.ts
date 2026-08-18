@@ -100,26 +100,11 @@ export interface ActivityRangeSummary {
 }
 
 /**
- * 活动仓库接口。
- * Phase 4-7（导入、列表、详情、统计）依赖此接口，不直接触碰 Dexie。
+ * 活动仓库读取接口（规格 §18/§45）。
+ * 作者数据快照（只读，fetch 实现）与 Dexie 本地实现共用此接口，
+ * UI 经数据源门面按当前源分发，见 src/storage/sourceActivityRepository.ts。
  */
-export interface ActivityRepository {
-  /**
-   * 写入单个活动（摘要 + 逐点记录，事务保证原子性）。
-   * fingerprint 重复时抛出 ConstraintError，调用方应先 existsByFingerprint 检测。
-   *
-   * @param activity 活动（records 可选，为 undefined 时不写逐点表）
-   * @param name 活动标题（Strava CSV 还原，可为空）
-   */
-  addActivity(activity: Activity, name?: string): Promise<void>;
-
-  /**
-   * 批量写入多个活动（单事务）。
-   *
-   * @param activities 活动列表
-   */
-  addActivities(activities: Activity[]): Promise<void>;
-
+export interface ActivityReadRepository {
   /**
    * 按 ID 查询活动摘要（不含逐点记录）。
    *
@@ -152,10 +137,46 @@ export interface ActivityRepository {
 
   /**
    * 按文件指纹检测活动是否已导入（重复检测，规格 §9）。
+   * 作者快照实现恒返回 false：访客指纹去重只查本地库，与作者数据天然隔离。
    *
    * @param fingerprint 文件 SHA-256 指纹
    */
   existsByFingerprint(fingerprint: string): Promise<boolean>;
+
+  /**
+   * 统计指定时间范围（含边界）的活动聚合数据。
+   *
+   * @param startTime 起始时间（ISO 8601）
+   * @param endTime 结束时间（ISO 8601）
+   */
+  summarizeByRange(startTime: string, endTime: string): Promise<ActivityRangeSummary>;
+
+  /**
+   * 返回全部活动摘要（按 startTime 降序，列表页/统计页全量统计用）。
+   */
+  listAllSummaries(): Promise<ActivitySummary[]>;
+}
+
+/**
+ * 活动仓库接口。
+ * Phase 4-7（导入、列表、详情、统计）依赖此接口，不直接触碰 Dexie。
+ */
+export interface ActivityRepository extends ActivityReadRepository {
+  /**
+   * 写入单个活动（摘要 + 逐点记录，事务保证原子性）。
+   * fingerprint 重复时抛出 ConstraintError，调用方应先 existsByFingerprint 检测。
+   *
+   * @param activity 活动（records 可选，为 undefined 时不写逐点表）
+   * @param name 活动标题（Strava CSV 还原，可为空）
+   */
+  addActivity(activity: Activity, name?: string): Promise<void>;
+
+  /**
+   * 批量写入多个活动（单事务）。
+   *
+   * @param activities 活动列表
+   */
+  addActivities(activities: Activity[]): Promise<void>;
 
   /**
    * 更新活动标题（列表页/详情页重命名，规格 §31）。
@@ -184,19 +205,6 @@ export interface ActivityRepository {
    * 清空全部活动与逐点记录（不涉及 files/settings）。
    */
   deleteAll(): Promise<void>;
-
-  /**
-   * 统计指定时间范围（含边界）的活动聚合数据。
-   *
-   * @param startTime 起始时间（ISO 8601）
-   * @param endTime 结束时间（ISO 8601）
-   */
-  summarizeByRange(startTime: string, endTime: string): Promise<ActivityRangeSummary>;
-
-  /**
-   * 返回全部活动摘要（按 startTime 降序，列表页/统计页全量统计用）。
-   */
-  listAllSummaries(): Promise<ActivitySummary[]>;
 }
 
 /** 默认分页条数 */
@@ -207,6 +215,93 @@ const DEFAULT_SORT_BY = 'startTime';
 
 /** 默认排序方向 */
 const DEFAULT_SORT_ORDER = 'desc';
+
+/**
+ * 活动列表内存查询（筛选/排序/分页）。
+ * Dexie 与作者快照两个仓库实现共用本函数，保证任一数据源行为一致
+ * （个人数据量级小，全量过滤 + 内存排序保证多条件组合正确）。
+ *
+ * @param all 全量活动摘要
+ * @param options 查询选项（数值条件含边界，组合语义 AND；avgPower 缺失不满足功率条件）
+ * @returns 当前页摘要与满足筛选条件的总条数
+ */
+export function queryActivityList(
+  all: readonly ActivitySummary[],
+  options: ActivityListOptions = {},
+): ActivityListResult {
+  const {
+    sortBy = DEFAULT_SORT_BY,
+    sortOrder = DEFAULT_SORT_ORDER,
+    offset = 0,
+    limit = DEFAULT_PAGE_SIZE,
+    month,
+    activityType,
+    search,
+    minDistance,
+    maxDistance,
+    minElevationGain,
+    maxElevationGain,
+    minAvgPower,
+    maxAvgPower,
+  } = options;
+
+  let items = [...all];
+  if (month) {
+    items = items.filter((a) => a.startTime.startsWith(month));
+  }
+  if (activityType) {
+    items = items.filter((a) => a.activityType === activityType);
+  }
+  if (search) {
+    const keyword = search.trim().toLowerCase();
+    if (keyword) {
+      items = items.filter(
+        (a) =>
+          a.fileName.toLowerCase().includes(keyword) ||
+          (a.name ?? '').toLowerCase().includes(keyword),
+      );
+    }
+  }
+
+  // 数值范围筛选（单位与领域模型一致：距离米、爬升米、功率 W；含边界，组合为 AND）。
+  // avgPower 为可选字段：缺失的活动不满足任何功率条件（显式排除 undefined）。
+  if (minDistance !== undefined) {
+    items = items.filter((a) => a.distance >= minDistance);
+  }
+  if (maxDistance !== undefined) {
+    items = items.filter((a) => a.distance <= maxDistance);
+  }
+  if (minElevationGain !== undefined) {
+    items = items.filter((a) => a.elevationGain >= minElevationGain);
+  }
+  if (maxElevationGain !== undefined) {
+    items = items.filter((a) => a.elevationGain <= maxElevationGain);
+  }
+  if (minAvgPower !== undefined) {
+    items = items.filter((a) => a.avgPower !== undefined && a.avgPower >= minAvgPower);
+  }
+  if (maxAvgPower !== undefined) {
+    items = items.filter((a) => a.avgPower !== undefined && a.avgPower <= maxAvgPower);
+  }
+
+  // 排序（startTime 为 ISO 字符串，字典序即时间序；数字字段按值序）
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  items.sort((a, b) => {
+    const left = a[sortBy] ?? 0;
+    const right = b[sortBy] ?? 0;
+    if (left < right) {
+      return -direction;
+    }
+    if (left > right) {
+      return direction;
+    }
+    return 0;
+  });
+
+  const total = items.length;
+  const page = limit > 0 ? items.slice(offset, offset + limit) : items.slice(offset);
+  return { items: page, total };
+}
 
 /**
  * Dexie 实现的活动仓库。
@@ -262,79 +357,8 @@ export class DexieActivityRepository implements ActivityRepository {
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {
-    const {
-      sortBy = DEFAULT_SORT_BY,
-      sortOrder = DEFAULT_SORT_ORDER,
-      offset = 0,
-      limit = DEFAULT_PAGE_SIZE,
-      month,
-      activityType,
-      search,
-      minDistance,
-      maxDistance,
-      minElevationGain,
-      maxElevationGain,
-      minAvgPower,
-      maxAvgPower,
-    } = options ?? {};
-
     // 内存过滤：个人本地数据量级小，全量过滤 + 内存排序保证多条件组合正确
-    let items = await this.db.activities.toArray();
-    if (month) {
-      items = items.filter((a) => a.startTime.startsWith(month));
-    }
-    if (activityType) {
-      items = items.filter((a) => a.activityType === activityType);
-    }
-    if (search) {
-      const keyword = search.trim().toLowerCase();
-      if (keyword) {
-        items = items.filter(
-          (a) =>
-            a.fileName.toLowerCase().includes(keyword) ||
-            (a.name ?? '').toLowerCase().includes(keyword),
-        );
-      }
-    }
-
-    // 数值范围筛选（单位与领域模型一致：距离米、爬升米、功率 W；含边界，组合为 AND）。
-    // avgPower 为可选字段：缺失的活动不满足任何功率条件（显式排除 undefined）。
-    if (minDistance !== undefined) {
-      items = items.filter((a) => a.distance >= minDistance);
-    }
-    if (maxDistance !== undefined) {
-      items = items.filter((a) => a.distance <= maxDistance);
-    }
-    if (minElevationGain !== undefined) {
-      items = items.filter((a) => a.elevationGain >= minElevationGain);
-    }
-    if (maxElevationGain !== undefined) {
-      items = items.filter((a) => a.elevationGain <= maxElevationGain);
-    }
-    if (minAvgPower !== undefined) {
-      items = items.filter((a) => a.avgPower !== undefined && a.avgPower >= minAvgPower);
-    }
-    if (maxAvgPower !== undefined) {
-      items = items.filter((a) => a.avgPower !== undefined && a.avgPower <= maxAvgPower);
-    }
-
-    // 排序（startTime 为 ISO 字符串，字典序即时间序；数字字段按值序）
-    const direction = sortOrder === 'asc' ? 1 : -1;
-    items.sort((a, b) => {
-      const left = a[sortBy] ?? 0;
-      const right = b[sortBy] ?? 0;
-      if (left < right) {
-        return -direction;
-      }
-      if (left > right) {
-        return direction;
-      }
-      return 0;
-    });
-
-    const total = items.length;
-    const page = limit > 0 ? items.slice(offset, offset + limit) : items.slice(offset);
-    return { items: page, total };
+    return queryActivityList(await this.db.activities.toArray(), options);
   }
 
   async countActivities(): Promise<number> {
