@@ -2,8 +2,8 @@
  * 活动详情页（规格 §15/§16/§17/§25/§26/§32）。
  *
  * 布局：标题区（名称/类型/开始时间/删除按钮）→ 指标卡（距离/运动时长/总时长/爬升/累计下降等 12 项）→
- * 轨迹着色切换 + 轨迹地图 → 七个图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合）→
- * 训练区间区块（心率/功率区间分布 + IF/TSS）。
+ * 轨迹着色切换 + 轨迹地图 → 六个图表（速度/踏频/海拔/功率/功率曲线/速度+心率组合）→
+ * 训练区间区块（心率统计/折线图 + 心率/功率区间分布 + IF/TSS + 计算方式说明）。
  * 数据源：activityRepository.getById（摘要）+ getRecords（逐点），
  * 逐点数据按需加载，不参与列表查询。
  * 训练分析在渲染层调用纯函数（records ≤ 万级，性能可接受），
@@ -265,6 +265,16 @@ function ActivityDetailPage() {
     () => records.some((record) => record.heartRate !== undefined),
     [records],
   )
+  // 最小心率：摘要模型无此字段，从逐点记录取（缺失不计，全无数据为 undefined）
+  const minHeartRate = useMemo(() => {
+    let min = Infinity
+    for (const record of records) {
+      if (record.heartRate !== undefined && record.heartRate < min) {
+        min = record.heartRate
+      }
+    }
+    return min === Infinity ? undefined : min
+  }, [records])
 
   // 用户配置（设置未加载完成时为 undefined）：IF/TSS/区间分布均依赖它们
   const ftp = settings?.profile.ftp
@@ -535,7 +545,6 @@ function ActivityDetailPage() {
 
       <section className="activity-detail__charts" aria-label="活动图表">
         <SpeedChart records={chartRecords} />
-        <HeartRateChart records={chartRecords} />
         <CadenceChart records={chartRecords} />
         <ElevationChart records={chartRecords} />
         <PowerChart records={chartRecords} />
@@ -550,6 +559,10 @@ function ActivityDetailPage() {
         hasPowerData={hasPowerData}
         intensityFactor={intensityFactor}
         tss={tss}
+        avgHeartRate={activity.avgHeartRate}
+        maxHeartRate={activity.maxHeartRate}
+        minHeartRate={minHeartRate}
+        heartRateRecords={chartRecords}
       />
     </div>
   )
@@ -576,10 +589,23 @@ interface TrainingZonesSectionProps {
 
   /** 训练压力分数（同上） */
   tss: number | undefined
+
+  /** 平均心率（摘要字段，缺失为 undefined） */
+  avgHeartRate: number | undefined
+
+  /** 最大心率（摘要字段，缺失为 undefined） */
+  maxHeartRate: number | undefined
+
+  /** 最小心率（逐点计算，缺失为 undefined） */
+  minHeartRate: number | undefined
+
+  /** 心率折线图数据（抽稀后逐点记录） */
+  heartRateRecords: ActivityRecord[]
 }
 
 /**
- * 训练区间区块（规格 §26）：心率/功率区间分布条 + IF/TSS。
+ * 训练区间区块（规格 §26）：心率统计（平均/最大/最小）+ 心率折线图 +
+ * 心率/功率区间分布条 + IF/TSS + 计算方式说明。
  * 仅当对应配置存在且数据含该指标时显示区间；无任何可显示内容时
  * 展示引导文案（无依据不伪造计算）。
  *
@@ -592,9 +618,20 @@ function TrainingZonesSection({
   hasPowerData,
   intensityFactor,
   tss,
+  avgHeartRate,
+  maxHeartRate,
+  minHeartRate,
+  heartRateRecords,
 }: TrainingZonesSectionProps) {
   const showHeartRate = heartRateZones !== null && hasHeartRateData
   const showPower = powerZones !== null && hasPowerData
+
+  // 心率统计行：摘要平均/最大 + 逐点最小，缺失显示 '—'
+  const heartRateStats: ReadonlyArray<{ label: string; value: number | undefined }> = [
+    { label: '平均心率', value: avgHeartRate },
+    { label: '最大心率', value: maxHeartRate },
+    { label: '最小心率', value: minHeartRate },
+  ]
 
   // 区间/指标均无可显示内容（配置缺失或数据无对应指标）时显示引导文案
   const metrics =
@@ -608,6 +645,18 @@ function TrainingZonesSection({
   return (
     <section className="activity-detail__zones" aria-label="训练区间">
       <h2 className="activity-detail__zones-title">训练区间</h2>
+      {hasHeartRateData && (
+        <div className="activity-detail__hr-analysis">
+          <div className="activity-detail__hr-stats">
+            {heartRateStats.map((stat) => (
+              <span key={stat.label}>
+                {stat.label} {stat.value === undefined ? '—' : `${Math.round(stat.value)} bpm`}
+              </span>
+            ))}
+          </div>
+          <HeartRateChart records={heartRateRecords} />
+        </div>
+      )}
       {showHeartRate || showPower || metrics !== null ? (
         <>
           {showHeartRate && heartRateZones !== null && (

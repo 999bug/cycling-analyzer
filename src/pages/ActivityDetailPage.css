@@ -254,6 +254,20 @@
   font-size: 13px;
 }
 
+/* 心率分析块：统计行 + 心率折线图 */
+.activity-detail__hr-analysis {
+  margin-bottom: 14px;
+}
+
+.activity-detail__hr-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .activity-detail__zone-group {
   margin-bottom: 14px;
 }

@@ -189,6 +189,40 @@ describe('活动详情页训练分析集成', () => {
     expect(screen.queryByText('功率区间')).not.toBeInTheDocument()
   })
 
+  it('训练区间区块内心率统计行与心率折线图（平均/最大/最小）', async () => {
+    // 心率 [120,140,160,150,130]：算术平均 140、最大 160、最小 120
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130], {
+        avgHeartRate: 140,
+        maxHeartRate: 160,
+      }),
+    )
+    renderPage()
+
+    const zonesSection = await screen.findByRole('region', { name: '训练区间' })
+    expect(within(zonesSection).getByText('平均心率 140 bpm')).toBeInTheDocument()
+    expect(within(zonesSection).getByText('最大心率 160 bpm')).toBeInTheDocument()
+    expect(within(zonesSection).getByText('最小心率 120 bpm')).toBeInTheDocument()
+    // 心率折线图移入训练区间区块（x 轴时间/距离可切换）
+    expect(within(zonesSection).getByText('心率')).toBeInTheDocument()
+    // 图表区不再重复心率图
+    const chartsSection = screen.getByRole('region', { name: '活动图表' })
+    expect(within(chartsSection).queryByText('心率')).not.toBeInTheDocument()
+  })
+
+  it('无心率数据时训练区间区块不显示心率统计与折线图', async () => {
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200, 300, 200, 100], [], {
+        avgHeartRate: undefined,
+        maxHeartRate: undefined,
+      }),
+    )
+    renderPage()
+
+    const zonesSection = await screen.findByRole('region', { name: '训练区间' })
+    expect(within(zonesSection).queryByText(/平均心率/)).not.toBeInTheDocument()
+  })
+
   it('训练区间区块展示「计算方式说明」折叠块（含区间边界与 IF/TSS 公式）', async () => {
     await repo.addActivity(makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130]))
     renderPage()
