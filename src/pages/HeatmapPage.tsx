@@ -28,8 +28,8 @@ const HEATMAP_SIMPLIFY_TOLERANCE_METERS = 10
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_TRACK_POINTS = 2
 
-/** 热力线颜色（暖红，叠加后加深形成热力感） */
-const TRACK_COLOR = '#ff453a'
+/** 热力线颜色（天空蓝，与轨迹路线的主蓝 #4f8cff 区分；低透明度叠加后加深形成热力感） */
+const TRACK_COLOR = '#38bdf8'
 
 /** 热力线宽（像素） */
 const TRACK_WEIGHT = 2
