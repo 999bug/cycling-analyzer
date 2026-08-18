@@ -102,6 +102,8 @@ describe('骑行热力图页', () => {
     expect(screen.getByText(/已探索 \d+ 个 1km 网格（约 [\d.]+ km²）/)).toBeInTheDocument()
     // Leaflet 地图容器已渲染
     expect(container.querySelector('.leaflet-container')).not.toBeNull()
+    // 全屏查看按钮悬浮于地图右上角
+    expect(screen.getByRole('button', { name: '全屏查看' })).toBeInTheDocument()
   })
 
   it('只有 1 个坐标点的轨迹不可绘制，显示引导文案', async () => {

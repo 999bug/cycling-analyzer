@@ -70,7 +70,7 @@
 |---|---|---|
 | Dashboard | `/` | 本周/本月/总计（次数/距离/时长/爬升）+ 30/90/365 天趋势图；**订阅 importStore 导入后自动刷新** |
 | Activity List | `/activities` | 排序/搜索/月份+类型筛选/分页 20/页；缺失字段 `—`；行点击跳详情 |
-| Activity Detail | `/activities/:id` | 8 指标卡 + Leaflet 轨迹（Douglas-Peucker 抽稀 + 起终点标记 + fitBounds）+ 7 图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
+| Activity Detail | `/activities/:id` | 10 指标卡（距离/运动时长/总时长/爬升/累计下降/平均速度/平均心率/平均功率/平均踏频/卡路里，功率活动追加标准化功率卡）+ Leaflet 轨迹（Douglas-Peucker 抽稀 + 起点绿点/终点黑白格旗标 + fitBounds + 滚轮缩放 + 全屏查看）+ 7 图表（速度/心率/踏频/海拔/功率/功率曲线/速度+心率组合，Tooltip/Brush/时间-距离轴）+ 删除（二次确认+级联） |
 | Statistics / Calendar / Settings | `/statistics` `/calendar` `/settings` | ✅ P1 完成（见 §3）；统计页含「个人纪录」「设备统计」「路线分析」区块（P2，见 §3.1） |
 | Heatmap 热力图 | `/heatmap` | ✅ P2 完成（见 §3.1：全部轨迹低透明度叠加） |
 | Year Review 年度回顾 | `/year-review` | ✅ 后续项完成（见 §4：年份切换 + 年度指标 + 月度距离图） |
@@ -161,6 +161,9 @@ P1 阶段任务已全部完成，无进行中项。
   - 死代码清理：getRouteEndpoints（合并扫描后被 extractEndpoints 取代）从仓库接口删除
 - [x] **E2E 测试**（✅ 3/3 通过）：`playwright.config.ts`（webServer 自动起 dev server，workers=1 串行防 IndexedDB 互染）+ `e2e/smoke.spec.ts`：应用加载与导航、各页路由可达、核心链路「导入合成 FIT（tests/fixtures/cycling-gps.fit）→ 列表 → 详情」；`npm run test:e2e` 本地运行（不进 CI deploy）；vitest exclude e2e/ 防 .spec.ts 混入
 - [x] **a11y 无障碍**（✅ 4/4 测试 `tests/a11y.test.tsx`）：列表标题列渲染为真实链接（stopPropagation 防重复导航）；MetricChart/CombinedChart 横轴切换按钮 role=group + aria-pressed；AppLayout 加「跳转到主内容」skip link（聚焦浮出）+ main#main-content + 主导航 aria-label；ImportPanel toggle aria-expanded。既有良好实践保留：表格行 tabIndex+Enter/Space、日历年份按钮 aria-label、趋势图 role=tab、着色切换 aria-pressed、范围选择 radiogroup
+- [x] **品牌区回首页 + 数值单位同行**（纯 UI 调整）：AppLayout 品牌区改 `<Link>` 回仪表盘首页；仪表盘/统计页指标卡数值 `white-space: nowrap`，修复窄卡数值与单位（km/m）折行
+- [x] **详情页指标卡扩充**：运动时长/总时长分列 + 新增累计下降（elevationLoss，缺失显示 — 不伪造），基础 10 卡，功率活动追加标准化功率
+- [x] **地图全屏查看 + 缩放控件右下角 + 起终点标识区分**（✅ 8/8 测试）：`src/map/mapFullscreen.tsx`——FullscreenSync（fullscreenchange → `map.invalidateSize()` 防瓦片错位）、ZoomControlBottomRight（+/− 统一右下角，`map.zoomControl.setPosition`）、MapFullscreenButton（右上角悬浮按钮，Fullscreen API 作用于相对定位包裹层，Esc 退出按钮图标同步还原）；详情页轨迹图与热力图共用接入；终点标记改**黑白格完赛旗**（divIcon + CSS `repeating-conic-gradient` 棋盘格），起点保留绿色圆点
 
 ---
 

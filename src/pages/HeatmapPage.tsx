@@ -5,8 +5,9 @@
  * 形成"热力"效果（无新依赖，纯 Leaflet Polyline 叠加）。
  * 轨迹抽稀复用 Douglas-Peucker（simplifyRoute），加载期间显示进度，
  * 无坐标数据时显示引导文案（不伪造）。
+ * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { db } from '@/storage/db'
@@ -14,6 +15,11 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { simplifyRoute } from '@/map/simplify'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { summariesScanKey } from '@/storage/scanCache'
+import {
+  FullscreenSync,
+  MapFullscreenButton,
+  ZoomControlBottomRight,
+} from '@/map/mapFullscreen'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -68,6 +74,8 @@ function FitAllBounds({ tracks }: { tracks: LatLng[][] }) {
 function HeatmapPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [tracks, setTracks] = useState<LatLng[][]>([])
+  // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   // 加载全部活动轨迹：摘要列表 → 逐活动加载逐点 → 抽稀取坐标
   useEffect(() => {
@@ -134,20 +142,25 @@ function HeatmapPage() {
             共 {tracks.length} 条轨迹，已探索 {coverage.cellCount} 个 1km 网格（约{' '}
             {coverage.areaKm2} km²），骑得越多的路段颜色越深
           </p>
-          <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {tracks.map((track, index) => (
-              <Polyline
-                key={index}
-                positions={track}
-                pathOptions={{ color: TRACK_COLOR, weight: TRACK_WEIGHT, opacity: TRACK_OPACITY }}
+          <div className="heatmap-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
+            <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-            ))}
-            <FitAllBounds tracks={tracks} />
-          </MapContainer>
+              {tracks.map((track, index) => (
+                <Polyline
+                  key={index}
+                  positions={track}
+                  pathOptions={{ color: TRACK_COLOR, weight: TRACK_WEIGHT, opacity: TRACK_OPACITY }}
+                />
+              ))}
+              <FitAllBounds tracks={tracks} />
+              <FullscreenSync />
+              <ZoomControlBottomRight />
+            </MapContainer>
+            <MapFullscreenButton targetRef={wrapperRef} />
+          </div>
         </>
       )}
     </div>

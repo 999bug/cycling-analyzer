@@ -19,10 +19,23 @@
   font-size: 13px;
 }
 
-/* 地图容器：占满剩余高度，圆角与卡片风格一致 */
-.heatmap-page__map {
+/* 地图全屏包裹层：作为 flex 子项占满剩余高度（原地图的 flex 布局上移一层） */
+.heatmap-page__map-wrapper {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 480px;
+}
+
+/* 地图容器：填满包裹层，圆角与卡片风格一致 */
+.heatmap-page__map {
+  flex: 1;
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+/* 全屏查看时去掉圆角与描边 */
+.map-fullscreen-wrapper:fullscreen .heatmap-page__map {
+  border: none;
+  border-radius: 0;
 }

@@ -1,12 +1,14 @@
 /**
  * 活动轨迹地图（规格 §16）。
  *
- * react-leaflet 绘制轨迹 Polyline + 起点/终点 CircleMarker，
+ * react-leaflet 绘制轨迹 Polyline + 起点绿色圆点 / 终点黑白格旗标，
  * 地图自动 fitBounds 到轨迹范围。
  * 默认单色轨迹；coloring 指定时按速度/心率/功率/海拔分段着色。
+ * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
  */
-import { useEffect, useMemo } from 'react'
-import { CircleMarker, MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
+import { useEffect, useMemo, useRef } from 'react'
+import { divIcon } from 'leaflet'
+import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RoutePoint } from '@/types/activity'
 import {
@@ -16,16 +18,25 @@ import {
   type ColoringMode,
   type ColoredLine,
 } from '@/map/routeColoring'
+import {
+  FullscreenSync,
+  MapFullscreenButton,
+  ZoomControlBottomRight,
+} from '@/map/mapFullscreen'
 import '@/map/ActivityMap.css'
 
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_POINTS = 2
 
-/** 起点标记颜色（绿色） */
+/** 起点标记颜色（绿色圆点） */
 const START_COLOR = '#34c759'
 
-/** 终点标记颜色（红色） */
-const END_COLOR = '#ff453a'
+/** 终点黑白格旗标（完赛旗样式，CSS 绘制棋盘格） */
+const FINISH_ICON = divIcon({
+  className: 'activity-map__finish-marker',
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+})
 
 /** 轨迹线颜色（主题主色） */
 const ROUTE_COLOR = '#4f8cff'
@@ -74,7 +85,10 @@ function FitBounds({ points }: { points: RoutePoint[] }) {
  * @param props 组件参数
  */
 function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
-  // 经纬度元组列表：Polyline / CircleMarker 共用
+  // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // 经纬度元组列表：Polyline / CircleMarker / Marker 共用
   const latLngs = useMemo(
     () => points.map((point) => [point.latitude, point.longitude] as [number, number]),
     [points],
@@ -114,30 +128,35 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
   const end = latLngs[latLngs.length - 1]
 
   return (
-    <MapContainer
-      className="activity-map"
-      center={start}
-      zoom={14}
-      bounds={latLngs}
-      scrollWheelZoom
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {hasMetricData
-        ? coloredLines.map((line, index) => (
-            <Polyline
-              key={index}
-              positions={line.positions}
-              pathOptions={{ color: line.color, weight: ROUTE_WEIGHT }}
-            />
-          ))
-        : <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />}
-      <CircleMarker center={start} radius={6} pathOptions={{ color: START_COLOR, fillColor: START_COLOR, fillOpacity: 1 }} />
-      <CircleMarker center={end} radius={6} pathOptions={{ color: END_COLOR, fillColor: END_COLOR, fillOpacity: 1 }} />
-      <FitBounds points={points} />
-    </MapContainer>
+    <div className="map-fullscreen-wrapper" ref={wrapperRef}>
+      <MapContainer
+        className="activity-map"
+        center={start}
+        zoom={14}
+        bounds={latLngs}
+        scrollWheelZoom
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {hasMetricData
+          ? coloredLines.map((line, index) => (
+              <Polyline
+                key={index}
+                positions={line.positions}
+                pathOptions={{ color: line.color, weight: ROUTE_WEIGHT }}
+              />
+            ))
+          : <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />}
+        <CircleMarker center={start} radius={6} pathOptions={{ color: START_COLOR, fillColor: START_COLOR, fillOpacity: 1 }} />
+        <Marker position={end} icon={FINISH_ICON} />
+        <FitBounds points={points} />
+        <FullscreenSync />
+        <ZoomControlBottomRight />
+      </MapContainer>
+      <MapFullscreenButton targetRef={wrapperRef} />
+    </div>
   )
 }
 
