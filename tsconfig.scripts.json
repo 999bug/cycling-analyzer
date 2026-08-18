@@ -1,0 +1,9 @@
+{
+  // 构建脚本（scripts/）类型检查配置：与 app 同设置（DOM/vite client 类型），
+  // 仅纳入范围不同——脚本能 import src 解析纯函数（@/ 别名在同一程序内解析）。
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo"
+  },
+  "include": ["scripts", "src", "tests/setup.ts"]
+}

@@ -26,6 +26,9 @@ dist-ssr
 # 用户本地真实骑行数据（不进仓库）
 private-fixtures/
 
+# 作者数据快照构建产物（CI 由 author-data/ 源数据生成，见 scripts/build-author-data.ts）
+public/author-data/
+
 # Playwright E2E 产物
 test-results/
 playwright-report/
