@@ -34,6 +34,8 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   line-height: 1.2;
+  /* 数值与单位（km/m）之间是普通空格，窄卡片会在空格处折行——禁止换行 */
+  white-space: nowrap;
 }
 
 .stat-card__label {

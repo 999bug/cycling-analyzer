@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import ImportPanel from '@/features/import/ImportPanel'
 import '@/layouts/AppLayout.css'
 
@@ -34,7 +34,9 @@ function AppLayout() {
         跳转到主内容
       </a>
       <aside className="app-layout__sidebar">
-        <div className="app-layout__brand">骑行数据</div>
+        <Link className="app-layout__brand" to="/" title="回到仪表盘首页">
+          骑行数据
+        </Link>
         <nav className="app-layout__nav" aria-label="主导航">
           {NAV_ITEMS.map((item) => (
             <NavLink

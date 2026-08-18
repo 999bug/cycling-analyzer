@@ -18,10 +18,17 @@
 }
 
 .app-layout__brand {
+  display: block;
   padding: 8px 12px 20px;
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.app-layout__brand:hover {
+  color: var(--primary);
 }
 
 .app-layout__nav {
