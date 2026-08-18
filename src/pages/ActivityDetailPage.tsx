@@ -33,6 +33,8 @@ import { calculateIntensityFactor, calculateTss } from '@/features/analysis/inte
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import SplitsSection from '@/features/activity/SplitsSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
+import AchievementsSection from '@/features/activity/AchievementsSection'
+import { detectAchievements } from '@/features/activity/achievements'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import { downsampleRecords } from '@/charts/downsample'
 import {
@@ -197,6 +199,8 @@ function ActivityDetailPage() {
   const [saving, setSaving] = useState(false)
   // 用户设置（FTP/最大心率等，训练分析依赖；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
+  // 历史活动摘要（成就检测输入；undefined = 尚未加载完成）
+  const [history, setHistory] = useState<ActivitySummary[]>()
   // 轨迹着色模式（规格 §16，默认单色）
   const [coloring, setColoring] = useState<'none' | ColoringMode>('none')
 
@@ -246,6 +250,27 @@ function ActivityDetailPage() {
       cancelled = true
     }
   }, [])
+
+  // 加载历史活动摘要（成就检测输入；失败不阻断详情页，成就栏仅静默缺席）
+  useEffect(() => {
+    if (activity === undefined) {
+      return
+    }
+    let cancelled = false
+    repository
+      .listAllSummaries()
+      .then((summaries) => {
+        if (!cancelled) {
+          setHistory(summaries)
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load activity history', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activity])
 
   // 轨迹抽稀：逐点数据变化时重算（详情页仅此一处消费 records 全量）
   const routePoints = useMemo(
@@ -304,6 +329,12 @@ function ActivityDetailPage() {
     [records, maxHeartRate],
   )
   const powerZones = useMemo(() => calculatePowerZones(records, ftp), [records, ftp])
+
+  // 成就检测：与开始时间更早的历史活动比较纪录（首次骑行/无刷新为空数组）
+  const achievements = useMemo(
+    () => (activity === undefined ? [] : detectAchievements(activity, history ?? [])),
+    [activity, history],
+  )
 
   /**
    * 删除活动（规格 §32）：确认后删除并跳回列表页。
@@ -520,6 +551,8 @@ function ActivityDetailPage() {
           </div>
         ))}
       </section>
+
+      <AchievementsSection achievements={achievements} distanceUnit={distanceUnit} />
 
       <section className="activity-detail__map">
         <div className="activity-detail__coloring" role="group" aria-label="轨迹着色">

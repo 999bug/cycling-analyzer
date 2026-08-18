@@ -407,7 +407,10 @@ describe('单位偏好显示（规格 §27）', () => {
     renderPage()
 
     expect(await screen.findByText('10.00 mi')).toBeInTheDocument()
-    expect(screen.getByText('22.4 mph')).toBeInTheDocument()
+    // 平均速度限定在指标卡区块内断言（分段详情表格可能渲染相同值）
+    expect(
+      within(screen.getByRole('region', { name: '活动指标' })).getByText('22.4 mph'),
+    ).toBeInTheDocument()
   })
 
   it('12 小时制设置后开始时间按 12h 显示', async () => {
@@ -507,5 +510,66 @@ describe('设为赛段（后续工作项：完整 Segment）', () => {
     renderPage()
 
     expect(await screen.findByRole('button', { name: '设为赛段' })).toBeDisabled()
+  })
+})
+
+describe('成就栏（刷新纪录检测）', () => {
+  let repo: DexieActivityRepository
+
+  beforeEach(() => {
+    repo = new DexieActivityRepository(testDb)
+    // jsdom 中 getBoundingClientRect 恒为 0，mock 容器尺寸让 Recharts 正常渲染
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 800,
+      height: 220,
+    } as DOMRect)
+  })
+
+  it('本次骑行刷新距离纪录时显示成就徽章', async () => {
+    // 历史活动 10 km，本次 20 km → 最远骑行成就（其余维度本次均小于历史）
+    await repo.addActivity(
+      makeActivity('act-old', [100], [120], {
+        startTime: '2026-07-01T08:00:00.000Z',
+        distance: 10_000,
+        duration: 4000,
+        elevationGain: 900,
+        avgSpeed: 15,
+        avgPower: 300,
+      }),
+    )
+    await repo.addActivity(makeActivity('act-1', [100], [120], { distance: 20_000 }))
+    renderPage()
+
+    const region = await screen.findByRole('region', { name: '本次成就' })
+    expect(within(region).getByText('最远骑行')).toBeInTheDocument()
+    expect(within(region).getByText('20.00 km')).toBeInTheDocument()
+    expect(within(region).getByText('原纪录 10.00 km')).toBeInTheDocument()
+  })
+
+  it('首次骑行（无历史）不显示成就栏', async () => {
+    await repo.addActivity(makeActivity('act-1', [100], [120]))
+    renderPage()
+
+    // 等待详情加载完成后断言缺席
+    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '本次成就' })).not.toBeInTheDocument()
+  })
+
+  it('历史活动全面更强时不显示成就栏', async () => {
+    await repo.addActivity(
+      makeActivity('act-old', [100], [120], {
+        startTime: '2026-07-01T08:00:00.000Z',
+        distance: 30_000,
+        duration: 4000,
+        elevationGain: 900,
+        avgSpeed: 15,
+        avgPower: 300,
+      }),
+    )
+    await repo.addActivity(makeActivity('act-1', [100], [120]))
+    renderPage()
+
+    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '本次成就' })).not.toBeInTheDocument()
   })
 })
