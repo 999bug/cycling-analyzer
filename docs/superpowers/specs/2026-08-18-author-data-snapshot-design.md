@@ -120,7 +120,9 @@ CI（.github/workflows/deploy.yml）在 `npm run test` 之后、`npm run build` 
 - `src/storage/dataSource.ts`：`export type DataSource = 'author' | 'local'`
 - `src/stores/dataSourceStore.ts`（zustand + persist，localStorage key `cycling-data-source`）：
   - `source: DataSource`（用户显式选择，默认 'author'）
-  - `authorAvailable: boolean`（manifest 探测结果，默认 true 乐观假设）
+  - `authorAvailable: boolean`（manifest 探测结果，**默认 false**——探测成功才翻牌；
+    现有页面测试不走探测，有效源恒为 local，测试零影响；生产端首屏先 local 加载态，
+    manifest 探测完成（毫秒级）后自动切 author 刷新）
   - `effectiveSource()`：source === 'author' && authorAvailable ? 'author' : 'local'
   - `setSource(source)`、`setAuthorAvailable(available)`
 - `initDataSource()`（main.tsx 启动调用，与 initTheme 并列）：fetch manifest.json，
