@@ -32,3 +32,6 @@ public/author-data/
 # Playwright E2E 浜х墿
 test-results/
 playwright-report/
+
+# CodeGraph 守护进程文件
+.codegraph/daemon.pid
