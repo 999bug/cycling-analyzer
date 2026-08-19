@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（品牌区视觉升级）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（品牌定稿 2.0.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -27,6 +27,7 @@
 | ✅ 已提交 | 地图瓦片源自动降级（OSM → 高德 + GCJ-02 纠偏） | `src/map/tileSources.ts`（双瓦片源定义 + WGS-84→GCJ-02 标准算法，境内偏移/境外原样）；`src/map/FallbackTileLayer.tsx`（连续 3 次 tileerror 且期间无 tileload → 降级回调，单向防重）；详情页 ActivityMap 与热力图页接入（高德源时展示坐标统一转换，sessionStorage key `cycling-map-tile-fallback` 会话记忆）；测试 12 新增（tileSources 6 + fallbackTileLayer 6） | 已提交 `1b2c54b`，随 1.9.0 推送 |
 | ✅ 已提交 | 品牌焕新：骑记 Ride Insight → 骑了么 + 新 Logo | 站名全量替换（index.html/404.html 标题、侧边栏品牌区删英文行 Ride Insight、README、分享卡落款/下载文件名）；新 Logo `public/qileme.png`（用户 AI 生成原图 2848×1600，去水印后压缩为 128×72，原图归档 `docs/brand/qileme-source.png`）接入侧边栏 + favicon；废弃 `ride.png` 删除；a11y 与 e2e 品牌断言同步 | 已提交 `c735121`，随 1.9.0 推送 |
 | ✅ 已提交 | 品牌区视觉升级（Logo 放大 + 设计升级 + README 截图更新） | Logo 40 → 72px（`e84126d`）；品牌区设计升级（`f46de54`）：Logo 卡片化（圆角 10px + 边框 + 投影）、slogan 荧光绿左对齐、悬停微动效（prefers-reduced-motion 降级）；README 截图重截 8 页 + 截图脚本 HTTPS_PROXY 支持（`7819c0b`） | 已推送，随 1.10.0 发布 |
+| ✅ 已提交 | 品牌定稿：通栏横幅图品牌区 + 新 Logo（2.0.0 大版本） | 新 Logo（自行车 + 数据图形，用户 AI 生成 1774×887 → 512×256 高清版，原图/矢量稿归档 `docs/brand/`）替换旧图标（`dcd9898`）；品牌区改为**通栏横幅图**（负 margin 抵消侧边栏内边距，图内自带品牌名，去 HTML 文字，`e2cc2f2`）；README 截图重截 8 页 + 截图脚本修复瓦片页 networkidle 超时（`113447f`）；版本 1.10.0 → **2.0.0**（成熟产品标记） | 随 2.0.0 发布 |
 
 ---
 
