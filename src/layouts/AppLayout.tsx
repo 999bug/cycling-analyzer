@@ -37,17 +37,11 @@ function AppLayout() {
       </a>
       <aside className="app-layout__sidebar">
         <Link className="app-layout__brand" to="/" title="回到仪表盘首页">
-          <span className="app-layout__brand-row">
-            <img
-              className="app-layout__brand-logo"
-              src={`${import.meta.env.BASE_URL}qileme.png`}
-              alt="骑了么 logo"
-            />
-            <span className="app-layout__brand-text">
-              <span className="app-layout__brand-name">骑了么</span>
-              <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
-            </span>
-          </span>
+          <img
+            className="app-layout__brand-logo"
+            src={`${import.meta.env.BASE_URL}qileme.png`}
+            alt="骑了么 logo"
+          />
         </Link>
         <DataSourceSwitcher />
         <nav className="app-layout__nav" aria-label="主导航">

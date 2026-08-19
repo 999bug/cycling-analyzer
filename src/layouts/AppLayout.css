@@ -21,20 +21,16 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px 20px;
+  /* 负 margin 抵消侧边栏内边距，横幅图真正通栏贴边 */
+  margin: 0 -12px;
+  padding: 8px 0 20px;
   text-decoration: none;
   border-radius: 8px;
 }
 
-.app-layout__brand-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Logo 白卡：圆角 + 柔和边框 + 投影，深色侧边栏中形成有意的品牌卡片 */
+/* 完整横幅图占满侧边栏宽度（下方展示 HTML 文字） */
 .app-layout__brand-logo {
-  width: 64px;
+  width: 100%;
   height: auto;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 60%, var(--text));
@@ -50,30 +46,7 @@
   box-shadow: 0 2px 8px rgba(13, 59, 76, 0.1);
 }
 
-/* 品牌名 + slogan 文字列：slogan 严格左对齐品牌名，锚定清晰 */
-.app-layout__brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.app-layout__brand-name {
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text);
-  line-height: 1.2;
-}
-
-/* Slogan 用主题主色（深色荧光绿 / 浅色深蓝）：呼应 Logo 自行车绿，随主题自动适配 */
-.app-layout__brand-tagline {
-  font-size: 12px;
-  letter-spacing: 1.2px;
-  color: var(--primary);
-  line-height: 1.2;
-}
-
-/* 悬停微动效：Logo 卡片轻浮 + 边框泛主色 + 投影加深 */
+/* 悬停微动效：横幅图轻浮 + 边框泛主色 + 投影加深 */
 .app-layout__brand:hover .app-layout__brand-logo {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--primary) 50%, transparent);
@@ -82,10 +55,6 @@
 
 :root[data-theme='light'] .app-layout__brand:hover .app-layout__brand-logo {
   box-shadow: 0 3px 12px rgba(13, 59, 76, 0.16);
-}
-
-.app-layout__brand:hover .app-layout__brand-name {
-  color: var(--primary);
 }
 
 /* 系统「减少动态效果」时禁用过渡动画 */
