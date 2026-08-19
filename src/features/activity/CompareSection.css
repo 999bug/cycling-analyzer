@@ -1,0 +1,126 @@
+/**
+ * 活动对比区块样式。
+ * 颜色取自全局 CSS 变量，深色基调与全局一致。
+ */
+.compare-section {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+
+.compare-section__title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.compare-section__picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.compare-section__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.compare-section__select {
+  flex: 1;
+  max-width: 360px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.compare-section__map-wrapper {
+  position: relative;
+}
+
+.compare-section__map {
+  height: 320px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.compare-section__legend {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+
+.compare-section__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-section__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.compare-section__legend-dot--a {
+  background: #4f8cff;
+}
+
+.compare-section__legend-dot--b {
+  background: #f97316;
+}
+
+.compare-section__scroller {
+  overflow-x: auto;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 8px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.compare-table th:first-child,
+.compare-table td:first-child {
+  text-align: left;
+}
+
+.compare-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 12px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 差值语义色：增长 = 橙，减少 = 绿 */
+.compare-table__diff--up {
+  color: #f97316;
+  font-weight: 600;
+}
+
+.compare-table__diff--down {
+  color: #22c55e;
+  font-weight: 600;
+}

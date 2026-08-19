@@ -5,7 +5,7 @@
  * 不在任何分组 / 组内仅自身 / 分组数据为空 → 空数组。
  */
 import { describe, expect, it } from 'vitest'
-import { compareDurations, findMatchingRides } from '@/features/routes/similarRides'
+import { compareDurations, findMatchingRides, trackToSvgPoints } from '@/features/routes/similarRides'
 import type { RouteGroup } from '@/features/routes/routeGrouping'
 
 /** 构造一条路线分组（3 个成员，时间升序） */
@@ -51,6 +51,39 @@ describe('findMatchingRides 匹配的骑行', () => {
   it('分组数据为空时返回空数组', () => {
     expect(findMatchingRides(null, 'a1')).toEqual([])
     expect(findMatchingRides([], 'a1')).toEqual([])
+  })
+})
+
+describe('trackToSvgPoints 迷你轨迹折线', () => {
+  it('两点轨迹映射到视口边界', () => {
+    // 西南角 → 东北角：应铺满视口
+    const points = trackToSvgPoints(
+      [
+        [30.0, 120.0],
+        [31.0, 121.0],
+      ],
+      120,
+      64,
+    )
+    expect(points).toBe('0.0,64.0 120.0,0.0')
+  })
+
+  it('纬度向上（南低北高）；经度无变化时 x 居中为 0', () => {
+    // 纬度从 30 → 31：y 从 50 → 0（向上）；经度相同 → x = 0
+    const points = trackToSvgPoints(
+      [
+        [30.0, 120.5],
+        [31.0, 120.5],
+      ],
+      100,
+      50,
+    )
+    expect(points).toBe('0.0,50.0 0.0,0.0')
+  })
+
+  it('单点或空轨迹返回空字符串', () => {
+    expect(trackToSvgPoints([], 100, 50)).toBe('')
+    expect(trackToSvgPoints([[30.0, 120.0]], 100, 50)).toBe('')
   })
 })
 

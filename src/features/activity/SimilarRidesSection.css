@@ -25,9 +25,9 @@
 
 .similar-rides__item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   text-decoration: none;
   color: var(--text);
@@ -36,6 +36,23 @@
 
 .similar-rides__item:hover {
   background-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+/* 迷你轨迹折线（Strava 匹配活动风格）：主题主色描边，浅色圆角底 */
+.similar-rides__mini-track {
+  width: 120px;
+  height: 64px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 25%, transparent);
+  color: var(--primary);
+}
+
+.similar-rides__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .similar-rides__name {

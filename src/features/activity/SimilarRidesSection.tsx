@@ -11,7 +11,13 @@ import {
   type RouteActivityInput,
   type RouteGroup,
 } from '@/features/routes/routeGrouping'
-import { compareDurations, findMatchingRides, type SimilarRide } from '@/features/routes/similarRides'
+import {
+  compareDurations,
+  findMatchingRides,
+  trackToSvgPoints,
+  type SimilarRide,
+} from '@/features/routes/similarRides'
+import { simplifyRoute } from '@/map/simplify'
 import { summariesScanKey } from '@/storage/scanCache'
 import { formatDate, formatDuration } from '@/utils/format'
 import {
@@ -23,6 +29,13 @@ import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/features/activity/SimilarRidesSection.css'
+
+/** 迷你轨迹折线视口（SVG viewBox） */
+const MINI_TRACK_WIDTH = 120
+const MINI_TRACK_HEIGHT = 64
+
+/** 迷你轨迹抽稀阈值（米）——小图展示，粗抽稀即可 */
+const MINI_TRACK_SIMPLIFY_METERS = 5
 
 /**
  * 本地源路线分组扫描模块级缓存（性能优化）：key = summariesScanKey。
@@ -53,6 +66,8 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
   // 匹配结果（null = 计算中；计算失败或空时区块不渲染）
   const [rides, setRides] = useState<SimilarRide[] | null>(null)
   const [failed, setFailed] = useState(false)
+  // 迷你轨迹折线（活动 ID → SVG points；加载失败/加载中为 null）
+  const [miniTracks, setMiniTracks] = useState<Map<string, string> | null>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
   const repository = useActivityRepository()
   // 当前数据源（作者源路线分组为 CI 预计算产物）
@@ -112,6 +127,40 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
     }
   }, [repository, source, activityId])
 
+  // 匹配确定后加载各活动轨迹 → 迷你折线（Strava 风格缩略轨迹图）
+  useEffect(() => {
+    if (rides === null || rides.length === 0) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const entries = await Promise.all(
+          rides.map(async (ride) => {
+            const records = await repository.getRecords(ride.id)
+            const points = simplifyRoute(records, MINI_TRACK_SIMPLIFY_METERS)
+            const track = points.map(
+              (point) => [point.latitude, point.longitude] as [number, number],
+            )
+            return [ride.id, trackToSvgPoints(track, MINI_TRACK_WIDTH, MINI_TRACK_HEIGHT)] as const
+          }),
+        )
+        if (!cancelled) {
+          setMiniTracks(new Map(entries))
+        }
+      } catch (error) {
+        // 轨迹加载失败：仅展示文字行（不阻塞区块）
+        if (!cancelled) {
+          setMiniTracks(new Map())
+        }
+        console.error('Failed to load mini tracks', error)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [rides, repository])
+
   // 计算中 / 失败 / 无匹配：区块不渲染
   if (failed || rides === null || rides.length === 0) {
     return null
@@ -123,36 +172,55 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
       <ul className="similar-rides__list">
         {rides.map((ride) => {
           const comparison = compareDurations(currentDuration, ride.duration)
+          const points = miniTracks?.get(ride.id)
           return (
             <li key={ride.id}>
               <Link className="similar-rides__item" to={`/activities/${ride.id}`}>
-                <span className="similar-rides__name" title={ride.name}>
-                  {ride.name ?? '未命名活动'}
-                </span>
-                <span className="similar-rides__meta">
-                  {formatDate(ride.startTime)} ·{' '}
-                  {formatDistanceByUnit(ride.distance, distanceUnit)} ·{' '}
-                  {formatDuration(ride.duration)} ·{' '}
-                  {formatSpeedByUnit(ride.distance / ride.duration, distanceUnit)}
-                </span>
-                {comparison !== null && (
-                  <span
-                    className={
-                      'similar-rides__race' +
-                      (comparison.faster === true
-                        ? ' similar-rides__race--faster'
-                        : comparison.faster === false
-                          ? ' similar-rides__race--slower'
-                          : '')
-                    }
-                  >
-                    {comparison.faster === true
-                      ? `比本次快 ${formatDuration(comparison.diffSeconds)}`
-                      : comparison.faster === false
-                        ? `比本次慢 ${formatDuration(comparison.diffSeconds)}`
-                        : '与本次持平'}
+                <svg
+                  className="similar-rides__mini-track"
+                  viewBox={`0 0 ${MINI_TRACK_WIDTH} ${MINI_TRACK_HEIGHT}`}
+                  aria-hidden="true"
+                >
+                  {points !== undefined && points !== '' && (
+                    <polyline
+                      points={points}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                </svg>
+                <span className="similar-rides__text">
+                  <span className="similar-rides__name" title={ride.name}>
+                    {ride.name ?? '未命名活动'}
                   </span>
-                )}
+                  <span className="similar-rides__meta">
+                    {formatDate(ride.startTime)} ·{' '}
+                    {formatDistanceByUnit(ride.distance, distanceUnit)} ·{' '}
+                    {formatDuration(ride.duration)} ·{' '}
+                    {formatSpeedByUnit(ride.distance / ride.duration, distanceUnit)}
+                  </span>
+                  {comparison !== null && (
+                    <span
+                      className={
+                        'similar-rides__race' +
+                        (comparison.faster === true
+                          ? ' similar-rides__race--faster'
+                          : comparison.faster === false
+                            ? ' similar-rides__race--slower'
+                            : '')
+                      }
+                    >
+                      {comparison.faster === true
+                        ? `比本次快 ${formatDuration(comparison.diffSeconds)}`
+                        : comparison.faster === false
+                          ? `比本次慢 ${formatDuration(comparison.diffSeconds)}`
+                          : '与本次持平'}
+                    </span>
+                  )}
+                </span>
               </Link>
             </li>
           )

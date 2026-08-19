@@ -38,6 +38,7 @@ import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpx
 import SplitsSection from '@/features/activity/SplitsSection'
 import ClimbSection from '@/features/activity/ClimbSection'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
+import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
 import AchievementsSection from '@/features/activity/AchievementsSection'
 import { detectAchievements } from '@/features/activity/achievements'
@@ -637,6 +638,8 @@ function ActivityDetailPage() {
         currentDuration={activity.duration}
         distanceUnit={distanceUnit}
       />
+
+      <CompareSection activity={activity} records={records} distanceUnit={distanceUnit} />
 
       <TrainingEffectSection
         aerobic={activity.aerobicTrainingEffect}

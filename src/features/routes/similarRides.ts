@@ -50,6 +50,52 @@ export function findMatchingRides(
 }
 
 /**
+ * 轨迹点归一化为 SVG polyline points（拉伸铺满视口，纬度向上）。
+ * Strava 匹配活动列表的迷你轨迹图风格。
+ *
+ * @param track 轨迹点（[纬度, 经度] 元组）
+ * @param width 视口宽
+ * @param height 视口高
+ * @returns SVG points 字符串（不足 2 点返回空串）
+ */
+export function trackToSvgPoints(
+  track: readonly [number, number][],
+  width: number,
+  height: number,
+): string {
+  if (track.length < 2) {
+    return ''
+  }
+  let minLat = Infinity
+  let maxLat = -Infinity
+  let minLng = Infinity
+  let maxLng = -Infinity
+  for (const [lat, lng] of track) {
+    if (lat < minLat) {
+      minLat = lat
+    }
+    if (lat > maxLat) {
+      maxLat = lat
+    }
+    if (lng < minLng) {
+      minLng = lng
+    }
+    if (lng > maxLng) {
+      maxLng = lng
+    }
+  }
+  const latSpan = maxLat - minLat || 1
+  const lngSpan = maxLng - minLng || 1
+  return track
+    .map(([lat, lng]) => {
+      const x = ((lng - minLng) / lngSpan) * width
+      const y = height - ((lat - minLat) / latSpan) * height
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+}
+
+/**
  * 用时对比结果：与本次骑行相比对方快/慢。
  */
 export interface DurationComparison {
