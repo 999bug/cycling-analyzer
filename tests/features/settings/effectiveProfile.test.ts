@@ -25,6 +25,7 @@ function makeClient(profile: UserProfile | Error): SnapshotClient {
     getSegmentResults: async () => ({}),
     getRouteGroups: async () => [],
     getPowerRecords: async () => [],
+    getRouteTracks: async () => ({ toleranceMeters: 10, routes: [] }),
   }
 }
 

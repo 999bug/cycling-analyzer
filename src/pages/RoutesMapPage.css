@@ -1,0 +1,93 @@
+/**
+ * 骑行路线图页样式：左列表 + 右地图布局。
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深色基调与全局一致。
+ */
+.routes-map-page {
+  padding: 20px 24px;
+  max-width: 1200px;
+}
+
+.routes-map-page__notice {
+  color: var(--text-secondary);
+  padding: 24px 0;
+}
+
+.routes-map-page__layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.routes-map-page__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 260px;
+  flex-shrink: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.routes-map-page__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.routes-map-page__item:hover {
+  background-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.routes-map-page__item--active {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.routes-map-page__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routes-map-page__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.routes-map-page__count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.routes-map-page__map-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.routes-map-page__map {
+  height: 70vh;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}

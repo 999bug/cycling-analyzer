@@ -46,6 +46,7 @@ import {
   SNAPSHOT_VERSION,
   type ActivityRecordsFile,
   type AuthorSnapshotManifest,
+  type RouteTracksFile,
   type SegmentResultsFile,
   type TracksFile,
 } from '@/storage/authorData/snapshotTypes'
@@ -384,7 +385,26 @@ async function writePrecomputed(
   const tracksFile: TracksFile = { toleranceMeters: TRACKS_SIMPLIFY_TOLERANCE_METERS, tracks }
   await writeJson(outDir, 'precomputed/tracks.json', tracksFile)
   await writeJson(outDir, 'precomputed/power-records.json', buildPowerRecords(powerItems))
-  await writeJson(outDir, 'precomputed/route-groups.json', buildRouteGroups(routeItems))
+
+  // 路线分组 + 路线 → 轨迹映射（路线总览地图页：轨迹按路线归属着色）
+  const routeGroups = buildRouteGroups(routeItems)
+  const trackById = new Map(activities.map((item, index) => [item.summary.id, tracks[index]]))
+  const routeTracksFile: RouteTracksFile = {
+    toleranceMeters: TRACKS_SIMPLIFY_TOLERANCE_METERS,
+    routes: routeGroups
+      .map((group) => ({
+        activityIds: group.activities.map((activity) => activity.id),
+        tracks: group.activities
+          .map((activity) => trackById.get(activity.id))
+          .filter((track): track is [number, number][] => track !== undefined),
+        count: group.count,
+        name: group.lastActivityName,
+        lastActivityId: group.lastActivityId,
+      }))
+      .filter((route) => route.tracks.length > 0),
+  }
+  await writeJson(outDir, 'precomputed/route-groups.json', routeGroups)
+  await writeJson(outDir, 'precomputed/route-tracks.json', routeTracksFile)
 }
 
 /**

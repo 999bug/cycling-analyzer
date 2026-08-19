@@ -14,6 +14,7 @@ import type { PowerRecordEntry } from '@/features/records/personalRecords'
 import type {
   ActivityRecordsFile,
   AuthorSnapshotManifest,
+  RouteTracksFile,
   SegmentResultsFile,
   TracksFile,
 } from '@/storage/authorData/snapshotTypes'
@@ -37,6 +38,9 @@ export interface SnapshotClient {
 
   /** 预计算：全部轨迹抽稀点（热力图页） */
   getTracks(): Promise<TracksFile>
+
+  /** 预计算：路线 → 抽稀轨迹（路线总览地图页） */
+  getRouteTracks(): Promise<RouteTracksFile>
 
   /** 预计算：赛段成绩榜（赛段页） */
   getSegmentResults(): Promise<SegmentResultsFile>
@@ -83,6 +87,7 @@ export function createSnapshotClient(): SnapshotClient {
     getProfile: () => fetchJson('profile.json'),
     getSegments: () => fetchJson('segments.json'),
     getTracks: () => fetchJson('precomputed/tracks.json'),
+    getRouteTracks: () => fetchJson('precomputed/route-tracks.json'),
     getSegmentResults: () => fetchJson('precomputed/segment-results.json'),
     getRouteGroups: () => fetchJson('precomputed/route-groups.json'),
     getPowerRecords: () => fetchJson('precomputed/power-records.json'),

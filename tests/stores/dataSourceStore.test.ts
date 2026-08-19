@@ -27,6 +27,7 @@ function makeClient(manifest: { snapshotVersion: number; author: string } | Erro
     getSegmentResults: async () => ({}),
     getRouteGroups: async () => [],
     getPowerRecords: async () => [],
+    getRouteTracks: async () => ({ toleranceMeters: 10, routes: [] }),
   }
 }
 

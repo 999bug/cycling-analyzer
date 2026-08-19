@@ -12,4 +12,5 @@ export const ROUTES = [
   '/heatmap',
   '/year-review',
   '/segments',
+  '/routes-map',
 ] as const

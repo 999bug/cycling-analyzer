@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/statistics', label: '统计' },
   { to: '/calendar', label: '日历' },
   { to: '/heatmap', label: '热力图' },
+  { to: '/routes-map', label: '路线图' },
   { to: '/year-review', label: '年度回顾' },
   { to: '/segments', label: '赛段' },
   { to: '/settings', label: '设置' },

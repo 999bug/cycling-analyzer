@@ -44,5 +44,29 @@ export interface TracksFile {
   tracks: [number, number][][]
 }
 
+/** precomputed/route-tracks.json：路线总览地图（路线 → 抽稀轨迹） */
+export interface RouteTracksFile {
+  /** 抽稀阈值（米），与热力图口径一致 */
+  toleranceMeters: number
+
+  /** 路线列表（按次数降序，与 route-groups.json 同序） */
+  routes: Array<{
+    /** 组内活动 ID（按开始时间升序） */
+    activityIds: string[]
+
+    /** 每条活动的抽稀轨迹（[纬度, 经度] 元组数组；无轨迹活动不出现） */
+    tracks: [number, number][][]
+
+    /** 骑行次数 */
+    count: number
+
+    /** 最近骑行活动标题（可为空） */
+    name?: string
+
+    /** 最近骑行活动 ID（跳转详情用） */
+    lastActivityId: string
+  }>
+}
+
 /** precomputed/segment-results.json：赛段 ID（字符串化）→ 成绩榜 */
 export type SegmentResultsFile = Record<string, SegmentEffort[]>

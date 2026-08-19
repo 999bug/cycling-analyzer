@@ -28,6 +28,7 @@
 | ✅ 已提交 | 品牌焕新：骑记 Ride Insight → 骑了么 + 新 Logo | 站名全量替换（index.html/404.html 标题、侧边栏品牌区删英文行 Ride Insight、README、分享卡落款/下载文件名）；新 Logo `public/qileme.png`（用户 AI 生成原图 2848×1600，去水印后压缩为 128×72，原图归档 `docs/brand/qileme-source.png`）接入侧边栏 + favicon；废弃 `ride.png` 删除；a11y 与 e2e 品牌断言同步 | 已提交 `c735121`，随 1.9.0 推送 |
 | ✅ 已提交 | 品牌区视觉升级（Logo 放大 + 设计升级 + README 截图更新） | Logo 40 → 72px（`e84126d`）；品牌区设计升级（`f46de54`）：Logo 卡片化（圆角 10px + 边框 + 投影）、slogan 荧光绿左对齐、悬停微动效（prefers-reduced-motion 降级）；README 截图重截 8 页 + 截图脚本 HTTPS_PROXY 支持（`7819c0b`） | 已推送，随 1.10.0 发布 |
 | ✅ 已提交 | 品牌定稿：通栏横幅图品牌区 + 新 Logo（2.0.0 大版本） | 新 Logo（自行车 + 数据图形，用户 AI 生成 1774×887 → 512×256 高清版，原图/矢量稿归档 `docs/brand/`）替换旧图标（`dcd9898`）；品牌区改为**通栏横幅图**（负 margin 抵消侧边栏内边距，图内自带品牌名，去 HTML 文字，`e2cc2f2`）；README 截图重截 8 页 + 截图脚本修复瓦片页 networkidle 超时（`113447f`）；版本 1.10.0 → **2.0.0**（成熟产品标记） | 随 2.0.0 发布 |
+| ✅ 已完成 | 骑行路线图页（路线总览地图） | `/routes-map` 路由 + 侧边栏「路线图」导航：所有路线按聚类画在一张地图（`src/features/routes/routeMap.ts` 黄金角色相配色，同路线同色），点击路线列表高亮（其余降透明度）；作者源 CI 预计算 `precomputed/route-tracks.json`（buildAuthorData + snapshotClient `getRouteTracks`），本地源实时扫描（复用热力图缓存模式）；测试 11 新增 | 提交待确认 |
 
 ---
 

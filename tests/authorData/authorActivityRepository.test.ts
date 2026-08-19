@@ -66,6 +66,7 @@ function makeFakeClient(): SnapshotClient {
     getSegmentResults: async () => ({}),
     getRouteGroups: async () => [],
     getPowerRecords: async () => [],
+    getRouteTracks: async () => ({ toleranceMeters: 10, routes: [] }),
   }
 }
 
