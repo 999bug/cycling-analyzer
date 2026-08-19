@@ -43,6 +43,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - **SPA 路由**：`main.tsx` basename 生产 `/cycling-analyzer`、dev `/`；`public/404.html` 处理深链接
 - **导入在 Web Worker 解析**（jsdom 自动降级主线程），失败进台账可重试
 - **双数据源**：`dataSourceStore` 管理「作者的数据（CI 构建的静态快照，只读）/ 我的数据（本地 IndexedDB）」；组件统一经 `useActivityRepository()` 获取当前源的仓库，训练配置经 `getEffectiveProfile(source)` 随源切换；作者源下写操作 UI 一律隐藏
+- **地图瓦片源自动降级**：默认 OSM，直连失败（连续 3 张失败且期间无成功）自动降级高德瓦片，sessionStorage 记忆（`cycling-map-tile-fallback`）；高德底图为 GCJ-02（火星坐标），降级后展示坐标统一 WGS-84 → GCJ-02 转换（`src/map/tileSources.ts`，境外原样返回）；详情页与热力图页共用（`src/map/FallbackTileLayer.tsx`）
 
 ### 测试约定
 

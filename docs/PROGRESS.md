@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（作者数据快照）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（地图瓦片源自动降级）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -24,6 +24,8 @@
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |
 | ✅ 已提交 | 导入面板 UI 优化 + 文件选择无反应 bug 修复 | 数据来源下拉改为两个目录导入入口按钮（Strava 导出 / 其他设备），单文件/拖拽导入无需来源（FIT 通用）；修复 FileList live 引用 bug——`event.target.value=''` 重置会清空已保存的 FileList，选择文件/目录回退后页面无反应；先 `Array.from` 转数组再重置，Playwright 实测弹窗→编辑→导入→落库全链路通过 | push 触发 CI（版本保持 1.8.0，本组为发布前完善） |
 | ✅ 已提交 | 同步数据弹窗美化 | 按千问多模态读图审查 + Vercel Web Interface Guidelines 优化：弹窗内边距加大、入口卡片化（图标 + 主文案 + 说明，hover/active/focus 反馈）、拖拽区加上传图标与副文案、弹窗阴影/边框对比增强、淡入上滑动画 + prefers-reduced-motion 降级、overscroll-behavior: contain、关闭按钮 hover 态；千问回评 6.5→7.5+（布局/层次/间距获认可） | 推送待确认（版本保持 1.8.0） |
+| ✅ 已完成 | 地图瓦片源自动降级（OSM → 高德 + GCJ-02 纠偏） | `src/map/tileSources.ts`（双瓦片源定义 + WGS-84→GCJ-02 标准算法，境内偏移/境外原样）；`src/map/FallbackTileLayer.tsx`（连续 3 次 tileerror 且期间无 tileload → 降级回调，单向防重）；详情页 ActivityMap 与热力图页接入（高德源时展示坐标统一转换，sessionStorage key `cycling-map-tile-fallback` 会话记忆）；测试 12 新增（tileSources 6 + fallbackTileLayer 6） | 提交待确认 |
+| ✅ 已完成 | 品牌焕新：骑记 Ride Insight → 骑了么 + 新 Logo | 站名全量替换（index.html/404.html 标题、侧边栏品牌区删英文行 Ride Insight、README、分享卡落款/下载文件名）；新 Logo `public/qileme.png`（用户 AI 生成原图 2848×1600 → 128×72 压缩版，原图归档 `docs/brand/qileme-source.png`）接入侧边栏 + favicon；废弃 `ride.png` 删除；a11y 与 e2e 品牌断言同步 | 提交待确认（与瓦片降级同批发布 1.9.0） |
 
 ---
 
@@ -95,6 +97,13 @@
 | Year Review 年度回顾 | `/year-review` | ✅ 后续项完成（见 §4：年份切换 + 年度指标 + 月度距离图） |
 | Segments 赛段 | `/segments` | ✅ 后续项完成（见 §4：起终点圆穿越匹配 + 成绩榜） |
 
+### 地图（瓦片源自动降级，2026-08-19 新增）
+
+| 能力 | 位置 | 说明 |
+|---|---|---|
+| 瓦片源自动降级 | `src/map/tileSources.ts` + `src/map/FallbackTileLayer.tsx` | 默认 OSM，国内直连失败（**连续 3 张瓦片失败且期间无成功**，tileload 重置计数）自动降级高德瓦片（`webrd0{s}.is.autonavi.com`，国内直连可用）；降级单向防重 + **sessionStorage 记忆**（key `cycling-map-tile-fallback`，本会话内刷新页面直接走高德不再重试 OSM）；详情页 `ActivityMap` 与热力图页 `HeatmapPage` 共用 |
+| GCJ-02 坐标纠偏 | `src/map/tileSources.ts` `wgs84ToGcj02` | 高德底图为火星坐标，WGS-84 轨迹直接叠加偏移 300-500 米；降级后所有展示坐标（Polyline/起终点/fitBounds/热力轨迹）统一转换对齐；标准加密算法，**中国境外坐标原样返回**；测试参考值用在线工具成对数据验证（3 位小数 ≈ 50 米精度） |
+
 ### 部署（规格 §34/§35）
 
 - `.github/workflows/deploy.yml`：push main → lint → test → **build:author-data（作者数据快照）** → build → deploy-pages（Node 22）
@@ -134,7 +143,7 @@ P1 阶段任务已全部完成，无进行中项。
 | 训练状态 Fitness/Fatigue（§39） | ✅ 18/18 测试 | `src/features/analysis/trainingStatus.ts`：每日 TSS 聚合 + CTL 42 天/ATL 7 天 EWMA + TSB 前一日口径；**导入时同步算 NP 落库**（importer.ts，摘要含 normalizedPower），历史活动 `backfillNormalizedPower.ts` 幂等回填（repository 新增 `updateNormalizedPower`）；`TrainingStatusSection`（Dashboard：当前值卡 + 90 天三线趋势；无 FTP/无功率引导文案） |
 | 设备统计（§39） | ✅ 6/6 测试 | `src/features/statistics/deviceStats.ts`：按设备分组聚合（次数/距离/时长/爬升/最近骑行，显示名产品名→型号→制造商回退，缺失归「未知设备」）；`DeviceStatsCards` 统计页底部区块（全时段口径）；自行车无独立数据源（FIT 未提取单车字段），设备统计即设备/码表维度 |
 | FTP 自动估算 / VO2Max 估算（§39） | ✅ 10/10 测试 | `src/features/analysis/ftpEstimate.ts`：FTP = 近 90 天 20 分钟最佳功率 × 0.95（取整），VO2Max = 10.8 × 5 分钟最佳功率 ÷ 体重 + 7（1 位小数），非法输入 undefined；设置页 FTP 字段下方估算区块（异步扫描近 90 天含功率活动，`buildPowerCurve(records, [300, 1200])` 跨活动取最佳），「采用」按钮一键保存 FTP；无功率数据/未填体重显示引导文案（不伪造）；`Activity` 领域模型补 `name` 字段（§31，修复详情页改名提交的 tsc 遗漏） |
-| 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后 **紫色 `#9333ea`、宽 3px、透明度 0.45** Polyline 叠加（OSM 浅色瓦片高对比，与详情页轨迹主蓝 `#4f8cff` 明显区分），重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
+| 骑行热力图（§39） | ✅ 5/5 测试 | `src/pages/HeatmapPage.tsx`（/heatmap 路由 + 侧边导航「热力图」）：全部活动轨迹 `simplifyRoute` 10m 抽稀后 **紫色 `#9333ea`、宽 3px、透明度 0.45** Polyline 叠加（浅色瓦片底图高对比，与详情页轨迹主蓝 `#4f8cff` 明显区分；瓦片源自动降级见 §2 地图小节），重合路段自然加深形成热力；无坐标活动自动剔除，fitBounds 全轨迹视野；加载/空态/错误三态文案 |
 | 单位换算显示（§27） | ✅ 7/7 新增测试 | settings.ts 新增 `formatSpeedByUnit`（km/h ↔ mph 随距离单位）；新 hook `src/hooks/useUnits.ts`（挂载读一次单位偏好，默认公制）；StatCards/TrendChart/ActivityListTable/StatisticCards/RecordCards/DeviceStatsCards/CalendarHeatmap 加 `distanceUnit` prop（默认 'km' 向后兼容），详情页复用已加载 settings（距离/速度 mi + 开始时间 12h '3:30 PM'）；四个页面接入 useUnits |
 | 路线分析（§39） | ✅ 13/13 测试 | `src/features/routes/routeGrouping.ts`：贪心聚类（起点 500m 内 + 终点 500m 内 + 距离 ±10% 组均值容差，haversine 测距），输出按次数降序/最近骑行降序；端点提取 `extractEndpoints`（统计页合并扫描复用已加载 records）；`RouteGroupCards.tsx` 统计页底部区块（路线卡片以**最近骑行标题**命名——无标题回退「路线 N」，长标题 CSS 缩略 + title 悬浮看全名；次数/平均距离/最快用时/最近骑行，点击跳最近详情）；完整 Segment 已完成（见 §4 后续工作项） |
 

@@ -7,10 +7,12 @@
  * 无坐标数据时显示引导文案（不伪造）。
  * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapContainer, Polyline, TileLayer, useMap } from 'react-leaflet'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { simplifyRoute } from '@/map/simplify'
+import { TILE_FALLBACK_STORAGE_KEY, wgs84ToGcj02 } from '@/map/tileSources'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { summariesScanKey } from '@/storage/scanCache'
 import {
@@ -72,6 +74,10 @@ function FitAllBounds({ tracks }: { tracks: LatLng[][] }) {
 function HeatmapPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [tracks, setTracks] = useState<LatLng[][]>([])
+  // 当前瓦片源索引：默认 OSM；本会话已降级过则直接使用高德
+  const [sourceIndex, setSourceIndex] = useState(
+    () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
+  )
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -137,6 +143,26 @@ function HeatmapPage() {
     }
   }, [repository, source])
 
+  // 降级回调：切换高德源并记忆（单向，本会话内刷新页面仍直接使用降级源）
+  const handleFallback = useCallback(() => {
+    setSourceIndex(1)
+    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'amap')
+  }, [])
+
+  // 展示轨迹：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）；
+  // 转换仅作用于渲染，模块级缓存中的 WGS-84 元组保持不变
+  const displayTracks = useMemo(() => {
+    if (sourceIndex === 0) {
+      return tracks
+    }
+    return tracks.map((track) =>
+      track.map(([lat, lng]) => {
+        const point = wgs84ToGcj02({ longitude: lng, latitude: lat })
+        return [point.latitude, point.longitude] as LatLng
+      }),
+    )
+  }, [tracks, sourceIndex])
+
   // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
   const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])
 
@@ -156,18 +182,15 @@ function HeatmapPage() {
           </p>
           <div className="heatmap-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
             <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {tracks.map((track, index) => (
+              <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
+              {displayTracks.map((track, index) => (
                 <Polyline
                   key={index}
                   positions={track}
                   pathOptions={{ color: TRACK_COLOR, weight: TRACK_WEIGHT, opacity: TRACK_OPACITY }}
                 />
               ))}
-              <FitAllBounds tracks={tracks} />
+              <FitAllBounds tracks={displayTracks} />
               <FullscreenSync />
               <ZoomControlBottomRight />
             </MapContainer>

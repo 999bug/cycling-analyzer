@@ -6,11 +6,12 @@
  * 默认单色轨迹；coloring 指定时按速度/心率/功率/海拔分段着色。
  * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { divIcon } from 'leaflet'
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RoutePoint } from '@/types/activity'
+import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import {
   buildBucketLines,
   buildSegments,
@@ -18,6 +19,7 @@ import {
   type ColoringMode,
   type ColoredLine,
 } from '@/map/routeColoring'
+import { TILE_FALLBACK_STORAGE_KEY, wgs84ToGcj02 } from '@/map/tileSources'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -88,10 +90,27 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
+  // 当前瓦片源索引：默认 OSM；本会话已降级过则直接使用高德
+  const [sourceIndex, setSourceIndex] = useState(
+    () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
+  )
+
+  // 降级回调：切换高德源并记忆（单向，本会话内刷新页面仍直接使用降级源）
+  const handleFallback = useCallback(() => {
+    setSourceIndex(1)
+    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'amap')
+  }, [])
+
+  // 展示坐标：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）
+  const displayPoints = useMemo(
+    () => (sourceIndex === 0 ? points : points.map(wgs84ToGcj02)),
+    [points, sourceIndex],
+  )
+
   // 经纬度元组列表：Polyline / CircleMarker / Marker 共用
   const latLngs = useMemo(
-    () => points.map((point) => [point.latitude, point.longitude] as [number, number]),
-    [points],
+    () => displayPoints.map((point) => [point.latitude, point.longitude] as [number, number]),
+    [displayPoints],
   )
 
   // 着色模式下是否具备该指标数据（全部缺失时回退单色轨迹）
@@ -108,8 +127,8 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
     if (coloring === 'none' || !hasMetricData) {
       return []
     }
-    if (points.length - 1 <= MAX_DETAILED_SEGMENTS) {
-      return buildSegments(points, coloring).map((segment) => ({
+    if (displayPoints.length - 1 <= MAX_DETAILED_SEGMENTS) {
+      return buildSegments(displayPoints, coloring).map((segment) => ({
         color: segment.color,
         positions: [
           [segment.lat1, segment.lng1],
@@ -117,8 +136,8 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
         ],
       }))
     }
-    return buildBucketLines(points, coloring)
-  }, [points, coloring, hasMetricData])
+    return buildBucketLines(displayPoints, coloring)
+  }, [displayPoints, coloring, hasMetricData])
 
   if (points.length < MIN_POINTS) {
     return <div className="activity-map activity-map--empty">该活动没有坐标轨迹</div>
@@ -136,10 +155,7 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
         bounds={latLngs}
         scrollWheelZoom
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
         {hasMetricData
           ? coloredLines.map((line, index) => (
               <Polyline
@@ -151,7 +167,7 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
           : <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />}
         <CircleMarker center={start} radius={6} pathOptions={{ color: START_COLOR, fillColor: START_COLOR, fillOpacity: 1 }} />
         <Marker position={end} icon={FINISH_ICON} />
-        <FitBounds points={points} />
+        <FitBounds points={displayPoints} />
         <FullscreenSync />
         <ZoomControlBottomRight />
       </MapContainer>
