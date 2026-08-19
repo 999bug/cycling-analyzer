@@ -9,7 +9,7 @@
  * 单文件导入无需数据源（FIT 格式通用）：选择单个 FIT 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
  */
-import { useRef, useState, type InputHTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react'
 
 /** TS DOM 类型未包含 showDirectoryPicker（File System Access API），此处补充 */
 interface DirectoryPickerWindow extends Window {
@@ -35,7 +35,7 @@ function ImportPanel() {
   const retryFailed = useImportStore((state) => state.retryFailed)
   const reset = useImportStore((state) => state.reset)
 
-  /** 入口区是否展开 */
+  /** 入口区是否展开（弹窗） */
   const [open, setOpen] = useState(false)
   /** 拖拽区高亮 */
   const [dragActive, setDragActive] = useState(false)
@@ -141,6 +141,45 @@ function ImportPanel() {
     )
   }
 
+  /**
+   * 弹窗打开时锁定背景滚动（模态语义）。
+   */
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
+
+  /**
+   * Esc 关闭弹窗（导入进行中禁止关闭，防止丢失进度反馈）。
+   */
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !importing) {
+        setOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, importing])
+
+  /**
+   * 关闭弹窗（导入进行中禁止）。
+   */
+  function closeDialog(): void {
+    if (!importing) {
+      setOpen(false)
+    }
+  }
+
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0
 
   return (
@@ -154,46 +193,139 @@ function ImportPanel() {
         同步骑行数据
       </button>
 
-      {open && !importing && (
-        <div className="import-panel__entries">
-          {IMPORT_SOURCE_OPTIONS.map((option) => (
-            <div key={option.value} className="import-panel__entry-wrap">
+      {open && (
+        <div
+          className="import-dialog__backdrop"
+          onClick={closeDialog}
+          role="presentation"
+        >
+          <div
+            className="import-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="同步骑行数据"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="import-dialog__head">
+              <span className="import-dialog__title">同步骑行数据</span>
               <button
                 type="button"
-                className="import-panel__entry"
-                onClick={() => void pickDirectory(option.value)}
+                className="import-dialog__close"
+                aria-label="关闭"
+                onClick={closeDialog}
+                disabled={importing}
               >
-                {option.label}
+                ×
               </button>
-              <span className="import-panel__entry-hint">{option.hint}</span>
             </div>
-          ))}
-          <button
-            type="button"
-            className="import-panel__entry"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            选择文件
-          </button>
-          <div
-            className={`import-panel__dropzone${dragActive ? ' import-panel__dropzone--active' : ''}`}
-            onDragOver={(event) => {
-              event.preventDefault()
-              setDragActive(true)
-            }}
-            onDragLeave={() => setDragActive(false)}
-            onDrop={(event) => {
-              event.preventDefault()
-              setDragActive(false)
-              const result = collectFitFiles(event.dataTransfer.files)
-              if (result.files.length === 1) {
-                setPendingFile(result.files[0])
-              } else {
-                void runScan(result)
-              }
-            }}
-          >
-            拖拽 FIT 文件到此处
+            <div className="import-dialog__body">
+              {!importing && (
+                <div className="import-panel__entries">
+                  {IMPORT_SOURCE_OPTIONS.map((option) => (
+                    <div key={option.value} className="import-panel__entry-wrap">
+                      <button
+                        type="button"
+                        className="import-panel__entry"
+                        onClick={() => void pickDirectory(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                      <span className="import-panel__entry-hint">{option.hint}</span>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="import-panel__entry"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    选择文件
+                  </button>
+                  <div
+                    className={`import-panel__dropzone${dragActive ? ' import-panel__dropzone--active' : ''}`}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setDragActive(true)
+                    }}
+                    onDragLeave={() => setDragActive(false)}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      setDragActive(false)
+                      const result = collectFitFiles(event.dataTransfer.files)
+                      if (result.files.length === 1) {
+                        setPendingFile(result.files[0])
+                      } else {
+                        void runScan(result)
+                      }
+                    }}
+                  >
+                    拖拽 FIT 文件到此处
+                  </div>
+                </div>
+              )}
+
+              {notice && <p className="import-panel__notice">{notice}</p>}
+
+              {pendingFile && (
+                <ImportEditDialog
+                  fileName={pendingFile.name}
+                  defaultTitle={titleFromFileName(pendingFile.name) ?? ''}
+                  onConfirm={handleEditConfirm}
+                  onCancel={() => setPendingFile(null)}
+                />
+              )}
+
+              {importing && (
+                <div className="import-panel__progress">
+                  <div className="import-panel__progress-bar">
+                    <div className="import-panel__progress-fill" style={{ width: `${percent}%` }} />
+                  </div>
+                  <span className="import-panel__progress-text">
+                    已处理 {progress.current}/{progress.total}
+                  </span>
+                </div>
+              )}
+
+              {summary && (
+                <div className="import-panel__result">
+                  <div className="import-panel__result-head">
+                    <p className="import-panel__summary-text">
+                      发现 {summary.total} 个 FIT 文件，新增 {summary.newImported} 个，
+                      已存在 {summary.skipped} 个，失败 {summary.failed} 个
+                    </p>
+                    <button
+                      type="button"
+                      className="import-panel__dismiss"
+                      aria-label="清除导入结果"
+                      onClick={reset}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {summary.failedItems.length > 0 && (
+                    <>
+                      <ul className="import-panel__failures">
+                        {summary.failedItems.map((item, index) => (
+                          <li key={index} className="import-panel__failure" title={item.error}>
+                            <span className="import-panel__failure-name">{item.fileName}</span>
+                            {item.error}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="import-panel__retry"
+                        onClick={() => void retryFailed()}
+                        disabled={importing}
+                      >
+                        重试失败文件
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {errors.length > 0 && <p className="import-panel__error">{errors.join('；')}</p>}
+            </div>
           </div>
         </div>
       )}
@@ -229,68 +361,6 @@ function ImportPanel() {
         }}
       />
 
-      {notice && <p className="import-panel__notice">{notice}</p>}
-
-      {pendingFile && (
-        <ImportEditDialog
-          fileName={pendingFile.name}
-          defaultTitle={titleFromFileName(pendingFile.name) ?? ''}
-          onConfirm={handleEditConfirm}
-          onCancel={() => setPendingFile(null)}
-        />
-      )}
-
-      {importing && (
-        <div className="import-panel__progress">
-          <div className="import-panel__progress-bar">
-            <div className="import-panel__progress-fill" style={{ width: `${percent}%` }} />
-          </div>
-          <span className="import-panel__progress-text">
-            已处理 {progress.current}/{progress.total}
-          </span>
-        </div>
-      )}
-
-      {summary && (
-        <div className="import-panel__result">
-          <div className="import-panel__result-head">
-            <p className="import-panel__summary-text">
-              发现 {summary.total} 个 FIT 文件，新增 {summary.newImported} 个，
-              已存在 {summary.skipped} 个，失败 {summary.failed} 个
-            </p>
-            <button
-              type="button"
-              className="import-panel__dismiss"
-              aria-label="清除导入结果"
-              onClick={reset}
-            >
-              ×
-            </button>
-          </div>
-          {summary.failedItems.length > 0 && (
-            <>
-              <ul className="import-panel__failures">
-                {summary.failedItems.map((item, index) => (
-                  <li key={index} className="import-panel__failure" title={item.error}>
-                    <span className="import-panel__failure-name">{item.fileName}</span>
-                    {item.error}
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                className="import-panel__retry"
-                onClick={() => void retryFailed()}
-                disabled={importing}
-              >
-                重试失败文件
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {errors.length > 0 && <p className="import-panel__error">{errors.join('；')}</p>}
     </div>
   )
 }

@@ -17,7 +17,7 @@ describe('ImportEditDialog 单文件导入编辑框', () => {
       />,
     );
 
-    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByRole('group', { name: '导入活动信息' })).toBeDefined();
     expect((screen.getByLabelText('活动标题') as HTMLInputElement).value).toBe('机场东路有氧');
 
     fireEvent.change(screen.getByLabelText('活动标题'), { target: { value: '机场东路晨骑' } });

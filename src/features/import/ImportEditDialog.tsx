@@ -46,7 +46,7 @@ function ImportEditDialog({ fileName, defaultTitle, onConfirm, onCancel }: Impor
   const [note, setNote] = useState('')
 
   return (
-    <div className="import-edit" role="dialog" aria-label="导入活动信息">
+    <div className="import-edit" role="group" aria-label="导入活动信息">
       <div className="import-edit__head">
         <p className="import-edit__title">导入活动信息</p>
         <p className="import-edit__file">{fileName}</p>
