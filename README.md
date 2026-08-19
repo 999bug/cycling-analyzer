@@ -1,4 +1,4 @@
-# 骑记 Ride Insight（Cycling Analyzer）
+# 骑了么（Cycling Analyzer）
 
 > 看懂你的每一次骑行
 

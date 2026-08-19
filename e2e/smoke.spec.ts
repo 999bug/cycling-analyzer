@@ -33,9 +33,8 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('应用加载：品牌、导航与空态引导可见', async ({ page }) => {
-  // 品牌区：骑记 / Ride Insight / 副标题
-  await expect(page.getByText('骑记', { exact: true })).toBeVisible()
-  await expect(page.getByText('Ride Insight', { exact: true })).toBeVisible()
+  // 品牌区：骑了么 / 副标题
+  await expect(page.getByText('骑了么', { exact: true })).toBeVisible()
   await expect(page.getByText('看懂你的每一次骑行', { exact: true })).toBeVisible()
   for (const label of ['仪表盘', '骑行记录', '统计', '日历', '热力图', '年度回顾', '赛段', '设置']) {
     await expect(page.getByRole('link', { name: label })).toBeVisible()

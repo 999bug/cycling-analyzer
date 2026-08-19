@@ -98,12 +98,11 @@ describe('布局 skip link', () => {
 })
 
 describe('品牌区', () => {
-  it('展示骑记 / Ride Insight / 副标题，链接回仪表盘首页', () => {
+  it('展示骑了么 / 副标题，链接回仪表盘首页', () => {
     render(<AppLayout />, { wrapper: MemoryRouter })
 
-    const brand = screen.getByRole('link', { name: /骑记/ })
+    const brand = screen.getByRole('link', { name: /骑了么/ })
     expect(brand).toHaveAttribute('href', '/')
-    expect(screen.getByText('Ride Insight')).toBeInTheDocument()
     expect(screen.getByText('看懂你的每一次骑行')).toBeInTheDocument()
   })
 })

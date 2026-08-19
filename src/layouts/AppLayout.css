@@ -44,13 +44,6 @@
   color: var(--text);
 }
 
-.app-layout__brand-en {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--primary);
-}
-
 .app-layout__brand-tagline {
   font-size: 11px;
   color: var(--text-secondary);

@@ -114,7 +114,7 @@ export function drawShareCard(canvas: HTMLCanvasElement, model: ShareCardModel):
   // 顶部品牌行
   ctx.fillStyle = COLORS.secondary
   ctx.font = `16px ${FONT_FAMILY}`
-  ctx.fillText('骑记 Ride Insight · 年度回顾', PADDING, 88)
+  ctx.fillText('骑了么 · 年度回顾', PADDING, 88)
 
   // 大年份
   ctx.fillStyle = COLORS.text
@@ -172,7 +172,7 @@ export function drawShareCard(canvas: HTMLCanvasElement, model: ShareCardModel):
   ctx.stroke()
   ctx.fillStyle = COLORS.secondary
   ctx.font = `12px ${FONT_FAMILY}`
-  ctx.fillText('数据保存在本地浏览器 · 由「骑记 Ride Insight」生成', PADDING, 776)
+  ctx.fillText('数据保存在本地浏览器 · 由「骑了么」生成', PADDING, 776)
   return true
 }
 
@@ -190,7 +190,7 @@ export function downloadShareCardPng(canvas: HTMLCanvasElement, year: number): v
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `骑记-${year}-年度回顾.png`
+    anchor.download = `骑了么-${year}-年度回顾.png`
     anchor.click()
     URL.revokeObjectURL(url)
   }, 'image/png')
