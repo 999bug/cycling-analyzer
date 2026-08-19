@@ -23,8 +23,9 @@ import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
 import { createWorkerParser } from './parseClient'
 import {
-  buildStravaTitleLookup,
-  matchStravaTitle,
+  applyStravaMeta,
+  buildStravaMetaLookup,
+  matchStravaMeta,
   titleFromFileName,
   type StravaActivityMeta,
 } from './stravaExport'
@@ -116,7 +117,7 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
     activityRepository = defaultActivityRepository,
     fileRepository = defaultFileRepository,
   } = options
-  const titles = buildStravaTitleLookup(options.stravaCsv)
+  const metas = buildStravaMetaLookup(options.stravaCsv)
   const failedItems: FailedItem[] = []
   let newImported = 0
   let skipped = 0
@@ -132,6 +133,7 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
       if (await activityRepository.existsByFingerprint(fingerprint)) {
         skipped++
       } else {
+        const meta = matchStravaMeta(entry.path, entry.name, metas)
         const activity = await parser({ fileName: entry.name, bytes: content, fingerprint })
         // 导入时顺带计算 NP 落库（原始派生值、与 FTP 无关）：
         // 训练状态等全量聚合直接读摘要，避免每次全量扫描逐点数据
@@ -139,10 +141,11 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         if (normalizedPower !== undefined) {
           activity.normalizedPower = normalizedPower
         }
-        await activityRepository.addActivity(
-          activity,
-          matchStravaTitle(entry.path, entry.name, titles) ?? titleFromFileName(entry.name),
-        )
+        // Strava 元数据补充：描述 + 无功率计时用估算功率填充
+        applyStravaMeta(activity, meta)
+        const title =
+          (meta?.name ? meta.name : undefined) ?? titleFromFileName(entry.name)
+        await activityRepository.addActivity(activity, title)
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
         await fileRepository.recordImported(
           fingerprint,

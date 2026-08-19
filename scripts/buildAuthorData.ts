@@ -16,10 +16,12 @@ import { computeFingerprint } from '@/utils/fingerprint'
 import { gunzipBytes, shouldGunzip } from '@/features/import/gzip'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import {
-  buildStravaTitleLookup,
-  matchStravaTitle,
+  applyStravaMeta,
+  buildStravaMetaLookup,
+  matchStravaMeta,
   parseStravaActivitiesCsv,
   titleFromFileName,
+  type StravaActivityMeta,
 } from '@/features/import/stravaExport'
 import { simplifyRoute } from '@/map/simplify'
 import {
@@ -100,7 +102,7 @@ const TRACK_COORDINATE_DECIMALS = 5
 export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<BuildAuthorDataStats> {
   const { fitDir, outDir, author } = options
   const files = await scanFitFiles(fitDir)
-  const titles = await loadTitleLookup(options.csvPath)
+  const metas = await loadMetaLookup(options.csvPath)
 
   const seen = new Set<string>()
   const activities: Array<{ summary: ActivitySummary; records: ActivityRecord[] }> = []
@@ -127,12 +129,17 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
     }
     // 确定性 ID = 内容指纹（覆盖 parseFitBytes 的随机 UUID），重建深链不变
     const normalizedPower = calculateNormalizedPower(activity.records ?? [])
+    if (normalizedPower !== undefined) {
+      activity.normalizedPower = normalizedPower
+    }
+    // Strava 元数据补充：描述 + 无功率计时用估算功率填充（标题同样优先 CSV）
+    const meta = matchStravaMeta(file.relPath, file.name, metas)
+    applyStravaMeta(activity, meta)
     const named: Activity = {
       ...activity,
       id: fingerprint,
       fileId: fingerprint,
-      name: matchStravaTitle(file.relPath, file.name, titles) ?? titleFromFileName(file.name),
-      normalizedPower,
+      name: meta?.name || titleFromFileName(file.name),
     }
     activities.push({ summary: toSummary(named), records: toRecords(named) })
   }
@@ -195,17 +202,17 @@ async function scanFitFiles(fitDir: string): Promise<ScannedFitFile[]> {
 }
 
 /**
- * 加载 Strava 标题查找表（CSV 不存在时返回空表）。
+ * 加载 Strava 元数据查找表（CSV 不存在时返回空表）。
  *
  * @param csvPath activities.csv 路径（可选）
  */
-async function loadTitleLookup(csvPath: string | undefined): Promise<Map<string, string>> {
+async function loadMetaLookup(csvPath: string | undefined): Promise<Map<string, StravaActivityMeta>> {
   if (csvPath === undefined) {
     return new Map()
   }
   try {
     const text = await readFile(csvPath, 'utf8')
-    return buildStravaTitleLookup(parseStravaActivitiesCsv(text))
+    return buildStravaMetaLookup(parseStravaActivitiesCsv(text))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return new Map()
@@ -223,6 +230,7 @@ function toSummary(activity: Activity): ActivitySummary {
   return {
     id: activity.id,
     name: activity.name,
+    description: activity.description,
     fileId: activity.fileId,
     fileName: activity.fileName,
     fingerprint: activity.fingerprint,

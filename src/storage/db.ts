@@ -31,6 +31,9 @@ export interface ActivityEntity {
   /** 活动标题（Strava CSV 还原，可为空） */
   name?: string;
 
+  /** 活动描述（Strava CSV 还原，可为空；非索引字段，免升版本） */
+  description?: string;
+
   /** 源 FIT 文件标识 */
   fileId: string;
 

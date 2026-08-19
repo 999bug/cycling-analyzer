@@ -222,6 +222,39 @@ describe('importFiles 导入执行器', () => {
     expect(activity.name).toBeUndefined();
   });
 
+  it('Strava CSV 描述落库与估算功率填充（FIT 无功率计）', async () => {
+    const csv = parseStravaActivitiesCsv(
+      ['活动 ID,活动名称,活动描述,文件名,平均瓦特数', '12345,晨骑,今早风大,activities/ride-4.fit,127.0'].join('\n'),
+    );
+
+    await importFiles([makeImportFile('ride-4.fit', readFixtureBytes('hrm-activity.fit'))], {
+      activityRepository,
+      fileRepository,
+      stravaCsv: csv,
+    });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.description).toBe('今早风大');
+    expect(activity.avgPower).toBe(127);
+  });
+
+  it('Strava CSV 估算功率不覆盖 FIT 实测功率', async () => {
+    const csv = parseStravaActivitiesCsv(
+      ['活动 ID,活动名称,活动描述,文件名,平均瓦特数', '12345,晨骑,今早风大,activities/ride-5.fit,127.0'].join('\n'),
+    );
+
+    await importFiles([makeImportFile('ride-5.fit', readFixtureBytes('cycling-gps.fit'))], {
+      activityRepository,
+      fileRepository,
+      stravaCsv: csv,
+    });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.description).toBe('今早风大');
+    expect(activity.avgPower).toBeGreaterThan(200);
+    expect(activity.avgPower).not.toBe(127);
+  });
+
   it('每个文件处理完毕回调进度', async () => {
     const progress: number[] = [];
     const entries = [makeImportFile('cycling-gps.fit'), makeImportFile('bad.fit', randomBytes(64))];

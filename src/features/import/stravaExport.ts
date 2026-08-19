@@ -5,6 +5,7 @@
  * 导入时解析该 CSV，按文件名关联还原原标题（规格 §31）。
  * CSV 为 UTF-8（可能带 BOM），字段支持引号转义与换行。
  */
+import type { Activity } from '@/types/activity'
 
 /**
  * Strava 活动元数据。
@@ -18,6 +19,14 @@ export interface StravaActivityMeta {
   activityType: string
   /** 导出文件名（如 activities/xxx.fit.gz） */
   fileName: string
+  /** 活动描述（用户填写，可能为空） */
+  description?: string
+  /** 平均功率（W；无功率计活动为 Strava 估算值） */
+  avgPower?: number
+  /** 最大功率（W；无功率计活动为 Strava 估算值） */
+  maxPower?: number
+  /** 加权平均功率（W；Strava 加权平均口径） */
+  weightedAvgPower?: number
 }
 
 /**
@@ -40,6 +49,10 @@ export function parseStravaActivitiesCsv(csvText: string): Map<string, StravaAct
   const nameIndex = header.indexOf('活动名称')
   const typeIndex = header.indexOf('活动类型')
   const fileIndex = header.indexOf('文件名')
+  const descriptionIndex = header.indexOf('活动描述')
+  const avgPowerIndex = header.indexOf('平均瓦特数')
+  const maxPowerIndex = header.indexOf('最大瓦特数')
+  const weightedAvgPowerIndex = header.indexOf('加权平均功率')
   if (idIndex < 0 || fileIndex < 0) {
     return result
   }
@@ -55,9 +68,30 @@ export function parseStravaActivitiesCsv(csvText: string): Map<string, StravaAct
       name: nameIndex >= 0 ? fields[nameIndex]?.trim() ?? '' : '',
       activityType: typeIndex >= 0 ? fields[typeIndex]?.trim() ?? '' : '',
       fileName: fields[fileIndex]?.trim() ?? '',
+      description: descriptionIndex >= 0 ? fields[descriptionIndex]?.trim() || undefined : undefined,
+      avgPower: parseOptionalNumber(avgPowerIndex >= 0 ? fields[avgPowerIndex] : undefined),
+      maxPower: parseOptionalNumber(maxPowerIndex >= 0 ? fields[maxPowerIndex] : undefined),
+      weightedAvgPower: parseOptionalNumber(
+        weightedAvgPowerIndex >= 0 ? fields[weightedAvgPowerIndex] : undefined,
+      ),
     })
   }
   return result
+}
+
+/**
+ * 解析可选的数字 CSV 单元格（空串/非数字返回 undefined）。
+ *
+ * @param raw 原始单元格文本
+ * @returns 数值；空或非法时 undefined
+ */
+function parseOptionalNumber(raw: string | undefined): number | undefined {
+  const trimmed = raw?.trim()
+  if (!trimmed) {
+    return undefined
+  }
+  const value = Number(trimmed)
+  return Number.isFinite(value) ? value : undefined
 }
 
 /**
@@ -143,6 +177,69 @@ export function matchStravaTitle(
   titles: Map<string, string>,
 ): string | undefined {
   return titles.get(path) ?? titles.get(name)
+}
+
+/**
+ * 从 Strava 元数据构建"文件名 → 元数据"查找表。
+ * 同时索引完整相对路径与纯文件名，覆盖选择导出根目录 / 子目录两种场景。
+ *
+ * @param stravaCsv 活动 ID → 元数据映射（可为空）
+ * @returns 文件名/相对路径 → 元数据查找表
+ */
+export function buildStravaMetaLookup(
+  stravaCsv: Map<string, StravaActivityMeta> | undefined,
+): Map<string, StravaActivityMeta> {
+  const metas = new Map<string, StravaActivityMeta>()
+  for (const meta of stravaCsv?.values() ?? []) {
+    metas.set(meta.fileName, meta)
+    const slash = meta.fileName.lastIndexOf('/')
+    if (slash >= 0) {
+      metas.set(meta.fileName.slice(slash + 1), meta)
+    }
+  }
+  return metas
+}
+
+/**
+ * 按文件匹配 Strava 元数据：相对路径精确匹配优先，纯文件名回退。
+ *
+ * @param path 文件相对路径
+ * @param name 纯文件名
+ * @param metas 文件名 → 元数据查找表
+ * @returns 匹配到的元数据，未匹配时 undefined
+ */
+export function matchStravaMeta(
+  path: string,
+  name: string,
+  metas: Map<string, StravaActivityMeta>,
+): StravaActivityMeta | undefined {
+  return metas.get(path) ?? metas.get(name)
+}
+
+/**
+ * 将 Strava 元数据补充到领域活动：
+ * 描述直接写入；功率仅在 FIT 无数据（无功率计设备）时用 Strava 估算值填充，
+ * 有实测功率的活动不被覆盖。
+ *
+ * @param activity 领域活动（就地修改）
+ * @param meta Strava 元数据（可为空）
+ */
+export function applyStravaMeta(activity: Activity, meta: StravaActivityMeta | undefined): void {
+  if (meta === undefined) {
+    return
+  }
+  if (meta.description) {
+    activity.description = meta.description
+  }
+  if (activity.avgPower === undefined && meta.avgPower !== undefined) {
+    activity.avgPower = meta.avgPower
+  }
+  if (activity.maxPower === undefined && meta.maxPower !== undefined) {
+    activity.maxPower = meta.maxPower
+  }
+  if (activity.normalizedPower === undefined && meta.weightedAvgPower !== undefined) {
+    activity.normalizedPower = meta.weightedAvgPower
+  }
 }
 
 /**

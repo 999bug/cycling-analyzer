@@ -125,6 +125,25 @@ describe('活动详情页训练分析集成', () => {
     expect(screen.queryByText('该活动没有踏频数据')).not.toBeInTheDocument()
   })
 
+  it('有 Strava 描述时标题下方展示描述', async () => {
+    await repo.addActivity(
+      makeActivity('act-1', [100, 200], [120, 140], { name: '晨骑', description: '去程休闲骑，返程被拉爆' }),
+      '晨骑',
+    )
+    renderPage()
+
+    expect(await screen.findByText('晨骑')).toBeInTheDocument()
+    expect(screen.getByText('去程休闲骑，返程被拉爆')).toBeInTheDocument()
+  })
+
+  it('无描述时不渲染描述区', async () => {
+    await repo.addActivity(makeActivity('act-2', [100, 200], [120, 140], { name: '夜骑' }), '夜骑')
+    renderPage('act-2')
+
+    expect(await screen.findByText('夜骑')).toBeInTheDocument()
+    expect(screen.queryByText('去程休闲骑，返程被拉爆')).not.toBeInTheDocument()
+  })
+
   it('无踏频/速度/心率数据时图表显示空态提示', async () => {
     // 仅功率数据：踏频图/速度+心率组合图均无对应指标
     const records: ActivityRecord[] = [

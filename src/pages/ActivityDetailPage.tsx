@@ -543,6 +543,7 @@ function ActivityDetailPage() {
             <span className="activity-detail__type">{typeLabel}</span>
             <time className="activity-detail__time">{formatDateTime(activity.startTime, timeFormat)}</time>
           </div>
+          {activity.description && <p className="activity-detail__description">{activity.description}</p>}
         </div>
         <div className="activity-detail__actions">
           <button

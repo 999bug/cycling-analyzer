@@ -5,8 +5,21 @@
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
+> **每个任务开始前先登记到 §0 进行中任务清单，完成后移出**（防中断丢失进度）。
 >
 > 产品规格原文：`docs/个人骑行数据分析网站——Agent 开发规格说明.md`（规格 §N 引用即该文档章节）。
+
+---
+
+## 0. 进行中任务清单（中断恢复必读）
+
+> 用途：任务中途因上下文满 / 费用不足 / 手动停止而中断时，agent 先读本节定位进度，
+> 避免重复工作或遗漏。**每开始一个新任务在此登记；每完成一步更新状态；全部完成并提交后移除**。
+
+| 状态 | 任务 | 进度 | 下一步 |
+|---|---|---|---|
+| 🔄 未提交 | Strava 描述 + 估算功率展示 + 详情页铺满 | 代码完成：`stravaExport.ts`（meta 描述/功率解析 + `matchStravaMeta`/`applyStravaMeta`）、`importer.ts`/`buildAuthorData.ts` 接入、`Activity`/`ActivityEntity` 加 `description`、详情页描述渲染 + 去 `max-width` 铺满（`ActivityDetailPage.css`）；测试 631/631 通过（+15 新增）、lint/build 绿、本地 `build:author-data` 验证（28 条描述 + 估算功率填充） | git 提交 + push 触发 CI（需用户确认） |
+| 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 
 ---
 
@@ -26,7 +39,7 @@
 | P2 阶段 | 规格 §39 高级功能 | ✅ 完成（见 §3.1） |
 | 作者数据快照 | 数据源抽象 + CI 构建时快照 + 数据源切换 + 作者数据只读 | ✅ 完成（见 §3.2） |
 
-- 验证：**616/616 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**631/631 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -42,7 +55,7 @@
 | 标准化 | `src/fit/normalizer/normalizer.ts` | `normalizeActivity(fit, { id, fileName, fingerprint })`；半周→十进制度、Date→ISO、缺失字段 undefined |
 | 统计计算 | `src/fit/calculator/calculator.ts` | `calculateSummary(records, session?)`；距离取末点累计、爬升=相邻正增量、平均速度=距离/时长；缺失 ≠ 0 |
 | 指纹 | `src/utils/fingerprint.ts` | `computeFingerprint(bytes)` SHA-256，去重依据（**基于解压后内容**） |
-| Strava 标题还原 | `src/features/import/stravaExport.ts` | `parseStravaActivitiesCsv`（跨行引号/BOM 兼容），按文件名匹配；**CSV 未命中时文件名兜底提取标题**（`titleFromFileName`：Strava 手动下载文件名=标题，纯数字 ID 文件名跳过不显示数字标题） |
+| Strava 标题还原 | `src/features/import/stravaExport.ts` | `parseStravaActivitiesCsv`（跨行引号/BOM 兼容），按文件名匹配；**CSV 未命中时文件名兜底提取标题**（`titleFromFileName`：Strava 手动下载文件名=标题，纯数字 ID 文件名跳过不显示数字标题）；**描述与估算功率**（`buildStravaMetaLookup`/`matchStravaMeta`/`applyStravaMeta`：活动描述落库详情页展示；FIT 无功率计时用 CSV「平均瓦特数/最大瓦特数/加权平均功率」填充 avgPower/maxPower/normalizedPower，实测功率不覆盖） |
 
 ### 导入（规格 §6/§7/§9/§21/§22/§23/§24）
 

@@ -427,6 +427,7 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
   return {
     id: activity.id,
     name,
+    description: activity.description,
     fileId: activity.fileId,
     fileName: activity.fileName,
     fingerprint: activity.fingerprint,
