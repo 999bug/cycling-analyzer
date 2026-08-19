@@ -56,6 +56,7 @@ import HeartRateChart from '@/charts/HeartRateChart'
 import CadenceChart from '@/charts/CadenceChart'
 import ElevationChart from '@/charts/ElevationChart'
 import PowerChart from '@/charts/PowerChart'
+import TemperatureChart from '@/charts/TemperatureChart'
 import PowerCurveChart from '@/charts/PowerCurveChart'
 import CombinedChart from '@/charts/CombinedChart'
 import '@/pages/ActivityDetailPage.css'
@@ -621,13 +622,18 @@ function ActivityDetailPage() {
         <CadenceChart records={chartRecords} />
         <ElevationChart records={chartRecords} />
         <PowerChart records={chartRecords} />
+        <TemperatureChart records={chartRecords} />
         <PowerCurveChart records={records} />
         <CombinedChart mode="speedHeartRate" records={chartRecords} />
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />
 
-      <SimilarRidesSection activityId={id} distanceUnit={distanceUnit} />
+      <SimilarRidesSection
+        activityId={id}
+        currentDuration={activity.duration}
+        distanceUnit={distanceUnit}
+      />
 
       <TrainingEffectSection
         aerobic={activity.aerobicTrainingEffect}

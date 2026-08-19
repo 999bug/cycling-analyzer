@@ -11,7 +11,7 @@ import {
   type RouteActivityInput,
   type RouteGroup,
 } from '@/features/routes/routeGrouping'
-import { findMatchingRides, type SimilarRide } from '@/features/routes/similarRides'
+import { compareDurations, findMatchingRides, type SimilarRide } from '@/features/routes/similarRides'
 import { summariesScanKey } from '@/storage/scanCache'
 import { formatDate, formatDuration } from '@/utils/format'
 import {
@@ -37,6 +37,9 @@ export interface SimilarRidesSectionProps {
   /** 当前活动 ID（匹配结果排除自身） */
   activityId: string
 
+  /** 当前活动骑行时长（秒，用于竞速对比；缺失时不显示快慢） */
+  currentDuration?: number
+
   /** 距离显示单位（规格 §27） */
   distanceUnit: DistanceUnit
 }
@@ -46,7 +49,7 @@ export interface SimilarRidesSectionProps {
  *
  * @param props 组件参数
  */
-function SimilarRidesSection({ activityId, distanceUnit }: SimilarRidesSectionProps) {
+function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: SimilarRidesSectionProps) {
   // 匹配结果（null = 计算中；计算失败或空时区块不渲染）
   const [rides, setRides] = useState<SimilarRide[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -118,20 +121,42 @@ function SimilarRidesSection({ activityId, distanceUnit }: SimilarRidesSectionPr
     <section className="similar-rides" aria-label="匹配的骑行">
       <h2 className="similar-rides__title">匹配的骑行</h2>
       <ul className="similar-rides__list">
-        {rides.map((ride) => (
-          <li key={ride.id}>
-            <Link className="similar-rides__item" to={`/activities/${ride.id}`}>
-              <span className="similar-rides__name" title={ride.name}>
-                {ride.name ?? '未命名活动'}
-              </span>
-              <span className="similar-rides__meta">
-                {formatDate(ride.startTime)} · {formatDistanceByUnit(ride.distance, distanceUnit)} ·{' '}
-                {formatDuration(ride.duration)} ·{' '}
-                {formatSpeedByUnit(ride.distance / ride.duration, distanceUnit)}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {rides.map((ride) => {
+          const comparison = compareDurations(currentDuration, ride.duration)
+          return (
+            <li key={ride.id}>
+              <Link className="similar-rides__item" to={`/activities/${ride.id}`}>
+                <span className="similar-rides__name" title={ride.name}>
+                  {ride.name ?? '未命名活动'}
+                </span>
+                <span className="similar-rides__meta">
+                  {formatDate(ride.startTime)} ·{' '}
+                  {formatDistanceByUnit(ride.distance, distanceUnit)} ·{' '}
+                  {formatDuration(ride.duration)} ·{' '}
+                  {formatSpeedByUnit(ride.distance / ride.duration, distanceUnit)}
+                </span>
+                {comparison !== null && (
+                  <span
+                    className={
+                      'similar-rides__race' +
+                      (comparison.faster === true
+                        ? ' similar-rides__race--faster'
+                        : comparison.faster === false
+                          ? ' similar-rides__race--slower'
+                          : '')
+                    }
+                  >
+                    {comparison.faster === true
+                      ? `比本次快 ${formatDuration(comparison.diffSeconds)}`
+                      : comparison.faster === false
+                        ? `比本次慢 ${formatDuration(comparison.diffSeconds)}`
+                        : '与本次持平'}
+                  </span>
+                )}
+              </Link>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )

@@ -89,7 +89,7 @@ async function seedActivities(activities: Activity[]): Promise<void> {
 }
 
 describe('匹配的骑行区块', () => {
-  it('同路线活动渲染匹配列表（排除自身，最新在前）', async () => {
+  it('同路线活动渲染匹配列表（排除自身，最新在前 + 竞速标签）', async () => {
     await seedActivities([
       makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
       makeActivity('a2', '机场东路夜骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
@@ -97,7 +97,7 @@ describe('匹配的骑行区块', () => {
 
     render(
       <MemoryRouter>
-        <SimilarRidesSection activityId="a1" distanceUnit="km" />
+        <SimilarRidesSection activityId="a1" currentDuration={3600} distanceUnit="km" />
       </MemoryRouter>,
     )
 
@@ -105,6 +105,23 @@ describe('匹配的骑行区块', () => {
     const link = await screen.findByRole('link', { name: /机场东路夜骑/ })
     expect(link).toHaveAttribute('href', '/activities/a2')
     expect(screen.getByText(/20\.50 km/)).toBeInTheDocument()
+    // 竞速：a1 与 a2 同时长 → 与本次持平
+    expect(screen.getByText('与本次持平')).toBeInTheDocument()
+  })
+
+  it('对方更快时显示「比本次快」', async () => {
+    await seedActivities([
+      makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
+      makeActivity('a2', '机场东路快骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
+    ])
+
+    render(
+      <MemoryRouter>
+        <SimilarRidesSection activityId="a1" currentDuration={4000} distanceUnit="km" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/比本次快/)).toBeInTheDocument()
   })
 
   it('独一路线（无同组其他骑行）时不渲染区块', async () => {

@@ -13,3 +13,21 @@ class ResizeObserverStub {
 
 // 全局注入：jsdom 环境下 Recharts 使用 initialDimension 即可渲染，无需真实测量
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+/**
+ * jsdom 缺少 matchMedia（主题跟随系统与媒体查询依赖）：
+ * 提供基础 stub（matches: false = 深色默认），具体行为由各测试 stub 覆盖。
+ */
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList;
+}

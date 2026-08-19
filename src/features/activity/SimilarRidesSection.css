@@ -50,3 +50,17 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* 竞速标签：快 = 绿，慢 = 橙 */
+.similar-rides__race {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.similar-rides__race--faster {
+  color: #22c55e;
+}
+
+.similar-rides__race--slower {
+  color: #f97316;
+}

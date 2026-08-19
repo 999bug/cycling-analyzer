@@ -48,3 +48,38 @@ export function findMatchingRides(
   }
   return []
 }
+
+/**
+ * 用时对比结果：与本次骑行相比对方快/慢。
+ */
+export interface DurationComparison {
+  /** true = 对方更快；false = 对方更慢；null = 用时相等 */
+  faster: boolean | null
+
+  /** 差值（秒，绝对值） */
+  diffSeconds: number
+}
+
+/**
+ * 比较本次骑行与匹配骑行的用时（Strava 竞速提示：比本次快/慢）。
+ * 任一时长缺失返回 null（不比较）。
+ *
+ * @param currentSeconds 本次骑行时长（秒）
+ * @param otherSeconds 匹配骑行时长（秒）
+ * @returns 对比结果；无法比较时 null
+ */
+export function compareDurations(
+  currentSeconds: number | null | undefined,
+  otherSeconds: number | null | undefined,
+): DurationComparison | null {
+  if (typeof currentSeconds !== 'number' || typeof otherSeconds !== 'number') {
+    return null
+  }
+  if (currentSeconds === otherSeconds) {
+    return { faster: null, diffSeconds: 0 }
+  }
+  return {
+    faster: otherSeconds < currentSeconds,
+    diffSeconds: Math.abs(currentSeconds - otherSeconds),
+  }
+}

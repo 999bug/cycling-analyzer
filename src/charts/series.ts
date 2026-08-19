@@ -10,7 +10,7 @@ import type { ActivityRecord } from '@/types/activity'
 export type XAxisMode = 'time' | 'distance'
 
 /** 可绘制的指标字段 */
-export type MetricField = 'speed' | 'heartRate' | 'altitude' | 'power' | 'cadence'
+export type MetricField = 'speed' | 'heartRate' | 'altitude' | 'power' | 'cadence' | 'temperature'
 
 /** 图表数据点 */
 export interface ChartSeriesPoint {

@@ -348,7 +348,15 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTheme(next)
     try {
       await switchTheme(next, context.settingsRepository)
-      setMessage({ type: 'success', text: next === 'light' ? '已切换为浅色主题' : '已切换为深色主题' })
+      setMessage({
+        type: 'success',
+        text:
+          next === 'light'
+            ? '已切换为浅色主题'
+            : next === 'dark'
+              ? '已切换为深色主题'
+              : '已切换为跟随系统主题',
+      })
     } catch (error) {
       console.error('Failed to switch theme', error)
       setMessage({ type: 'error', text: '主题保存失败，请重试' })
@@ -575,6 +583,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
             >
               <option value="dark">深色</option>
               <option value="light">浅色</option>
+              <option value="system">跟随系统</option>
             </select>
           </div>
         </div>

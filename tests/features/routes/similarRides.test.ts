@@ -5,7 +5,7 @@
  * 不在任何分组 / 组内仅自身 / 分组数据为空 → 空数组。
  */
 import { describe, expect, it } from 'vitest'
-import { findMatchingRides } from '@/features/routes/similarRides'
+import { compareDurations, findMatchingRides } from '@/features/routes/similarRides'
 import type { RouteGroup } from '@/features/routes/routeGrouping'
 
 /** 构造一条路线分组（3 个成员，时间升序） */
@@ -51,5 +51,25 @@ describe('findMatchingRides 匹配的骑行', () => {
   it('分组数据为空时返回空数组', () => {
     expect(findMatchingRides(null, 'a1')).toEqual([])
     expect(findMatchingRides([], 'a1')).toEqual([])
+  })
+})
+
+describe('compareDurations 与本次竞速', () => {
+  it('对方更快返回 faster + 差值', () => {
+    // 本次 3600s，对方 3500s → 快 100s
+    expect(compareDurations(3600, 3500)).toEqual({ faster: true, diffSeconds: 100 })
+  })
+
+  it('对方更慢返回 faster false + 差值', () => {
+    expect(compareDurations(3600, 3700)).toEqual({ faster: false, diffSeconds: 100 })
+  })
+
+  it('用时相等返回持平', () => {
+    expect(compareDurations(3600, 3600)).toEqual({ faster: null, diffSeconds: 0 })
+  })
+
+  it('当前用时缺失时不比较', () => {
+    expect(compareDurations(undefined, 3500)).toBeNull()
+    expect(compareDurations(3600, undefined)).toBeNull()
   })
 })

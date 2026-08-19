@@ -19,8 +19,8 @@ export type DistanceUnit = 'km' | 'mi'
 /** 时间格式（仅影响显示） */
 export type TimeFormat = '24h' | '12h'
 
-/** 主题（规格 §36，默认深色） */
-export type Theme = 'dark' | 'light'
+/** 主题（规格 §36，默认深色；system = 跟随系统偏好） */
+export type Theme = 'dark' | 'light' | 'system'
 
 /**
  * 个人信息（规格 §27）。

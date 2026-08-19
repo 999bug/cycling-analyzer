@@ -42,6 +42,46 @@ describe('主题切换', () => {
     expect(settings.appearance.theme).toBe('light')
   })
 
+  it('system 模式按系统偏好映射（浅色偏好 → data-theme light）', () => {
+    // stub matchMedia 返回浅色偏好（jsdom 默认 matches: false = 深色）
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+    )
+
+    applyTheme('system')
+    expect(document.documentElement.dataset.theme).toBe('light')
+    vi.unstubAllGlobals()
+  })
+
+  it('显式主题切换卸载系统监听（切回固定主题不再跟随）', () => {
+    const removeListener = vi.fn()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: removeListener }),
+    )
+
+    applyTheme('system')
+    applyTheme('dark')
+
+    expect(removeListener).toHaveBeenCalled()
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    vi.unstubAllGlobals()
+  })
+
+  it('switchTheme 持久化 system 偏好', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+    )
+    await switchTheme('system')
+
+    const settings = await getSettings()
+    expect(settings.appearance.theme).toBe('system')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    vi.unstubAllGlobals()
+  })
+
   it('initTheme 恢复持久化主题；无设置时应用默认深色', async () => {
     // 无设置：默认深色
     await initTheme()

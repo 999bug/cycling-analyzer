@@ -4,7 +4,7 @@
  */
 .routes-map-page {
   padding: 20px 24px;
-  max-width: 1200px;
+  /* 无宽度上限：地图铺满右侧剩余空间 */
 }
 
 .routes-map-page__notice {
