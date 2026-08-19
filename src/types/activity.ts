@@ -28,6 +28,9 @@ export interface Activity {
   /** 活动描述（Strava CSV 还原，可为空） */
   description?: string
 
+  /** 个人备注（本地导入时手动填写，与 Strava 描述分开，可为空） */
+  note?: string
+
   /** 源 FIT 文件标识 */
   fileId: string
 

@@ -119,6 +119,20 @@
   word-break: break-word;
 }
 
+/* 个人备注（导入时手动填写，区别于 Strava 描述） */
+.activity-detail__note {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 6px 6px 0;
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 标题区右侧操作按钮组（导出/删除） */
 .activity-detail__actions {
   display: flex;

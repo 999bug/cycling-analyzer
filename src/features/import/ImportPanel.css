@@ -44,6 +44,31 @@
   gap: 8px;
 }
 
+.import-panel__source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-panel__source-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-panel__source-select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.import-panel__source-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .import-panel__dropzone {
   padding: 14px 8px;
   border: 1px dashed var(--border);
@@ -140,4 +165,74 @@
 .import-panel__error {
   font-size: 12px;
   color: #e57373;
+}
+
+.import-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--bg) 95%, white);
+}
+
+.import-edit__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.import-edit__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.import-edit__file {
+  font-size: 11px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.import-edit__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-edit__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.import-edit__input,
+.import-edit__textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.import-edit__input:focus,
+.import-edit__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.import-edit__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.import-edit__confirm {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  font-weight: 600;
 }

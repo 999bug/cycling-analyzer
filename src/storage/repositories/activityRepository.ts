@@ -428,6 +428,7 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     id: activity.id,
     name,
     description: activity.description,
+    note: activity.note,
     fileId: activity.fileId,
     fileName: activity.fileName,
     fingerprint: activity.fingerprint,

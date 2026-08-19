@@ -34,6 +34,9 @@ export interface ActivityEntity {
   /** 活动描述（Strava CSV 还原，可为空；非索引字段，免升版本） */
   description?: string;
 
+  /** 个人备注（本地导入时手动填写，与 Strava 描述分开；非索引字段，免升版本） */
+  note?: string;
+
   /** 源 FIT 文件标识 */
   fileId: string;
 

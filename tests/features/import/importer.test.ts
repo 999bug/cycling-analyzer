@@ -255,6 +255,49 @@ describe('importFiles 导入执行器', () => {
     expect(activity.avgPower).not.toBe(127);
   });
 
+  it('单文件导入：手动编辑的标题/说明/备注落库（弹窗编辑流程）', async () => {
+    const entry: ImportFile = {
+      ...makeImportFile('cycling-gps.fit'),
+      title: '周末环湖',
+      description: '手动说明',
+      note: '个人备注内容',
+    };
+
+    await importFiles([entry], { activityRepository, fileRepository });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.name).toBe('周末环湖');
+    expect(activity.description).toBe('手动说明');
+    expect(activity.note).toBe('个人备注内容');
+  });
+
+  it('手动标题优先于 Strava CSV 还原标题', async () => {
+    const csv = parseStravaActivitiesCsv(
+      ['活动 ID,活动名称,文件名', '12345,CSV标题,activities/ride-6.fit'].join('\n'),
+    );
+    const entry: ImportFile = {
+      ...makeImportFile('ride-6.fit'),
+      title: '手动标题',
+    };
+
+    await importFiles([entry], { activityRepository, fileRepository, stravaCsv: csv });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.name).toBe('手动标题');
+  });
+
+  it('手动标题留空时回退文件名兜底还原', async () => {
+    const entry: ImportFile = {
+      ...makeImportFile('机场东路有氧.fit'),
+      title: '',
+    };
+
+    await importFiles([entry], { activityRepository, fileRepository });
+
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.name).toBe('机场东路有氧');
+  });
+
   it('每个文件处理完毕回调进度', async () => {
     const progress: number[] = [];
     const entries = [makeImportFile('cycling-gps.fit'), makeImportFile('bad.fit', randomBytes(64))];

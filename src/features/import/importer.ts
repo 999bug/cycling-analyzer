@@ -42,6 +42,15 @@ export interface ImportFile {
 
   /** 文件对象 */
   file: File
+
+  /** 手动编辑的活动标题（单文件导入弹窗填写，优先于 CSV/文件名还原） */
+  title?: string
+
+  /** 手动编辑的活动描述（单文件导入弹窗填写，优先于 CSV 还原） */
+  description?: string
+
+  /** 手动填写的个人备注（单文件导入弹窗填写） */
+  note?: string
 }
 
 /**
@@ -143,8 +152,15 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         }
         // Strava 元数据补充：描述 + 无功率计时用估算功率填充
         applyStravaMeta(activity, meta)
+        // 手动编辑覆盖（单文件导入弹窗）：标题 > CSV > 文件名兜底；描述/备注直接覆盖
+        if (entry.description !== undefined) {
+          activity.description = entry.description
+        }
+        if (entry.note !== undefined) {
+          activity.note = entry.note
+        }
         const title =
-          (meta?.name ? meta.name : undefined) ?? titleFromFileName(entry.name)
+          entry.title || (meta?.name ? meta.name : undefined) || titleFromFileName(entry.name)
         await activityRepository.addActivity(activity, title)
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
         await fileRepository.recordImported(

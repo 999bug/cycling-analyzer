@@ -544,6 +544,7 @@ function ActivityDetailPage() {
             <time className="activity-detail__time">{formatDateTime(activity.startTime, timeFormat)}</time>
           </div>
           {activity.description && <p className="activity-detail__description">{activity.description}</p>}
+          {activity.note && <p className="activity-detail__note">{activity.note}</p>}
         </div>
         <div className="activity-detail__actions">
           <button
