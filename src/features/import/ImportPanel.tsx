@@ -4,10 +4,9 @@
  * 入口：目录选择（File System Access API，降级 webkitdirectory）、
  * 文件选择、拖拽区——统一经 scanner 归一化后进入导入 store。
  *
- * 数据源选择（批量导入）：Strava 目录解析 activities.csv 还原标题/描述/估算功率；
- * 佳明/igpsport/行者等来源无 CSV，标题按文件名兜底。
- *
- * 单文件导入：选择单个 FIT 时弹出编辑框（标题/说明/个人备注），确认后入库。
+ * 目录批量导入区分数据源：Strava 目录解析 activities.csv 还原标题/描述/估算功率；
+ * 其他设备（佳明/igpsport/行者等）无 CSV，标题按文件名兜底。
+ * 单文件导入无需数据源（FIT 格式通用）：选择单个 FIT 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
  */
 import { useRef, useState, type InputHTMLAttributes } from 'react'
@@ -16,9 +15,9 @@ import { useRef, useState, type InputHTMLAttributes } from 'react'
 interface DirectoryPickerWindow extends Window {
   showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>
 }
-import { collectFitFiles, scanDirectory, scanFilesLegacy, type ScanResult } from './scanner'
+import { collectFitFiles, scanDirectory, type ScanResult } from './scanner'
 import { parseStravaActivitiesCsv, titleFromFileName, type StravaActivityMeta } from './stravaExport'
-import { DEFAULT_IMPORT_SOURCE, IMPORT_SOURCE_OPTIONS, isStravaSource, type ImportSource } from './importSources'
+import { IMPORT_SOURCE_OPTIONS, isStravaSource, type ImportSource } from './importSources'
 import type { ImportFile } from './importer'
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog'
 import { useImportStore } from '@/stores/importStore'
@@ -40,8 +39,8 @@ function ImportPanel() {
   const [open, setOpen] = useState(false)
   /** 拖拽区高亮 */
   const [dragActive, setDragActive] = useState(false)
-  /** 批量导入数据源（决定是否解析 Strava CSV） */
-  const [source, setSource] = useState<ImportSource>(DEFAULT_IMPORT_SOURCE)
+  /** 目录批量导入数据源（Strava 目录解析 CSV，其他设备按文件名还原） */
+  const [source, setSource] = useState<ImportSource>('strava')
   /** 待编辑的单文件（非空时弹编辑框） */
   const [pendingFile, setPendingFile] = useState<ScanResult['files'][number] | null>(null)
   /** 非文件级提示（如未找到 FIT 文件） */
@@ -76,9 +75,12 @@ function ImportPanel() {
   }
 
   /**
-   * 目录选择：优先 File System Access API，失败/不支持时回退传统目录输入。
+   * 目录选择（按指定数据源）：优先 File System Access API，失败/不支持时回退传统目录输入。
+   *
+   * @param nextSource 批量导入数据源
    */
-  async function pickDirectory(): Promise<void> {
+  async function pickDirectory(nextSource: ImportSource): Promise<void> {
+    setSource(nextSource)
     const picker = (window as DirectoryPickerWindow).showDirectoryPicker
     if (!picker) {
       // 不支持 File System Access API（非安全上下文等）：回退传统目录选择
@@ -99,11 +101,12 @@ function ImportPanel() {
 
   /**
    * 文件选择：单个文件弹出编辑框（标题/说明/备注），多个文件直接导入。
+   * 注意：FileList 是 live 集合，必须先转数组再重置 input.value，否则引用被清空。
    *
    * @param files 用户选择的文件列表
    */
-  function pickFiles(files: FileList | null): void {
-    const result = collectFitFiles(files ?? [])
+  function pickFiles(files: File[]): void {
+    const result = collectFitFiles(files)
     if (result.files.length === 0) {
       return
     }
@@ -139,7 +142,6 @@ function ImportPanel() {
   }
 
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0
-  const selectedSource = IMPORT_SOURCE_OPTIONS.find((option) => option.value === source)
 
   return (
     <div className="import-panel">
@@ -154,25 +156,18 @@ function ImportPanel() {
 
       {open && !importing && (
         <div className="import-panel__entries">
-          <label className="import-panel__source">
-            <span className="import-panel__source-label">数据来源</span>
-            <select
-              className="import-panel__source-select"
-              value={source}
-              aria-label="批量导入数据来源"
-              onChange={(event) => setSource(event.target.value as ImportSource)}
-            >
-              {IMPORT_SOURCE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="import-panel__source-hint">{selectedSource?.hint}</span>
-          </label>
-          <button type="button" className="import-panel__entry" onClick={() => void pickDirectory()}>
-            选择目录
-          </button>
+          {IMPORT_SOURCE_OPTIONS.map((option) => (
+            <div key={option.value} className="import-panel__entry-wrap">
+              <button
+                type="button"
+                className="import-panel__entry"
+                onClick={() => void pickDirectory(option.value)}
+              >
+                {option.label}
+              </button>
+              <span className="import-panel__entry-hint">{option.hint}</span>
+            </div>
+          ))}
           <button
             type="button"
             className="import-panel__entry"
@@ -211,7 +206,8 @@ function ImportPanel() {
         accept=".fit,.fit.gz"
         className="import-panel__hidden-input"
         onChange={(event) => {
-          const files = event.target.files
+          // FileList 为 live 集合：先转数组保留 File 引用，再重置 value 供下次选择
+          const files = Array.from(event.target.files ?? [])
           event.target.value = ''
           pickFiles(files)
         }}
@@ -224,10 +220,11 @@ function ImportPanel() {
         className="import-panel__hidden-input"
         {...({ webkitdirectory: '' } as InputHTMLAttributes<HTMLInputElement>)}
         onChange={(event) => {
-          const files = event.target.files
+          // 同上：先转数组再重置，避免 live FileList 被清空
+          const files = Array.from(event.target.files ?? [])
           event.target.value = ''
-          if (files && files.length > 0) {
-            void runScan(scanFilesLegacy(files))
+          if (files.length > 0) {
+            void runScan(collectFitFiles(files))
           }
         }}
       />
