@@ -23,7 +23,7 @@
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |
 | ✅ 已提交 | 导入面板 UI 优化 + 文件选择无反应 bug 修复 | 数据来源下拉改为两个目录导入入口按钮（Strava 导出 / 其他设备），单文件/拖拽导入无需来源（FIT 通用）；修复 FileList live 引用 bug——`event.target.value=''` 重置会清空已保存的 FileList，选择文件/目录回退后页面无反应；先 `Array.from` 转数组再重置，Playwright 实测弹窗→编辑→导入→落库全链路通过 | push 触发 CI（版本保持 1.8.0，本组为发布前完善） |
-| ✅ 已提交 | 同步骑行数据改为模态弹窗 | 点击「同步骑行数据」弹出居中弹窗（遮罩 + Esc/点遮罩/× 关闭，导入中禁用关闭，body 滚动锁定）：标题栏 + 两个目录导入入口（带说明）+ 选择文件 + 拖拽区 + 编辑表单/进度/结果/失败重试均在弹窗内呈现；ImportEditDialog role 改 group 防嵌套 dialog 语义；测试 72 用例 + lint/build 绿，Playwright 全链路通过 | push 触发 CI（待推送：`bed6ad8` + 本提交） |
+| ✅ 已提交 | 同步数据弹窗美化 | 按千问多模态读图审查 + Vercel Web Interface Guidelines 优化：弹窗内边距加大、入口卡片化（图标 + 主文案 + 说明，hover/active/focus 反馈）、拖拽区加上传图标与副文案、弹窗阴影/边框对比增强、淡入上滑动画 + prefers-reduced-motion 降级、overscroll-behavior: contain、关闭按钮 hover 态；千问回评 6.5→7.5+（布局/层次/间距获认可） | 推送待确认（版本保持 1.8.0） |
 
 ---
 

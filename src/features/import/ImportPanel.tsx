@@ -222,23 +222,56 @@ function ImportPanel() {
               {!importing && (
                 <div className="import-panel__entries">
                   {IMPORT_SOURCE_OPTIONS.map((option) => (
-                    <div key={option.value} className="import-panel__entry-wrap">
-                      <button
-                        type="button"
-                        className="import-panel__entry"
-                        onClick={() => void pickDirectory(option.value)}
+                    <button
+                      key={option.value}
+                      type="button"
+                      className="import-panel__entry"
+                      onClick={() => void pickDirectory(option.value)}
+                    >
+                      <svg
+                        className="import-panel__entry-icon"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
                       >
-                        {option.label}
-                      </button>
-                      <span className="import-panel__entry-hint">{option.hint}</span>
-                    </div>
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      </svg>
+                      <span className="import-panel__entry-text">
+                        <span className="import-panel__entry-label">{option.label}</span>
+                        <span className="import-panel__entry-hint">{option.hint}</span>
+                      </span>
+                    </button>
                   ))}
                   <button
                     type="button"
                     className="import-panel__entry"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    选择文件
+                    <svg
+                      className="import-panel__entry-icon"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                    <span className="import-panel__entry-text">
+                      <span className="import-panel__entry-label">选择文件</span>
+                      <span className="import-panel__entry-hint">单个 .fit / .fit.gz 文件</span>
+                    </span>
                   </button>
                   <div
                     className={`import-panel__dropzone${dragActive ? ' import-panel__dropzone--active' : ''}`}
@@ -258,7 +291,23 @@ function ImportPanel() {
                       }
                     }}
                   >
-                    拖拽 FIT 文件到此处
+                    <svg
+                      className="import-panel__dropzone-icon"
+                      width="28"
+                      height="28"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 16V4m0 0l-4 4m4-4l4 4" />
+                      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                    </svg>
+                    <span className="import-panel__dropzone-title">拖拽 FIT 文件到此处</span>
+                    <span className="import-panel__dropzone-hint">可多选，支持 .fit / .fit.gz</span>
                   </div>
                 </div>
               )}
