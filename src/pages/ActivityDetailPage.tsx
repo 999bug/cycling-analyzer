@@ -36,6 +36,7 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import SplitsSection from '@/features/activity/SplitsSection'
+import ClimbSection from '@/features/activity/ClimbSection'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
 import AchievementsSection from '@/features/activity/AchievementsSection'
@@ -628,6 +629,8 @@ function ActivityDetailPage() {
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />
+
+      <ClimbSection records={records} distanceUnit={distanceUnit} />
 
       <SimilarRidesSection
         activityId={id}
