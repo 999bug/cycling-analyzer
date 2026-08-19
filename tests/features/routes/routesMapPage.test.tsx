@@ -127,11 +127,11 @@ describe('骑行路线图页', () => {
     expect(screen.getByText('2 次')).toBeInTheDocument()
     expect(screen.getByText('1 次')).toBeInTheDocument()
 
-    // 地图轨迹：a1 + a2 + b1 三条 polyline（Leaflet 异步挂载，等待就绪）
+    // 地图轨迹：3 条路线 × 2 层（白色光晕 + 彩色）= 6 条 polyline（Leaflet 异步挂载，等待就绪）
     await waitFor(() => {
       expect(
         container.querySelectorAll('.routes-map-page__map path.leaflet-interactive'),
-      ).toHaveLength(3)
+      ).toHaveLength(6)
     })
   })
 

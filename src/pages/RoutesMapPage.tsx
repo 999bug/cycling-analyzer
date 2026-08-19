@@ -5,7 +5,7 @@
  * 点击路线列表高亮该路线（其余路线降透明度），再次点击恢复。
  * 作者源用 CI 预计算 route-tracks.json；本地源实时扫描（复用热力图缓存模式）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
@@ -34,12 +34,16 @@ const ROUTES_SIMPLIFY_TOLERANCE_METERS = 10
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_TRACK_POINTS = 2
 
-/** 路线线宽（像素） */
-const ROUTE_WEIGHT = 3
+/** 路线线宽（像素，常规 / 选中加粗） */
+const ROUTE_WEIGHT = 4
+const ROUTE_WEIGHT_SELECTED = 6
 
-/** 路线透明度（常规 / 未选中降透明） */
-const ROUTE_OPACITY = 0.9
-const ROUTE_OPACITY_DIM = 0.15
+/** 白色描边光晕宽度（比彩色线粗的量，浅色瓦片上增强对比） */
+const ROUTE_HALO_WEIGHT = 2
+
+/** 路线透明度（常规 / 未选中几乎隐藏） */
+const ROUTE_OPACITY = 0.95
+const ROUTE_OPACITY_DIM = 0.06
 
 /** 加载状态：loading / empty / ready / error */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'
@@ -227,20 +231,34 @@ function RoutesMapPage() {
             >
               <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
               {routes.map((route) =>
-                route.tracks.map((track, trackIndex) => (
-                  <Polyline
-                    key={`${route.index}-${trackIndex}`}
-                    positions={track}
-                    pathOptions={{
-                      color: route.color,
-                      weight: ROUTE_WEIGHT,
-                      opacity:
-                        selected === null || selected === route.index
-                          ? ROUTE_OPACITY
-                          : ROUTE_OPACITY_DIM,
-                    }}
-                  />
-                )),
+                route.tracks.map((track, trackIndex) => {
+                  // 未选中时几乎隐藏；选中路线加粗 + 白描边光晕（浅色瓦片上醒目）
+                  const isDimmed = selected !== null && selected !== route.index
+                  const isSelected = selected === route.index
+                  const weight = isSelected ? ROUTE_WEIGHT_SELECTED : ROUTE_WEIGHT
+                  return (
+                    <Fragment key={`${route.index}-${trackIndex}`}>
+                      <Polyline
+                        positions={track}
+                        pathOptions={{
+                          color: '#ffffff',
+                          weight: weight + ROUTE_HALO_WEIGHT,
+                          opacity: isDimmed ? 0 : 0.35,
+                          lineCap: 'round',
+                        }}
+                      />
+                      <Polyline
+                        positions={track}
+                        pathOptions={{
+                          color: route.color,
+                          weight,
+                          opacity: isDimmed ? ROUTE_OPACITY_DIM : ROUTE_OPACITY,
+                          lineCap: 'round',
+                        }}
+                      />
+                    </Fragment>
+                  )
+                }),
               )}
               <FitAllBounds tracks={visibleTracks} />
               <FullscreenSync />

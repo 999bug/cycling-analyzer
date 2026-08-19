@@ -33,8 +33,11 @@ const GOLDEN_ANGLE = 137.5
 /** 路线颜色饱和度（%） */
 const ROUTE_COLOR_SATURATION = 70
 
-/** 路线颜色亮度（%）——深色/浅色主题背景均可辨 */
-const ROUTE_COLOR_LIGHTNESS = 60
+/**
+ * 路线颜色亮度（%）——地图底图为浅色瓦片，深色系路线对比最强。
+ * 用户反馈全局总览颜色偏淡：60% → 42%（浅底上醒目且各色相可辨）。
+ */
+const ROUTE_COLOR_LIGHTNESS = 42
 
 /**
  * 路线配色：按索引取黄金角色相（确定性，同路线永远同色）。

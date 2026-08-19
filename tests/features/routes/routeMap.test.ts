@@ -34,8 +34,8 @@ describe('routeColor 路线配色', () => {
     expect(new Set(colors).size).toBe(12)
   })
 
-  it('输出现代 CSS hsl 格式（亮度 60% 深色/浅色主题均可见）', () => {
-    expect(routeColor(0)).toMatch(/^hsl\(\d+ 70% 60%\)$/)
+  it('输出现代 CSS hsl 格式（亮度 42% 浅色瓦片上醒目）', () => {
+    expect(routeColor(0)).toMatch(/^hsl\(\d+ 70% 42%\)$/)
   })
 })
 
