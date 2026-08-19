@@ -1,0 +1,52 @@
+/**
+ * 匹配的骑行区块样式。
+ * 颜色取自全局 CSS 变量，深色基调与全局一致。
+ */
+.similar-rides {
+  margin-top: 16px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+
+.similar-rides__title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.similar-rides__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.similar-rides__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background-color 0.15s ease;
+}
+
+.similar-rides__item:hover {
+  background-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.similar-rides__name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.similar-rides__meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
