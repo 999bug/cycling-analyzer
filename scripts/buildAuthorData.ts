@@ -19,6 +19,7 @@ import {
   buildStravaTitleLookup,
   matchStravaTitle,
   parseStravaActivitiesCsv,
+  titleFromFileName,
 } from '@/features/import/stravaExport'
 import { simplifyRoute } from '@/map/simplify'
 import {
@@ -130,7 +131,7 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
       ...activity,
       id: fingerprint,
       fileId: fingerprint,
-      name: matchStravaTitle(file.relPath, file.name, titles),
+      name: matchStravaTitle(file.relPath, file.name, titles) ?? titleFromFileName(file.name),
       normalizedPower,
     }
     activities.push({ summary: toSummary(named), records: toRecords(named) })

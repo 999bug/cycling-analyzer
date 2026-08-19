@@ -1,4 +1,4 @@
-# 项目进度与功能状态
+﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
 > 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（作者数据快照）。
@@ -26,7 +26,7 @@
 | P2 阶段 | 规格 §39 高级功能 | ✅ 完成（见 §3.1） |
 | 作者数据快照 | 数据源抽象 + CI 构建时快照 + 数据源切换 + 作者数据只读 | ✅ 完成（见 §3.2） |
 
-- 验证：**610/610 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
+- 验证：**616/616 测试通过**，lint/build 全绿；线上 https://999bug.github.io/cycling-analyzer/ 可用
 - 端到端已实测：真实 Strava 导出 .fit.gz 拖拽导入 → Dashboard 自动刷新 → 列表 → 详情地图/图表 → 刷新持久化
 
 ---
@@ -42,7 +42,7 @@
 | 标准化 | `src/fit/normalizer/normalizer.ts` | `normalizeActivity(fit, { id, fileName, fingerprint })`；半周→十进制度、Date→ISO、缺失字段 undefined |
 | 统计计算 | `src/fit/calculator/calculator.ts` | `calculateSummary(records, session?)`；距离取末点累计、爬升=相邻正增量、平均速度=距离/时长；缺失 ≠ 0 |
 | 指纹 | `src/utils/fingerprint.ts` | `computeFingerprint(bytes)` SHA-256，去重依据（**基于解压后内容**） |
-| Strava 标题还原 | `src/features/import/stravaExport.ts` | `parseStravaActivitiesCsv`（跨行引号/BOM 兼容），按文件名匹配 |
+| Strava 标题还原 | `src/features/import/stravaExport.ts` | `parseStravaActivitiesCsv`（跨行引号/BOM 兼容），按文件名匹配；**CSV 未命中时文件名兜底提取标题**（`titleFromFileName`：Strava 手动下载文件名=标题，纯数字 ID 文件名跳过不显示数字标题） |
 
 ### 导入（规格 §6/§7/§9/§21/§22/§23/§24）
 

@@ -25,6 +25,7 @@ import { createWorkerParser } from './parseClient'
 import {
   buildStravaTitleLookup,
   matchStravaTitle,
+  titleFromFileName,
   type StravaActivityMeta,
 } from './stravaExport'
 
@@ -138,7 +139,10 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         if (normalizedPower !== undefined) {
           activity.normalizedPower = normalizedPower
         }
-        await activityRepository.addActivity(activity, matchStravaTitle(entry.path, entry.name, titles))
+        await activityRepository.addActivity(
+          activity,
+          matchStravaTitle(entry.path, entry.name, titles) ?? titleFromFileName(entry.name),
+        )
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
         await fileRepository.recordImported(
           fingerprint,

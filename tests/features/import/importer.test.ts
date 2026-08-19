@@ -207,12 +207,12 @@ describe('importFiles 导入执行器', () => {
     expect(activity.name).toBe('环湖绕圈');
   });
 
-  it('CSV 中标题为空时不还原名称', async () => {
+  it('CSV 中标题为空时不还原名称（数字 ID 文件名亦无标题可提取）', async () => {
     const csv = parseStravaActivitiesCsv(
-      ['活动 ID,活动名称,文件名', '12345,,activities/ride-3.fit.gz'].join('\n'),
+      ['活动 ID,活动名称,文件名', '12345,,activities/12345.fit.gz'].join('\n'),
     );
 
-    await importFiles([makeImportFile('ride-3.fit.gz', gzipFitFixture())], {
+    await importFiles([makeImportFile('12345.fit.gz', gzipFitFixture())], {
       activityRepository,
       fileRepository,
       stravaCsv: csv,

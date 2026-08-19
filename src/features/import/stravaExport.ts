@@ -144,3 +144,23 @@ export function matchStravaTitle(
 ): string | undefined {
   return titles.get(path) ?? titles.get(name)
 }
+
+/**
+ * 从文件名提取活动标题（Strava 手动下载的单文件文件名 = 活动标题）。
+ * 纯数字文件名（Strava 批量导出的活动 ID）不提取，避免显示数字标题。
+ *
+ * @param name 文件名（可含目录路径，如 机场东路有氧_平均心率138.fit）
+ * @returns 标题；非 FIT 文件或纯数字 ID 文件名返回 undefined
+ */
+export function titleFromFileName(name: string): string | undefined {
+  const baseName = name.slice(name.lastIndexOf('/') + 1)
+  const match = /^(.+)\.(fit|fit\.gz)$/i.exec(baseName)
+  if (!match) {
+    return undefined
+  }
+  const base = match[1].trim()
+  if (/^\d+$/.test(base)) {
+    return undefined
+  }
+  return base.length > 0 ? base : undefined
+}

@@ -3,7 +3,7 @@
  * 用途：导入时还原用户在 Strava 上的活动原标题（规格 §31）。
  */
 import { describe, expect, it } from 'vitest'
-import { parseStravaActivitiesCsv } from '@/features/import/stravaExport'
+import { parseStravaActivitiesCsv, titleFromFileName } from '@/features/import/stravaExport'
 
 describe('parseStravaActivitiesCsv', () => {
   it('解析标题、文件名与运动类型', () => {
@@ -69,5 +69,32 @@ describe('parseStravaActivitiesCsv', () => {
   it('空文件返回空映射', () => {
     expect(parseStravaActivitiesCsv('').size).toBe(0)
     expect(parseStravaActivitiesCsv('活动 ID,活动名称,文件名').size).toBe(0)
+  })
+})
+
+describe('titleFromFileName', () => {
+  it('手动下载文件名即标题时提取标题', () => {
+    expect(titleFromFileName('机场东路有氧_平均心率138.fit')).toBe('机场东路有氧_平均心率138')
+  })
+
+  it('fit.gz 后缀同样提取', () => {
+    expect(titleFromFileName('周末休闲骑.fit.gz')).toBe('周末休闲骑')
+  })
+
+  it('大写扩展名同样提取', () => {
+    expect(titleFromFileName('环湖拉练.FIT')).toBe('环湖拉练')
+  })
+
+  it('批量导出数字 ID 文件名不提取', () => {
+    expect(titleFromFileName('20898459132.fit')).toBeUndefined()
+    expect(titleFromFileName('activities/20898459132.fit.gz')).toBeUndefined()
+  })
+
+  it('非 FIT 文件不提取', () => {
+    expect(titleFromFileName('readme.txt')).toBeUndefined()
+  })
+
+  it('纯扩展名文件名不提取', () => {
+    expect(titleFromFileName('.fit')).toBeUndefined()
   })
 })
