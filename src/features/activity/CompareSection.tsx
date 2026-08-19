@@ -73,8 +73,11 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
   const [summaries, setSummaries] = useState<ActivitySummary[] | null>(null)
   // 选中对比活动（null = 未选择）
   const [selected, setSelected] = useState<ActivitySummary | null>(null)
-  // 对比活动轨迹点
-  const [otherPoints, setOtherPoints] = useState<[number, number][] | null>(null)
+  // 对比活动轨迹（含所属活动 ID：渲染层按 ID 匹配，切换选择时旧轨迹不串显）
+  const [otherData, setOtherData] = useState<{
+    id: string
+    points: [number, number][]
+  } | null>(null)
   // 当前瓦片源索引（瓦片降级）
   const [sourceIndex, setSourceIndex] = useState(
     () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
@@ -103,26 +106,26 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
     }
   }, [repository, activity.id])
 
-  // 选中活动后加载其轨迹
+  // 选中活动后加载其轨迹（异步回调中 setState；渲染层按 ID 匹配防串显）
   useEffect(() => {
     if (selected === null) {
-      setOtherPoints(null)
       return
     }
     let cancelled = false
     repository
       .getRecords(selected.id)
       .then((otherRecords) => {
-        const points = simplifyRoute(otherRecords, COMPARE_SIMPLIFY_METERS)
-          .map((point) => [point.latitude, point.longitude] as [number, number])
+        const points = simplifyRoute(otherRecords, COMPARE_SIMPLIFY_METERS).map(
+          (point) => [point.latitude, point.longitude] as [number, number],
+        )
         if (!cancelled) {
-          setOtherPoints(points)
+          setOtherData({ id: selected.id, points })
         }
       })
       .catch((error: unknown) => {
         console.error('Failed to load comparison records', error)
         if (!cancelled) {
-          setOtherPoints([])
+          setOtherData({ id: selected.id, points: [] })
         }
       })
     return () => {
@@ -144,6 +147,9 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
     () => (selected !== null ? compareActivities(activity, selected) : []),
     [activity, selected],
   )
+
+  // 对比活动轨迹（按选中 ID 匹配；未选择或加载中为 null）
+  const otherPoints = otherData !== null && otherData.id === selected?.id ? otherData.points : null
 
   // 全部轨迹点（视野适配）
   const allPoints = useMemo(

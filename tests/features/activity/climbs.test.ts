@@ -5,7 +5,7 @@
  * 输出段距离/爬升/平均坡度/最大坡度；下坡或缺失海拔断开段。
  */
 import { describe, expect, it } from 'vitest'
-import { buildClimbs } from '@/features/activity/climbs'
+import { buildClimbs, uciCategory } from '@/features/activity/climbs'
 import type { ActivityRecord } from '@/types/activity'
 
 /**
@@ -98,5 +98,61 @@ describe('buildClimbs 爬坡分析', () => {
 
     expect(climbs).toHaveLength(1)
     expect(climbs[0].maxGradePercent).toBeCloseTo(7.5, 0)
+  })
+
+  it('海拔噪声点不产生虚假大坡度（突跳点对过滤）', () => {
+    // 正常 4% 爬升中夹一个海拔突跳点（120 → 160 → 121）
+    const records = makeRecords([
+      [0, 100, 0],
+      [100, 120, 500],
+      [200, 160, 510], // 噪声：10m 内跳 40m（400%）
+      [300, 121, 520],
+      [400, 141, 1000],
+      [500, 160, 1500],
+    ])
+    const climbs = buildClimbs(records)
+
+    expect(climbs).toHaveLength(1)
+    // 最大坡度不超过物理上限（噪声被过滤）
+    expect(climbs[0].maxGradePercent).toBeLessThanOrEqual(30)
+  })
+
+  it('距离过近的点对（停车/低速噪声）不参与坡度计算', () => {
+    // 有效爬升 20 + 30 = 50m（噪声点 1m 内 +1m 跳过不累计）
+    const records = makeRecords([
+      [0, 100, 0],
+      [100, 120, 500],
+      [200, 121, 501], // 1m 内 +1m = 100% 坡度（噪声）
+      [300, 151, 1000],
+    ])
+    const climbs = buildClimbs(records)
+
+    expect(climbs).toHaveLength(1)
+    expect(climbs[0].maxGradePercent).toBeLessThanOrEqual(30)
+  })
+})
+
+describe('uciCategory UCI 坡级分类（近似规则）', () => {
+  it('距离 + 坡度组合分级', () => {
+    // HC：≥10km 且 ≥8%
+    expect(uciCategory(12000, 8.5)).toBe('HC')
+    // 1 级：≥8km 且 ≥6%
+    expect(uciCategory(10000, 6.5)).toBe(1)
+    // 2 级：≥5km 且 ≥5%
+    expect(uciCategory(6000, 5.5)).toBe(2)
+    // 3 级：≥3km 且 ≥4%
+    expect(uciCategory(4000, 4.5)).toBe(3)
+    // 4 级：≥1km 且 ≥3%
+    expect(uciCategory(2000, 3.5)).toBe(4)
+  })
+
+  it('坡度或距离不足不分类（不到 4 级）', () => {
+    expect(uciCategory(500, 5)).toBeNull() // 距离不足
+    expect(uciCategory(2000, 2)).toBeNull() // 坡度不足
+    expect(uciCategory(500, 2)).toBeNull()
+  })
+
+  it('长距离低坡度归 HC（>15km 且 ≥6%）', () => {
+    expect(uciCategory(18000, 6.5)).toBe('HC')
   })
 })

@@ -1,5 +1,5 @@
 /**
- * 爬坡分析区块样式。
+ * 爬坡分析区块样式（可视化版：海拔剖面 + 级别卡片）。
  * 颜色取自全局 CSS 变量，深色基调与全局一致。
  */
 .climb-section {
@@ -22,35 +22,52 @@
   margin-bottom: 10px;
 }
 
-.climb-section__scroller {
-  overflow-x: auto;
-}
-
-.climb-table {
+/* 海拔剖面：爬坡段区域按级别色高亮 */
+.climb-section__profile {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+  height: 140px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 20%, transparent);
 }
 
-.climb-table th,
-.climb-table td {
-  padding: 8px 12px;
-  text-align: right;
-  border-bottom: 1px solid var(--border);
+/* 级别卡片列表 */
+.climb-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.climb-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.climb-card__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.climb-card__name {
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.climb-table th:first-child,
-.climb-table td:first-child {
-  text-align: left;
-}
-
-.climb-table th {
+.climb-card__stats {
   color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.climb-table tbody tr:last-child td {
-  border-bottom: none;
+  white-space: nowrap;
 }

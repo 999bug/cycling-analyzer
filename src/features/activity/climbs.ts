@@ -12,6 +12,15 @@ const CLIMB_MIN_GAIN_METERS = 30
 /** 爬坡判定阈值：平均坡度（%） */
 const CLIMB_MIN_AVG_GRADE_PERCENT = 1.5
 
+/** 坡度计算最小点对距离（米）：过近点对（停车/低速噪声）坡度不可靠，跳过 */
+const MIN_GRADE_DIST_METERS = 2
+
+/** 单点海拔最大跳变（米）：超过视为 GPS/气压计噪声（真实爬升由坡度上限把关，此值宽松） */
+const MAX_ALT_JUMP_METERS = 80
+
+/** 坡度物理上限（%）：超过视为噪声（真实骑行坡道一般 <25%） */
+const MAX_GRADE_PERCENT = 30
+
 /** 一个爬坡段 */
 export interface ClimbSegment {
   /** 段起点累计距离（米） */
@@ -81,7 +90,12 @@ export function buildClimbs(records: readonly ActivityRecord[]): ClimbSegment[] 
     if (prev !== undefined) {
       const deltaAlt = record.altitude - prev.altitude
       const deltaDist = record.distance - prev.distance
-      if (deltaDist > 0) {
+      // 噪声过滤：距离过近、海拔突跳、坡度超物理上限的点对跳过（不参与爬升与坡度）
+      const validPair =
+        deltaDist >= MIN_GRADE_DIST_METERS &&
+        Math.abs(deltaAlt) <= MAX_ALT_JUMP_METERS &&
+        (deltaDist === 0 || Math.abs((deltaAlt / deltaDist) * 100) <= MAX_GRADE_PERCENT)
+      if (validPair) {
         const grade = (deltaAlt / deltaDist) * 100
         if (grade > maxGrade) {
           maxGrade = grade
@@ -106,4 +120,47 @@ export function buildClimbs(records: readonly ActivityRecord[]): ClimbSegment[] 
 
   closeSegment(prev?.distance)
   return climbs
+}
+
+/** UCI 坡级（近似规则；4 → HC 递进） */
+export type UciCategory = 'HC' | 1 | 2 | 3 | 4
+
+/**
+ * UCI 坡级近似分类（基于长度 + 平均坡度的简化规则）。
+ *
+ * - HC：≥10km 且 ≥8%，或 ≥15km 且 ≥6%
+ * - 1 级：≥8km 且 ≥6%
+ * - 2 级：≥5km 且 ≥5%
+ * - 3 级：≥3km 且 ≥4%
+ * - 4 级：≥1km 且 ≥3%
+ * - 其余（距离或坡度不足）null（不分类）
+ *
+ * @param distanceMeters 坡段长度（米）
+ * @param avgGradePercent 平均坡度（%）
+ * @returns 坡级；不满足最低标准时 null
+ */
+export function uciCategory(
+  distanceMeters: number,
+  avgGradePercent: number,
+): UciCategory | null {
+  const distanceKm = distanceMeters / 1000
+  if (distanceKm >= 10 && avgGradePercent >= 8) {
+    return 'HC'
+  }
+  if (distanceKm >= 15 && avgGradePercent >= 6) {
+    return 'HC'
+  }
+  if (distanceKm >= 8 && avgGradePercent >= 6) {
+    return 1
+  }
+  if (distanceKm >= 5 && avgGradePercent >= 5) {
+    return 2
+  }
+  if (distanceKm >= 3 && avgGradePercent >= 4) {
+    return 3
+  }
+  if (distanceKm >= 1 && avgGradePercent >= 3) {
+    return 4
+  }
+  return null
 }

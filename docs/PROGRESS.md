@@ -31,6 +31,8 @@
 | ✅ 已完成 | 骑行路线图页（路线总览地图） | `/routes-map` 路由 + 侧边栏「路线图」导航：所有路线按聚类画在一张地图（`src/features/routes/routeMap.ts` 黄金角色相配色，同路线同色），点击路线列表高亮（其余降透明度）；作者源 CI 预计算 `precomputed/route-tracks.json`（buildAuthorData + snapshotClient `getRouteTracks`），本地源实时扫描（复用热力图缓存模式）；测试 11 新增 | 提交待确认 |
 | ✅ 已完成 | 活动详情页「匹配的骑行」区块（Strava Similar Rides） | `src/features/routes/similarRides.ts`（`findMatchingRides`：同路线分组其他骑行，排除自身、时间降序）+ `src/features/activity/SimilarRidesSection.tsx`（详情页 SplitsSection 后挂载，展示名称/日期/距离/用时/速度，点击跳转；无匹配/失败不渲染）；作者源 `getRouteGroups` 预计算，本地源实时扫描（缓存模式）；测试 7 新增 | 提交待确认 |
 | ✅ 已完成 | 路线图颜色优化 + 匹配骑行竞速 + 温度曲线 + 主题跟随系统 | 路线图：路线色亮度 60→42%（浅色瓦片醒目）+ 白描边光晕 + 选中加粗 6px、未选中透明度 0.06，地图铺满右侧（去 max-width）；匹配骑行加 `compareDurations` 竞速标签（比本次快绿/慢橙/持平）；详情页新增温度图表（`TemperatureChart`，MetricField 加 temperature，无数据不渲染）；设置页主题加「跟随系统」（Theme 加 'system'，matchMedia 解析 + change 监听自动跟随，显式主题卸载监听）；tests/setup.ts 补 matchMedia stub；测试 13 新增（竞速 4+组件 2、温度 5、主题 3 含 setup） | 提交待确认 |
+| ✅ 已完成 | 爬坡分析（UCI 分级 + 可视化） | `climbs.ts`：buildClimbs（**噪声过滤**：距离 <2m / 海拔突跳 >80m / 坡度 >30% 点对跳过——修复真实数据出现 20%+ 虚假坡度）+ uciCategory（UCI 近似分级 HC/1-4，长度+平均坡度组合规则）；ClimbSection 可视化（**海拔剖面 SVG** 爬坡段级别色高亮 + 级别徽章卡片，去表格）；测试 11 新增 | 提交待确认 |
+| ⏳ 待办 | **功能队列（VIP 级，用户确认全做）** | 训练计划生成 / 目标设定与进度 / 表现趋势（12 周 + 效率因子）/ 比赛预测 / 离线地图（瓦片 IndexedDB 缓存）/ 路线规划器（画路线导出 GPX）/ 每周训练综述 / 骑行记录 CSV 批量导出 / 轨迹纠偏（GPS 漂移点清理）/ 自行车统计（FIT 提取单车字段）/ PWA 离线可用 | 每完成一个更新本行拆分为 ✅ 已提交 |
 
 ---
 
