@@ -63,7 +63,9 @@ async function fetchLatestActivityUrl() {
  */
 async function captureAll() {
   await mkdir(outDir, { recursive: true })
-  const browser = await chromium.launch()
+  // 国内直连 GitHub Pages 不稳定：支持通过 HTTPS_PROXY 环境变量走代理
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy
+  const browser = await chromium.launch({ proxy: proxyUrl ? { server: proxyUrl } : undefined })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
 
   const detailPath = await fetchLatestActivityUrl()
