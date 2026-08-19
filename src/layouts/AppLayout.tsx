@@ -43,9 +43,11 @@ function AppLayout() {
               src={`${import.meta.env.BASE_URL}qileme.png`}
               alt="骑了么 logo"
             />
-            <span className="app-layout__brand-name">骑了么</span>
+            <span className="app-layout__brand-text">
+              <span className="app-layout__brand-name">骑了么</span>
+              <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
+            </span>
           </span>
-          <span className="app-layout__brand-tagline">看懂你的每一次骑行</span>
         </Link>
         <DataSourceSwitcher />
         <nav className="app-layout__nav" aria-label="主导航">
