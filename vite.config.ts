@@ -1,7 +1,13 @@
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
 
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+
+// 应用版本号（取自 package.json，define 注入供页面显示）
+const pkg = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+) as { version: string }
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -10,6 +16,10 @@ export default defineConfig(({ command }) => ({
   // dev 保持 '/'，与 main.tsx 的 ROUTER_BASENAME 规则一致。
   base: command === 'build' ? '/cycling-analyzer/' : '/',
   plugins: [react()],
+  // 版本号注入（侧边栏显示；bundle 内直接内联字符串，无运行时 JSON 加载）
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

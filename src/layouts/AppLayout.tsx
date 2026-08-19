@@ -67,6 +67,7 @@ function AppLayout() {
         </nav>
         <div className="app-layout__sidebar-footer">
           <ImportPanel />
+          <span className="app-layout__version">v{__APP_VERSION__}</span>
         </div>
       </aside>
       <main id="main-content" className="app-layout__content" tabIndex={-1}>
