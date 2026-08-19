@@ -46,3 +46,4 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 前缀 `[NF]`/`[BF]`/`[IM]`/`[CU]` + 中文 Subject；**无 AI 署名**
 - 提交身份固定 `999bug <999bug@users.noreply.github.com>`（项目 git config 已设，勿改）
 - 先同步更新 `docs/PROGRESS.md` 再提交；完成后 `codegraph sync`（如环境可用）
+- **版本策略**：每次 push 一组功能提交前，`package.json` 升一次 minor 版本（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）；如已升过则跳过
