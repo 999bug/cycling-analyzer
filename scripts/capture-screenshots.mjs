@@ -72,7 +72,8 @@ async function captureAll() {
   const targets = detailPath !== undefined ? [{ path: detailPath, file: 'detail.png' }, ...PAGES] : PAGES
 
   for (const { path, file } of targets) {
-    await page.goto(`${SITE_URL}${path}`, { waitUntil: 'networkidle' })
+    // domcontentloaded 而非 networkidle：地图瓦片加载慢/失败时 networkidle 永不满足
+    await page.goto(`${SITE_URL}${path}`, { waitUntil: 'domcontentloaded' })
     await settle(page, path)
     await page.screenshot({ path: resolve(outDir, file), fullPage: false })
     console.log(`Captured ${file} <- ${path}`)
