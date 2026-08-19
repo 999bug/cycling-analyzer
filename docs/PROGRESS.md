@@ -24,8 +24,8 @@
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |
 | ✅ 已提交 | 导入面板 UI 优化 + 文件选择无反应 bug 修复 | 数据来源下拉改为两个目录导入入口按钮（Strava 导出 / 其他设备），单文件/拖拽导入无需来源（FIT 通用）；修复 FileList live 引用 bug——`event.target.value=''` 重置会清空已保存的 FileList，选择文件/目录回退后页面无反应；先 `Array.from` 转数组再重置，Playwright 实测弹窗→编辑→导入→落库全链路通过 | push 触发 CI（版本保持 1.8.0，本组为发布前完善） |
 | ✅ 已提交 | 同步数据弹窗美化 | 按千问多模态读图审查 + Vercel Web Interface Guidelines 优化：弹窗内边距加大、入口卡片化（图标 + 主文案 + 说明，hover/active/focus 反馈）、拖拽区加上传图标与副文案、弹窗阴影/边框对比增强、淡入上滑动画 + prefers-reduced-motion 降级、overscroll-behavior: contain、关闭按钮 hover 态；千问回评 6.5→7.5+（布局/层次/间距获认可） | 推送待确认（版本保持 1.8.0） |
-| ✅ 已完成 | 地图瓦片源自动降级（OSM → 高德 + GCJ-02 纠偏） | `src/map/tileSources.ts`（双瓦片源定义 + WGS-84→GCJ-02 标准算法，境内偏移/境外原样）；`src/map/FallbackTileLayer.tsx`（连续 3 次 tileerror 且期间无 tileload → 降级回调，单向防重）；详情页 ActivityMap 与热力图页接入（高德源时展示坐标统一转换，sessionStorage key `cycling-map-tile-fallback` 会话记忆）；测试 12 新增（tileSources 6 + fallbackTileLayer 6） | 提交待确认 |
-| ✅ 已完成 | 品牌焕新：骑记 Ride Insight → 骑了么 + 新 Logo | 站名全量替换（index.html/404.html 标题、侧边栏品牌区删英文行 Ride Insight、README、分享卡落款/下载文件名）；新 Logo `public/qileme.png`（用户 AI 生成原图 2848×1600 → 128×72 压缩版，原图归档 `docs/brand/qileme-source.png`）接入侧边栏 + favicon；废弃 `ride.png` 删除；a11y 与 e2e 品牌断言同步 | 提交待确认（与瓦片降级同批发布 1.9.0） |
+| ✅ 已提交 | 地图瓦片源自动降级（OSM → 高德 + GCJ-02 纠偏） | `src/map/tileSources.ts`（双瓦片源定义 + WGS-84→GCJ-02 标准算法，境内偏移/境外原样）；`src/map/FallbackTileLayer.tsx`（连续 3 次 tileerror 且期间无 tileload → 降级回调，单向防重）；详情页 ActivityMap 与热力图页接入（高德源时展示坐标统一转换，sessionStorage key `cycling-map-tile-fallback` 会话记忆）；测试 12 新增（tileSources 6 + fallbackTileLayer 6） | 已提交 `1b2c54b`，随 1.9.0 推送 |
+| ✅ 已提交 | 品牌焕新：骑记 Ride Insight → 骑了么 + 新 Logo | 站名全量替换（index.html/404.html 标题、侧边栏品牌区删英文行 Ride Insight、README、分享卡落款/下载文件名）；新 Logo `public/qileme.png`（用户 AI 生成原图 2848×1600，去水印后压缩为 128×72，原图归档 `docs/brand/qileme-source.png`）接入侧边栏 + favicon；废弃 `ride.png` 删除；a11y 与 e2e 品牌断言同步 | 已提交 `c735121`，随 1.9.0 推送 |
 
 ---
 
