@@ -17,6 +17,7 @@ const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'))
 const YearReviewPage = lazy(() => import('@/pages/YearReviewPage'))
 const RoutesMapPage = lazy(() => import('@/pages/RoutesMapPage'))
 const TrainingPlanPage = lazy(() => import('@/pages/TrainingPlanPage'))
+const PerformancePage = lazy(() => import('@/pages/PerformancePage'))
 
 /**
  * 懒加载页面容器：chunk 下载期间显示轻量占位。
@@ -46,6 +47,7 @@ function App() {
         <Route path={ROUTES[8]} element={<LazyPage><SegmentsPage /></LazyPage>} />
         <Route path={ROUTES[9]} element={<LazyPage><RoutesMapPage /></LazyPage>} />
         <Route path={ROUTES[10]} element={<LazyPage><TrainingPlanPage /></LazyPage>} />
+        <Route path={ROUTES[11]} element={<LazyPage><PerformancePage /></LazyPage>} />
       </Route>
     </Routes>
   )

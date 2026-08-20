@@ -300,6 +300,34 @@ describe('统计页面', () => {
     const deviceSection = await screen.findByRole('region', { name: '设备统计' })
     expect(await within(deviceSection).findByText('暂无设备信息')).toBeInTheDocument()
   })
+
+  it('自行车统计区块：按单车分组展示聚合指标，无单车信息显示提示', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const today = new Date().toISOString()
+    await repo.addActivities([
+      makeActivity(0, today, 30000, 3600, 200),
+      makeActivity(1, today, 20000, 1800, 100),
+    ])
+    // act-0/act-1 落库后补单车信息（makeActivity 不含 bikeName 字段）
+    await testDb.activities.update('act-0', { bikeName: '公路车' })
+    await testDb.activities.update('act-1', { bikeName: '公路车' })
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const bikeSection = await screen.findByRole('region', { name: '自行车统计' })
+    expect(await within(bikeSection).findByText('公路车')).toBeInTheDocument()
+    expect(within(bikeSection).getByText('2 次')).toBeInTheDocument()
+    expect(within(bikeSection).getByText('50.00 km')).toBeInTheDocument()
+    expect(within(bikeSection).getByText('01:30:00')).toBeInTheDocument()
+  })
+
+  it('全部活动无单车信息时自行车统计区块显示提示', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivities([makeActivity(0, new Date().toISOString())])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    const bikeSection = await screen.findByRole('region', { name: '自行车统计' })
+    expect(await within(bikeSection).findByText(/暂无自行车信息/)).toBeInTheDocument()
+  })
 })
 
 describe('路线分析区块（规格 §39）', () => {

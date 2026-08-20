@@ -455,6 +455,7 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     aerobicTrainingEffect: activity.aerobicTrainingEffect,
     anaerobicTrainingEffect: activity.anaerobicTrainingEffect,
     device: activity.device,
+    bikeName: activity.bikeName,
   };
 }
 

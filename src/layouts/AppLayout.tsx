@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/year-review', label: '年度回顾' },
   { to: '/segments', label: '赛段' },
   { to: '/training-plan', label: '训练计划' },
+  { to: '/performance', label: '表现趋势' },
   { to: '/settings', label: '设置' },
 ]
 

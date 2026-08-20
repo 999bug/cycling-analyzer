@@ -35,6 +35,7 @@ import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
+import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import SplitsSection from '@/features/activity/SplitsSection'
 import ClimbSection from '@/features/activity/ClimbSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
@@ -310,10 +311,13 @@ function ActivityDetailPage() {
     }
   }, [activity, repository])
 
+  // 轨迹纠偏（规格 §39）：GPS 漂移飞点清理，仅作用于展示层（地图/GPX），不落库
+  const cleanedRecords = useMemo(() => cleanTrackDrift(records), [records])
+
   // 轨迹抽稀：逐点数据变化时重算（详情页仅此一处消费 records 全量）
   const routePoints = useMemo(
-    () => simplifyRoute(records, SIMPLIFY_TOLERANCE_METERS),
-    [records],
+    () => simplifyRoute(cleanedRecords.cleaned, SIMPLIFY_TOLERANCE_METERS),
+    [cleanedRecords],
   )
 
   // 共享时间轴悬停 → 地图联动圆点坐标（按 timestamp 匹配最近轨迹点）
@@ -415,7 +419,7 @@ function ActivityDetailPage() {
       return
     }
     const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
-    const gpx = buildGpx(trackName, records)
+    const gpx = buildGpx(trackName, cleanedRecords.cleaned)
     if (gpx === undefined) {
       return
     }
@@ -628,6 +632,11 @@ function ActivityDetailPage() {
         </div>
         {coloring !== 'none' && (
           <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
+        )}
+        {cleanedRecords.removedCount > 0 && (
+          <p className="activity-detail__drift-notice">
+            已清理 {cleanedRecords.removedCount} 个 GPS 漂移点（仅影响轨迹展示与导出）
+          </p>
         )}
         <ActivityMap
           points={routePoints}

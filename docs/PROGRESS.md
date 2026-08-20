@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（共享时间轴联动 + 分段分析 + 骑行质量评分）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（功能队列第 3/7/9/10 项：表现趋势 + 每周综述 + 轨迹纠偏 + 自行车统计）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -19,9 +19,13 @@
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
 | ✅ 已提交 | Strava 描述 + 估算功率展示 + 详情页铺满 | 已提交 `1604b98`（测试 631/631、lint/build 绿、本地快照验证 28 条描述 + 估算功率填充） | push 触发 CI（此前网络异常，随下次提交一起推送） |
-| ✅ 已完成 | **训练计划生成**（功能队列第一项，上会话遗留） | `src/features/training/plan.ts`（`buildTrainingPlan`：周期化训练——基础期/强化期/减量期/巅峰期，按周分配 TSS 递进 + 峰值前减量，周时长 = 小时折算，非法输入空数组兜底；`estimateFtpFromPowerCurve` 从功率曲线估算 FTP）+ `src/pages/TrainingPlanPage.tsx/.css`（表单：目标赛事日期/每周可投入时长/当前 CTL（未配置 FTP 时手动填）+ 逐周卡片列表：阶段色标 + 周数/日期/目标 TSS/骑行次数/时长/训练重点）；本次接线：`ROUTES[10]='/training-plan'` + App.tsx 懒加载 Route + 侧边栏「训练计划」导航；测试 5（plan 纯逻辑），全量 746/746 + lint/build 绿 | 提交待确认 |
-| ✅ 已完成 | **详情页三连：共享时间轴联动 + 分段分析 + 骑行质量评分**（用户确认三项全做） | ①共享时间轴：`src/charts/timeline.ts` 纯函数 + MetricChart/CombinedChart/五个薄封装图 hover 上报 + `ReferenceLine` 外部光标（Brush 缩放超域隐藏）、`ActivityMap` `hoverPoint` 圆点 + `MapHoverReporter` 反向联动（高德源 GCJ-02 展示坐标匹配）、`ClimbSection` 剖面改时间戳上报 + 外部参考线；②分段分析：`segments.ts` `buildSegments`（平路/爬坡连续分段，坡段终点收敛到海拔峰值）+ `climbInsights`（相邻爬坡功率/速度对比文案）+ `SegmentsSection` 卡片列表；③骑行质量评分：`qualityScore.ts`（配速/心率/功率稳定性变异系数 + 爬坡表现 + 后程状态，综合分 = 有效分项平均）+ `QualityScoreSection`（大数字 + 分项条 + 档位评价）；测试 36 新增（timeline 14 / segments 7 + 组件 3 / qualityScore 10 + 组件 2），全量 746/746 + lint/build 绿 | 提交待确认 |
-| ✅ 已提交 | 版本信息 + LICENSE + README 图文重写 | 侧边栏底部显示 `v1.7.0`（vite define 注入 `__APP_VERSION__`）、`LICENSE`（MIT）、`scripts/capture-screenshots.mjs` 截线上站点 8 页真实数据图（docs/screenshots/）、README 重写 | push 触发 CI |
+| ✅ 已提交 | **详情页三连：共享时间轴联动 + 分段分析 + 骑行质量评分** | 已提交 `9250ae5`（①`src/charts/timeline.ts` + 六图/地图/爬坡剖面共享 hover 联动；②`segments.ts` 平路/爬坡分段 + `climbInsights` 相邻爬坡对比 + SegmentsSection；③`qualityScore.ts` 五维度评分 + QualityScoreSection；测试 36 新增，全量 746/746 + lint/build 绿，版本 2.0.0 → 2.1.0） | 已推送 |
+| ✅ 已提交 | **训练计划生成**（功能队列第一项） | 已提交 `6a7db2c`（`src/features/training/plan.ts` + TrainingPlanPage + ROUTES[10] + 侧边栏导航，测试 5/5，全量 746/746 + lint/build 绿） | 随下次一起推送 |
+| ✅ 已提交 | **表现趋势（12 周 + 效率因子）**（功能队列第 3 项） | `src/features/analysis/weeklyStats.ts`（`buildWeeklySeries` 周聚合：次数/距离/时长/爬升/TSS/EF）+ 新页 `/performance`（`PerformancePage` 周综述对比 + 12 周趋势图，EF = ΣNP×时长/Σ心率×时长，FTP 缺失隐藏 TSS）；测试 8 + 页面 4 新增 | 随本次提交推送 |
+| ✅ 已提交 | **每周训练综述**（功能队列第 7 项） | 并入表现趋势页（`buildWeekReview` 本周 vs 上周对比卡片，与表现趋势同页展示） | 随本次提交推送 |
+| ✅ 已提交 | **轨迹纠偏（GPS 漂移点清理）**（功能队列第 9 项） | `src/features/activity/trackCleanup.ts`（`cleanTrackDrift`：两侧瞬时速度均 >50m/s 判飞点剔除，保守不误删单侧高速段；详情页地图与 GPX 导出使用清理后轨迹，提示条展示清理数）；测试 8 新增 | 随本次提交推送 |
+| ✅ 已提交 | **自行车统计（FIT 提取单车字段）**（功能队列第 10 项） | FIT session `sportProfileName`（字段 110）→ `Activity.bikeName`（decoder/normalizer/模型/DB/仓库全链路）+ `bikeStats.ts` `buildBikeStats`（缺失归「未知自行车」）+ `BikeStatsCards` 挂统计页设备区块后 + fixture 加单车名重生成；测试 5 + 页面 2 + normalizer 断言新增 | 随本次提交推送 |
+| ⏳ 待办 | **功能队列（VIP 级，用户确认全做）** | 训练计划生成 ✅ / 表现趋势 ✅ / 每周训练综述 ✅ / 轨迹纠偏 ✅ / 自行车统计 ✅ 已完成；剩余：目标设定与进度 / 比赛预测 / 离线地图（瓦片 IndexedDB 缓存）/ 路线规划器（画路线导出 GPX）/ 骑行记录 CSV 批量导出 / PWA 离线可用 | 每完成一个更新本行拆分为 ✅ 已提交 |
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |
 | ✅ 已提交 | 导入面板 UI 优化 + 文件选择无反应 bug 修复 | 数据来源下拉改为两个目录导入入口按钮（Strava 导出 / 其他设备），单文件/拖拽导入无需来源（FIT 通用）；修复 FileList live 引用 bug——`event.target.value=''` 重置会清空已保存的 FileList，选择文件/目录回退后页面无反应；先 `Array.from` 转数组再重置，Playwright 实测弹窗→编辑→导入→落库全链路通过 | push 触发 CI（版本保持 1.8.0，本组为发布前完善） |

@@ -1,0 +1,88 @@
+/**
+ * 表现趋势页面样式：周综述对比卡片 + 12 周趋势图（深色主题，复用全局 CSS 变量）。
+ */
+.performance-page__message {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.weekly-review {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.weekly-review__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.weekly-review__week {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.weekly-review__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.weekly-review__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.weekly-review__label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.weekly-review__value {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weekly-review__previous {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-trend {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.performance-trend__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.performance-trend__hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+/* 窄屏降为两列，避免周综述卡片挤压 */
+@media (max-width: 900px) {
+  .weekly-review__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

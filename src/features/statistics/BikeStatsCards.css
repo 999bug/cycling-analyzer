@@ -1,0 +1,85 @@
+/**
+ * 自行车统计区块样式：深色容器 + 单车聚合卡片（两列网格）。
+ * 与 DeviceStatsCards 同风格（同布局结构，独立类名避免混淆）。
+ */
+.bike-stats {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.bike-stats__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.bike-stats__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bike-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.bike-card__header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bike-card__name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.bike-card__count {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bike-card__stats {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bike-card__stat {
+  display: flex;
+  justify-content: space-between;
+}
+
+.bike-card__stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.bike-card__stat-value {
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bike-stats__hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 窄屏降为单列，避免单车卡片挤压 */
+@media (max-width: 600px) {
+  .bike-stats__grid {
+    grid-template-columns: 1fr;
+  }
+}

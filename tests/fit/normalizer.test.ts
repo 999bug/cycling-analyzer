@@ -27,6 +27,8 @@ describe('normalizeActivity 基本信息', () => {
     expect(activity.activityType).toBe('cycling')
     expect(activity.fileId).toBe('42420001-1735689600')
     expect(activity.device?.productName).toBe('Cycling Analyzer Test Device')
+    // 单车名来自 session sport_profile_name（合成样例写入「公路车测试单车」）
+    expect(activity.bikeName).toBe('公路车测试单车')
   })
 
   it('转换开始/结束时间为 ISO 字符串', () => {

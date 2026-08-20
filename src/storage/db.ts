@@ -114,6 +114,9 @@ export interface ActivityEntity {
 
   /** 设备信息 */
   device?: DeviceInfo;
+
+  /** 自行车名称（FIT session sport_profile_name，骑行设备所选单车；非索引字段，免升版本） */
+  bikeName?: string;
 }
 
 /**

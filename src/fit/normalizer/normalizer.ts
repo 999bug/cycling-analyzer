@@ -61,8 +61,21 @@ export function normalizeActivity(fit: DecodedFitFile, meta: NormalizeMeta): Act
     aerobicTrainingEffect: session?.aerobicTrainingEffect,
     anaerobicTrainingEffect: session?.anaerobicTrainingEffect,
     device: toDeviceInfo(fit.device),
+    // 单车名（session sport_profile_name）：trim 后为空视为缺失（不伪造）
+    bikeName: normalizeBikeName(session?.sportProfileName),
     records,
   }
+}
+
+/**
+ * 规范化单车名：trim 后为空字符串视为 undefined（缺失不伪造）。
+ *
+ * @param name 原始单车名（可缺失）
+ * @returns 规范化单车名或 undefined
+ */
+function normalizeBikeName(name: string | undefined): string | undefined {
+  const trimmed = name?.trim()
+  return trimmed ? trimmed : undefined
 }
 
 /** 半周位置 → 十进制度（0 或无值表示无有效坐标） */

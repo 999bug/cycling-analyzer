@@ -103,6 +103,8 @@ function writeMetaMessages(encoder, { sport, withHeartRate, withPower }) {
     // 官方 FIT 协议：单次有氧 TE = totalTrainingEffect（字段 24），无氧 TE = totalAnaerobicTrainingEffect（字段 137）
     totalTrainingEffect: withHeartRate ? 3.2 : undefined,
     totalAnaerobicTrainingEffect: withHeartRate ? 1.1 : undefined,
+    // 运动配置文件名（Garmin 骑行设备所选单车名）：合成样例给骑行单车
+    sportProfileName: '公路车测试单车',
     sport,
     subSport: 'generic',
     numLaps: 1,

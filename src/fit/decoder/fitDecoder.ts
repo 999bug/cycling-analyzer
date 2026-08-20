@@ -88,6 +88,8 @@ export interface RawFitSession {
   aerobicTrainingEffect?: number
   /** 无氧训练效果（0-5，来自 session 的 totalAnaerobicTrainingEffect 字段，Garmin TE 指标） */
   anaerobicTrainingEffect?: number
+  /** 运动配置文件名称（骑行场景为所选单车名，规格 §39 自行车统计） */
+  sportProfileName?: string
 }
 
 /**
@@ -296,6 +298,8 @@ function toSessions(mesgs: Record<string, unknown>[]): RawFitSession[] {
     // 137 = total_anaerobic_training_effect（即单次无氧 TE），均为 uint8 scale 10
     aerobicTrainingEffect: asNumber(mesg.totalTrainingEffect),
     anaerobicTrainingEffect: asNumber(mesg.totalAnaerobicTrainingEffect),
+    // 110 = sport_profile_name（运动配置文件名；Garmin 骑行设备所选单车名写入此处）
+    sportProfileName: typeof mesg.sportProfileName === 'string' ? mesg.sportProfileName : undefined,
   }))
 }
 

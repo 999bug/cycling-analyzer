@@ -14,4 +14,5 @@ export const ROUTES = [
   '/segments',
   '/routes-map',
   '/training-plan',
+  '/performance',
 ] as const

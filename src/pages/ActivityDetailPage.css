@@ -251,6 +251,13 @@
   color: var(--primary);
 }
 
+/* GPS 漂移点清理提示（规格 §39 轨迹纠偏） */
+.activity-detail__drift-notice {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
 /* 图表网格（2 列） */
 .activity-detail__charts {
   display: grid;

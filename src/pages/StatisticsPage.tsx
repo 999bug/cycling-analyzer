@@ -25,6 +25,8 @@ import RangeSelector from '@/features/statistics/RangeSelector'
 import StatisticCards from '@/features/statistics/StatisticCards'
 import DeviceStatsCards from '@/features/statistics/DeviceStatsCards'
 import { buildDeviceStats } from '@/features/statistics/deviceStats'
+import BikeStatsCards from '@/features/statistics/BikeStatsCards'
+import { buildBikeStats } from '@/features/statistics/bikeStats'
 import { buildPowerCurve } from '@/features/analysis/powerCurve'
 import {
   buildPowerRecords,
@@ -126,6 +128,9 @@ function StatisticsPage() {
 
   // 设备统计（全时段，与范围选择无关）：摘要就绪后即可计算
   const deviceStats = useMemo(() => buildDeviceStats(summaries ?? []), [summaries])
+
+  // 自行车统计（全时段，与范围选择无关）：摘要就绪后即可计算
+  const bikeStats = useMemo(() => buildBikeStats(summaries ?? []), [summaries])
 
   // 功率纪录 + 路线分析：合并为一次全量逐点扫描（性能优化）。
   // 渲染期派生优先读模块级缓存（离开页面再回来秒开）；
@@ -266,6 +271,7 @@ function StatisticsPage() {
         distanceUnit={distanceUnit}
       />
       <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
+      <BikeStatsCards entries={bikeStats} distanceUnit={distanceUnit} />
       <RouteGroupCards groups={routeGroups} failed={scanFailed} distanceUnit={distanceUnit} />
     </>
   )

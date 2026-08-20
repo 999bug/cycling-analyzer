@@ -109,6 +109,9 @@ export interface Activity {
   /** 设备信息 */
   device?: DeviceInfo
 
+  /** 自行车名称（FIT session sport_profile_name，骑行设备所选单车，缺失为 undefined） */
+  bikeName?: string
+
   /** 抽稀后的轨迹（地图绘制用，后续版本生成） */
   route?: RoutePoint[]
 
