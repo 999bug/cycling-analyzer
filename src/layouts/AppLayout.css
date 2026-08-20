@@ -1,12 +1,29 @@
 /**
- * 应用布局样式：左侧固定侧边栏 + 右侧主内容区。
+ * 应用布局样式：桌面端左侧固定侧边栏 + 右侧主内容区；
+ * 移动端（≤768px）侧边栏变为抽屉（顶栏汉堡开合 + 遮罩），默认收起。
  * 颜色取自全局 CSS 变量（--bg、--bg-surface 等），后续主题切换只需覆盖变量。
  */
+
+/* ---- 整体布局 ---- */
 .app-layout {
   display: flex;
   height: 100%;
+  position: relative;
 }
 
+/* 顶栏：仅移动端显示；桌面端隐藏 */
+.app-layout__topbar {
+  display: none;
+}
+
+/* 桌面端无顶栏，内容区即右侧 */
+.app-layout__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* 侧边栏（桌面端常驻） */
 .app-layout__sidebar {
   display: flex;
   flex-direction: column;
@@ -103,12 +120,6 @@
   opacity: 0.7;
 }
 
-.app-layout__content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-}
-
 /* skip link（a11y）：默认隐藏，聚焦时浮出到左上角 */
 .app-layout__skip-link {
   position: absolute;
@@ -125,4 +136,148 @@
 
 .app-layout__skip-link:focus-visible {
   top: 8px;
+}
+
+/* ---- 移动端（≤768px）：抽屉式侧边栏 ---- */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  /* 顶栏：汉堡按钮 + 品牌，固定顶部不随内容滚动 */
+  .app-layout__topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    padding: 10px 16px;
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .app-layout__menu-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .app-layout__menu-button:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  :root[data-theme='light'] .app-layout__menu-button:hover {
+    background-color: rgba(13, 59, 76, 0.06);
+  }
+
+  /* 汉堡图标：三条横线；展开时显示 × 形 */
+  .app-layout__menu-icon,
+  .app-layout__menu-icon::before,
+  .app-layout__menu-icon::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background-color: currentColor;
+    transition: transform 0.2s ease;
+  }
+
+  .app-layout__menu-icon {
+    position: relative;
+  }
+
+  .app-layout__menu-icon::before,
+  .app-layout__menu-icon::after {
+    content: '';
+    position: absolute;
+    left: 0;
+  }
+
+  .app-layout__menu-icon::before {
+    top: -6px;
+  }
+
+  .app-layout__menu-icon::after {
+    top: 6px;
+  }
+
+  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon {
+    background-color: transparent;
+  }
+
+  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon::before {
+    transform: translateY(6px) rotate(45deg);
+  }
+
+  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon::after {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  /* 顶栏品牌（移动端：小 logo，可点击回首页） */
+  .app-layout__topbar-brand {
+    display: block;
+    text-decoration: none;
+  }
+
+  .app-layout__topbar-logo {
+    height: 32px;
+    width: auto;
+    border-radius: 6px;
+  }
+
+  /* 抽屉遮罩 */
+  .app-layout__scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+
+  /* 抽屉本体：固定定位从左滑出，默认全收起在可视区外 */
+  .app-layout__sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(280px, 84vw);
+    /* 保持与桌面端一致的列布局，顶部留足抽屉头 */
+    padding-top: 20px;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .app-layout__sidebar--open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-layout__sidebar {
+      transition: none;
+    }
+  }
+
+  /* 品牌横幅在抽屉内保留，顶栏已有小 logo，抽屉内仍显示完整横幅 */
+  .app-layout__brand--drawer {
+    display: flex;
+  }
+
+  /* 内容区：移动端减边距，给图表/表格更多横向空间 */
+  .app-layout__content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
 }

@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（功能队列第 5/11 项：离线地图 + PWA 离线可用）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（移动端抽屉式侧边栏）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -27,6 +27,7 @@
 | ✅ 已提交 | **自行车统计（FIT 提取单车字段）**（功能队列第 10 项） | FIT session `sportProfileName`（字段 110）→ `Activity.bikeName`（decoder/normalizer/模型/DB/仓库全链路）+ `bikeStats.ts` `buildBikeStats`（缺失归「未知自行车」）+ `BikeStatsCards` 挂统计页设备区块后 + fixture 加单车名重生成；测试 5 + 页面 2 + normalizer 断言新增 | 随本次提交推送 |
 | ✅ 已提交 | **离线地图（瓦片 IndexedDB 缓存）**（功能队列第 5 项） | `src/storage/tileCache.ts`（LRU 淘汰：字节 100MB + 条数 20000 双上限，OSM/高德子域归一化 key；缺省上限可注入便于测试）+ `src/map/CachingTileLayer.tsx`（自定义 Leaflet TileLayer 覆写 `createTile`：缓存命中→Blob URL 显示，未命中 fetch(cors) 缓存后显示，失败回退原生加载使 tileerror 触发现有 OSM→高德降级；`createTileLayerComponent` 包装为 React 组件）+ `FallbackTileLayer` 唯一入口接入 + 设置页「离线地图」区（瓦片缓存开关 + 统计 + 清空按钮）+ settings `offline` 域（`tileCacheEnabled` 默认开）+ `useOfflinePreferences` hook；**PWA 图标 `public/icons/qileme-icon.svg` + 脚本 `scripts/generate-pwa-icons.mjs`（Playwright 渲染）**；测试 25 新增（tileCache 12 + fallback 改造 + db v3 + 设置页 2 + clearData 适配）；**已并入 PWA 提交** | 随本次提交推送 |
 | ✅ 已提交 | **PWA 离线可用**（功能队列第 11 项） | `vite-plugin-pwa@1.3.0`（`registerType: autoUpdate`）：manifest（独立窗口/主题色 #0a4268/192+512+maskable 图标，start_url/scope 适配 `/cycling-analyzer/` 子路径）+ workbox（预缓存应用壳，`globIgnores: author-data/**` 排除快照，SPA `navigateFallback` + denyList 保护 author-data，cleanupOutdatedCaches）+ `main.tsx` `registerSW({immediate:true})` + `index.html` theme-color/apple-touch-icon + `vite-env.d.ts` 引用 vite-plugin-pwa/client；构建产物 `dist/sw.js` + `manifest.webmanifest` 已验证 | 随本次提交推送 |
+| ✅ 已提交 | **移动端抽屉式侧边栏** | `AppLayout` 重构：顶栏汉堡按钮 + `aria-expanded` 遮罩滑轮菜单 + Escape/遮罩/导航点击关闭；`@media (max-width:768px)` 侧边栏 `position:fixed` 左滑入/出（`transform:translateX`）；顶栏品牌小 logo、导入弹窗移动端全屏优化；测试 4 新增（开合/导航/Escape/遮罩），全量 792/792 + lint/build 绿 | 随本次提交推送 |
 | ⏳ 待办 | **功能队列（VIP 级，用户确认全做）** | 训练计划生成 ✅ / 表现趋势 ✅ / 每周训练综述 ✅ / 轨迹纠偏 ✅ / 自行车统计 ✅ / 离线地图 ✅ / PWA 离线可用 ✅ 已完成；剩余：目标设定与进度 / 比赛预测 / 路线规划器（画路线导出 GPX）/ 骑行记录 CSV 批量导出 | 每完成一个更新本行拆分为 ✅ 已提交 |
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |

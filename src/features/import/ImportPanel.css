@@ -372,3 +372,12 @@
   color: var(--primary) !important;
   font-weight: 600;
 }
+
+/* 移动端：导入弹窗近乎全屏（更大触控区 / 拖拽区），圆角与内边距收拢 */
+@media (max-width: 768px) {
+  .import-dialog {
+    width: calc(100% - 24px);
+    max-height: calc(100dvh - 32px);
+    padding: 16px;
+  }
+}

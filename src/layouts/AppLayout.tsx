@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import ImportPanel from '@/features/import/ImportPanel'
 import DataSourceSwitcher from '@/components/DataSourceSwitcher'
@@ -29,17 +30,81 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 /**
- * 应用布局：左侧固定侧边栏 + 右侧主内容区。
+ * 应用布局：桌面端左侧固定侧边栏 + 右侧主内容区；
+ * 移动端（≤768px）侧边栏改为可滑出的抽屉：顶栏汉堡按钮开合 + 半透明遮罩，
+ * 默认收起不占空间，图标/导入/导航全部收进抽屉。
  * 含「跳转到主内容」skip link（a11y：键盘用户免逐项目录导航）。
  */
 function AppLayout() {
+  // 抽屉开合状态（仅移动端生效：导航项点击/Escape/点击遮罩时关闭）
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Escape 关闭抽屉（a11y：键盘可退出全屏遮罩）
+  useEffect(() => {
+    if (!drawerOpen) {
+      return
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDrawerOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [drawerOpen])
+
+  const closeDrawer = () => setDrawerOpen(false)
+
   return (
     <div className="app-layout">
       <a className="app-layout__skip-link" href="#main-content">
         跳转到主内容
       </a>
-      <aside className="app-layout__sidebar">
-        <Link className="app-layout__brand" to="/" title="回到仪表盘首页">
+
+      {/* 顶栏（移动端可见）：汉堡按钮 + 品牌 */}
+      <header className="app-layout__topbar">
+        <button
+          type="button"
+          className="app-layout__menu-button"
+          aria-label="打开菜单"
+          aria-expanded={drawerOpen}
+          aria-controls="app-nav"
+          onClick={() => setDrawerOpen((open) => !open)}
+        >
+          <span className="app-layout__menu-icon" aria-hidden="true" />
+        </button>
+        <Link className="app-layout__topbar-brand" to="/" title="回到仪表盘首页">
+          <img
+            className="app-layout__topbar-logo"
+            src={`${import.meta.env.BASE_URL}qileme.png`}
+            alt="骑了么 logo"
+          />
+        </Link>
+      </header>
+
+      {/* 抽屉遮罩（移动端展开时覆盖主内容） */}
+      {drawerOpen && (
+        <div
+          className="app-layout__scrim"
+          aria-hidden="true"
+          onClick={closeDrawer}
+        />
+      )}
+
+      <aside
+        id="app-nav"
+        className={
+          'app-layout__sidebar' + (drawerOpen ? ' app-layout__sidebar--open' : '')
+        }
+      >
+        <Link
+          className="app-layout__brand app-layout__brand--drawer"
+          to="/"
+          title="回到仪表盘首页"
+          onClick={closeDrawer}
+        >
           <img
             className="app-layout__brand-logo"
             src={`${import.meta.env.BASE_URL}qileme.png`}
@@ -58,6 +123,7 @@ function AppLayout() {
                   ? 'app-layout__nav-item app-layout__nav-item--active'
                   : 'app-layout__nav-item'
               }
+              onClick={closeDrawer}
             >
               {item.label}
             </NavLink>
