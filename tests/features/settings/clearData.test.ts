@@ -9,7 +9,14 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { DexieFileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository } from '@/storage/repositories/settingsRepository'
 import { clearAllData } from '@/features/settings/dataClear'
-import { DEFAULT_APPEARANCE, DEFAULT_IMPORT, DEFAULT_UNITS, getSettings, saveSettings } from '@/features/settings/settings'
+import {
+  DEFAULT_APPEARANCE,
+  DEFAULT_IMPORT,
+  DEFAULT_OFFLINE,
+  DEFAULT_UNITS,
+  getSettings,
+  saveSettings,
+} from '@/features/settings/settings'
 
 describe('clearAllData', () => {
   let db: CyclingDatabase
@@ -55,6 +62,7 @@ describe('clearAllData', () => {
       units: DEFAULT_UNITS,
       appearance: DEFAULT_APPEARANCE,
       import: DEFAULT_IMPORT,
+      offline: DEFAULT_OFFLINE,
     })
   })
 })

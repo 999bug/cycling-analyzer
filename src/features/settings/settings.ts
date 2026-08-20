@@ -67,6 +67,12 @@ export interface ImportPreferences {
   saveOriginalFit: boolean
 }
 
+/** 离线偏好（离线地图） */
+export interface OfflinePreferences {
+  /** 是否启用瓦片 IndexedDB 缓存（默认开启，离线/弱网时地图可用） */
+  tileCacheEnabled: boolean
+}
+
 /** 完整设置数据（getSettings 返回） */
 export interface SettingsData {
   /** 个人信息 */
@@ -80,6 +86,9 @@ export interface SettingsData {
 
   /** 导入偏好 */
   import: ImportPreferences
+
+  /** 离线偏好 */
+  offline: OfflinePreferences
 }
 
 /** 设置保存片段（按域合并保存，未提供的字段保留原值） */
@@ -95,6 +104,9 @@ export interface SettingsPatch {
 
   /** 导入偏好（可只传需更新的字段） */
   import?: Partial<ImportPreferences>
+
+  /** 离线偏好（可只传需更新的字段） */
+  offline?: Partial<OfflinePreferences>
 }
 
 /** profile 设置键（settings 表） */
@@ -109,6 +121,9 @@ export const APPEARANCE_KEY = 'appearance'
 /** import 设置键（settings 表） */
 export const IMPORT_KEY = 'import'
 
+/** offline 设置键（settings 表） */
+export const OFFLINE_KEY = 'offline'
+
 /** 默认单位偏好（规格 §27 默认全公制） */
 export const DEFAULT_UNITS: UnitPreferences = { distance: 'km', timeFormat: '24h' }
 
@@ -117,6 +132,9 @@ export const DEFAULT_APPEARANCE: AppearancePreferences = { theme: 'dark' }
 
 /** 默认导入偏好（规格 §19 默认不保存原始文件） */
 export const DEFAULT_IMPORT: ImportPreferences = { saveOriginalFit: false }
+
+/** 默认离线偏好（默认开启瓦片缓存） */
+export const DEFAULT_OFFLINE: OfflinePreferences = { tileCacheEnabled: true }
 
 /** 默认个人信息（全字段未设置） */
 export const DEFAULT_PROFILE: UserProfile = {}
@@ -136,17 +154,19 @@ const defaultSettingsRepository = new DexieSettingsRepository(db)
 export async function getSettings(
   settingsRepository: SettingsRepository = defaultSettingsRepository,
 ): Promise<SettingsData> {
-  const [profileRaw, unitsRaw, appearanceRaw, importRaw] = await Promise.all([
+  const [profileRaw, unitsRaw, appearanceRaw, importRaw, offlineRaw] = await Promise.all([
     settingsRepository.get(PROFILE_KEY),
     settingsRepository.get(UNITS_KEY),
     settingsRepository.get(APPEARANCE_KEY),
     settingsRepository.get(IMPORT_KEY),
+    settingsRepository.get(OFFLINE_KEY),
   ])
   return {
     profile: { ...DEFAULT_PROFILE, ...asRecord(profileRaw) },
     units: { ...DEFAULT_UNITS, ...asRecord(unitsRaw) },
     appearance: { ...DEFAULT_APPEARANCE, ...asRecord(appearanceRaw) },
     import: { ...DEFAULT_IMPORT, ...asRecord(importRaw) },
+    offline: { ...DEFAULT_OFFLINE, ...asRecord(offlineRaw) },
   }
 }
 
@@ -173,6 +193,9 @@ export async function saveSettings(
   }
   if (patch.import !== undefined) {
     await settingsRepository.set(IMPORT_KEY, { ...current.import, ...patch.import })
+  }
+  if (patch.offline !== undefined) {
+    await settingsRepository.set(OFFLINE_KEY, { ...current.offline, ...patch.offline })
   }
 }
 

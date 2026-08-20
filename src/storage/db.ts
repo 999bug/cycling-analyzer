@@ -16,8 +16,8 @@ import type { ActivityRecord, DeviceInfo } from '@/types/activity';
 /** 数据库名称 */
 export const DB_NAME = 'cycling-data';
 
-/** 数据库版本号（v2：新增 segments 赛段表） */
-export const DB_VERSION = 2;
+/** 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表） */
+export const DB_VERSION = 3;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -207,6 +207,26 @@ export interface SegmentEntity {
 }
 
 /**
+ * 瓦片缓存实体（tile_cache 表，离线地图）。
+ *
+ * 缓存地图瓦片二进制（Blob），按最后访问时间做 LRU 淘汰，
+ * 离线/弱网时地图底图可用（功能队列：离线地图）。非用户业务数据，导出/清空数据不涉及。
+ */
+export interface TileCacheEntry {
+  /** 瓦片 URL（规范化 key，去掉子域差异） */
+  url: string;
+
+  /** 瓦片二进制（Blob，IndexedDB 原生支持结构化存储） */
+  blob: Blob;
+
+  /** 瓦片大小（字节，用于字节上限淘汰） */
+  size: number;
+
+  /** 最后访问时间（Unix 毫秒，LRU 淘汰依据） */
+  lastAccess: number;
+}
+
+/**
  * cycling-data 数据库（规格 §18）。
  *
  * 索引设计：
@@ -235,6 +255,9 @@ export class CyclingDatabase extends Dexie {
   /** 赛段表（v2 新增） */
   declare segments: EntityTable<SegmentEntity, 'id'>;
 
+  /** 瓦片缓存表（v3 新增） */
+  declare tile_cache: EntityTable<TileCacheEntry, 'url'>;
+
   /**
    * 构造数据库实例。
    *
@@ -251,6 +274,10 @@ export class CyclingDatabase extends Dexie {
     // v2：新增赛段表（既有表结构不变，无需重复声明）
     this.version(2).stores({
       segments: '++id',
+    });
+    // v3：新增瓦片缓存表（url 主键 + lastAccess 索引用于 LRU 淘汰）
+    this.version(3).stores({
+      tile_cache: 'url, lastAccess',
     });
   }
 }

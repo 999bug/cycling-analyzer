@@ -13,6 +13,7 @@ import { db, type CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository, type SettingsRepository } from '@/storage/repositories/settingsRepository'
+import { clearTileCache, getTileCacheStats, type TileCacheStats } from '@/storage/tileCache'
 import {
   DEFAULT_UNITS,
   getSettings,
@@ -105,6 +106,11 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   // 导入偏好（保存原始 FIT 文件开关，规格 §19 默认不保存）
   const [saveOriginalFit, setSaveOriginalFit] = useState(false)
 
+  // 离线偏好（瓦片缓存开关，默认开启）
+  const [tileCacheEnabled, setTileCacheEnabled] = useState(true)
+  const [tileCacheStats, setTileCacheStats] = useState<TileCacheStats>({ count: 0, bytes: 0 })
+  const [clearingTiles, setClearingTiles] = useState(false)
+
   // 操作状态
   const [message, setMessage] = useState<FormMessage | null>(null)
   const [saving, setSaving] = useState(false)
@@ -136,6 +142,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         setTimeFormat(data.units.timeFormat)
         setTheme(data.appearance.theme)
         setSaveOriginalFit(data.import.saveOriginalFit)
+        setTileCacheEnabled(data.offline.tileCacheEnabled)
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -147,6 +154,25 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       cancelled = true
     }
   }, [context.settingsRepository])
+
+  // 加载瓦片缓存统计（条数 + 大小）
+  useEffect(() => {
+    let cancelled = false
+    if (tileCacheEnabled) {
+      getTileCacheStats(context.db)
+        .then((stats) => {
+          if (!cancelled) {
+            setTileCacheStats(stats)
+          }
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to load tile cache stats', error)
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [context.db, tileCacheEnabled])
 
   // FTP/VO2Max 估算：扫描近 90 天含功率的活动，取 5 分钟/20 分钟最佳功率
   useEffect(() => {
@@ -380,6 +406,53 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     }
   }
 
+  //
+  // 离线地图（功能队列：离线地图，瓦片 IndexedDB 缓存）
+  //
+
+  /** 切换瓦片缓存开关（立即持久化） */
+  async function handleTileCacheToggleChange(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.checked
+    setTileCacheEnabled(next)
+    try {
+      await saveSettings({ offline: { tileCacheEnabled: next } }, context.settingsRepository)
+      setMessage({
+        type: 'success',
+        text: next ? '已开启：地图瓦片将缓存到浏览器本地（离线可用）' : '已关闭：地图瓦片不再写入本地缓存',
+      })
+    } catch (error) {
+      console.error('Failed to save offline preferences', error)
+      setMessage({ type: 'error', text: '保存失败，请重试' })
+    }
+  }
+
+  /** 刷新瓦片缓存统计 */
+  async function refreshTileCacheStats() {
+    try {
+      setTileCacheStats(await getTileCacheStats(context.db))
+    } catch (error) {
+      console.error('Failed to read tile cache stats', error)
+    }
+  }
+
+  /** 清空瓦片缓存 */
+  async function handleClearTileCache() {
+    if (clearingTiles) {
+      return
+    }
+    setClearingTiles(true)
+    try {
+      await clearTileCache(context.db)
+      await refreshTileCacheStats()
+      setMessage({ type: 'success', text: '已清空地图瓦片缓存' })
+    } catch (error) {
+      console.error('Failed to clear tile cache', error)
+      setMessage({ type: 'error', text: '清空失败，请重试' })
+    } finally {
+      setClearingTiles(false)
+    }
+  }
+
   /**
    * 清空后重置表单为默认值（规格 §27 默认公制；主题复位深色，规格 §36）。
    */
@@ -395,6 +468,8 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTheme('dark')
     applyTheme('dark')
     setSaveOriginalFit(false)
+    setTileCacheEnabled(true)
+    setTileCacheStats({ count: 0, bytes: 0 })
   }
 
   return (
@@ -589,6 +664,42 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         </div>
       </section>
 
+      <section className="settings-section" aria-label="离线地图">
+        <h2 className="settings-section__title">离线地图</h2>
+        <p className="settings-section__hint">
+          开启后地图瓦片会缓存到浏览器本地（IndexedDB），离线或弱网时底图仍可显示。缓存有自动上限，超出后会清理最久未使用的瓦片。
+        </p>
+        <div className="settings-fields">
+          <div className="settings-field">
+            <span className="settings-field__label">瓦片缓存</span>
+            <label className="settings-field__checkbox">
+              <input
+                type="checkbox"
+                checked={tileCacheEnabled}
+                onChange={handleTileCacheToggleChange}
+              />
+              缓存地图瓦片（离线可用）
+            </label>
+          </div>
+          {tileCacheEnabled && (
+            <div className="settings-field settings-tile-cache">
+              <span className="settings-field__label">当前缓存</span>
+              <span className="settings-tile-cache__stats">
+                {formatBytes(tileCacheStats.bytes)} / {tileCacheStats.count} 张
+              </span>
+              <button
+                type="button"
+                className="settings-button settings-button--danger"
+                onClick={handleClearTileCache}
+                disabled={clearingTiles}
+              >
+                {clearingTiles ? '清空中…' : '清空瓦片缓存'}
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="settings-section" aria-label="导入">
         <h2 className="settings-section__title">导入</h2>
         <p className="settings-section__hint">
@@ -693,6 +804,22 @@ function parseOptionalNumber(value: string): number | undefined {
  */
 function numberToString(value: number | undefined): string {
   return value === undefined ? '' : String(value)
+}
+
+/** 1MB 字节数（缓存大小显示） */
+const MB_BYTES = 1024 * 1024
+
+/**
+ * 字节数格式化为可读大小（大于 1MB 显示 MB，否则 KB）。
+ *
+ * @param bytes 字节数
+ * @returns 如 '1.5 MB' / '320 KB'
+ */
+function formatBytes(bytes: number): string {
+  if (bytes >= MB_BYTES) {
+    return `${(bytes / MB_BYTES).toFixed(1)} MB`
+  }
+  return `${Math.round(bytes / 1024)} KB`
 }
 
 export default SettingsPage

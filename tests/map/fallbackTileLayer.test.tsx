@@ -31,17 +31,39 @@ const { fakeMap } = vi.hoisted(() => {
   }
 })
 
-// 只替换 useMap（假 map）与 TileLayer（可断言 div），其余透传真实 react-leaflet
+// mock react-leaflet：useMap 返回假 map（手动触发事件）；其余透传真实 react-leaflet
 vi.mock('react-leaflet', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-leaflet')>()
   return {
     ...actual,
     useMap: () => fakeMap,
-    TileLayer: ({ url, attribution }: { url: string; attribution: string }) => (
-      <div data-testid="tile-layer" data-url={url} data-attribution={attribution} />
-    ),
   }
 })
+
+// mock 缓存瓦片层组件（真实组件需要 LeafletProvider context）：渲染为可断言 div
+vi.mock('@/map/CachingTileLayer', () => ({
+  CachingTileLayerComponent: ({
+    url,
+    attribution,
+    cacheEnabled,
+  }: {
+    url: string
+    attribution: string
+    cacheEnabled: boolean
+  }) => (
+    <div
+      data-testid="tile-layer"
+      data-url={url}
+      data-attribution={attribution}
+      data-cache-enabled={cacheEnabled}
+    />
+  ),
+}))
+
+// mock 离线偏好 hook：返回瓦片缓存开启（避免真实读设置）
+vi.mock('@/hooks/useOfflinePreferences', () => ({
+  useOfflinePreferences: () => ({ tileCacheEnabled: true }),
+}))
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -102,6 +124,8 @@ describe('降级瓦片层', () => {
     const layer = screen.getByTestId('tile-layer')
     expect(layer).toHaveAttribute('data-url', TILE_SOURCES[1].url)
     expect(layer.getAttribute('data-attribution')).toContain('高德')
+    // 瓦片缓存开关传给缓存瓦片层（mock hook 固定开启）
+    expect(layer).toHaveAttribute('data-cache-enabled', 'true')
   })
 
   it('卸载时移除事件监听', () => {

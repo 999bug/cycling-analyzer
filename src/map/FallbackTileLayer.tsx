@@ -5,7 +5,9 @@
  * 连续失败（期间无成功）达阈值即触发降级回调，由上层切换 TILE_SOURCES 索引。
  */
 import { useEffect, useRef } from 'react'
-import { TileLayer, useMap } from 'react-leaflet'
+import { useMap } from 'react-leaflet'
+import { useOfflinePreferences } from '@/hooks/useOfflinePreferences'
+import { CachingTileLayerComponent } from '@/map/CachingTileLayer'
 import { FALLBACK_TILE_ERROR_THRESHOLD, TILE_SOURCES } from '@/map/tileSources'
 
 /**
@@ -26,6 +28,7 @@ export interface FallbackTileLayerProps {
  */
 export function FallbackTileLayer({ sourceIndex, onFallback }: FallbackTileLayerProps) {
   const map = useMap()
+  const { tileCacheEnabled } = useOfflinePreferences()
   // 连续失败计数（任一瓦片成功加载后清零，避免网络抖动误判）
   const failCountRef = useRef(0)
   // 已降级标记（单向防重：降级后不再重复回调）
@@ -59,11 +62,12 @@ export function FallbackTileLayer({ sourceIndex, onFallback }: FallbackTileLayer
   const source = TILE_SOURCES[sourceIndex]
   // key 随源变化：换源时强制重建瓦片图层，立即清空旧源瓦片重新加载
   return (
-    <TileLayer
+    <CachingTileLayerComponent
       key={source.url}
       url={source.url}
       subdomains={source.subdomains}
       attribution={source.attribution}
+      cacheEnabled={tileCacheEnabled}
     />
   )
 }

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- PWA 方形图标：品牌自行车图形，白底居中（截图自通栏横幅 SVG 的自行车部分） -->
+  <title>骑了么 — 看懂你的每一次骑行</title>
+  <desc>PWA app icon derived from the brand banner bicycyle graphic.</desc>
+  <defs>
+    <clipPath id="rearClip"><circle cx="260" cy="525" r="121"/></clipPath>
+    <clipPath id="frontClip"><circle cx="705" cy="525" r="121"/></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="#0a4268"/>
+
+  <g transform="translate(-9 5) scale(0.55)">
+    <!-- bicycle -->
+    <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="260" cy="525" r="132" stroke-width="22"/>
+      <circle cx="705" cy="525" r="132" stroke-width="22"/>
+      <path d="M260 525 L386 356 L530 526 L705 525 L602 336 L386 356 L530 526" stroke-width="18"/>
+      <path d="M386 356 L340 286" stroke-width="18"/>
+      <path d="M340 286 L316 250" stroke-width="15"/>
+      <path d="M316 250 L415 250" stroke-width="15"/>
+      <path d="M602 336 L640 292" stroke-width="18"/>
+      <path d="M640 292 L704 292" stroke-width="15"/>
+      <path d="M704 292 C744 292 750 250 716 243" stroke-width="15"/>
+      <path d="M716 243 L650 243" stroke-width="15"/>
+      <path d="M602 336 L670 486" stroke-width="18"/>
+      <path d="M650 243 L680 243" stroke-width="15"/>
+      <circle cx="530" cy="526" r="34" fill="#0a4268" stroke-width="12"/>
+      <circle cx="530" cy="526" r="9" fill="#8BE000" stroke="none"/>
+      <path d="M530 526 L574 570" stroke-width="13"/>
+      <path d="M574 570 L620 570" stroke-width="13"/>
+      <circle cx="260" cy="525" r="14" fill="#0a4268" stroke-width="10"/>
+      <circle cx="705" cy="525" r="14" fill="#0a4268" stroke-width="10"/>
+    </g>
+
+    <!-- green accent on frame -->
+    <path d="M438 355 L485 355 L458 381 L412 381 Z" fill="#8BE000"/>
+
+    <!-- rear-wheel riding terrain: clean, clipped flat-color waves -->
+    <g clip-path="url(#rearClip)">
+      <path d="M110 620 C145 582 177 552 204 569 C228 584 244 609 266 611 C289 613 306 588 326 591 C354 595 374 620 412 624 L412 670 L110 670 Z" fill="#8BE000"/>
+      <path d="M110 637 C145 614 173 596 200 610 C228 625 244 640 268 639 C295 638 309 620 328 624 C353 630 373 645 412 648 L412 670 L110 670 Z" fill="#18B99A"/>
+    </g>
+
+    <!-- front-wheel analytics bars: clean and clipped -->
+    <g clip-path="url(#frontClip)" fill="#8BE000">
+      <rect x="594" y="584" width="38" height="86" rx="4"/>
+      <rect x="641" y="552" width="38" height="118" rx="4"/>
+      <rect x="688" y="518" width="38" height="152" rx="4"/>
+      <rect x="735" y="476" width="38" height="194" rx="4"/>
+    </g>
+    <!-- data line -->
+    <path d="M592 585 C617 568 629 560 650 551 C674 541 690 535 704 515 C719 495 735 505 752 485 C763 472 773 453 787 442" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <g fill="#8BE000" stroke="#ffffff" stroke-width="6">
+      <circle cx="592" cy="585" r="13"/>
+      <circle cx="650" cy="551" r="13"/>
+      <circle cx="704" cy="515" r="13"/>
+      <circle cx="787" cy="442" r="13"/>
+    </g>
+  </g>
+</svg>

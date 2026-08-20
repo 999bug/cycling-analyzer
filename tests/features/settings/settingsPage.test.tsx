@@ -297,3 +297,38 @@ describe('设置页原始 FIT 文件开关（规格 §19）', () => {
     expect(settings.import.saveOriginalFit).toBe(true)
   })
 })
+
+describe('设置页离线地图（瓦片缓存）', () => {
+  const user = userEvent.setup()
+
+  it('默认开启瓦片缓存，可关闭并立即持久化', async () => {
+    render(<SettingsPage />)
+
+    const checkbox = await screen.findByRole('checkbox', { name: '缓存地图瓦片（离线可用）' })
+    expect(checkbox).toBeChecked()
+
+    await user.click(checkbox)
+
+    expect(await screen.findByText(/已关闭/)).toBeInTheDocument()
+    const settings = await getSettings()
+    expect(settings.offline.tileCacheEnabled).toBe(false)
+  })
+
+  it('开启瓦片缓存时展示清空按钮，点击后统计归零', async () => {
+    render(<SettingsPage />)
+
+    const clearButton = await screen.findByRole('button', { name: /清空瓦片缓存/ })
+    expect(clearButton).toBeInTheDocument()
+
+    // 写入一条缓存再清空
+    await testDb.tile_cache.put({
+      url: 'tile-1',
+      blob: new Blob(['x']),
+      size: 1,
+      lastAccess: Date.now(),
+    })
+    await user.click(clearButton)
+    expect(await screen.findByText(/已清空地图瓦片缓存/)).toBeInTheDocument()
+    expect(await testDb.tile_cache.count()).toBe(0)
+  })
+})

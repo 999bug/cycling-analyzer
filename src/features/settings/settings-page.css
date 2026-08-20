@@ -96,6 +96,19 @@
   cursor: pointer;
 }
 
+/* 瓦片缓存统计行（离线地图区） */
+.settings-tile-cache {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.settings-tile-cache__stats {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
 /* FTP/VO2Max 估算区块（个人信息区内，FTP 字段下方） */
 .settings-estimate {
   margin-top: 10px;
