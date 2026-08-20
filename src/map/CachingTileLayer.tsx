@@ -118,12 +118,19 @@ class CachingTileLayer extends LeafletTileLayer {
 
   /**
    * 用缓存 Blob 生成 Blob URL 并赋给瓦片（注册对象 URL 便于回收）。
+   * 仅接受真正的 Blob（跨环境防御：IndexedDB 读回/边界情况可能不是 Blob），
+   * 否则回退原生加载（tile.src = url），保证 tileerror 仍能触发降级。
    *
    * @param tile 瓦片 img 元素
-   * @param url 原始瓦片 URL（仅用于日志，非必填）
+   * @param url 原始瓦片 URL（回退时直接作为 img src）
    * @param blob 瓦片二进制
    */
-  private setTileSource(tile: HTMLImageElement, _url: string, blob: Blob): void {
+  private setTileSource(tile: HTMLImageElement, url: string, blob: Blob): void {
+    if (!(blob instanceof Blob)) {
+      console.warn('Tile cache returned a non-Blob, falling back to native loading', url)
+      tile.src = url
+      return
+    }
     const objectUrl = URL.createObjectURL(blob)
     this.objectUrls.set(tile, objectUrl)
     tile.src = objectUrl
