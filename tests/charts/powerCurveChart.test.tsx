@@ -21,10 +21,11 @@ afterEach(() => {
 })
 
 describe('PowerCurveChart', () => {
-  it('无功率数据时显示空态提示，不渲染图表', () => {
+  it('无功率数据时整区块隐藏（不渲染）', () => {
     render(<PowerCurveChart records={[{ timestamp: 1 }]} />)
 
-    expect(screen.getByText('该活动没有功率数据')).toBeInTheDocument()
+    expect(screen.queryByText('功率曲线')).toBeNull()
+    expect(screen.queryByText('该活动没有功率数据')).toBeNull()
   })
 
   it('有功率数据时渲染标题且隐藏空态', () => {

@@ -26,16 +26,36 @@
 .climb-section__profile-wrap {
   position: relative;
   width: 100%;
+  display: flex;
+  gap: 6px;
 }
 
 /* 海拔剖面：坡度着色折线；鼠标悬停联动地图（十字光标） */
 .climb-section__profile {
   display: block;
-  width: 100%;
-  height: 140px;
+  flex: 1;
+  aspect-ratio: 100 / 60;
+  max-height: 160px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--border) 20%, transparent);
   cursor: crosshair;
+}
+
+/* 海拔轴标注（右侧） */
+.climb-section__axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 44px;
+  padding: 2px 0;
+}
+
+.climb-section__axis-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 /* 爬坡级别徽章（HTML 覆盖于剖面峰值处） */

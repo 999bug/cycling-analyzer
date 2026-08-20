@@ -1,10 +1,21 @@
 /**
- * 匹配的骑行区块：展示与当前活动同一路线（聚类分组）的其他骑行。
+ * 匹配的骑行区块：折线图展示所有匹配骑行（同路线分组），
+ * 点代表一次骑行，鼠标悬停弹出骑行信息（名称/日期/距离/时长/竞速对比）。
+ * 点击点跳转至对应骑行详情。
  * 作者源用 CI 预计算 route-groups.json；本地源实时扫描（缓存模式）。
  * 无匹配（独一路线）或计算失败时区块不渲染。
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import {
   buildRouteGroups,
   extractEndpoints,
@@ -14,15 +25,11 @@ import {
 import {
   compareDurations,
   findMatchingRides,
-  trackToSvgPoints,
   type SimilarRide,
 } from '@/features/routes/similarRides'
-import { simplifyRoute } from '@/map/simplify'
-import { summariesScanKey } from '@/storage/scanCache'
 import { formatDate, formatDuration } from '@/utils/format'
 import {
   formatDistanceByUnit,
-  formatSpeedByUnit,
   type DistanceUnit,
 } from '@/features/settings/settings'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -30,18 +37,9 @@ import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceSt
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/features/activity/SimilarRidesSection.css'
 
-/** 迷你轨迹折线视口（SVG viewBox） */
-const MINI_TRACK_WIDTH = 120
-const MINI_TRACK_HEIGHT = 64
-
-/** 迷你轨迹抽稀阈值（米）——小图展示，粗抽稀即可 */
-const MINI_TRACK_SIMPLIFY_METERS = 5
-
-/**
- * 本地源路线分组扫描模块级缓存（性能优化）：key = summariesScanKey。
- * 全量扫描提取起终点成本高，活动集合指纹不变时直接复用。
- */
-let similarRidesScanCache: { key: string; groups: RouteGroup[] } | null = null
+/** 深色主题下坐标轴颜色 */
+const AXIS_TICK_COLOR = 'var(--text-secondary)'
+const GRID_COLOR = 'var(--border)'
 
 /**
  * 匹配的骑行区块 props。
@@ -57,6 +55,53 @@ export interface SimilarRidesSectionProps {
   distanceUnit: DistanceUnit
 }
 
+/** CustomTooltip 组件 props */
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: { id: string; name?: string; startTime: string; distance: number; duration: number } }>
+  currentDuration?: number
+  distanceUnit: DistanceUnit
+}
+
+/**
+ * 折线图 Tooltip 内容（定义在组件外避免 react-hooks/static-components 警告）。
+ */
+function CustomTooltip({ active, payload, currentDuration, distanceUnit }: CustomTooltipProps) {
+  if (!active || !payload || payload.length === 0) {
+    return null
+  }
+  const ride = payload[0].payload
+  const comparison = compareDurations(currentDuration, ride.duration)
+  return (
+    <div className="similar-rides__tooltip">
+      <Link className="similar-rides__tooltip-link" to={`/activities/${ride.id}`}>
+        <strong className="similar-rides__tooltip-name">{ride.name ?? '未命名活动'}</strong>
+        <span className="similar-rides__tooltip-meta">
+          {formatDate(ride.startTime)} · {formatDistanceByUnit(ride.distance, distanceUnit)} · {formatDuration(ride.duration)}
+        </span>
+        {comparison !== null && (
+          <span
+            className={
+              'similar-rides__tooltip-compare' +
+              (comparison.faster === true
+                ? ' similar-rides__tooltip-compare--faster'
+                : comparison.faster === false
+                  ? ' similar-rides__tooltip-compare--slower'
+                  : '')
+            }
+          >
+            {comparison.faster === true
+              ? `比本次快 ${formatDuration(comparison.diffSeconds)}`
+              : comparison.faster === false
+                ? `比本次慢 ${formatDuration(comparison.diffSeconds)}`
+                : '与本次持平'}
+          </span>
+        )}
+      </Link>
+    </div>
+  )
+}
+
 /**
  * 匹配的骑行区块组件。
  *
@@ -66,8 +111,6 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
   // 匹配结果（null = 计算中；计算失败或空时区块不渲染）
   const [rides, setRides] = useState<SimilarRide[] | null>(null)
   const [failed, setFailed] = useState(false)
-  // 迷你轨迹折线（活动 ID → SVG points；加载失败/加载中为 null）
-  const [miniTracks, setMiniTracks] = useState<Map<string, string> | null>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
   const repository = useActivityRepository()
   // 当前数据源（作者源路线分组为 CI 预计算产物）
@@ -76,40 +119,30 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
   useEffect(() => {
     let cancelled = false
 
-    /**
-     * 加载路线分组并匹配当前活动。
-     * 作者源：getRouteGroups 预计算；本地源：全量扫描起终点 + 聚类（缓存）。
-     */
     async function load() {
       let groups: RouteGroup[] | null
       if (source === 'author') {
         groups = await defaultSnapshotClient.getRouteGroups()
       } else {
         const summaries = await repository.listAllSummaries()
-        const scanKey = summariesScanKey(summaries)
-        if (similarRidesScanCache !== null && similarRidesScanCache.key === scanKey) {
-          groups = similarRidesScanCache.groups
-        } else {
-          const routeItems: RouteActivityInput[] = []
-          for (const summary of summaries) {
-            const records = await repository.getRecords(summary.id)
-            if (cancelled) {
-              return
-            }
-            const endpoints = extractEndpoints(records)
-            routeItems.push({
-              id: summary.id,
-              name: summary.name,
-              startTime: summary.startTime,
-              distance: summary.distance,
-              duration: summary.duration,
-              start: endpoints?.start,
-              end: endpoints?.end,
-            })
+        const routeItems: RouteActivityInput[] = []
+        for (const summary of summaries) {
+          const records = await repository.getRecords(summary.id)
+          if (cancelled) {
+            return
           }
-          groups = buildRouteGroups(routeItems)
-          similarRidesScanCache = { key: scanKey, groups }
+          const endpoints = extractEndpoints(records)
+          routeItems.push({
+            id: summary.id,
+            name: summary.name,
+            startTime: summary.startTime,
+            distance: summary.distance,
+            duration: summary.duration,
+            start: endpoints?.start,
+            end: endpoints?.end,
+          })
         }
+        groups = buildRouteGroups(routeItems)
       }
       if (!cancelled) {
         setRides(findMatchingRides(groups, activityId))
@@ -127,105 +160,56 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
     }
   }, [repository, source, activityId])
 
-  // 匹配确定后加载各活动轨迹 → 迷你折线（Strava 风格缩略轨迹图）
-  useEffect(() => {
-    if (rides === null || rides.length === 0) {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const entries = await Promise.all(
-          rides.map(async (ride) => {
-            const records = await repository.getRecords(ride.id)
-            const points = simplifyRoute(records, MINI_TRACK_SIMPLIFY_METERS)
-            const track = points.map(
-              (point) => [point.latitude, point.longitude] as [number, number],
-            )
-            return [ride.id, trackToSvgPoints(track, MINI_TRACK_WIDTH, MINI_TRACK_HEIGHT)] as const
-          }),
-        )
-        if (!cancelled) {
-          setMiniTracks(new Map(entries))
-        }
-      } catch (error) {
-        // 轨迹加载失败：仅展示文字行（不阻塞区块）
-        if (!cancelled) {
-          setMiniTracks(new Map())
-        }
-        console.error('Failed to load mini tracks', error)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [rides, repository])
-
   // 计算中 / 失败 / 无匹配：区块不渲染
   if (failed || rides === null || rides.length === 0) {
     return null
   }
 
+  // 按时间升序排列（折线图 x 轴按时间）
+  const sorted = [...rides].sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const chartData = sorted.map((ride) => ({
+    ...ride,
+    durationMinutes: Math.round(ride.duration / 60),
+    dateLabel: formatDate(ride.startTime),
+  }))
+
   return (
     <section className="similar-rides" aria-label="匹配的骑行">
       <h2 className="similar-rides__title">匹配的骑行</h2>
-      <ul className="similar-rides__list">
-        {rides.map((ride) => {
-          const comparison = compareDurations(currentDuration, ride.duration)
-          const points = miniTracks?.get(ride.id)
-          return (
-            <li key={ride.id}>
-              <Link className="similar-rides__item" to={`/activities/${ride.id}`}>
-                <svg
-                  className="similar-rides__mini-track"
-                  viewBox={`0 0 ${MINI_TRACK_WIDTH} ${MINI_TRACK_HEIGHT}`}
-                  aria-hidden="true"
-                >
-                  {points !== undefined && points !== '' && (
-                    <polyline
-                      points={points}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  )}
-                </svg>
-                <span className="similar-rides__text">
-                  <span className="similar-rides__name" title={ride.name}>
-                    {ride.name ?? '未命名活动'}
-                  </span>
-                  <span className="similar-rides__meta">
-                    {formatDate(ride.startTime)} ·{' '}
-                    {formatDistanceByUnit(ride.distance, distanceUnit)} ·{' '}
-                    {formatDuration(ride.duration)} ·{' '}
-                    {formatSpeedByUnit(ride.distance / ride.duration, distanceUnit)}
-                  </span>
-                  {comparison !== null && (
-                    <span
-                      className={
-                        'similar-rides__race' +
-                        (comparison.faster === true
-                          ? ' similar-rides__race--faster'
-                          : comparison.faster === false
-                            ? ' similar-rides__race--slower'
-                            : '')
-                      }
-                    >
-                      {comparison.faster === true
-                        ? `比本次快 ${formatDuration(comparison.diffSeconds)}`
-                        : comparison.faster === false
-                          ? `比本次慢 ${formatDuration(comparison.diffSeconds)}`
-                          : '与本次持平'}
-                    </span>
-                  )}
-                </span>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
+      <p className="similar-rides__summary">
+        共 {rides.length} 条同路线骑行，点大小代表时长，悬停查看详情
+      </p>
+
+      <div className="similar-rides__chart">
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+            <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
+            <XAxis
+              dataKey="dateLabel"
+              tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+              stroke={GRID_COLOR}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              width={44}
+              tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+              stroke={GRID_COLOR}
+              domain={[0, 'auto']}
+              tickFormatter={(v) => `${v}min`}
+            />
+            <Tooltip content={<CustomTooltip currentDuration={currentDuration} distanceUnit={distanceUnit} />} cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }} />
+            <Line
+              type="monotone"
+              dataKey="durationMinutes"
+              stroke="var(--primary)"
+              strokeWidth={2}
+              dot={{ r: 5, fill: 'var(--primary)', stroke: 'var(--bg-surface)', strokeWidth: 2 }}
+              activeDot={{ r: 7, fill: 'var(--primary)', stroke: '#fff', strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </section>
   )
 }

@@ -66,14 +66,14 @@ expect(screen.getByText('爬坡分析')).toBeInTheDocument()
     await user.pointer([{ pointerName: 'mouse', target: svg, coords: { clientX: 200 } }])
 
     expect(onHover).toHaveBeenCalledWith(100)
-    // 悬停参考线出现
-    expect(container.querySelector('.climb-section__profile line')).not.toBeNull()
+    // 悬停参考线出现（data-testid="hover-line"）
+    expect(container.querySelector('[data-testid="hover-line"]')).not.toBeNull()
 
     // 移出剖面：清除参考线并上报 undefined
     await user.unhover(svg)
 
     expect(onHover).toHaveBeenLastCalledWith(undefined)
-    expect(container.querySelector('.climb-section__profile line')).toBeNull()
+    expect(container.querySelector('[data-testid="hover-line"]')).toBeNull()
   })
 
   it('外部悬停时间戳渲染参考线（共享时间轴联动）', () => {
@@ -82,13 +82,13 @@ expect(screen.getByText('爬坡分析')).toBeInTheDocument()
     )
 
     // index 15（距离 1500m，x=75）→ 参考线出现
-    expect(container.querySelector('.climb-section__profile line')).not.toBeNull()
-    expect(container.querySelector('.climb-section__profile line')!.getAttribute('x1')).toBe(
+    expect(container.querySelector('[data-testid="hover-line"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="hover-line"]')!.getAttribute('x1')).toBe(
       '75',
     )
 
     // 无悬停时间戳时不渲染参考线
     rerender(<ClimbSection records={makeClimbRecords()} distanceUnit="km" />)
-    expect(container.querySelector('.climb-section__profile line')).toBeNull()
+    expect(container.querySelector('[data-testid="hover-line"]')).toBeNull()
   })
 })

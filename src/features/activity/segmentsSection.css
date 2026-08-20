@@ -73,3 +73,33 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* 海拔剖面图容器 */
+.segments-section__profile-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.segments-section__profile {
+  flex: 1;
+  height: 80px;
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--bg) 70%, var(--primary) 5%);
+}
+
+/* 海拔轴标注（右侧） */
+.segments-section__profile-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 48px;
+}
+
+.segments-section__profile-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}

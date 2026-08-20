@@ -280,4 +280,9 @@
     overflow-y: auto;
     padding: 16px;
   }
+
+  /* 移动端隐藏热力图/路线图导航项（大屏地图功能不适合小屏） */
+  .app-layout__nav-item[data-mobile-hidden='true'] {
+    display: none;
+  }
 }

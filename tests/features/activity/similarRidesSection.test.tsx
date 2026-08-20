@@ -1,7 +1,7 @@
 /**
- * 匹配的骑行区块集成测试。
+ * 匹配的骑行区块集成测试（折线图版）。
  *
- * 通过 vi.mock 注入独立数据库实例：同路线活动 → 渲染匹配项（排除自身）；
+ * 通过 vi.mock 注入独立数据库实例：同路线活动 → 渲染折线图区块；
  * 独一路线 / 计算失败 → 区块不渲染。
  */
 import 'fake-indexeddb/auto'
@@ -37,16 +37,6 @@ afterEach(() => {
 
 /**
  * 构造测试活动（含起终点坐标与标题）。
- *
- * @param id 活动 ID
- * @param name 活动标题
- * @param startLat 起点纬度
- * @param startLng 起点经度
- * @param endLat 终点纬度
- * @param endLng 终点经度
- * @param distance 距离（米）
- * @param startTime 开始时间
- * @returns 活动
  */
 function makeActivity(
   id: string,
@@ -89,7 +79,7 @@ async function seedActivities(activities: Activity[]): Promise<void> {
 }
 
 describe('匹配的骑行区块', () => {
-  it('同路线活动渲染匹配列表（排除自身，最新在前 + 竞速标签）', async () => {
+  it('同路线活动渲染折线图区块（含标题 + 匹配数量 + 图表容器）', async () => {
     await seedActivities([
       makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
       makeActivity('a2', '机场东路夜骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
@@ -101,27 +91,10 @@ describe('匹配的骑行区块', () => {
       </MemoryRouter>,
     )
 
-    // a1 的匹配 = a2（列表含名称与元信息）
-    const link = await screen.findByRole('link', { name: /机场东路夜骑/ })
-    expect(link).toHaveAttribute('href', '/activities/a2')
-    expect(screen.getByText(/20\.50 km/)).toBeInTheDocument()
-    // 竞速：a1 与 a2 同时长 → 与本次持平
-    expect(screen.getByText('与本次持平')).toBeInTheDocument()
-  })
-
-  it('对方更快时显示「比本次快」', async () => {
-    await seedActivities([
-      makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
-      makeActivity('a2', '机场东路快骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
-    ])
-
-    render(
-      <MemoryRouter>
-        <SimilarRidesSection activityId="a1" currentDuration={4000} distanceUnit="km" />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText(/比本次快/)).toBeInTheDocument()
+    // 区块标题渲染
+    expect(await screen.findByText('匹配的骑行')).toBeInTheDocument()
+    // 匹配数量
+    expect(screen.getByText(/共 1 条同路线骑行/)).toBeInTheDocument()
   })
 
   it('独一路线（无同组其他骑行）时不渲染区块', async () => {
@@ -135,7 +108,6 @@ describe('匹配的骑行区块', () => {
       </MemoryRouter>,
     )
 
-    // 等待计算完成后仍无区块（findBy 超时前用 waitFor 断言不存在）
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect(screen.queryByText('匹配的骑行')).toBeNull()
   })

@@ -1,7 +1,8 @@
 /**
  * 功率图表（规格 §17/§25）：X 轴支持 时间/距离 切换；
- * 无功率数据时整图不渲染（显示空态提示）。
+ * 无功率数据时整图不渲染（返回 null，不保留空态提示）。
  */
+import { useMemo } from 'react'
 import type { ActivityRecord } from '@/types/activity'
 import MetricChart from '@/charts/MetricChart'
 
@@ -25,6 +26,12 @@ export interface PowerChartProps {
  * @param props 组件参数
  */
 function PowerChart({ records, hoverTimestamp, onHover }: PowerChartProps) {
+  // 无功率数据时整区块隐藏（不保留空态卡片）
+  const hasPower = useMemo(() => records.some((r) => r.power !== undefined), [records])
+  if (!hasPower) {
+    return null
+  }
+
   return (
     <MetricChart
       title="功率"

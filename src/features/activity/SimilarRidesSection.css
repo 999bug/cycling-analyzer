@@ -1,5 +1,5 @@
 /**
- * 匹配的骑行区块样式。
+ * 匹配的骑行区块样式（折线图版）。
  * 颜色取自全局 CSS 变量，深色基调与全局一致。
  */
 .similar-rides {
@@ -13,71 +13,56 @@
 .similar-rides__title {
   font-size: 16px;
   font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.similar-rides__summary {
+  font-size: 12px;
+  color: var(--text-secondary);
   margin-bottom: 10px;
 }
 
-.similar-rides__list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.similar-rides__chart {
+  width: 100%;
 }
 
-.similar-rides__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+/* Tooltip 弹出框 */
+.similar-rides__tooltip {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.similar-rides__tooltip-link {
   text-decoration: none;
   color: var(--text);
-  transition: background-color 0.15s ease;
-}
-
-.similar-rides__item:hover {
-  background-color: color-mix(in srgb, var(--border) 40%, transparent);
-}
-
-/* 迷你轨迹折线（Strava 匹配活动风格）：主题主色描边，浅色圆角底 */
-.similar-rides__mini-track {
-  width: 120px;
-  height: 64px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--border) 25%, transparent);
-  color: var(--primary);
-}
-
-.similar-rides__text {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
 }
 
-.similar-rides__name {
-  font-size: 14px;
+.similar-rides__tooltip-name {
+  font-size: 13px;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.similar-rides__meta {
-  font-size: 12px;
+.similar-rides__tooltip-meta {
   color: var(--text-secondary);
+  font-size: 11px;
 }
 
-/* 竞速标签：快 = 绿，慢 = 橙 */
-.similar-rides__race {
+.similar-rides__tooltip-compare {
   font-size: 12px;
   font-weight: 600;
 }
 
-.similar-rides__race--faster {
+.similar-rides__tooltip-compare--faster {
   color: #22c55e;
 }
 
-.similar-rides__race--slower {
+.similar-rides__tooltip-compare--slower {
   color: #f97316;
 }

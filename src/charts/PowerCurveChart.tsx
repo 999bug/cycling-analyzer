@@ -59,6 +59,11 @@ function PowerCurveChart({ records }: PowerCurveChartProps) {
     power: Math.round(point.power),
   }))
 
+  // 无功率数据时整区块隐藏（不保留空态卡片）
+  if (data.length === 0) {
+    return null
+  }
+
   return (
     <ChartCard title="功率曲线" hasData={data.length > 0} emptyText="该活动没有功率数据">
       <ResponsiveContainer width="100%" height="100%">

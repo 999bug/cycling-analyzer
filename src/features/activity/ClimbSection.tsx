@@ -193,7 +193,7 @@ function ClimbSection({ records, distanceUnit, hoverTimestamp, onHover }: ClimbS
       }
     }
 
-    return { maxDist, points: normalized, segments }
+    return { maxDist, minAlt, maxAlt, points: normalized, segments }
   }, [records])
 
   // 悬停距离（米）换算 + 上报：鼠标 x → 视口 x → 距离 → 最近剖面点时间戳
@@ -271,13 +271,16 @@ function ClimbSection({ records, distanceUnit, hoverTimestamp, onHover }: ClimbS
           <svg
             className="climb-section__profile"
             viewBox={`0 0 ${PROFILE_WIDTH} ${PROFILE_HEIGHT}`}
-            preserveAspectRatio="none"
+            preserveAspectRatio="xMidYMid meet"
             onMouseMove={handleProfileMove}
             onMouseLeave={handleProfileLeave}
             role="img"
             aria-label="海拔剖面图，按坡度着色，鼠标悬停可联动地图定位"
           >
-            {/* 坡度着色折线（Strava 坡度洞察风格） */}
+            {/* 背景网格 */}
+            <line x1={0} y1={PROFILE_HEIGHT} x2={PROFILE_WIDTH} y2={PROFILE_HEIGHT} stroke="var(--border)" strokeWidth="0.3" />
+            <line x1={0} y1={0} x2={PROFILE_WIDTH} y2={0} stroke="var(--border)" strokeWidth="0.3" />
+            {/* 坡度着色折线 */}
             {profile.segments.map((segment, index) => (
               <polyline
                 key={index}
@@ -288,7 +291,7 @@ function ClimbSection({ records, distanceUnit, hoverTimestamp, onHover }: ClimbS
                 strokeLinejoin="round"
               />
             ))}
-            {/* 悬停参考线 + 圆点（共享时间轴联动地图/图表） */}
+            {/* 悬停参考线 + 圆点 */}
             {cursorX !== undefined && (
               <g>
                 <line
@@ -299,6 +302,7 @@ function ClimbSection({ records, distanceUnit, hoverTimestamp, onHover }: ClimbS
                   stroke={HOVER_LINE_COLOR}
                   strokeWidth="0.8"
                   strokeDasharray="2 1.5"
+                  data-testid="hover-line"
                 />
                 <circle
                   cx={cursorX}
@@ -312,7 +316,13 @@ function ClimbSection({ records, distanceUnit, hoverTimestamp, onHover }: ClimbS
             )}
           </svg>
 
-          {/* 爬坡级别徽章（HTML 覆盖，避免 SVG 文字拉伸变形） */}
+          {/* 海拔轴标注 */}
+          <div className="climb-section__axis" aria-hidden="true">
+            <span className="climb-section__axis-label">{Math.round(profile.maxAlt)} m</span>
+            <span className="climb-section__axis-label">{Math.round(profile.minAlt)} m</span>
+          </div>
+
+          {/* 爬坡级别徽章 */}
           {climbs.map((climb, index) => {
             const level = uciCategory(climb.distanceMeters, climb.avgGradePercent)
             if (level === null) {
