@@ -84,8 +84,9 @@ describe('buildClimbs 爬坡分析', () => {
     expect(climbs).toEqual([])
   })
 
-  it('最大坡度为段内相邻点最大坡度', () => {
-    // 相邻坡度：5%、5%、1.67%、3.33%、7.5%（末段 15m/200m）→ 最大 7.5%
+  it('最大坡度为段内 80m 窗口平滑坡度最大值（单点噪声被平滑）', () => {
+    // 相邻点坡度：5%、5%、1.67%、3.33%、7.5%（末段 15m/200m）
+    // 平滑后窗口坡度最大约 5%（7.5% 的单点坡度被窗口平均），且不出现假大坡度
     const records = makeRecords([
       [0, 100, 0],
       [100, 105, 100],
@@ -97,7 +98,23 @@ describe('buildClimbs 爬坡分析', () => {
     const climbs = buildClimbs(records)
 
     expect(climbs).toHaveLength(1)
-    expect(climbs[0].maxGradePercent).toBeCloseTo(7.5, 0)
+    expect(climbs[0].maxGradePercent).toBeCloseTo(5, 0)
+  })
+
+  it('密集点数据（真实设备采样）单点坡度噪声不产生虚假大坡度', () => {
+    // 真实设备场景：点距 3.5m、海拔量化 1m 步进（每 ~7 点 +1m = 4% 坡，
+    // 偶发 -1m 噪声），单点对坡度可达 28%+，但 80m 窗口平滑后应回到真实范围
+    const records: ActivityRecord[] = []
+    for (let i = 0; i <= 400; i++) {
+      const altitude = Math.round(100 + i * 0.14) - (i % 19 === 7 ? 1 : 0)
+      records.push({ timestamp: i * 2, altitude, distance: i * 3.5 })
+    }
+    const climbs = buildClimbs(records)
+
+    expect(climbs.length).toBeGreaterThan(0)
+    expect(climbs[0].maxGradePercent).toBeLessThan(15)
+    // 累计爬升接近真实值（1.4km × 4% ≈ 56m，含量化正贡献）
+    expect(climbs[0].elevationGain).toBeGreaterThan(30)
   })
 
   it('海拔噪声点不产生虚假大坡度（突跳点对过滤）', () => {
@@ -132,27 +149,31 @@ describe('buildClimbs 爬坡分析', () => {
   })
 })
 
-describe('uciCategory UCI 坡级分类（近似规则）', () => {
-  it('距离 + 坡度组合分级', () => {
-    // HC：≥10km 且 ≥8%
-    expect(uciCategory(12000, 8.5)).toBe('HC')
-    // 1 级：≥8km 且 ≥6%
-    expect(uciCategory(10000, 6.5)).toBe(1)
-    // 2 级：≥5km 且 ≥5%
-    expect(uciCategory(6000, 5.5)).toBe(2)
-    // 3 级：≥3km 且 ≥4%
-    expect(uciCategory(4000, 4.5)).toBe(3)
-    // 4 级：≥1km 且 ≥3%
-    expect(uciCategory(2000, 3.5)).toBe(4)
+describe('uciCategory UCI 坡级分类（Strava 官方公式：长度 × 坡度）', () => {
+  it('Strava 公式分级（score = 米 × %，阈值 8k/16k/32k/64k/80k）', () => {
+    // HC：23.6km × 4% = 94,200 > 80,000
+    expect(uciCategory(23600, 4)).toBe('HC')
+    expect(uciCategory(12000, 8.5)).toBe('HC') // 102,000
+    expect(uciCategory(18000, 6.5)).toBe('HC') // 117,000
+    // 1 级：score > 64,000
+    expect(uciCategory(10000, 6.5)).toBe(1) // 65,000
+    // 2 级：score > 32,000
+    expect(uciCategory(6000, 5.5)).toBe(2) // 33,000
+    // 3 级：score > 16,000
+    expect(uciCategory(4000, 4.5)).toBe(3) // 18,000
+    // 4 级：score > 8,000
+    expect(uciCategory(3000, 3.5)).toBe(4) // 10,500
   })
 
-  it('坡度或距离不足不分类（不到 4 级）', () => {
-    expect(uciCategory(500, 5)).toBeNull() // 距离不足
-    expect(uciCategory(2000, 2)).toBeNull() // 坡度不足
-    expect(uciCategory(500, 2)).toBeNull()
+  it('长坡缓坡按分数归级（不再要求单段高坡度）', () => {
+    // 18km × 3.4% = 61,200 → 2 级（长缓坡也是大坡）
+    expect(uciCategory(18000, 3.4)).toBe(2)
   })
 
-  it('长距离低坡度归 HC（>15km 且 ≥6%）', () => {
-    expect(uciCategory(18000, 6.5)).toBe('HC')
+  it('坡度或距离不足不分类（score 未过 8,000）', () => {
+    expect(uciCategory(500, 5)).toBeNull() // 2,500
+    expect(uciCategory(2000, 3.5)).toBeNull() // 7,000
+    expect(uciCategory(2000, 2)).toBeNull() // 4,000
+    expect(uciCategory(500, 2)).toBeNull() // 1,000
   })
 })

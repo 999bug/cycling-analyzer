@@ -6,13 +6,13 @@ import { describe, expect, it } from 'vitest'
 import ClimbSection from '@/features/activity/ClimbSection'
 import type { ActivityRecord } from '@/types/activity'
 
-/** 构造逐点记录（海拔持续爬升 4%：1000m 爬 40m；含坐标供抽稀） */
+/** 构造逐点记录（海拔持续爬升 4.5%：2000m 爬 90m；含坐标供抽稀） */
 function makeClimbRecords(): ActivityRecord[] {
-  return Array.from({ length: 11 }, (_, index) => ({
+  return Array.from({ length: 21 }, (_, index) => ({
     timestamp: index * 10,
     latitude: 31.2 + index * 0.001,
     longitude: 121.5 + index * 0.001,
-    altitude: 100 + index * 4,
+    altitude: 100 + index * 4.5,
     distance: index * 100,
   }))
 }
@@ -32,15 +32,14 @@ describe('爬坡分析区块', () => {
   it('有爬坡时渲染剖面图 + 级别卡片（距离/爬升/坡度）', () => {
     const { container } = render(<ClimbSection records={makeClimbRecords()} distanceUnit="km" />)
 
-    expect(screen.getByText('爬坡分析')).toBeInTheDocument()
+expect(screen.getByText('爬坡分析')).toBeInTheDocument()
     expect(screen.getByText(/共 1 段爬坡/)).toBeInTheDocument()
     // 海拔剖面 SVG
     expect(container.querySelector('.climb-section__profile polyline')).not.toBeNull()
-    // 1km 4% 坡度 → UCI 4 级徽章
+    // 2km 4.5% 坡度 → score=9000 → UCI 4 级
     expect(screen.getByText('4 级')).toBeInTheDocument()
-    expect(screen.getByText('爬坡 1')).toBeInTheDocument()
-    expect(screen.getByText(/1\.00 km/)).toBeInTheDocument()
-    expect(screen.getByText(/40 m · 均 4\.0%/)).toBeInTheDocument()
+    expect(screen.getByText(/2\.00 km/)).toBeInTheDocument()
+    expect(screen.getByText(/90 m · 均 4\.5%/)).toBeInTheDocument()
   })
 
   it('无爬坡时不渲染区块', () => {
