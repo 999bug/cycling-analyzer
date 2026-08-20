@@ -37,6 +37,8 @@ import { calculateIntensityFactor, calculateTss } from '@/features/analysis/inte
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import SplitsSection from '@/features/activity/SplitsSection'
 import ClimbSection from '@/features/activity/ClimbSection'
+import SegmentsSection from '@/features/activity/SegmentsSection'
+import QualityScoreSection from '@/features/analysis/QualityScoreSection'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
@@ -51,6 +53,7 @@ import {
 } from '@/features/analysis/zones'
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
+import { routePointAtTimestamp } from '@/charts/timeline'
 import ActivityMap from '@/map/ActivityMap'
 import ColoringLegend from '@/map/ColoringLegend'
 import SpeedChart from '@/charts/SpeedChart'
@@ -213,6 +216,8 @@ function ActivityDetailPage() {
   const [history, setHistory] = useState<ActivitySummary[]>()
   // 轨迹着色模式（规格 §16，默认单色）
   const [coloring, setColoring] = useState<'none' | ColoringMode>('none')
+  // 共享时间轴悬停时间戳（Unix 秒；undefined = 未悬停，地图/图表/剖面统一联动）
+  const [hoverTimestamp, setHoverTimestamp] = useState<number>()
   // 当前数据源（切换后重新加载；只读模式控制见渲染分支）
   const source = useDataSourceStore(selectEffectiveSource)
   // 当前数据源的活动仓库（随源联动的单例实例）
@@ -309,6 +314,12 @@ function ActivityDetailPage() {
   const routePoints = useMemo(
     () => simplifyRoute(records, SIMPLIFY_TOLERANCE_METERS),
     [records],
+  )
+
+  // 共享时间轴悬停 → 地图联动圆点坐标（按 timestamp 匹配最近轨迹点）
+  const hoverPoint = useMemo(
+    () => routePointAtTimestamp(routePoints, hoverTimestamp),
+    [hoverTimestamp, routePoints],
   )
 
   // 图表渲染抽稀（性能优化）：万级逐点等距降到 1000 内，SVG 节点数可控；
@@ -593,6 +604,8 @@ function ActivityDetailPage() {
         ))}
       </section>
 
+      <QualityScoreSection records={records} />
+
       <AchievementsSection achievements={achievements} distanceUnit={distanceUnit} />
 
       <section className="activity-detail__map">
@@ -616,22 +629,39 @@ function ActivityDetailPage() {
         {coloring !== 'none' && (
           <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
         )}
-        <ActivityMap points={routePoints} coloring={coloring} />
+        <ActivityMap
+          points={routePoints}
+          coloring={coloring}
+          hoverPoint={hoverPoint}
+          onHover={setHoverTimestamp}
+        />
       </section>
 
       <section className="activity-detail__charts" aria-label="活动图表">
-        <SpeedChart records={chartRecords} />
-        <CadenceChart records={chartRecords} />
-        <ElevationChart records={chartRecords} />
-        <PowerChart records={chartRecords} />
-        <TemperatureChart records={chartRecords} />
+        <SpeedChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
+        <CadenceChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
+        <ElevationChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
+        <PowerChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
+        <TemperatureChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
         <PowerCurveChart records={records} />
-        <CombinedChart mode="speedHeartRate" records={chartRecords} />
+        <CombinedChart
+          mode="speedHeartRate"
+          records={chartRecords}
+          hoverTimestamp={hoverTimestamp}
+          onHover={setHoverTimestamp}
+        />
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />
 
-      <ClimbSection records={records} distanceUnit={distanceUnit} />
+      <ClimbSection
+        records={records}
+        distanceUnit={distanceUnit}
+        hoverTimestamp={hoverTimestamp}
+        onHover={setHoverTimestamp}
+      />
+
+      <SegmentsSection records={records} distanceUnit={distanceUnit} />
 
       <SimilarRidesSection
         activityId={id}

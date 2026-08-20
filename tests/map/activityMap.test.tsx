@@ -50,4 +50,25 @@ describe('活动轨迹地图', () => {
     expect(screen.getByText('该活动没有坐标轨迹')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '全屏查看' })).toBeNull()
   })
+
+  it('传入 hoverPoint 时渲染悬停圆点（爬坡剖面联动）', () => {
+    const { container } = render(
+      <ActivityMap
+        points={TWO_POINTS}
+        hoverPoint={{ latitude: 31.2, longitude: 121.5 }}
+      />,
+    )
+
+    // react-leaflet CircleMarker 以 circle 元素输出，取 radius=7 的悬停圆点
+    const hoverCircles = Array.from(container.querySelectorAll('.leaflet-overlay-pane circle'))
+    const hoverCircle = hoverCircles.find((circle) => circle.getAttribute('r') === '7')
+    expect(hoverCircle).not.toBeNull()
+  })
+
+  it('不传 hoverPoint 时不渲染悬停圆点', () => {
+    const { container } = render(<ActivityMap points={TWO_POINTS} />)
+
+    const hoverCircles = Array.from(container.querySelectorAll('.leaflet-overlay-pane circle'))
+    expect(hoverCircles.some((circle) => circle.getAttribute('r') === '7')).toBe(false)
+  })
 })

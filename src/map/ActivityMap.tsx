@@ -11,6 +11,7 @@ import { divIcon } from 'leaflet'
 import { CircleMarker, MapContainer, Marker, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RoutePoint } from '@/types/activity'
+import { routePointAtLocation } from '@/charts/timeline'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import {
   buildBucketLines,
@@ -52,6 +53,9 @@ const ROUTE_WEIGHT = 4
  */
 const MAX_DETAILED_SEGMENTS = 500
 
+/** 悬停圆点颜色（与轨迹主色一致，视觉强调当前点位） */
+const HOVER_COLOR = '#4f8cff'
+
 /**
  * 地图组件 props。
  */
@@ -61,6 +65,12 @@ export interface ActivityMapProps {
 
   /** 轨迹着色模式：'none'（默认）单色轨迹；其余按指标分段着色 */
   coloring?: ColoringMode | 'none'
+
+  /** 悬停轨迹点（爬坡剖面/图表悬停联动；undefined = 无悬停，不渲染圆点） */
+  hoverPoint?: { latitude: number; longitude: number }
+
+  /** 地图悬停上报（共享时间轴反向联动）：鼠标移到轨迹附近时上报最近点时间戳 */
+  onHover?: (timestamp: number | undefined) => void
 }
 
 /**
@@ -82,11 +92,48 @@ function FitBounds({ points }: { points: RoutePoint[] }) {
 }
 
 /**
+ * 地图悬停上报子组件：鼠标移动时匹配最近轨迹点并上报其时间戳（共享时间轴反向联动）。
+ * 仅当 onHover 提供时挂载监听，避免无联动的场景产生事件开销。
+ * 匹配用展示坐标（与地图渲染一致，高德源为 GCJ-02）。
+ *
+ * @param displayPoints 展示坐标轨迹点
+ * @param onHover 上报回调（undefined = 不启用联动）
+ */
+function MapHoverReporter({
+  displayPoints,
+  onHover,
+}: {
+  displayPoints: RoutePoint[]
+  onHover: ((timestamp: number | undefined) => void) | undefined
+}) {
+  const map = useMap()
+  useEffect(() => {
+    if (onHover === undefined) {
+      return
+    }
+    const handleMove = (event: { latlng: { lat: number; lng: number } }) => {
+      const point = routePointAtLocation(displayPoints, event.latlng.lat, event.latlng.lng)
+      onHover(point?.timestamp)
+    }
+    const handleOut = () => {
+      onHover(undefined)
+    }
+    map.on('mousemove', handleMove)
+    map.on('mouseout', handleOut)
+    return () => {
+      map.off('mousemove', handleMove)
+      map.off('mouseout', handleOut)
+    }
+  }, [map, displayPoints, onHover])
+  return null
+}
+
+/**
  * 活动轨迹地图。
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -106,6 +153,14 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
     () => (sourceIndex === 0 ? points : points.map(wgs84ToGcj02)),
     [points, sourceIndex],
   )
+
+  // 悬停圆点展示坐标：与轨迹同一坐标系转换（高德源对齐底图）
+  const hoverDisplay = useMemo(() => {
+    if (hoverPoint === undefined) {
+      return undefined
+    }
+    return sourceIndex === 0 ? hoverPoint : wgs84ToGcj02(hoverPoint)
+  }, [hoverPoint, sourceIndex])
 
   // 经纬度元组列表：Polyline / CircleMarker / Marker 共用
   const latLngs = useMemo(
@@ -167,7 +222,20 @@ function ActivityMap({ points, coloring = 'none' }: ActivityMapProps) {
           : <Polyline positions={latLngs} pathOptions={{ color: ROUTE_COLOR, weight: ROUTE_WEIGHT }} />}
         <CircleMarker center={start} radius={6} pathOptions={{ color: START_COLOR, fillColor: START_COLOR, fillOpacity: 1 }} />
         <Marker position={end} icon={FINISH_ICON} />
+        {hoverDisplay !== undefined && (
+          <CircleMarker
+            center={[hoverDisplay.latitude, hoverDisplay.longitude]}
+            radius={7}
+            pathOptions={{
+              color: HOVER_COLOR,
+              weight: 3,
+              fillColor: HOVER_COLOR,
+              fillOpacity: 0.4,
+            }}
+          />
+        )}
         <FitBounds points={displayPoints} />
+        <MapHoverReporter displayPoints={displayPoints} onHover={onHover} />
         <FullscreenSync />
         <ZoomControlBottomRight />
       </MapContainer>

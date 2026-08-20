@@ -1,0 +1,75 @@
+/**
+ * 分段分析区块样式。
+ * 卡片式容器 + 平路/爬坡分段卡片列表 + 相邻爬坡对比洞察列表。
+ */
+.segments-section {
+  padding: 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.segments-section__title {
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+.segments-section__summary {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.segment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+}
+
+.segment-card {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.segment-card--flat {
+  border-left-color: var(--border);
+}
+
+.segment-card--climb {
+  border-left-color: var(--primary);
+}
+
+.segment-card__label {
+  font-weight: 600;
+}
+
+.segment-card__range {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-card__stats {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  list-style: none;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

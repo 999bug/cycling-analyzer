@@ -11,6 +11,12 @@ import MetricChart from '@/charts/MetricChart'
 export interface CadenceChartProps {
   /** 逐点记录 */
   records: readonly ActivityRecord[]
+
+  /** 共享时间轴：外部悬停时间戳 */
+  hoverTimestamp?: number
+
+  /** 共享时间轴：上报本图悬停时间戳 */
+  onHover?: (timestamp: number | undefined) => void
 }
 
 /**
@@ -18,7 +24,7 @@ export interface CadenceChartProps {
  *
  * @param props 组件参数
  */
-function CadenceChart({ records }: CadenceChartProps) {
+function CadenceChart({ records, hoverTimestamp, onHover }: CadenceChartProps) {
   return (
     <MetricChart
       title="踏频"
@@ -26,6 +32,8 @@ function CadenceChart({ records }: CadenceChartProps) {
       records={records}
       meta={{ color: '#a78bfa', unit: 'rpm' }}
       emptyText="该活动没有踏频数据"
+      hoverTimestamp={hoverTimestamp}
+      onHover={onHover}
     />
   )
 }

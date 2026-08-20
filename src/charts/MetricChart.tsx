@@ -15,16 +15,23 @@ import {
   CartesianGrid,
   Line,
   LineChart as RechartsLineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import type { ActivityRecord } from '@/types/activity'
+import type { CategoricalChartFunc } from 'recharts/types/chart/types'
 import { formatAxisDistance, formatAxisTime, formatValue } from '@/charts/axis'
 import ChartCard from '@/charts/ChartCard'
 import type { ChartSeriesPoint, MetricField, XAxisMode } from '@/charts/series'
 import { buildSeries } from '@/charts/series'
+import {
+  seriesPointAtTimestamp,
+  TIMELINE_CURSOR_COLOR,
+  TIMELINE_CURSOR_DASH,
+} from '@/charts/timeline'
 
 /**
  * 指标元数据：颜色与 Tooltip 单位。
@@ -61,6 +68,12 @@ export interface MetricChartProps {
 
   /** 是否用面积渲染（海拔图） */
   area?: boolean
+
+  /** 共享时间轴：外部悬停时间戳（Unix 秒）；命中时渲染 ReferenceLine 光标 */
+  hoverTimestamp?: number
+
+  /** 共享时间轴：上报本图悬停时间戳（移出传 undefined；未接入共享轴时不传） */
+  onHover?: (timestamp: number | undefined) => void
 }
 
 /** 深色主题下坐标轴文字颜色 */
@@ -82,6 +95,8 @@ function MetricChart({
   switchable = true,
   emptyText,
   area = false,
+  hoverTimestamp,
+  onHover,
 }: MetricChartProps) {
   // X 轴模式：默认距离；不可切换时固定距离（海拔图）
   const [axisMode, setAxisMode] = useState<XAxisMode>('distance')
@@ -124,7 +139,15 @@ function MetricChart({
       }
     >
       <ResponsiveContainer width="100%" height="100%">
-        <ChartBase series={series} meta={meta} xLabel={xLabel} gradientId={gradientId} area={area} />
+        <ChartBase
+          series={series}
+          meta={meta}
+          xLabel={xLabel}
+          gradientId={gradientId}
+          area={area}
+          hoverTimestamp={hoverTimestamp}
+          onHover={onHover}
+        />
       </ResponsiveContainer>
     </ChartCard>
   )
@@ -134,6 +157,7 @@ function MetricChart({
  * 图表骨架（坐标轴 + 网格 + Tooltip + Brush + 序列）。
  * recharts 3 中 Area 必须在 AreaChart 内渲染（LineChart 会忽略 Area 曲线），
  * 故按 area 标志切换容器组件。
+ * 共享时间轴：onMouseMove 上报本图悬停时间戳，hoverTimestamp 渲染外部 ReferenceLine 光标。
  */
 function ChartBase({
   series,
@@ -141,13 +165,37 @@ function ChartBase({
   xLabel,
   gradientId,
   area,
+  hoverTimestamp,
+  onHover,
 }: {
   series: ChartSeriesPoint[]
   meta: MetricMeta
   xLabel: (x: number) => string
   gradientId: string
   area: boolean
+  hoverTimestamp: number | undefined
+  onHover: ((timestamp: number | undefined) => void) | undefined
 }) {
+  // 外部悬停时间戳 → 本图序列点（ReferenceLine 定位 x；未命中返回 undefined）
+  const cursorPoint = useMemo(
+    () => seriesPointAtTimestamp(series, hoverTimestamp),
+    [series, hoverTimestamp],
+  )
+
+  // 图表级鼠标移动：把悬停位置换算成最接近的序列点时间戳上报（共享时间轴）
+  const handleMouseMove: CategoricalChartFunc = (state) => {
+    if (onHover === undefined) {
+      return
+    }
+    const index = typeof state.activeTooltipIndex === 'number' ? state.activeTooltipIndex : undefined
+    const point = index !== undefined ? series[index] : undefined
+    onHover(point?.timestamp)
+  }
+
+  const handleMouseLeave = () => {
+    onHover?.(undefined)
+  }
+
   const axes = (
     <>
       <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
@@ -179,6 +227,14 @@ function ChartBase({
         formatter={(value) => [formatValue(Number(value), meta.unit, true), meta.unit]}
         cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }}
       />
+      {cursorPoint !== undefined && (
+        <ReferenceLine
+          x={cursorPoint.x}
+          stroke={TIMELINE_CURSOR_COLOR}
+          strokeDasharray={TIMELINE_CURSOR_DASH}
+          ifOverflow="discard"
+        />
+      )}
     </>
   )
 
@@ -188,7 +244,12 @@ function ChartBase({
 
   if (area) {
     return (
-      <RechartsAreaChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+      <RechartsAreaChart
+        data={series}
+        margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         {axes}
         <AreaSeries meta={meta} gradientId={gradientId} />
         {brush}
@@ -196,7 +257,12 @@ function ChartBase({
     )
   }
   return (
-    <RechartsLineChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+    <RechartsLineChart
+      data={series}
+      margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
       {axes}
       <LineSeries meta={meta} />
       {brush}

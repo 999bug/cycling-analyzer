@@ -10,6 +10,12 @@ import MetricChart from '@/charts/MetricChart'
 export interface SpeedChartProps {
   /** 逐点记录 */
   records: readonly ActivityRecord[]
+
+  /** 共享时间轴：外部悬停时间戳 */
+  hoverTimestamp?: number
+
+  /** 共享时间轴：上报本图悬停时间戳 */
+  onHover?: (timestamp: number | undefined) => void
 }
 
 /**
@@ -17,7 +23,7 @@ export interface SpeedChartProps {
  *
  * @param props 组件参数
  */
-function SpeedChart({ records }: SpeedChartProps) {
+function SpeedChart({ records, hoverTimestamp, onHover }: SpeedChartProps) {
   return (
     <MetricChart
       title="速度"
@@ -25,6 +31,8 @@ function SpeedChart({ records }: SpeedChartProps) {
       records={records}
       meta={{ color: '#4f8cff', unit: 'km/h' }}
       emptyText="该活动没有速度数据"
+      hoverTimestamp={hoverTimestamp}
+      onHover={onHover}
     />
   )
 }

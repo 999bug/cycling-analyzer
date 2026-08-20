@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-19（品牌定稿 2.0.0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（共享时间轴联动 + 分段分析 + 骑行质量评分）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -19,6 +19,7 @@
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
 | ✅ 已提交 | Strava 描述 + 估算功率展示 + 详情页铺满 | 已提交 `1604b98`（测试 631/631、lint/build 绿、本地快照验证 28 条描述 + 估算功率填充） | push 触发 CI（此前网络异常，随下次提交一起推送） |
+| ✅ 已完成 | **详情页三连：共享时间轴联动 + 分段分析 + 骑行质量评分**（用户确认三项全做） | ①共享时间轴：`src/charts/timeline.ts` 纯函数 + MetricChart/CombinedChart/五个薄封装图 hover 上报 + `ReferenceLine` 外部光标（Brush 缩放超域隐藏）、`ActivityMap` `hoverPoint` 圆点 + `MapHoverReporter` 反向联动（高德源 GCJ-02 展示坐标匹配）、`ClimbSection` 剖面改时间戳上报 + 外部参考线；②分段分析：`segments.ts` `buildSegments`（平路/爬坡连续分段，坡段终点收敛到海拔峰值）+ `climbInsights`（相邻爬坡功率/速度对比文案）+ `SegmentsSection` 卡片列表；③骑行质量评分：`qualityScore.ts`（配速/心率/功率稳定性变异系数 + 爬坡表现 + 后程状态，综合分 = 有效分项平均）+ `QualityScoreSection`（大数字 + 分项条 + 档位评价）；测试 36 新增（timeline 14 / segments 7 + 组件 3 / qualityScore 10 + 组件 2），全量 746/746 + lint/build 绿 | 提交待确认 |
 | ✅ 已提交 | 版本信息 + LICENSE + README 图文重写 | 侧边栏底部显示 `v1.7.0`（vite define 注入 `__APP_VERSION__`）、`LICENSE`（MIT）、`scripts/capture-screenshots.mjs` 截线上站点 8 页真实数据图（docs/screenshots/）、README 重写 | push 触发 CI |
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ✅ 已提交 | 导入流程重构：批量导入数据源选择 + 单文件编辑弹窗 + 个人备注字段 | 同步面板新增「数据来源」下拉（Strava 解析 CSV / 佳明/igpsport/行者/其他按文件名还原）；选择单个 FIT 时弹「导入活动信息」框可编辑标题/说明/个人备注；`note` 新字段（模型/DB/仓库/详情页展示）；测试 636/636 + lint/build 绿 | push 触发 CI（随下次提交一起推送） |
@@ -226,6 +227,9 @@ P1 阶段任务已全部完成，无进行中项。
 - [x] **详情页分段详情 splits**（✅ 10/10 测试）：`splits.ts` 按累计里程等长切片（段末取首个达段长记录，段距离按实际值；末段不足一段按实际距离收尾；用时/平均速度/平均心率逐段输出，心率缺失不伪造）；`SplitsSection.tsx` 默认 5 公里、可选 1/10/100/200 公里，表格列 段/距离/用时/时速/平均心率，随单位偏好换算，长表格滚动 + 表头 sticky；详情页挂载于图表区与训练区间之间（完整逐点数据）
 - [x] **详情页训练效果栏**（✅ 4/4 组件测试 + 解码链路 18/18）：FIT 协议核实（官方 SDK 21.171 cpp 头文件为准）——单次有氧 TE = session `totalTrainingEffect`（字段 24）、无氧 TE = session `totalAnaerobicTrainingEffect`（字段 137），协议中不存在独立的 aerobic/anaerobic 字段号；decoder 按官方字段提取（SDK 21.213 原生支持，无需补丁）→ normalizer → Activity/ActivityEntity → repository 全链路落库；`trainingEffect.ts` 分档文案（Garmin 口径：<1 无效果/<2 恢复/<3 维持/<4 改善/<5 大幅提高/否则极限）；`TrainingEffectSection` 两行进度条渲染（有氧绿 `#22c55e`、无氧橙 `#f97316`，比例=值/5，progressbar 语义完整），单项缺失显示 —、两项均缺失区块不渲染（不伪造；用户现有 dabuziduo 设备数据不含 TE 字段，故历史活动不显示该栏）
 - [x] **详情页成就栏（刷新纪录检测）**（✅ 纯逻辑 8/8 + 组件 4/4 + 集成 3/3）：`achievements.ts` 纯函数——仅与开始时间严格早于本次的历史活动比较（排除自身/更晚活动），维度 最远骑行/最长骑行/最多爬升/最快均速/最高平均功率，严格大于历史最大才算刷新，本次缺失不参评、历史全缺无可比纪录、首次骑行无成就（不伪造）；`AchievementsSection` 徽章列表（🏆 + 纪录名 + 本次值 + 原纪录，值随单位偏好换算），无成就不渲染；详情页经 `listAllSummaries` 加载历史（失败仅静默缺席），挂载于指标卡与地图之间
+- [x] **详情页共享时间轴联动**（✅ 纯逻辑 14/14 + 组件 4+5+13）：`src/charts/timeline.ts` 纯函数（`findNearestByTimestamp` 二分 / `routePointAtTimestamp` / `routePointAtLocation` 100m 阈值 / `haversineMeters` / `seriesPointAtTimestamp`）+ 常量；`MetricChart`/`CombinedChart` 支持外部 `hoverTimestamp` + `onHover`（onMouseMove 上报 activeTooltipIndex、onMouseLeave 清除，`ReferenceLine ifOverflow="discard"` 处理 Brush 缩放超域）；Speed/Cadence/Power/Temperature/Elevation 五个薄封装透传；`ActivityMap` 新增 `hoverPoint`（CircleMarker r=7 悬停圆点）+ `onHover` + `MapHoverReporter`（useMap 监听 mousemove 反向联动，高德源按 GCJ-02 展示坐标匹配）；`ClimbSection` 剖面按坡度连续着色（Strava 坡度洞察风格：下坡蓝/平路绿/缓坡黄/中坡橙/陡坡红，60m 平滑窗口）+ UCI 级别徽章 HTML 覆盖 + 坡度图例，`onHover` 改时间戳上报 + 外部 `hoverTimestamp` 参考线；`ActivityDetailPage` 用 `hoverTimestamp` 统一接线（悬停任一图表/剖面/地图，其余全部联动参考线 + 地图圆点）
+- [x] **详情页分段分析**（✅ 纯逻辑 7/7 + 组件 3/3）：`segments.ts`——`buildSegments` 把整条骑行切为「平路/爬坡」连续分段（首末平路 + 坡段之间平路，爬坡段复用 buildClimbs 但段终点**收敛到海拔峰值**，避免坡后平地被吞进坡段）；每段统计距离/爬升/平均坡度/平均速度/平均功率/平均心率（缺失不伪造）；`climbInsights` 相邻爬坡对比洞察（功率/速度百分比变化，<0.5% 或 0 基数跳过，双指标用「，但」连接）；`SegmentsSection` 分段卡片列表 + 洞察列表，无爬坡不渲染；详情页挂载于爬坡分析之后
+- [x] **详情页骑行质量评分**（✅ 纯逻辑 10/10 + 组件 2/2）：`qualityScore.ts`——综合评分 = 有数据分项算术平均（0-100），分项 配速稳定性/心率控制/功率稳定性（变异系数，样本 <10 不评）、爬坡表现（坡段均功率/全程均功率，坡段止于峰值）、后程状态（后半程/前半程平均速度，距离中点切分）；缺失字段分项为 undefined、全缺综合分 undefined（不伪造）；`QualityScoreSection` 综合分大数字 + 分项得分条 + 总体评价档位文案（85/70/55 分档）；详情页挂载于指标卡之后
 
 ---
 

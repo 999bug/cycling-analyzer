@@ -11,16 +11,23 @@ import {
   CartesianGrid,
   Line,
   LineChart as RechartsLineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import type { ActivityRecord } from '@/types/activity'
+import type { CategoricalChartFunc } from 'recharts/types/chart/types'
 import { formatAxisDistance, formatAxisTime, formatValue } from '@/charts/axis'
 import ChartCard from '@/charts/ChartCard'
 import type { XAxisMode } from '@/charts/series'
 import { buildCombinedSeries } from '@/charts/series'
+import {
+  seriesPointAtTimestamp,
+  TIMELINE_CURSOR_COLOR,
+  TIMELINE_CURSOR_DASH,
+} from '@/charts/timeline'
 
 /**
  * 组合模式：速度+心率 / 功率+心率。
@@ -36,6 +43,12 @@ export interface CombinedChartProps {
 
   /** 逐点记录 */
   records: readonly ActivityRecord[]
+
+  /** 共享时间轴：外部悬停时间戳 */
+  hoverTimestamp?: number
+
+  /** 共享时间轴：上报本图悬停时间戳 */
+  onHover?: (timestamp: number | undefined) => void
 }
 
 /** 心率线颜色（与心率图一致） */
@@ -90,7 +103,7 @@ const MODE_META: Record<CombinedChartMode, ModeMeta> = {
  *
  * @param props 组件参数
  */
-function CombinedChart({ mode, records }: CombinedChartProps) {
+function CombinedChart({ mode, records, hoverTimestamp, onHover }: CombinedChartProps) {
   // X 轴模式：默认距离，与单指标图表一致
   const [axisMode, setAxisMode] = useState<XAxisMode>('distance')
   const meta = MODE_META[mode]
@@ -104,6 +117,26 @@ function CombinedChart({ mode, records }: CombinedChartProps) {
   // 各序列是否有数据：仅渲染有数据的一侧（优雅降级）
   const hasPrimary = series.some((point) => point.primary !== undefined)
   const hasHeartRate = series.some((point) => point.heartRate !== undefined)
+
+  // 外部悬停时间戳 → 本图序列点（ReferenceLine 定位 x）
+  const cursorPoint = useMemo(
+    () => seriesPointAtTimestamp(series, hoverTimestamp),
+    [series, hoverTimestamp],
+  )
+
+  // 图表级鼠标移动：上报最接近的序列点时间戳（共享时间轴）
+  const handleMouseMove: CategoricalChartFunc = (state) => {
+    if (onHover === undefined) {
+      return
+    }
+    const index = typeof state.activeTooltipIndex === 'number' ? state.activeTooltipIndex : undefined
+    const point = index !== undefined ? series[index] : undefined
+    onHover(point?.timestamp)
+  }
+
+  const handleMouseLeave = () => {
+    onHover?.(undefined)
+  }
 
   const xLabel = (x: number) => (axisMode === 'time' ? formatAxisTime(x) : formatAxisDistance(x))
 
@@ -137,7 +170,12 @@ function CombinedChart({ mode, records }: CombinedChartProps) {
       }
     >
       <ResponsiveContainer width="100%" height="100%">
-        <RechartsLineChart data={series} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+        <RechartsLineChart
+          data={series}
+          margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
           <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="x"
@@ -186,6 +224,14 @@ function CombinedChart({ mode, records }: CombinedChartProps) {
             }}
             cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }}
           />
+          {cursorPoint !== undefined && (
+            <ReferenceLine
+              x={cursorPoint.x}
+              stroke={TIMELINE_CURSOR_COLOR}
+              strokeDasharray={TIMELINE_CURSOR_DASH}
+              ifOverflow="discard"
+            />
+          )}
           {hasPrimary && (
             <Line
               type="monotone"
