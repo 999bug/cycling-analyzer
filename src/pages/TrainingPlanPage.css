@@ -1,0 +1,135 @@
+/**
+ * 训练计划页样式：输入表单 + 周计划卡片列表。
+ * 颜色复用全局 CSS 变量，与统计页风格一致。
+ */
+.training-plan__title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.training-plan__subtitle {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.training-plan__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.training-plan__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.training-plan__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.training-plan__input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.training-plan__input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.training-plan__submit {
+  padding: 9px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.training-plan__submit:hover {
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.training-plan__message {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.training-plan__weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.training-plan__week {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.training-plan__phase {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.training-plan__week-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.training-plan__week-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.training-plan__week-index {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.training-plan__week-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.training-plan__week-stats {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.training-plan__week-focus {
+  font-size: 12px;
+  color: var(--text);
+}
