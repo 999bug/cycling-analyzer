@@ -208,6 +208,61 @@ export function buildMonthLabels(grid: CalendarCell[][]): MonthLabel[] {
 }
 
 /**
+ * 年度汇总（日历页统计卡片，UI-4 填充下半屏留白）。
+ */
+export interface YearSummary {
+  /** 骑行天数（有活动的自然日数） */
+  rideDays: number
+
+  /** 活动总次数 */
+  count: number
+
+  /** 总距离（米） */
+  distance: number
+
+  /** 总时长（秒） */
+  duration: number
+
+  /** 总累计爬升（米） */
+  elevationGain: number
+
+  /** 单日最长距离（米） */
+  longestDayDistance: number
+}
+
+/**
+ * 汇总指定年份的全部骑行数据（本地时区归组）。
+ *
+ * @param year 年份
+ * @param data 聚合数据（buildCalendarData 输出）
+ * @returns 年度汇总（无活动时各值为 0）
+ */
+export function buildYearSummary(year: number, data: CalendarData): YearSummary {
+  const summary: YearSummary = {
+    rideDays: 0,
+    count: 0,
+    distance: 0,
+    duration: 0,
+    elevationGain: 0,
+    longestDayDistance: 0,
+  }
+  for (const [dateKey, day] of data) {
+    if (Number(dateKey.slice(0, 4)) !== year) {
+      continue
+    }
+    summary.rideDays += 1
+    summary.count += day.count
+    summary.distance += day.distance
+    summary.duration += day.duration
+    summary.elevationGain += day.elevationGain
+    if (day.distance > summary.longestDayDistance) {
+      summary.longestDayDistance = day.distance
+    }
+  }
+  return summary
+}
+
+/**
  * 本地时区日期键（YYYY-MM-DD，两位补零）。
  *
  * @param date 日期

@@ -283,3 +283,32 @@
 .calendar-page__message {
   margin-top: 24px;
 }
+
+/* 年度汇总统计卡片（UI-4：填充热力图下方留白） */
+.calendar-year-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  max-width: 960px;
+}
+
+.calendar-year-stats__card {
+  padding: 14px 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.calendar-year-stats__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-year-stats__label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

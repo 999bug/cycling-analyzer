@@ -12,6 +12,7 @@ import {
   buildCalendarData,
   buildMonthLabels,
   buildYearGrid,
+  buildYearSummary,
   formatDayTooltip,
   intensityLevel,
 } from '@/features/calendar/calendarData'
@@ -237,5 +238,40 @@ describe('buildMonthLabels 月份标签', () => {
     for (let index = 1; index < labels.length; index++) {
       expect(labels[index].weekIndex).toBeGreaterThan(labels[index - 1].weekIndex)
     }
+  })
+})
+
+describe('buildYearSummary 年度汇总', () => {
+  it('汇总指定年份：骑行天数/次数/距离/时长/爬升/最长单日', () => {
+    const data = buildCalendarData(
+      [
+        summary('a1', iso(2026, 3, 10), 60_000, 7200, 400),
+        summary('a2', iso(2026, 3, 12), 120_000, 14_400, 1_000),
+        summary('a3', iso(2026, 3, 12), 30_000, 3_600, 200),
+        // 次年活动不计入 2026 汇总
+        summary('a4', iso(2025, 5, 1), 99_999, 9_999, 999),
+      ],
+      NOW,
+    )
+
+    expect(buildYearSummary(2026, data)).toEqual({
+      rideDays: 2,
+      count: 3,
+      distance: 210_000,
+      duration: 25_200,
+      elevationGain: 1_600,
+      longestDayDistance: 150_000,
+    })
+  })
+
+  it('无活动年份返回全零汇总', () => {
+    expect(buildYearSummary(2024, new Map())).toEqual({
+      rideDays: 0,
+      count: 0,
+      distance: 0,
+      duration: 0,
+      elevationGain: 0,
+      longestDayDistance: 0,
+    })
   })
 })

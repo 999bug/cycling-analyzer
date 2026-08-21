@@ -420,3 +420,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 窄屏（≤480px）：标题区纵向堆叠，操作按钮组换行下沉；总结条全宽 */
+@media (max-width: 480px) {
+  .activity-detail__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .activity-detail__actions {
+    flex-wrap: wrap;
+  }
+
+  .activity-detail__meta {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .activity-detail__title {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .ride-summary__quality {
+    margin-left: 0;
+  }
+}

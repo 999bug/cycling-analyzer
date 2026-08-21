@@ -101,6 +101,26 @@ describe('骑行日历页面', () => {
     )
   })
 
+  it('展示年度汇总统计卡片（总距离/骑行天数/次数等）', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    const today = new Date()
+    const morning = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+    await repo.addActivities([
+      makeActivity(0, morning, 50000, 5400, 300),
+      makeActivity(1, today.toISOString(), 30000, 3600, 100),
+    ])
+    render(<CalendarPage />)
+
+    const stats = await screen.findByRole('region', {
+      name: `${today.getFullYear()} 年度汇总`,
+    })
+    // 同日两次活动：骑行天数 1、次数 2、总距离 80 km
+    expect(within(stats).getByText('总距离').parentElement).toHaveTextContent('80.00 km')
+    expect(within(stats).getByText('骑行天数').parentElement).toHaveTextContent('1 天')
+    expect(within(stats).getByText('骑行次数').parentElement).toHaveTextContent('2 次')
+    expect(within(stats).getByText('最长单日').parentElement).toHaveTextContent('80.00 km')
+  })
+
   it('可切换上一年/下一年', async () => {
     const user = userEvent.setup()
     const repo = new DexieActivityRepository(testDb)

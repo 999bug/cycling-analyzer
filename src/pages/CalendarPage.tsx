@@ -12,8 +12,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { type ActivitySummary } from '@/storage/repositories/activityRepository'
 import CalendarHeatmap from '@/features/calendar/CalendarHeatmap'
-import { buildCalendarData, localDateKey, type CalendarData } from '@/features/calendar/calendarData'
-import { formatDuration } from '@/utils/format'
+import {
+  buildCalendarData,
+  buildYearSummary,
+  localDateKey,
+  type CalendarData,
+} from '@/features/calendar/calendarData'
+import { formatDuration, formatElevation } from '@/utils/format'
 import { formatDistanceByUnit } from '@/features/settings/settings'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
@@ -62,6 +67,8 @@ function CalendarPage() {
   }, [reload, importSummary])
 
   const data: CalendarData | null = summaries === null ? null : buildCalendarData(summaries)
+  // 年度汇总（统计卡片，UI-4：填充热力图下方留白）
+  const yearSummary = data === null ? null : buildYearSummary(year, data)
   // 当日活动（面板展示）：按本地日期键过滤，开始时间升序
   const selectedActivities =
     selectedDate === null || summaries === null
@@ -113,6 +120,42 @@ function CalendarPage() {
         onDaySelect={setSelectedDate}
         selectedDate={selectedDate}
       />
+      {yearSummary !== null && (
+        <section aria-label={`${year} 年度汇总`} className="calendar-year-stats">
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">
+              {formatDistanceByUnit(yearSummary.distance, distanceUnit)}
+            </div>
+            <div className="calendar-year-stats__label">总距离</div>
+          </div>
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">{yearSummary.rideDays} 天</div>
+            <div className="calendar-year-stats__label">骑行天数</div>
+          </div>
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">{yearSummary.count} 次</div>
+            <div className="calendar-year-stats__label">骑行次数</div>
+          </div>
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">
+              {formatDuration(yearSummary.duration)}
+            </div>
+            <div className="calendar-year-stats__label">总时长</div>
+          </div>
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">
+              {formatElevation(yearSummary.elevationGain)}
+            </div>
+            <div className="calendar-year-stats__label">总爬升</div>
+          </div>
+          <div className="calendar-year-stats__card">
+            <div className="calendar-year-stats__value">
+              {formatDistanceByUnit(yearSummary.longestDayDistance, distanceUnit)}
+            </div>
+            <div className="calendar-year-stats__label">最长单日</div>
+          </div>
+        </section>
+      )}
       {selectedDate !== null && (
         <section aria-label="当日骑行" className="calendar-day-panel">
           <div className="calendar-day-panel__header">
