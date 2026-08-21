@@ -28,6 +28,7 @@ import ChartCard from '@/charts/ChartCard'
 import type { ChartSeriesPoint, MetricField, XAxisMode } from '@/charts/series'
 import { buildSeries } from '@/charts/series'
 import {
+  activeTooltipIndexToNumber,
   seriesPointAtTimestamp,
   TIMELINE_CURSOR_COLOR,
   TIMELINE_CURSOR_DASH,
@@ -182,12 +183,13 @@ function ChartBase({
     [series, hoverTimestamp],
   )
 
-  // 图表级鼠标移动：把悬停位置换算成最接近的序列点时间戳上报（共享时间轴）
+  // 图表级鼠标移动：把悬停位置换算成最接近的序列点时间戳上报（共享时间轴）。
+  // recharts 3 的 activeTooltipIndex 是字符串，须经 activeTooltipIndexToNumber 归一化
   const handleMouseMove: CategoricalChartFunc = (state) => {
     if (onHover === undefined) {
       return
     }
-    const index = typeof state.activeTooltipIndex === 'number' ? state.activeTooltipIndex : undefined
+    const index = activeTooltipIndexToNumber(state.activeTooltipIndex)
     const point = index !== undefined ? series[index] : undefined
     onHover(point?.timestamp)
   }

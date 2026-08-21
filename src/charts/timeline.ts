@@ -15,6 +15,22 @@ export const TIMELINE_CURSOR_COLOR = 'var(--text-secondary)'
 /** 悬停光标虚线样式（SVG strokeDasharray） */
 export const TIMELINE_CURSOR_DASH = '4 3'
 
+/**
+ * recharts 图表 onMouseMove 状态中的 activeTooltipIndex → 数据下标。
+ * recharts 3 中该值为字符串（如 '6'；无命中时 null/undefined），
+ * 直接 typeof number 判断会漏报悬停时间戳，需归一化为非负整数下标。
+ *
+ * @param value recharts 状态里的 activeTooltipIndex
+ * @returns 数据下标；无有效命中时 undefined
+ */
+export function activeTooltipIndexToNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') {
+    return undefined
+  }
+  const index = Number(value)
+  return Number.isInteger(index) && index >= 0 ? index : undefined
+}
+
 /** 距离阈值（米）：地图悬停点与轨迹点的最近匹配上限，超过则不上报 */
 const MAP_HOVER_MAX_DISTANCE_METERS = 100
 
