@@ -146,11 +146,11 @@
 }
 
 .segment-card--flat {
-  border-left-color: #3b82f6;
+  border-left-color: var(--info);
 }
 
 .segment-card--climb {
-  border-left-color: #f97316;
+  border-left-color: var(--warning);
 }
 
 .segment-card--active,
@@ -162,13 +162,13 @@
 .segment-card--climb.segment-card--active,
 .segment-card--climb:hover {
   border-left-color: var(--primary);
-  background-color: color-mix(in srgb, #f97316 12%, transparent);
+  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
 }
 
 .segment-card--flat.segment-card--active,
 .segment-card--flat:hover {
-  border-left-color: #3b82f6;
-  background-color: color-mix(in srgb, #3b82f6 10%, transparent);
+  border-left-color: var(--info);
+  background-color: color-mix(in srgb, var(--info) 10%, transparent);
 }
 
 .segment-card__label {

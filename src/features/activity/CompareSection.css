@@ -71,11 +71,11 @@
 }
 
 .compare-section__legend-dot--a {
-  background: #4f8cff;
+  background: var(--info);
 }
 
 .compare-section__legend-dot--b {
-  background: #f97316;
+  background: var(--warning);
 }
 
 .compare-section__scroller {
@@ -116,11 +116,11 @@
 
 /* 差值语义色：增长 = 橙，减少 = 绿 */
 .compare-table__diff--up {
-  color: #f97316;
+  color: var(--warning);
   font-weight: 600;
 }
 
 .compare-table__diff--down {
-  color: #22c55e;
+  color: var(--success);
   font-weight: 600;
 }

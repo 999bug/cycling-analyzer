@@ -20,6 +20,7 @@ import { simplifyRoute } from '@/map/simplify'
 import { formatDistanceByUnit, formatSpeedByUnit, type DistanceUnit } from '@/features/settings/settings'
 import type { ActivityRecord } from '@/types/activity'
 import { findNearestByTimestamp } from '@/charts/timeline'
+import { SEGMENT_BAND_COLORS as BAND_COLORS } from '@/theme/colors'
 import '@/features/activity/segmentsSection.css'
 
 /** 剖面抽稀阈值（米）——SVG 小图展示，粗抽稀即可 */
@@ -55,12 +56,6 @@ const GRADE_COLORS: ReadonlyArray<{ max: number; color: string; label: string }>
   { max: 6, color: '#f97316', label: '中坡' },
   { max: Infinity, color: '#ef4444', label: '陡坡' },
 ]
-
-/** 平路/爬坡色带颜色（半透明） */
-const BAND_COLORS = {
-  flat: 'rgba(59, 130, 246, 0.18)',
-  climb: 'rgba(249, 115, 22, 0.28)',
-}
 
 /** 剖面点（归一化到视口 + 保留原始距离/海拔/时间戳） */
 interface ProfilePoint {

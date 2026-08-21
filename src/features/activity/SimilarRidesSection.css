@@ -60,9 +60,9 @@
 }
 
 .similar-rides__tooltip-compare--faster {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .similar-rides__tooltip-compare--slower {
-  color: #f97316;
+  color: var(--warning);
 }

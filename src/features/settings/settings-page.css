@@ -166,12 +166,12 @@
 
 /* 危险操作（清空全部数据，红字红边，规格 §32） */
 .settings-button--danger {
-  color: #ff6b6b;
-  border-color: #ff6b6b;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .settings-button--danger:hover:not(:disabled) {
-  background-color: rgba(255, 107, 107, 0.08);
+  background-color: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 /* 数据管理操作区 */
@@ -194,13 +194,13 @@
 }
 
 .settings-message--success {
-  background-color: rgba(76, 175, 80, 0.12);
-  border: 1px solid rgba(76, 175, 80, 0.4);
-  color: #81c784;
+  background-color: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  color: var(--success);
 }
 
 .settings-message--error {
-  background-color: rgba(255, 107, 107, 0.12);
-  border: 1px solid rgba(255, 107, 107, 0.4);
-  color: #ff6b6b;
+  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
 }

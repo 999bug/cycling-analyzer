@@ -19,11 +19,12 @@ import { formatDuration } from '@/utils/format'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import type { Activity, ActivityRecord } from '@/types/activity'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
+import { COMPARE_COLORS } from '@/theme/colors'
 import '@/features/activity/CompareSection.css'
 
-/** 当前活动轨迹颜色（蓝）与对比活动轨迹颜色（橙） */
-const TRACK_A_COLOR = '#4f8cff'
-const TRACK_B_COLOR = '#f97316'
+/** 当前活动轨迹颜色（蓝）与对比活动轨迹颜色（橙；调色板见 theme/colors.ts） */
+const TRACK_A_COLOR = COMPARE_COLORS.current
+const TRACK_B_COLOR = COMPARE_COLORS.baseline
 
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_TRACK_POINTS = 2

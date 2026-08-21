@@ -35,5 +35,5 @@
   flex-shrink: 0;
   margin-left: auto;
   font-size: 13px;
-  color: var(--text-secondary, #66707a);
+  color: var(--text-tertiary);
 }

@@ -40,8 +40,8 @@
 }
 
 .segment-card__delete:hover {
-  border-color: #ff453a;
-  color: #ff453a;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .segment-card__stats {

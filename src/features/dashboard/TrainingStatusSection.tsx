@@ -20,6 +20,7 @@ import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceSt
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
+import { TRAINING_LINE_COLORS } from '@/theme/colors'
 import { backfillNormalizedPower } from '@/features/analysis/backfillNormalizedPower'
 import {
   buildDailyTss,
@@ -50,8 +51,8 @@ const TOOLTIP_STYLE = {
   color: 'var(--text)',
 }
 
-/** CTL/ATL/TSB 线条颜色（与训练区间色阶同色系） */
-const LINE_COLORS = { ctl: '#4f8cff', atl: '#ff453a', tsb: '#34c759' } as const
+/** CTL/ATL/TSB 线条颜色（与训练区间色阶同色系，调色板见 theme/colors.ts） */
+const LINE_COLORS = TRAINING_LINE_COLORS
 
 /** 加载状态机 */
 type LoadState = 'loading' | 'noFtp' | 'noData' | 'ready' | 'error'

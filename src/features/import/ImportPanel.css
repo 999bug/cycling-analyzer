@@ -206,7 +206,7 @@
 
 .import-panel__failure {
   font-size: 12px;
-  color: #e57373;
+  color: var(--danger);
   word-break: break-all;
 }
 
@@ -217,7 +217,7 @@
 
 .import-panel__error {
   font-size: 12px;
-  color: #e57373;
+  color: var(--danger);
 }
 
 .import-dialog__backdrop {

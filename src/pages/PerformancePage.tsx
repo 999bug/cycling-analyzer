@@ -25,6 +25,7 @@ import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceSt
 import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { useUnits } from '@/hooks/useUnits'
+import { PERFORMANCE_SERIES_COLORS } from '@/theme/colors'
 import { useImportStore } from '@/stores/importStore'
 import {
   buildWeeklySeries,
@@ -63,14 +64,8 @@ const TOOLTIP_STYLE = {
   color: 'var(--text)',
 }
 
-/** 图表系列颜色 */
-const SERIES_COLORS = {
-  distance: '#4f8cff',
-  distanceMa4: '#8aa4c9',
-  tss: '#ff9f0a',
-  ef: '#34c759',
-  efMa4: '#7db88b',
-} as const
+/** 图表系列颜色（调色板见 theme/colors.ts） */
+const SERIES_COLORS = PERFORMANCE_SERIES_COLORS
 
 /** 加载状态机 */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'

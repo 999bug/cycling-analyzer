@@ -166,10 +166,10 @@
 .activity-detail__delete {
   flex-shrink: 0;
   padding: 8px 16px;
-  border: 1px solid rgba(255, 69, 58, 0.5);
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
   border-radius: 8px;
   background-color: transparent;
-  color: #ff453a;
+  color: var(--danger);
   font-size: 13px;
   cursor: pointer;
   transition:
@@ -178,8 +178,8 @@
 }
 
 .activity-detail__delete:hover {
-  background-color: rgba(255, 69, 58, 0.12);
-  border-color: #ff453a;
+  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-color: var(--danger);
 }
 
 .activity-detail__delete:disabled {

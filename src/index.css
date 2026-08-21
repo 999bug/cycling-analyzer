@@ -4,24 +4,73 @@
  * 品牌色对齐 logo：荧光绿 #b8e62e（深色主题主色）+ 深蓝 #0d3b4c（浅色主题主色/荧光绿上的文字色）。
  */
 :root {
+  /* 背景与表面 */
   --bg: #121417;
   --bg-surface: #1b1e23;
+  --bg-elevated: #232830;
+
+  /* 文字层级 */
   --text: #e8eaed;
   --text-secondary: #9aa0a6;
+  --text-tertiary: #6b7178;
+
+  /* 品牌 */
   --primary: #b8e62e;
   --on-primary: #0d3b4c;
   --border: #2a2e35;
+
+  /* 语义色 */
+  --success: #34c759;
+  --on-success: #0d3b4c;
+  --warning: #ff9f0a;
+  --on-warning: #1a1d21;
+  --danger: #ff453a;
+  --on-danger: #ffffff;
+  --info: #4f8cff;
+  --on-info: #ffffff;
+
+  /* 间距（4px 基准） */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
 }
 
 /* 浅色主题（规格 §36）：覆盖 CSS 变量，组件无需改动；荧光绿在白底对比度不足，主色换深蓝 */
 :root[data-theme='light'] {
   --bg: #f5f6f8;
   --bg-surface: #ffffff;
+  --bg-elevated: #ffffff;
+
   --text: #1a1d21;
   --text-secondary: #5f6368;
+  --text-tertiary: #9aa0a6;
+
   --primary: #0d3b4c;
   --on-primary: #ffffff;
   --border: #d8dce2;
+
+  --success: #2e8b57;
+  --on-success: #ffffff;
+  --warning: #e67300;
+  --on-warning: #ffffff;
+  --danger: #e53935;
+  --on-danger: #ffffff;
+  --info: #1a73e8;
+  --on-info: #ffffff;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
 }
 
 /* reset */

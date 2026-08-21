@@ -44,11 +44,11 @@
 }
 
 .training-status__value--positive {
-  color: #34c759;
+  color: var(--success);
 }
 
 .training-status__value--negative {
-  color: #ff9f0a;
+  color: var(--warning);
 }
 
 .training-status__label {

@@ -35,7 +35,7 @@
 
 /* Leaflet 默认浅色控件在深色主题下微调 */
 .leaflet-container {
-  background-color: #1a1d22;
+  background-color: var(--bg);
   color: var(--text);
 }
 

@@ -60,6 +60,7 @@ import { simplifyRoute } from '@/map/simplify'
 import { routePointAtTimestamp } from '@/charts/timeline'
 import ActivityMap from '@/map/ActivityMap'
 import ColoringLegend from '@/map/ColoringLegend'
+import { ZONE_COLORS } from '@/theme/colors'
 import SpeedChart from '@/charts/SpeedChart'
 import HeartRateChart from '@/charts/HeartRateChart'
 import CadenceChart from '@/charts/CadenceChart'
@@ -102,9 +103,6 @@ const HEART_RATE_ZONE_NAMES: readonly string[] = ['恢复区', '耐力区', '有
 
 /** 功率区间名称（Z1-Z5，按 FTP 百分比） */
 const POWER_ZONE_NAMES: readonly string[] = ['恢复', '耐力', '有氧', '阈值', '冲刺']
-
-/** 区间分布条颜色（低区 → 高区，与轨迹色阶一致） */
-const ZONE_COLORS: readonly string[] = ['#4f8cff', '#34c759', '#ffd60a', '#ff9f0a', '#ff453a']
 
 /** 加载状态：加载中 / 不存在 / 就绪 / 出错 */
 type LoadState = 'loading' | 'notFound' | 'ready' | 'error'
