@@ -87,15 +87,19 @@ describe('TrainingStatusSection', () => {
     render(<TrainingStatusSection />)
 
     // 卡片标签
-    expect(await screen.findByText('体能（CTL）')).toBeInTheDocument()
-    expect(screen.getByText('疲劳（ATL）')).toBeInTheDocument()
-    expect(screen.getByText('状态（TSB）')).toBeInTheDocument()
+    expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)
+    expect(screen.getAllByText('疲劳（ATL）').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('状态（TSB）').length).toBeGreaterThanOrEqual(1)
     // 首日 CTL = 100/42 ≈ 2，ATL = 100/7 ≈ 14
     expect(screen.getByText('2')).toBeInTheDocument()
     expect(screen.getByText('14')).toBeInTheDocument()
     // 趋势图与图例
     expect(screen.getByRole('img', { name: '训练负荷趋势图' })).toBeInTheDocument()
     expect(screen.getByText('— 体能（CTL）')).toBeInTheDocument()
+    // 指标说明（UI-7）：折叠块含怎么算/怎么理解
+    expect(screen.getByText('指标说明')).toBeInTheDocument()
+    expect(screen.getByText('每日 TSS 的 42 天指数加权平均，反映长期训练积累，稳步上升说明有氧基础在增强。')).toBeInTheDocument()
+    expect(screen.getByText('= CTL − ATL。正值代表休息充足、状态新鲜；负值代表近期负荷大、身体疲劳，适度负值属正常训练反应。')).toBeInTheDocument()
   })
 
   it('历史活动 NP 缺失时先回填再计算（有平均功率 + 功率逐点）', async () => {
@@ -115,7 +119,7 @@ describe('TrainingStatusSection', () => {
     render(<TrainingStatusSection />)
 
     // 回填后 IF = 150/150 = 1 → 正常显示卡片
-    expect(await screen.findByText('体能（CTL）')).toBeInTheDocument()
+    expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)
     // NP 已回填落库
     expect((await repo.getById('legacy'))?.normalizedPower).toBeCloseTo(150, 6)
   })
@@ -148,7 +152,7 @@ describe('TrainingStatusSection', () => {
     render(<TrainingStatusSection />)
 
     // IF = 200/200 = 1 → 显示卡片（FTP 来自快照而非本地设置）
-    expect(await screen.findByText('体能（CTL）')).toBeInTheDocument()
+    expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)
     // 本地库活动未被回填
     expect((await repo.getById('legacy'))?.normalizedPower).toBeUndefined()
   })

@@ -29,6 +29,7 @@ import {
 } from '@/features/analysis/trainingStatus'
 import { useImportStore } from '@/stores/importStore'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import MetricHelp from '@/components/MetricHelp'
 import '@/features/dashboard/TrainingStatusSection.css'
 
 /** 本地库仓库（NP 回填是写操作，仅本地源执行） */
@@ -53,6 +54,34 @@ const TOOLTIP_STYLE = {
 
 /** CTL/ATL/TSB 线条颜色（与训练区间色阶同色系，调色板见 theme/colors.ts） */
 const LINE_COLORS = TRAINING_LINE_COLORS
+
+/** 指标说明（UI-7）：怎么算 / 怎么理解 */
+const METRIC_HELP_ITEMS = [
+  {
+    name: '体能（CTL）',
+    description: '每日 TSS 的 42 天指数加权平均，反映长期训练积累，稳步上升说明有氧基础在增强。',
+  },
+  {
+    name: '疲劳（ATL）',
+    description: '每日 TSS 的 7 天指数加权平均，反映最近一周的训练负荷。',
+  },
+  {
+    name: '状态（TSB）',
+    description: '= CTL − ATL。正值代表休息充足、状态新鲜；负值代表近期负荷大、身体疲劳，适度负值属正常训练反应。',
+  },
+  {
+    name: '训练压力分数（TSS）',
+    description: '= 时长（秒）× IF² × 100 ÷ 3600，以 IF=1 骑行 1 小时为 100 分，衡量单次骑行的训练负荷。',
+  },
+  {
+    name: '标准化功率（NP）',
+    description: '30 秒滑动平均的四次方均值再开四次方，反映体感强度而非简单平均。',
+  },
+  {
+    name: '强度因子（IF）',
+    description: '= NP ÷ FTP，即实际强度相对功能阈值功率的比值。',
+  },
+] as const
 
 /** 加载状态机 */
 type LoadState = 'loading' | 'noFtp' | 'noData' | 'ready' | 'error'
@@ -185,6 +214,7 @@ function TrainingStatusSection() {
             <span style={{ color: LINE_COLORS.atl }}>— 疲劳（ATL）</span>
             <span style={{ color: LINE_COLORS.tsb }}>— 状态（TSB）</span>
           </div>
+          <MetricHelp items={METRIC_HELP_ITEMS} />
         </>
       )}
     </section>

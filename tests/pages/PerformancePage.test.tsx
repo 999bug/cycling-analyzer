@@ -140,6 +140,13 @@ describe('表现趋势页面（规格 §39）', () => {
 
     const trendSection = await screen.findByRole('region', { name: '表现趋势' })
     expect(await within(trendSection).findByText(/橙线：TSS/)).toBeInTheDocument()
+    // 指标说明（UI-7）：折叠块含 EF/TSS 算法说明
+    expect(within(trendSection).getByText('指标说明')).toBeInTheDocument()
+    expect(
+      within(trendSection).getByText(
+        '= Σ(NP×时长) ÷ Σ(平均心率×时长)。同样心率下能输出的功率越高，有氧效率越好，长期上升是进步信号。',
+      ),
+    ).toBeInTheDocument()
   })
 })
 

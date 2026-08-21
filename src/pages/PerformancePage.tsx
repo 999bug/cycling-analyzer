@@ -39,6 +39,7 @@ import {
 } from '@/features/analysis/performanceTrend'
 import { formatDate } from '@/utils/format'
 import { formatDistanceByUnit } from '@/features/settings/settings'
+import MetricHelp from '@/components/MetricHelp'
 import '@/pages/PerformancePage.css'
 
 /** 表现趋势周数（规格 §39） */
@@ -66,6 +67,26 @@ const TOOLTIP_STYLE = {
 
 /** 图表系列颜色（调色板见 theme/colors.ts） */
 const SERIES_COLORS = PERFORMANCE_SERIES_COLORS
+
+/** 指标说明（UI-7）：怎么算 / 怎么理解 */
+const METRIC_HELP_ITEMS = [
+  {
+    name: '效率因子（EF）',
+    description: '= Σ(NP×时长) ÷ Σ(平均心率×时长)。同样心率下能输出的功率越高，有氧效率越好，长期上升是进步信号。',
+  },
+  {
+    name: '训练压力分数（TSS）',
+    description: '= 时长（秒）× IF² × 100 ÷ 3600，以 IF=1 骑行 1 小时为 100 分；未配置 FTP 时不展示（不伪造数据）。',
+  },
+  {
+    name: '标准化功率（NP）',
+    description: '30 秒滑动平均的四次方均值再开四次方，反映体感强度而非简单平均。',
+  },
+  {
+    name: '4 周移动平均',
+    description: '近 4 周的滚动均值（虚线），平滑单周波动，便于识别趋势方向。',
+  },
+] as const
 
 /** 加载状态机 */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'
@@ -399,6 +420,7 @@ function TrendSection({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      <MetricHelp items={METRIC_HELP_ITEMS} />
     </section>
   )
 }
