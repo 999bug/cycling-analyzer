@@ -1,0 +1,43 @@
+/* 最近骑行区块：列表卡片，复用全局语义 token（间距/圆角/悬浮阴影） */
+
+.recent-rides__title {
+  margin: 0 0 var(--space-md);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recent-rides__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.recent-rides__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.recent-rides__item:hover,
+.recent-rides__item:focus-visible {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.recent-rides__name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recent-rides__meta {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}

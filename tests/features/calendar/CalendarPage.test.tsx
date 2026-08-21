@@ -91,13 +91,13 @@ describe('骑行日历页面', () => {
     const expectedCount = buildYearGrid(today.getFullYear(), new Map()).flat().length
     expect(cells).toHaveLength(expectedCount)
 
-    // 今日格子：最高档 + 完整工具提示
+    // 今日格子：最高档 + 完整工具提示（可点击格子追加操作提示后缀）
     const dateKey = formatDate(startTimes[0])
     const cell = container.querySelector(`[data-date="${dateKey}"]`)
     expect(cell).toHaveAttribute('data-level', '4')
     expect(cell).toHaveAttribute(
       'title',
-      `${dateKey} / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m`,
+      `${dateKey} / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m（点击查看当日骑行）`,
     )
   })
 

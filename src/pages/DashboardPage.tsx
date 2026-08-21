@@ -11,6 +11,7 @@ import { buildDashboardData, type DashboardData } from '@/features/dashboard/sta
 import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
 import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
+import RecentRidesSection from '@/features/dashboard/RecentRidesSection'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -96,6 +97,7 @@ function DashboardPage() {
       </div>
       <TrendChart trends={data.trends} distanceUnit={distanceUnit} />
       <TrainingStatusSection />
+      <RecentRidesSection rides={data.recentActivities} distanceUnit={distanceUnit} />
     </>
   )
 }

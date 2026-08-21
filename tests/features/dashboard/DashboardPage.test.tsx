@@ -7,6 +7,7 @@
  */
 import 'fake-indexeddb/auto'
 import { render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
@@ -88,7 +89,7 @@ describe('仪表盘页面', () => {
       makeActivity(1, lastSunday.toISOString(), 20000, 1800, 200),
       makeActivity(2, lastMonth15.toISOString(), 30000, 7200, 400),
     ])
-    render(<DashboardPage />)
+    render(<DashboardPage />, { wrapper: MemoryRouter })
 
     // 本周：仅本周一的活动（周 = 周一起至今天）
     const weekSection = await screen.findByLabelText('本周')
@@ -123,7 +124,7 @@ describe('仪表盘页面', () => {
     } as DOMRect)
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivities([makeActivity(0, new Date().toISOString(), 10000)])
-    render(<DashboardPage />)
+    render(<DashboardPage />, { wrapper: MemoryRouter })
 
     const chart = await screen.findByRole('img', { name: '每日骑行距离柱状图' })
     expect(chart).toBeInTheDocument()
@@ -140,8 +141,26 @@ describe('仪表盘页面', () => {
     expect(tab30).toHaveAttribute('aria-selected', 'false')
   })
 
+  it('展示最近骑行列表，条目链接到对应详情页', async () => {
+    const today = new Date()
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivities([
+      makeActivity(0, today.toISOString(), 30000, 5400, 200),
+      makeActivity(1, new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3, 8).toISOString(), 15000, 3600, 100),
+    ])
+    render(<DashboardPage />, { wrapper: MemoryRouter })
+
+    const section = await screen.findByLabelText('最近骑行')
+    const links = within(section).getAllByRole('link')
+    // 最近一条在前，两条均链接到详情页
+    expect(links[0]).toHaveAttribute('href', '/activities/act-0')
+    expect(links[1]).toHaveAttribute('href', '/activities/act-1')
+    expect(links[0]).toHaveTextContent('30.00 km')
+    expect(links[0]).toHaveTextContent('01:30:00')
+  })
+
   it('无数据时展示导入引导文案', async () => {
-    render(<DashboardPage />)
+    render(<DashboardPage />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText(/欢迎使用/)).toBeInTheDocument()
     expect(screen.getByText(/同步骑行数据/)).toBeInTheDocument()
@@ -151,7 +170,7 @@ describe('仪表盘页面', () => {
     vi.spyOn(DexieActivityRepository.prototype, 'listAllSummaries').mockRejectedValue(
       new Error('db down'),
     )
-    render(<DashboardPage />)
+    render(<DashboardPage />, { wrapper: MemoryRouter })
 
     expect(await screen.findByText(/加载失败/)).toBeInTheDocument()
   })

@@ -182,9 +182,20 @@
   opacity: 0.35;
 }
 
-/* 有骑行的格子可点击（当日活动面板入口） */
+/* 有骑行的格子可点击（当日活动面板入口）：hover 主题色描边 + 轻微上浮，
+   与普通格子 hover 的中性描边区分，暗示可交互（评审 §6.3 问题 5） */
 .calendar-heatmap__cell--clickable {
   cursor: pointer;
+  transition: transform 0.12s ease, outline-color 0.12s ease;
+}
+
+.calendar-heatmap__cell--clickable:hover,
+.calendar-heatmap__cell--clickable:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
+  transform: scale(1.25);
+  z-index: 1;
+  position: relative;
 }
 
 .calendar-heatmap__cell:hover {

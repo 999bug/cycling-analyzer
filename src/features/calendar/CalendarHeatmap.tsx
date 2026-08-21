@@ -151,7 +151,9 @@ function CalendarHeatmap({
                   title={
                     cell.summary === null
                       ? undefined
-                      : formatDayTooltip(cell.dateKey, cell.summary, distanceUnit)
+                      : // 可点击的格子追加操作提示（静态无暗示的补足，评审 §6.3 问题 5）
+                        formatDayTooltip(cell.dateKey, cell.summary, distanceUnit) +
+                        (clickable ? '（点击查看当日骑行）' : '')
                   }
                   {...(clickable
                     ? {

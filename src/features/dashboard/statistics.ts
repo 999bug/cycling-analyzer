@@ -69,9 +69,15 @@ export interface DashboardData {
   /** 距离趋势序列 */
   trends: TrendSeries
 
+  /** 最近骑行（startTime 降序，最多 RECENT_RIDES_COUNT 条） */
+  recentActivities: ActivitySummary[]
+
   /** 是否有活动数据（空状态判断） */
   hasData: boolean
 }
+
+/** 仪表盘「最近骑行」展示条数 */
+export const RECENT_RIDES_COUNT = 5
 
 /** 趋势粒度键（days30 / days90 / year） */
 export type TrendKey = 'days30' | 'days90' | 'year'
@@ -124,8 +130,26 @@ export function buildDashboardData(summaries: ActivitySummary[], now: Date = new
       days90: buildDailySeries(summaries, TREND_DAYS.days90, now),
       year: buildDailySeries(summaries, TREND_DAYS.year, now),
     },
+    recentActivities: buildRecentActivities(summaries),
     hasData: summaries.length > 0,
   }
+}
+
+/**
+ * 提取最近骑行摘要：按 startTime 降序，无效时间戳剔除，截取前 N 条。
+ *
+ * @param summaries 活动摘要列表（顺序任意）
+ * @param count 展示条数
+ * @returns 最近的最多 count 条活动
+ */
+function buildRecentActivities(
+  summaries: ActivitySummary[],
+  count: number = RECENT_RIDES_COUNT,
+): ActivitySummary[] {
+  return summaries
+    .filter((activity) => !Number.isNaN(new Date(activity.startTime).getTime()))
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+    .slice(0, count)
 }
 
 /**

@@ -206,6 +206,21 @@ describe('统计页面', () => {
     expect(await screen.findByText(/暂无骑行记录/)).toBeInTheDocument()
   })
 
+  it('范围内活动均无功率数据时最高功率显示 —（缺失 ≠ 0，规格 §25）', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    // 今日活动仅含速度、无功率
+    await repo.addActivities([makeActivity(0, new Date().toISOString(), 20000, 3600, 100, 10)])
+    render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByText('1 次')).toBeInTheDocument()
+    const powerLabel = screen.getByText('最高功率')
+    const powerCard = powerLabel.closest('.statistic-card')
+    expect(powerCard).not.toBeNull()
+    expect(within(powerCard as HTMLElement).getByText('—')).toBeInTheDocument()
+    // 不应伪造 0 W
+    expect(screen.queryByText('0 W')).not.toBeInTheDocument()
+  })
+
   it('无数据时展示导入引导文案', async () => {
     render(<StatisticsPage />, { wrapper: MemoryRouter })
 

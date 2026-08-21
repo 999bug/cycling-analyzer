@@ -41,7 +41,8 @@ function StatisticCards({ title, metrics, distanceUnit = 'km' }: StatisticCardsP
     { label: '最长骑行', value: formatDistanceByUnit(metrics.longestRide, distanceUnit) },
     { label: '单次最大爬升', value: formatElevation(metrics.maxElevationGain) },
     { label: '最快速度', value: formatSpeedByUnit(metrics.maxSpeed, distanceUnit) },
-    { label: '最高功率', value: `${Math.round(metrics.maxPower)} W` },
+    // 功率缺失 = undefined ≠ 0，显示 —（规格 §25）
+    { label: '最高功率', value: metrics.maxPower !== undefined ? `${Math.round(metrics.maxPower)} W` : '—' },
   ]
 
   return (

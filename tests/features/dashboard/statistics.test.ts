@@ -227,3 +227,37 @@ describe('buildDashboardData 趋势序列归组', () => {
     expect(data.trends.days30).toHaveLength(30)
   })
 })
+
+describe('buildDashboardData 最近骑行', () => {
+  it('按 startTime 降序截取前 5 条，无效时间戳剔除', () => {
+    const rides = [
+      summary('oldest', iso(2026, 5, 1, 8)),
+      summary('d6', iso(2026, 8, 12, 8)),
+      summary('newest', iso(2026, 8, 17, 8)),
+      { ...summary('invalid', 'not-a-date') },
+      summary('d5', iso(2026, 8, 11, 8)),
+      summary('d4', iso(2026, 8, 10, 8)),
+      summary('d3', iso(2026, 8, 7, 8)),
+      summary('d2', iso(2026, 8, 4, 8)),
+      summary('d1', iso(2026, 8, 2, 8)),
+    ]
+
+    const data = buildDashboardData(rides, NOW)
+
+    expect(data.recentActivities.map((r) => r.id)).toEqual([
+      'newest',
+      'd6',
+      'd5',
+      'd4',
+      'd3',
+    ])
+  })
+
+  it('不足 5 条时全量返回，空数据为空数组', () => {
+    const data = buildDashboardData([summary('only', iso(2026, 8, 17, 8))], NOW)
+    expect(data.recentActivities.map((r) => r.id)).toEqual(['only'])
+
+    const empty = buildDashboardData([], NOW)
+    expect(empty.recentActivities).toEqual([])
+  })
+})

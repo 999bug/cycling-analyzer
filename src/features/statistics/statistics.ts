@@ -76,8 +76,8 @@ export interface StatisticsMetrics {
   /** 最快速度（m/s） */
   maxSpeed: number
 
-  /** 最高功率（W） */
-  maxPower: number
+  /** 最高功率（W），范围内无任何功率数据时为 undefined（规格 §25） */
+  maxPower: number | undefined
 }
 
 /** 范围键 → 中文标签（选择器选项文本，顺序即选择器展示顺序） */
@@ -107,7 +107,7 @@ const EMPTY_METRICS: StatisticsMetrics = {
   longestRide: 0,
   maxElevationGain: 0,
   maxSpeed: 0,
-  maxPower: 0,
+  maxPower: undefined,
 }
 
 /**
@@ -226,7 +226,11 @@ export function buildStatistics(summaries: ActivitySummary[], range: DateRange):
     if (activity.maxSpeed !== undefined && activity.maxSpeed > metrics.maxSpeed) {
       metrics.maxSpeed = activity.maxSpeed
     }
-    if (activity.maxPower !== undefined && activity.maxPower > metrics.maxPower) {
+    // 功率缺失 = undefined ≠ 0：仅活动自身携带功率时才参与比较（规格 §25）
+    if (
+      activity.maxPower !== undefined &&
+      (metrics.maxPower === undefined || activity.maxPower > metrics.maxPower)
+    ) {
       metrics.maxPower = activity.maxPower
     }
   }

@@ -249,7 +249,7 @@ describe('buildStatistics 范围过滤', () => {
 })
 
 describe('buildStatistics 指标计算', () => {
-  it('空数据：全部指标为零', () => {
+  it('空数据：计数与累计指标为零，功率缺失为 undefined', () => {
     const metrics = buildStatistics([], resolveRange('all', NOW))
 
     expect(metrics).toEqual({
@@ -262,7 +262,7 @@ describe('buildStatistics 指标计算', () => {
       longestRide: 0,
       maxElevationGain: 0,
       maxSpeed: 0,
-      maxPower: 0,
+      maxPower: undefined,
     })
   })
 
@@ -359,7 +359,21 @@ describe('buildStatistics 指标计算', () => {
     expect(metrics.longestRide).toBe(20000)
     expect(metrics.maxElevationGain).toBe(200)
     expect(metrics.maxSpeed).toBe(0)
-    expect(metrics.maxPower).toBe(0)
+    expect(metrics.maxPower).toBeUndefined()
+  })
+
+  it('范围内活动均无功率数据时 maxPower 为 undefined（缺失 ≠ 0，规格 §25）', () => {
+    const metrics = buildStatistics(
+      [
+        summary('a', iso(2026, 8, 1, 8), 10000, 3600, 100),
+        { ...summary('b', iso(2026, 8, 2, 8), 15000, 3600, 150), maxSpeed: 12 },
+      ],
+      resolveRange('custom', NOW, { start: '2026-08-01', end: '2026-08-31' }),
+    )
+
+    expect(metrics.count).toBe(2)
+    expect(metrics.maxSpeed).toBe(12)
+    expect(metrics.maxPower).toBeUndefined()
   })
 
   it('默认 now 参数使用当前时间，正常聚合不抛错', () => {
