@@ -298,6 +298,25 @@
   background-color: color-mix(in srgb, var(--border) 50%, transparent) !important;
 }
 
+/* 隐私提示（UI-5：本地解析不上传，info 中性配色） */
+.import-dialog__privacy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--info) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--info) 25%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.import-dialog__privacy svg {
+  flex-shrink: 0;
+  color: var(--info);
+}
+
 .import-dialog__close:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 1px;

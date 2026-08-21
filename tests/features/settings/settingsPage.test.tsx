@@ -196,7 +196,9 @@ describe('设置页', () => {
     render(<SettingsPage />)
     await user.click(await screen.findByRole('button', { name: '清空全部本地数据' }))
 
-    expect(window.confirm).toHaveBeenCalledWith('确定清空全部本地数据？此操作不可恢复')
+    expect(window.confirm).toHaveBeenCalledWith(
+      '确定清空全部本地数据？将删除你导入的全部骑行活动、赛段与训练配置（共本机数据，不含作者发布数据），此操作不可恢复',
+    )
     expect(await screen.findByText('已清空全部本地数据')).toBeInTheDocument()
     await waitFor(async () => {
       expect(await activityRepo.countActivities()).toBe(0)

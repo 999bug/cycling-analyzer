@@ -12,6 +12,13 @@
   margin-top: 24px;
 }
 
+/* 空态隐私提示（UI-5：本地解析不上传，差异化卖点前置） */
+.dashboard__privacy-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
 /* 窄屏统计区改为单列，卡片内指标由 StatCards 自行降列 */
 @media (max-width: 900px) {
   .dashboard__stats {

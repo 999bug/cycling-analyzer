@@ -79,6 +79,9 @@ function DashboardPage() {
         <p className="dashboard__message">
           欢迎使用！点击左侧「同步骑行数据」导入你的 FIT 骑行文件。
         </p>
+        <p className="dashboard__privacy-hint">
+          文件在本浏览器内解析与存储，不上传任何服务器。
+        </p>
       </>
     )
   }

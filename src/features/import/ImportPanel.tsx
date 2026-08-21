@@ -220,7 +220,24 @@ function ImportPanel() {
             </div>
             <div className="import-dialog__body">
               {!importing && (
-                <div className="import-panel__entries">
+                <>
+                  <p className="import-dialog__privacy">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    文件在本浏览器内解析，不会上传到任何服务器
+                  </p>
+                  <div className="import-panel__entries">
                   {IMPORT_SOURCE_OPTIONS.map((option) => (
                     <button
                       key={option.value}
@@ -310,6 +327,7 @@ function ImportPanel() {
                     <span className="import-panel__dropzone-hint">可多选，支持 .fit / .fit.gz</span>
                   </div>
                 </div>
+                </>
               )}
 
               {notice && <p className="import-panel__notice">{notice}</p>}

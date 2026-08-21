@@ -42,8 +42,9 @@ import {
 } from '@/features/analysis/ftpEstimate'
 import '@/features/settings/settings-page.css'
 
-/** 清空确认文案（规格 §32 二次确认） */
-const CLEAR_ALL_CONFIRM_TEXT = '确定清空全部本地数据？此操作不可恢复'
+/** 清空确认文案（规格 §32 二次确认；含影响范围提示） */
+const CLEAR_ALL_CONFIRM_TEXT =
+  '确定清空全部本地数据？将删除你导入的全部骑行活动、赛段与训练配置（共本机数据，不含作者发布数据），此操作不可恢复'
 
 /** 一天的毫秒数（估算窗口换算） */
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -722,6 +723,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
 
       <section className="settings-section" aria-label="数据管理">
         <h2 className="settings-section__title">数据管理</h2>
+        <p className="settings-section__hint">
+          你的数据全部保存在本浏览器的 IndexedDB 中——解析与统计均在本地完成，不上传任何服务器。
+          清除浏览器站点数据或卸载浏览器会导致数据丢失，建议定期导出 JSON 备份。
+        </p>
         <p className="settings-section__hint">
           导出 JSON 备份可迁移到其他设备；导入会合并到当前数据。
           导出/清空仅作用于「我的数据」，不影响作者发布的数据。
