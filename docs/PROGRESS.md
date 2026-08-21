@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-20（移动端抽屉式侧边栏）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-21（爬坡/分区块合并 + 悬浮联动 + 表现趋势分析增强）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **爬坡/分段区块合并 + 悬浮联动 + 表现趋势分析增强**（用户反馈三项） | ①`ClimbSection` 与 `SegmentsSection` 合并为「爬坡与分段分析」区块（`SegmentsSection.tsx` 重构：海拔剖面按坡度着色 + 平路/爬坡色带 + UCI 徽章，下方**平路 + 爬坡全量分段卡片**（修复平路路段无展示），卡片↔色带悬停高亮联动 + 共享时间轴参考线（hoverTimestamp/onHover 透传），剖面视口改 100×100 + preserveAspectRatio=none 使 HTML 徽章坐标精确对齐；删除 ClimbSection.tsx/.css + 旧测试，详情页合并接线）；②表现趋势页（`PerformancePage.tsx`）：**修复 EF 与 TSS 共轴被 TSS 数量级吞没导致的「看不到 EF 线」**（拆独立右轴 + 仅 FTP 时渲染 TSS 轴）、叠加距离/EF 4 周移动平均虚线、周综述卡片加「较上周 ↑/↓」增减、新增 `performanceTrend.ts` `analyzePerformanceTrend`（近 4 周 vs 前 4 周距离/EF/TSS 变化 + 最强周/效率最高周 + 活跃/空周数）与「趋势解读」区块（量化卡片 + 一段式解读文案）；测试 15 新增（segmentsSection 7 重写 + performanceTrend 6 + PerformancePage 断言 2），全量 797/797 + lint/build 绿，版本 2.3.0 → 2.4.0 | push 触发 CI |
 | ✅ 已提交 | Strava 描述 + 估算功率展示 + 详情页铺满 | 已提交 `1604b98`（测试 631/631、lint/build 绿、本地快照验证 28 条描述 + 估算功率填充） | push 触发 CI（此前网络异常，随下次提交一起推送） |
 | ✅ 已提交 | **详情页三连：共享时间轴联动 + 分段分析 + 骑行质量评分** | 已提交 `9250ae5`（①`src/charts/timeline.ts` + 六图/地图/爬坡剖面共享 hover 联动；②`segments.ts` 平路/爬坡分段 + `climbInsights` 相邻爬坡对比 + SegmentsSection；③`qualityScore.ts` 五维度评分 + QualityScoreSection；测试 36 新增，全量 746/746 + lint/build 绿，版本 2.0.0 → 2.1.0） | 已推送 |
 | ✅ 已提交 | **训练计划生成**（功能队列第一项） | 已提交 `6a7db2c`（`src/features/training/plan.ts` + TrainingPlanPage + ROUTES[10] + 侧边栏导航，测试 5/5，全量 746/746 + lint/build 绿） | 随下次一起推送 |

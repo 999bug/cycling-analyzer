@@ -60,6 +60,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.weekly-review__delta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .performance-trend {
   background: var(--bg-surface);
   border: 1px solid var(--border);
@@ -80,9 +86,73 @@
   margin-bottom: 12px;
 }
 
-/* 窄屏降为两列，避免周综述卡片挤压 */
+/* 趋势解读区块 */
+.performance-insights {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.performance-insights__title {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.performance-insights__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.performance-insights__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+.performance-insights__label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.performance-insights__value {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-insights__delta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-insights__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  list-style: none;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* 窄屏降为两列，避免周综述/解读卡片挤压 */
 @media (max-width: 900px) {
-  .weekly-review__grid {
+  .weekly-review__grid,
+  .performance-insights__grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }

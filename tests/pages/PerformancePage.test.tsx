@@ -103,6 +103,11 @@ describe('表现趋势页面（规格 §39）', () => {
     expect(within(reviewSection).getAllByText('30.00 km').length).toBeGreaterThan(0)
     // 上周对比：上一周距离 15.00 km
     expect(within(reviewSection).getAllByText('上周 15.00 km').length).toBeGreaterThan(0)
+    // 较上周增减（本周 30km > 上周 15km → ↑ 100%）
+    expect(within(reviewSection).getAllByText(/较上周↑/).length).toBeGreaterThan(0)
+    // 趋势解读区块：最强周解读
+    const insightsSection = await screen.findByRole('region', { name: '趋势解读' })
+    expect(within(insightsSection).getByText(/最强的一周/)).toBeInTheDocument()
   })
 
   it('表现趋势区块：展示 12 周趋势图（无 FTP 时隐藏 TSS 提示）', async () => {

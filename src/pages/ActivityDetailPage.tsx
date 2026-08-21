@@ -37,7 +37,6 @@ import { calculateIntensityFactor, calculateTss } from '@/features/analysis/inte
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import SplitsSection from '@/features/activity/SplitsSection'
-import ClimbSection from '@/features/activity/ClimbSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
@@ -663,14 +662,12 @@ function ActivityDetailPage() {
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />
 
-      <ClimbSection
+      <SegmentsSection
         records={records}
         distanceUnit={distanceUnit}
         hoverTimestamp={hoverTimestamp}
         onHover={setHoverTimestamp}
       />
-
-      <SegmentsSection records={records} distanceUnit={distanceUnit} />
 
       <SimilarRidesSection
         activityId={id}

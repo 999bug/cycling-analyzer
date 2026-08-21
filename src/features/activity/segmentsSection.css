@@ -1,9 +1,11 @@
 /**
- * 分段分析区块样式。
- * 卡片式容器 + 平路/爬坡分段卡片列表 + 相邻爬坡对比洞察列表。
+ * 爬坡与分段分析区块样式（合并爬坡分析 + 分段分析）。
+ * 卡片式容器 + 海拔剖面（坡度着色 + 平路/爬坡色带 + UCI 徽章）+
+ * 全量分段卡片 + 对比洞察；悬浮高亮联动。
  */
 .segments-section {
-  padding: 16px;
+  margin-top: 16px;
+  padding: 16px 20px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -12,6 +14,7 @@
 .segments-section__title {
   margin-bottom: 4px;
   font-size: 16px;
+  font-weight: 700;
 }
 
 .segments-section__summary {
@@ -20,10 +23,111 @@
   font-size: 13px;
 }
 
+/* 海拔剖面容器：SVG + 级别徽章叠放定位 */
+.segments-section__profile-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  gap: 6px;
+}
+
+/* 海拔剖面：坡度着色折线 + 色带；鼠标悬停联动地图（十字光标） */
+.segments-section__profile {
+  display: block;
+  flex: 1;
+  height: 140px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border) 20%, transparent);
+  cursor: crosshair;
+}
+
+/* 平路/爬坡色带（SVG 内矩形，CSS 控制颜色与悬浮高亮） */
+.segments-section__band {
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity 120ms ease;
+}
+
+.segments-section__band--flat {
+  fill: rgba(59, 130, 246, 0.18);
+}
+
+.segments-section__band--climb {
+  fill: rgba(249, 115, 22, 0.28);
+}
+
+.segments-section__band--active {
+  opacity: 1;
+  stroke: var(--text-secondary);
+  stroke-width: 0.6;
+  stroke-dasharray: 2 1;
+}
+
+/* 海拔轴标注（右侧） */
+.segments-section__profile-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 48px;
+  padding: 2px 0;
+}
+
+.segments-section__profile-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* UCI 级别徽章（HTML 覆盖于剖面峰值处） */
+.segments-section__badge {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 色阶图例（坡度 + 分段色带） */
+.segments-section__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segments-section__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.segments-section__legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.segments-section__legend-swatch--band {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+/* 全量分段卡片列表（平路 + 爬坡） */
 .segment-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 10px;
   list-style: none;
 }
 
@@ -37,14 +141,34 @@
   border-left-width: 4px;
   border-radius: 8px;
   font-size: 13px;
+  cursor: default;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
 .segment-card--flat {
-  border-left-color: var(--border);
+  border-left-color: #3b82f6;
 }
 
 .segment-card--climb {
+  border-left-color: #f97316;
+}
+
+.segment-card--active,
+.segment-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.segment-card--climb.segment-card--active,
+.segment-card--climb:hover {
   border-left-color: var(--primary);
+  background-color: color-mix(in srgb, #f97316 12%, transparent);
+}
+
+.segment-card--flat.segment-card--active,
+.segment-card--flat:hover {
+  border-left-color: #3b82f6;
+  background-color: color-mix(in srgb, #3b82f6 10%, transparent);
 }
 
 .segment-card__label {
@@ -61,6 +185,7 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 相邻爬坡对比洞察 */
 .segment-insights {
   display: flex;
   flex-direction: column;
@@ -72,34 +197,4 @@
   list-style: none;
   font-size: 13px;
   color: var(--text-secondary);
-}
-
-/* 海拔剖面图容器 */
-.segments-section__profile-wrap {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.segments-section__profile {
-  flex: 1;
-  height: 80px;
-  border-radius: 8px;
-  background-color: color-mix(in srgb, var(--bg) 70%, var(--primary) 5%);
-}
-
-/* 海拔轴标注（右侧） */
-.segments-section__profile-labels {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  flex-shrink: 0;
-  width: 48px;
-}
-
-.segments-section__profile-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
 }
