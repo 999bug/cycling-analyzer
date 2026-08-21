@@ -1,7 +1,7 @@
 /**
  * 爬坡与分段分析区块样式（合并爬坡分析 + 分段分析）。
- * 卡片式容器 + 海拔剖面（坡度着色 + 平路/爬坡色带 + UCI 徽章）+
- * 全量分段卡片 + 对比洞察；悬浮高亮联动。
+ * 卡片式容器 + 海拔剖面（坡度着色 + 平路/爬坡色带 + UCI 徽章 + 悬停详情卡）+
+ * 坡度色阶图例 + 对比洞察。
  */
 .segments-section {
   margin-top: 16px;
@@ -122,66 +122,58 @@
   border: 1px solid var(--border);
 }
 
-/* 全量分段卡片列表（平路 + 爬坡） */
-.segment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-  list-style: none;
-}
-
-.segment-card {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 10px 12px;
+/* 分段详情悬浮卡（跟随光标，边缘翻转对齐；不拦截鼠标事件避免悬停抖动） */
+.segments-section__tooltip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  min-width: 168px;
+  padding: 8px 10px;
+  background-color: var(--bg-elevated, var(--bg-surface));
   border: 1px solid var(--border);
-  border-left-width: 4px;
   border-radius: 8px;
-  font-size: 13px;
-  cursor: default;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.18));
+  font-size: 12px;
+  pointer-events: none;
 }
 
-.segment-card--flat {
-  border-left-color: var(--info);
-}
-
-.segment-card--climb {
-  border-left-color: var(--warning);
-}
-
-.segment-card--active,
-.segment-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
-  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
-}
-
-.segment-card--climb.segment-card--active,
-.segment-card--climb:hover {
-  border-left-color: var(--primary);
-  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
-}
-
-.segment-card--flat.segment-card--active,
-.segment-card--flat:hover {
-  border-left-color: var(--info);
-  background-color: color-mix(in srgb, var(--info) 10%, transparent);
-}
-
-.segment-card__label {
+.segments-section__tooltip-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
   font-weight: 600;
+  font-size: 13px;
 }
 
-.segment-card__range {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+.segments-section__tooltip-type {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
 }
 
-.segment-card__stats {
+.segments-section__tooltip-type--flat {
+  background-color: var(--info);
+}
+
+.segments-section__tooltip-type--climb {
+  background-color: var(--warning);
+}
+
+.segments-section__tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  line-height: 1.7;
+}
+
+.segments-section__tooltip-row dt {
   color: var(--text-secondary);
+}
+
+.segments-section__tooltip-row dd {
+  margin: 0;
   font-variant-numeric: tabular-nums;
 }
 

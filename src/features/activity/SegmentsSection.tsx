@@ -3,11 +3,11 @@
  *
  * 顶部海拔剖面：剖面线按坡度连续着色（Strava 坡度洞察风格：下坡蓝/平路绿/缓坡黄/
  * 中坡橙/陡坡红），底下叠加平路/爬坡色带，爬坡段在峰值处打 UCI 级别徽章；
- * 下方为**全量**分段卡片（平路段 + 爬坡段，含距离/爬升/坡度/速度/功率/心率）
- * 与相邻爬坡对比洞察。
+ * 分段详情（距离区间/爬升/坡度/速度/功率/心率）全部收进剖面悬停卡，鼠标滑过即示，
+ * 下方仅保留坡度色阶图例与相邻爬坡对比洞察。
  *
- * 悬浮联动：悬停剖面更新悬停分段的色带高亮，并上报时间戳（共享时间轴联动地图/图表）；
- * 悬停分段卡片同步高亮剖面对应色带。无爬坡时区块不渲染。
+ * 悬浮联动：悬停剖面更新悬停分段的色带高亮，并上报时间戳（共享时间轴联动地图/图表）。
+ * 无爬坡时区块不渲染。
  */
 import { useMemo, useState } from 'react'
 import { buildClimbs, uciCategory, type UciCategory } from '@/features/activity/climbs'
@@ -47,6 +47,10 @@ const LEVEL_COLORS: Record<UciCategory, string> = {
   1: '#ef4444',
   HC: '#a855f7',
 }
+
+/** 悬浮卡左右翻转阈值（视口 x 百分比）：大于右阈值右对齐，小于左阈值左对齐 */
+const TOOLTIP_FLIP_RIGHT = 65
+const TOOLTIP_FLIP_LEFT = 35
 
 /** 坡度着色分档（Strava 坡度洞察配色）：下坡蓝 → 平路绿 → 缓坡黄 → 中坡橙 → 陡坡红 */
 const GRADE_COLORS: ReadonlyArray<{ max: number; color: string; label: string }> = [
@@ -198,6 +202,10 @@ function SegmentsSection({
   const [hoverIndex, setHoverIndex] = useState<number>()
   // 本图鼠标 x（视口 0-100；undefined = 未悬停，回退外部共享时间轴）
   const [hoverX, setHoverX] = useState<number>()
+  // 悬停点海拔（米；悬浮卡展示用）
+  const [hoverAltitude, setHoverAltitude] = useState<number>()
+  // 悬停点剖面视口 y（0-100；悬停圆点跟随剖面高度）
+  const [hoverY, setHoverY] = useState<number>()
 
   // 分段 + 洞察 + 剖面数据
   const { climbs, segments, insights, profile, climbCount, flatCount } = useMemo(() => {
@@ -358,6 +366,8 @@ function SegmentsSection({
         nearest = candidate
       }
     }
+    setHoverAltitude(nearest?.altitude)
+    setHoverY(nearest?.y)
     onHover?.(nearest?.timestamp)
   }
 
@@ -365,6 +375,8 @@ function SegmentsSection({
   function handleProfileLeave() {
     setHoverX(undefined)
     setHoverIndex(undefined)
+    setHoverAltitude(undefined)
+    setHoverY(undefined)
     onHover?.(undefined)
   }
 
@@ -379,6 +391,55 @@ function SegmentsSection({
   // 参考线位置：优先本图悬停（鼠标所在），否则外部悬停
   const cursorX = hoverX ?? externalPoint?.x
 
+  // 悬停圆点 y：优先本图悬停点，否则外部参考点（未悬停时不渲染）
+  const cursorY = hoverY ?? externalPoint?.y
+
+  // 悬停分段（悬浮卡内容源；仅本图鼠标悬停时命中，外部共享时间轴不弹卡）
+  const hoveredSegment = hoverIndex !== undefined ? segments[hoverIndex] : undefined
+
+  // 悬浮卡数据行：区间/长度为通用行，爬坡段补爬升与坡度，末尾是三项强度指标
+  const tooltipRows: Array<[string, string]> = []
+  if (hoveredSegment !== undefined) {
+    tooltipRows.push([
+      '区间',
+      `${formatDistanceByUnit(hoveredSegment.startDistanceMeters, distanceUnit)} – ${formatDistanceByUnit(
+        hoveredSegment.endDistanceMeters,
+        distanceUnit,
+      )}`,
+    ])
+    tooltipRows.push(['长度', formatDistanceByUnit(hoveredSegment.distanceMeters, distanceUnit)])
+    if (hoveredSegment.type === 'climb') {
+      tooltipRows.push(['爬升', `${Math.round(hoveredSegment.elevationGain)} m`])
+      tooltipRows.push(['坡度', `${hoveredSegment.avgGradePercent.toFixed(1)}%`])
+    }
+    if (hoverAltitude !== undefined) {
+      tooltipRows.push(['此处海拔', `${Math.round(hoverAltitude)} m`])
+    }
+    tooltipRows.push([
+      '速度',
+      hoveredSegment.avgSpeedMps === undefined
+        ? '—'
+        : formatSpeedByUnit(hoveredSegment.avgSpeedMps, distanceUnit),
+    ])
+    tooltipRows.push(['功率', hoveredSegment.avgPowerW !== undefined ? `${Math.round(hoveredSegment.avgPowerW)} W` : '—'])
+    tooltipRows.push([
+      '心率',
+      hoveredSegment.avgHeartRateBpm !== undefined
+        ? `${Math.round(hoveredSegment.avgHeartRateBpm)} bpm`
+        : '—',
+    ])
+  }
+
+  // 悬浮卡水平定位：跟随光标；贴近左右边缘时翻转对齐方向避免被裁切
+  const tooltipStyle =
+    hoveredSegment !== undefined && hoverX !== undefined
+      ? hoverX > TOOLTIP_FLIP_RIGHT
+        ? { left: `${hoverX.toFixed(1)}%`, transform: 'translateX(-100%)' }
+        : hoverX < TOOLTIP_FLIP_LEFT
+          ? { left: `${hoverX.toFixed(1)}%` }
+          : { left: `${hoverX.toFixed(1)}%`, transform: 'translateX(-50%)' }
+      : undefined
+
   // 无爬坡时区块不渲染（纯平路骑行无爬坡/分段分析）
   if (climbs.length === 0 || segments.length === 0) {
     return null
@@ -388,7 +449,7 @@ function SegmentsSection({
     <section className="segments-section" aria-label="爬坡与分段分析">
       <h2 className="segments-section__title">爬坡与分段分析</h2>
       <p className="segments-section__summary">
-        共 {climbCount} 段爬坡、{flatCount} 段平路（连续爬升 ≥ 30 米且平均坡度 ≥ 1.5% 记为爬坡；悬停剖面或卡片联动定位）
+        共 {climbCount} 段爬坡、{flatCount} 段平路（连续爬升 ≥ 30 米且平均坡度 ≥ 1.5% 记为爬坡；悬停剖面查看分段详情）
       </p>
 
       {profile !== null && (
@@ -400,7 +461,7 @@ function SegmentsSection({
             onMouseMove={handleProfileMove}
             onMouseLeave={handleProfileLeave}
             role="img"
-            aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停可联动地图定位"
+            aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停显示分段详情"
           >
             {/* 平路/爬坡色带 */}
             {profile.bands.map((band) => (
@@ -444,7 +505,7 @@ function SegmentsSection({
                 />
                 <circle
                   cx={cursorX}
-                  cy={Math.min(4, PROFILE_HEIGHT - 4)}
+                  cy={cursorY ?? PROFILE_HEIGHT / 2}
                   r={2.2}
                   fill={HOVER_DOT_COLOR}
                   stroke={HOVER_LINE_COLOR}
@@ -474,6 +535,24 @@ function SegmentsSection({
               {levelLabel(badge.level)}
             </span>
           ))}
+
+          {/* 分段详情悬浮卡（跟随光标，边缘翻转；不拦截鼠标事件） */}
+          {hoveredSegment !== undefined && tooltipStyle !== undefined && (
+            <div className="segments-section__tooltip" style={tooltipStyle} data-testid="segment-tooltip">
+              <p className="segments-section__tooltip-title">
+                <i className={`segments-section__tooltip-type segments-section__tooltip-type--${hoveredSegment.type}`} />
+                {hoveredSegment.label}
+              </p>
+              <dl>
+                {tooltipRows.map(([label, value]) => (
+                  <div className="segments-section__tooltip-row" key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
         </div>
       )}
 
@@ -494,40 +573,6 @@ function SegmentsSection({
           爬坡段
         </span>
       </div>
-
-      {/* 全量分段卡片（平路 + 爬坡，悬停联动色带） */}
-      <ul className="segment-list">
-        {segments.map((segment, index) => (
-          <li
-            key={index}
-            className={`segment-card segment-card--${segment.type}${
-              hoverIndex === index ? ' segment-card--active' : ''
-            }`}
-            data-testid={`segment-card-${index}`}
-            onMouseEnter={() => setHoverIndex(index)}
-            onMouseLeave={() => setHoverIndex(undefined)}
-          >
-            <span className="segment-card__label">{segment.label}</span>
-            <span className="segment-card__range">
-              {formatDistanceByUnit(segment.startDistanceMeters, distanceUnit)} –{' '}
-              {formatDistanceByUnit(segment.endDistanceMeters, distanceUnit)}
-              {' · '}
-              {formatDistanceByUnit(segment.distanceMeters, distanceUnit)}
-            </span>
-            <span className="segment-card__stats">
-              {segment.elevationGain > 0 && `爬升 ${Math.round(segment.elevationGain)} m`}
-              {segment.avgGradePercent > 0.5 && ` · 均 ${segment.avgGradePercent.toFixed(1)}%`}
-              {' · '}
-              {segment.avgSpeedMps === undefined
-                ? '速度 —'
-                : `速度 ${formatSpeedByUnit(segment.avgSpeedMps, distanceUnit)}`}
-              {segment.avgPowerW !== undefined && ` · 功率 ${Math.round(segment.avgPowerW)} W`}
-              {segment.avgHeartRateBpm !== undefined &&
-                ` · 心率 ${Math.round(segment.avgHeartRateBpm)} bpm`}
-            </span>
-          </li>
-        ))}
-      </ul>
 
       {insights.length > 0 && (
         <ul className="segment-insights" aria-label="相邻爬坡对比洞察">
