@@ -12,6 +12,7 @@ import SegmentsSection from '@/features/activity/SegmentsSection'
 import {
   buildSegmentProfile,
   gradeBandIndex,
+  MAX_PROFILE_POINTS,
   segmentIndexAtDistance,
 } from '@/features/activity/segmentsProfile'
 import { buildClimbs } from '@/features/activity/climbs'
@@ -179,6 +180,25 @@ describe('buildSegmentProfile（剖面数据）', () => {
 
     expect(profile?.badges).toHaveLength(1)
     expect(profile?.badges[0]).toEqual({ segmentIndex: 0, level: 4, x: 2000, y: 190 })
+  })
+
+  it('剖面点数超过上限时均匀抽稀到上限内（保留首尾，性能封顶）', () => {
+    // 1000 个点：纬度交替抖动（≈55m）使 Douglas-Peucker 全保留，触发封顶抽稀
+    const records = Array.from({ length: 1000 }, (_, index) => ({
+      timestamp: index * 10,
+      latitude: 31.2 + index * 0.0001 + (index % 2) * 0.0005,
+      longitude: 121.5 + index * 0.0001,
+      altitude: 100 + Math.sin(index / 20) * 30,
+      distance: index * 10,
+    }))
+    const segments = buildSegmentsFrom(records)
+    const profile = buildSegmentProfile(records, segments)
+
+    expect(profile).not.toBeNull()
+    expect(profile?.points.length).toBeLessThanOrEqual(MAX_PROFILE_POINTS)
+    // 首尾点保留（剖面覆盖全程）
+    expect(profile?.points[0].x).toBe(0)
+    expect(profile?.points[profile!.points.length - 1].x).toBe(9990)
   })
 })
 

@@ -10,9 +10,14 @@
  * 与相邻爬坡对比洞察。
  *
  * 悬浮联动：悬停剖面高亮所在分段色带，并上报时间戳（共享时间轴联动地图/图表）。
+ *
+ * 性能（悬停卡顿修复）：整棵图表拆成 memo 化的 SegmentProfileChart 子树
+ * （props 全稳定），mousemove 期间只更新 recharts 内部 Tooltip，不重渲染子树；
+ * 自悬停（hoverTimestamp 与本图最近上报值一致）时跳过外部参考线——
+ * Tooltip 光标已指示位置，参考线冗余。剖面点数在 segmentsProfile 里封顶。
  * 无爬坡时区块不渲染。
  */
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import {
   Brush,
   CartesianGrid,
@@ -36,6 +41,7 @@ import {
 import {
   buildSegmentProfile,
   GRADE_BANDS,
+  type SegmentProfile,
   type SegmentProfilePoint,
 } from '@/features/activity/segmentsProfile'
 import { formatAxisDistance, formatValue } from '@/charts/axis'
@@ -169,6 +175,161 @@ function SegmentTooltipContent({ active, payload, segments, distanceUnit }: Segm
   )
 }
 
+/** 剖面图子树 props（全部稳定引用：数据经 useMemo、回调经 useCallback） */
+interface SegmentProfileChartProps {
+  /** 剖面数据（points 供 ComposedChart，badges 供 ReferenceDot） */
+  profile: SegmentProfile
+
+  /** 平路/爬坡连续分段（ReferenceArea 色带 + Tooltip 详情） */
+  segments: readonly RideSegment[]
+
+  /** 距离显示单位 */
+  distanceUnit: DistanceUnit
+
+  /** 悬停分段下标（undefined = 未悬停；色带高亮用） */
+  hoverIndex: number | undefined
+
+  /** 外部共享时间轴光标 x（米）；本图自悬停时为 undefined */
+  cursorX: number | undefined
+
+  /** 悬停上报：滑过剖面时上报所在点时间戳（Unix 秒）；移出时传 undefined */
+  onHover: (timestamp: number | undefined) => void
+
+  /** 悬停分段下标变化（跨过分段边界时触发；同值时上层 setState 自动跳过） */
+  onHoverIndexChange: (index: number | undefined) => void
+}
+
+/**
+ * 剖面图子树（memo 化）：mousemove 期间 recharts 只更新内部 Tooltip，
+ * 本子树因 props 全稳定而不重渲染——悬停流畅的关键。
+ *
+ * @param props 组件参数
+ */
+const SegmentProfileChart = memo(function SegmentProfileChart({
+  profile,
+  segments,
+  distanceUnit,
+  hoverIndex,
+  cursorX,
+  onHover,
+  onHoverIndexChange,
+}: SegmentProfileChartProps) {
+  // 图表鼠标移动：Tooltip 命中剖面点 → 高亮所属分段色带 + 上报时间戳（共享时间轴）
+  const handleChartMove: CategoricalChartFunc = (state) => {
+    const index = activeTooltipIndexToNumber(state.activeTooltipIndex)
+    const point = index !== undefined ? profile.points[index] : undefined
+    onHoverIndexChange(point?.segmentIndex)
+    onHover(point?.timestamp)
+  }
+
+  // 移出图表：清除分段高亮并通知上层
+  const handleChartLeave = () => {
+    onHoverIndexChange(undefined)
+    onHover(undefined)
+  }
+
+  return (
+    <div
+      className="segments-section__chart"
+      role="img"
+      aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停显示分段详情"
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart
+          data={profile.points}
+          margin={{ top: 16, right: 8, bottom: 0, left: 0 }}
+          onMouseMove={handleChartMove}
+          onMouseLeave={handleChartLeave}
+        >
+          <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="x"
+            type="number"
+            domain={['auto', 'auto']}
+            tickCount={6}
+            tickFormatter={formatAxisDistance}
+            tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+            stroke={GRID_COLOR}
+          />
+          <YAxis
+            width={44}
+            domain={['auto', 'auto']}
+            tickFormatter={(value: number) => formatValue(value, 'm', false)}
+            tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+            stroke={GRID_COLOR}
+          />
+
+          {/* 平路/爬坡分段色带（悬停段加深 + 虚线描边） */}
+          {segments.map((segment, index) => (
+            <ReferenceArea
+              key={index}
+              x1={segment.startDistanceMeters}
+              x2={segment.endDistanceMeters}
+              fill={hoverIndex === index ? BAND_FILL_ACTIVE[segment.type] : BAND_FILL[segment.type]}
+              stroke={hoverIndex === index ? 'var(--text-secondary)' : 'none'}
+              strokeDasharray="4 3"
+              ifOverflow="extendDomain"
+            />
+          ))}
+
+          {/* 坡度分档着色折线（每档一条 Line，边界点双档衔接） */}
+          {GRADE_BANDS.map((band, bandIndex) => (
+            <Line
+              key={band.label}
+              type="linear"
+              dataKey={`alt${bandIndex}`}
+              name={band.label}
+              stroke={band.color}
+              strokeWidth={2.2}
+              dot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+              activeDot={false}
+            />
+          ))}
+
+          {/* 外部共享时间轴光标（本图自悬停时由 Tooltip 光标指示，不渲染） */}
+          {cursorX !== undefined && (
+            <ReferenceLine
+              x={cursorX}
+              stroke={TIMELINE_CURSOR_COLOR}
+              strokeDasharray={TIMELINE_CURSOR_DASH}
+              ifOverflow="discard"
+            />
+          )}
+
+          {/* UCI 级别徽章（爬坡段峰值处圆点 + 白字级别） */}
+          {profile.badges.map((badge) => (
+            <ReferenceDot
+              key={badge.segmentIndex}
+              x={badge.x}
+              y={badge.y}
+              r={BADGE_RADIUS}
+              fill={LEVEL_COLORS[badge.level]}
+              stroke="none"
+              ifOverflow="discard"
+              label={{
+                value: levelLabel(badge.level),
+                position: 'center',
+                fill: '#ffffff',
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            />
+          ))}
+
+          <Tooltip
+            content={<SegmentTooltipContent segments={segments} distanceUnit={distanceUnit} />}
+            cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }}
+            isAnimationActive={false}
+          />
+          <Brush dataKey="x" height={22} travellerWidth={8} stroke={GRID_COLOR} fill="transparent" />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  )
+})
+
 /**
  * 爬坡与分段分析区块组件。
  *
@@ -182,6 +343,9 @@ function SegmentsSection({
 }: SegmentsSectionProps) {
   // 悬停分段下标（undefined = 未悬停；色带高亮用）
   const [hoverIndex, setHoverIndex] = useState<number>()
+
+  // 最近一次由本图上报的悬停时间戳（区分「自己悬停」与「外部联动」）
+  const lastReportedTimestampRef = useRef<number | undefined>(undefined)
 
   // 分段 + 洞察 + 剖面数据
   const { climbs, segments, insights, profile, climbCount, flatCount } = useMemo(() => {
@@ -200,27 +364,27 @@ function SegmentsSection({
     }
   }, [records])
 
-  // 图表鼠标移动：Tooltip 命中剖面点 → 高亮所属分段色带 + 上报时间戳（共享时间轴）
-  const handleChartMove: CategoricalChartFunc = (state) => {
-    const index = activeTooltipIndexToNumber(state.activeTooltipIndex)
-    const point = profile !== null && index !== undefined ? profile.points[index] : undefined
-    setHoverIndex(point?.segmentIndex)
-    onHover?.(point?.timestamp)
-  }
+  // 本图悬停上报：记录时间戳后转发上层（共享时间轴）
+  const handleChartHover = useCallback(
+    (timestamp: number | undefined) => {
+      lastReportedTimestampRef.current = timestamp
+      onHover?.(timestamp)
+    },
+    [onHover],
+  )
 
-  // 移出图表：清除分段高亮并通知上层
-  const handleChartLeave = () => {
-    setHoverIndex(undefined)
-    onHover?.(undefined)
-  }
-
-  // 外部悬停时间戳 → 剖面点（参考线定位 x；未命中返回 undefined）
-  const externalPoint = useMemo(() => {
-    if (profile === null || hoverTimestamp === undefined) {
-      return undefined
-    }
-    return findNearestByTimestamp(profile.points, hoverTimestamp)
-  }, [profile, hoverTimestamp])
+  // 外部共享时间轴光标：仅在悬停来自其他图表/地图时渲染。
+  // 自悬停（hoverTimestamp 与本图最近上报值一致）时跳过——Tooltip 光标已在指示
+  // 位置，参考线冗余；跳过后 memo 化的图表子树在 mousemove 期间完全免于重渲染
+  const cursorPoint =
+    profile !== null &&
+    hoverTimestamp !== undefined &&
+    // ref 在事件处理器里先于触发本渲染的 setState 写入，渲染期读取安全
+    // （最坏情况仅光标显隐一帧误差），故豁免 react-hooks/refs
+    // eslint-disable-next-line react-hooks/refs -- 自悬停判定需渲染期对比最近上报值
+    hoverTimestamp !== lastReportedTimestampRef.current
+      ? findNearestByTimestamp(profile.points, hoverTimestamp)
+      : undefined
 
   // 无爬坡时区块不渲染（纯平路骑行无爬坡/分段分析）
   if (climbs.length === 0 || segments.length === 0) {
@@ -235,104 +399,15 @@ function SegmentsSection({
       </p>
 
       {profile !== null && (
-        <div
-          className="segments-section__chart"
-          role="img"
-          aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停显示分段详情"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={profile.points}
-              margin={{ top: 16, right: 8, bottom: 0, left: 0 }}
-              onMouseMove={handleChartMove}
-              onMouseLeave={handleChartLeave}
-            >
-              <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="x"
-                type="number"
-                domain={['auto', 'auto']}
-                tickCount={6}
-                tickFormatter={formatAxisDistance}
-                tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
-                stroke={GRID_COLOR}
-              />
-              <YAxis
-                width={44}
-                domain={['auto', 'auto']}
-                tickFormatter={(value: number) => formatValue(value, 'm', false)}
-                tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
-                stroke={GRID_COLOR}
-              />
-
-              {/* 平路/爬坡分段色带（悬停段加深 + 虚线描边） */}
-              {segments.map((segment, index) => (
-                <ReferenceArea
-                  key={index}
-                  x1={segment.startDistanceMeters}
-                  x2={segment.endDistanceMeters}
-                  fill={hoverIndex === index ? BAND_FILL_ACTIVE[segment.type] : BAND_FILL[segment.type]}
-                  stroke={hoverIndex === index ? 'var(--text-secondary)' : 'none'}
-                  strokeDasharray="4 3"
-                  ifOverflow="extendDomain"
-                />
-              ))}
-
-              {/* 坡度分档着色折线（每档一条 Line，边界点双档衔接） */}
-              {GRADE_BANDS.map((band, bandIndex) => (
-                <Line
-                  key={band.label}
-                  type="linear"
-                  dataKey={`alt${bandIndex}`}
-                  name={band.label}
-                  stroke={band.color}
-                  strokeWidth={2.2}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                  activeDot={false}
-                />
-              ))}
-
-              {/* 外部共享时间轴光标 */}
-              {externalPoint !== undefined && (
-                <ReferenceLine
-                  x={externalPoint.x}
-                  stroke={TIMELINE_CURSOR_COLOR}
-                  strokeDasharray={TIMELINE_CURSOR_DASH}
-                  ifOverflow="discard"
-                />
-              )}
-
-              {/* UCI 级别徽章（爬坡段峰值处圆点 + 白字级别） */}
-              {profile.badges.map((badge) => (
-                <ReferenceDot
-                  key={badge.segmentIndex}
-                  x={badge.x}
-                  y={badge.y}
-                  r={BADGE_RADIUS}
-                  fill={LEVEL_COLORS[badge.level]}
-                  stroke="none"
-                  ifOverflow="discard"
-                  label={{
-                    value: levelLabel(badge.level),
-                    position: 'center',
-                    fill: '#ffffff',
-                    fontSize: 10,
-                    fontWeight: 700,
-                  }}
-                />
-              ))}
-
-              <Tooltip
-                content={<SegmentTooltipContent segments={segments} distanceUnit={distanceUnit} />}
-                cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }}
-                isAnimationActive={false}
-              />
-              <Brush dataKey="x" height={22} travellerWidth={8} stroke={GRID_COLOR} fill="transparent" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        <SegmentProfileChart
+          profile={profile}
+          segments={segments}
+          distanceUnit={distanceUnit}
+          hoverIndex={hoverIndex}
+          cursorX={cursorPoint?.x}
+          onHover={handleChartHover}
+          onHoverIndexChange={setHoverIndex}
+        />
       )}
 
       {/* 坡度色阶图例 */}

@@ -14,6 +14,10 @@ import type { RideSegment } from '@/features/activity/segments'
 /** 剖面抽稀阈值（米）：图表展示，粗抽稀即可 */
 const PROFILE_SIMPLIFY_METERS = 5
 
+/** 剖面点数上限：超出时均匀抽稀到图表像素级密度（~800px 宽）。
+ *  渲染与每次重渲染的开销都和点数成正比，山路骑行 DP 抽稀后仍可能上千点 */
+export const MAX_PROFILE_POINTS = 800
+
 /** 坡度平滑窗口（米）：按距离窗口平均坡度，压掉海拔量化噪声 */
 const GRADE_WINDOW_METERS = 60
 
@@ -141,6 +145,25 @@ export function segmentIndexAtDistance(
 }
 
 /**
+ * 均匀抽稀到上限点数（保留首尾，等步长采样）。
+ *
+ * @param points 已抽稀的剖面点（升序）
+ * @param maxPoints 目标点数上限（≥ 2 才有意义）
+ * @returns 均匀采样后的点列表（不超上限时原样返回）
+ */
+function uniformSample<T>(points: T[], maxPoints: number): T[] {
+  if (points.length <= maxPoints || maxPoints < 2) {
+    return points
+  }
+  const step = (points.length - 1) / (maxPoints - 1)
+  const sampled: T[] = []
+  for (let i = 0; i < maxPoints; i++) {
+    sampled.push(points[Math.round(i * step)])
+  }
+  return sampled
+}
+
+/**
  * 构建爬坡剖面数据。
  *
  * @param records 逐点记录（含海拔/距离/坐标）
@@ -152,8 +175,11 @@ export function buildSegmentProfile(
   segments: readonly RideSegment[],
 ): SegmentProfile | null {
   // 抽稀 + 过滤无海拔/距离的点（需带坐标才会被 simplifyRoute 保留）
-  const simplified = simplifyRoute(records, PROFILE_SIMPLIFY_METERS).filter(
-    (point) => point.altitude !== undefined && point.distance !== undefined,
+  const simplified = uniformSample(
+    simplifyRoute(records, PROFILE_SIMPLIFY_METERS).filter(
+      (point) => point.altitude !== undefined && point.distance !== undefined,
+    ),
+    MAX_PROFILE_POINTS,
   )
   if (simplified.length < 2) {
     return null
