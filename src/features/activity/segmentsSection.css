@@ -1,7 +1,7 @@
 /**
  * 爬坡与分段分析区块样式（合并爬坡分析 + 分段分析）。
- * 卡片式容器 + 海拔剖面（坡度着色 + 平路/爬坡色带 + UCI 徽章 + 悬停详情卡）+
- * 坡度色阶图例 + 对比洞察。
+ * 卡片式容器 + Recharts 剖面图（坡度着色折线 + 平路/爬坡色带 + UCI 徽章 +
+ * Tooltip 悬浮详情卡）+ 坡度色阶图例 + 对比洞察。
  */
 .segments-section {
   margin-top: 16px;
@@ -23,110 +23,15 @@
   font-size: 13px;
 }
 
-/* 海拔剖面容器：SVG + 级别徽章叠放定位 */
-.segments-section__profile-wrap {
-  position: relative;
+/* 海拔剖面图容器（Recharts ComposedChart，高度对齐 chart-card__body） */
+.segments-section__chart {
   width: 100%;
-  display: flex;
-  gap: 6px;
+  height: 220px;
 }
 
-/* 海拔剖面：坡度着色折线 + 色带；鼠标悬停联动地图（十字光标） */
-.segments-section__profile {
-  display: block;
-  flex: 1;
-  height: 140px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--border) 20%, transparent);
-  cursor: crosshair;
-}
-
-/* 平路/爬坡色带（SVG 内矩形，CSS 控制颜色与悬浮高亮） */
-.segments-section__band {
-  pointer-events: none;
-  opacity: 0.65;
-  transition: opacity 120ms ease;
-}
-
-.segments-section__band--flat {
-  fill: rgba(59, 130, 246, 0.18);
-}
-
-.segments-section__band--climb {
-  fill: rgba(249, 115, 22, 0.28);
-}
-
-.segments-section__band--active {
-  opacity: 1;
-  stroke: var(--text-secondary);
-  stroke-width: 0.6;
-  stroke-dasharray: 2 1;
-}
-
-/* 海拔轴标注（右侧） */
-.segments-section__profile-labels {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  flex-shrink: 0;
-  width: 48px;
-  padding: 2px 0;
-}
-
-.segments-section__profile-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-/* UCI 级别徽章（HTML 覆盖于剖面峰值处） */
-.segments-section__badge {
-  position: absolute;
-  transform: translateX(-50%);
-  padding: 1px 5px;
-  border-radius: 999px;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.5;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-/* 色阶图例（坡度 + 分段色带） */
-.segments-section__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.segments-section__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.segments-section__legend-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-}
-
-.segments-section__legend-swatch--band {
-  border-radius: 999px;
-  border: 1px solid var(--border);
-}
-
-/* 分段详情悬浮卡（跟随光标，边缘翻转对齐；不拦截鼠标事件避免悬停抖动） */
+/* 分段详情悬浮卡（Recharts Tooltip 自定义内容；定位由 recharts-tooltip-wrapper 接管，
+   此处只管视觉，pointer-events 防拦截悬停） */
 .segments-section__tooltip {
-  position: absolute;
-  top: 8px;
-  z-index: 2;
   min-width: 168px;
   padding: 8px 10px;
   background-color: var(--bg-elevated, var(--bg-surface));
@@ -175,6 +80,34 @@
 .segments-section__tooltip-row dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* 色阶图例（坡度 + 分段色带） */
+.segments-section__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segments-section__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.segments-section__legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.segments-section__legend-swatch--band {
+  border-radius: 999px;
+  border: 1px solid var(--border);
 }
 
 /* 相邻爬坡对比洞察 */

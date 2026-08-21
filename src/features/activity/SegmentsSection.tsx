@@ -1,43 +1,49 @@
 /**
  * 爬坡与分段分析区块（合并爬坡分析 + 分段分析）。
  *
- * 顶部海拔剖面：剖面线按坡度连续着色（Strava 坡度洞察风格：下坡蓝/平路绿/缓坡黄/
- * 中坡橙/陡坡红），底下叠加平路/爬坡色带，爬坡段在峰值处打 UCI 级别徽章；
- * 分段详情（距离区间/爬升/坡度/速度/功率/心率）全部收进剖面悬停卡，鼠标滑过即示，
- * 下方仅保留坡度色阶图例与相邻爬坡对比洞察。
+ * 海拔剖面改用 Recharts ComposedChart 渲染（对齐「海拔」卡片交互）：
+ * 距离/海拔坐标轴 + 网格 + Brush 缩放；剖面线按坡度分档连续着色
+ * （Strava 坡度洞察风格：下坡蓝/平路绿/缓坡黄/中坡橙/陡坡红，每档一条 Line），
+ * 底下叠加平路/爬坡 ReferenceArea 色带（悬停段高亮），爬坡段在峰值处打
+ * ReferenceDot UCI 级别徽章；分段详情（距离区间/爬升/坡度/速度/功率/心率）
+ * 全部收进 Recharts Tooltip 悬浮卡，鼠标滑过即示，下方仅保留坡度色阶图例
+ * 与相邻爬坡对比洞察。
  *
- * 悬浮联动：悬停剖面更新悬停分段的色带高亮，并上报时间戳（共享时间轴联动地图/图表）。
+ * 悬浮联动：悬停剖面高亮所在分段色带，并上报时间戳（共享时间轴联动地图/图表）。
  * 无爬坡时区块不渲染。
  */
 import { useMemo, useState } from 'react'
-import { buildClimbs, uciCategory, type UciCategory } from '@/features/activity/climbs'
+import {
+  Brush,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceArea,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import type { CategoricalChartFunc } from 'recharts/types/chart/types'
+import { buildClimbs, type UciCategory } from '@/features/activity/climbs'
 import {
   buildSegments,
   climbInsights,
   type RideSegment,
 } from '@/features/activity/segments'
-import { simplifyRoute } from '@/map/simplify'
+import {
+  buildSegmentProfile,
+  GRADE_BANDS,
+  type SegmentProfilePoint,
+} from '@/features/activity/segmentsProfile'
+import { formatAxisDistance, formatValue } from '@/charts/axis'
+import { findNearestByTimestamp, activeTooltipIndexToNumber, TIMELINE_CURSOR_COLOR, TIMELINE_CURSOR_DASH } from '@/charts/timeline'
 import { formatDistanceByUnit, formatSpeedByUnit, type DistanceUnit } from '@/features/settings/settings'
 import type { ActivityRecord } from '@/types/activity'
-import { findNearestByTimestamp } from '@/charts/timeline'
 import { SEGMENT_BAND_COLORS as BAND_COLORS } from '@/theme/colors'
 import '@/features/activity/segmentsSection.css'
-
-/** 剖面抽稀阈值（米）——SVG 小图展示，粗抽稀即可 */
-const PROFILE_SIMPLIFY_METERS = 5
-
-/** 剖面视口（x/y 同 0-100，宽度与高度独立归一化，配合 preserveAspectRatio=none 与 HTML 徽章精确对齐） */
-const PROFILE_WIDTH = 100
-const PROFILE_HEIGHT = 100
-
-/** 坡度平滑窗口（米）：按距离窗口平均坡度，压掉海拔量化噪声 */
-const GRADE_WINDOW_METERS = 60
-
-/** 悬停参考线色（主色，与地图悬停圆点呼应） */
-const HOVER_LINE_COLOR = '#4f8cff'
-
-/** 悬停圆点填充色 */
-const HOVER_DOT_COLOR = '#ffffff'
 
 /** UCI 级别色板（Strava 风格：4 级蓝 → HC 紫） */
 const LEVEL_COLORS: Record<UciCategory, string> = {
@@ -48,75 +54,25 @@ const LEVEL_COLORS: Record<UciCategory, string> = {
   HC: '#a855f7',
 }
 
-/** 悬浮卡左右翻转阈值（视口 x 百分比）：大于右阈值右对齐，小于左阈值左对齐 */
-const TOOLTIP_FLIP_RIGHT = 65
-const TOOLTIP_FLIP_LEFT = 35
+/** 坐标轴文字颜色 */
+const AXIS_TICK_COLOR = 'var(--text-secondary)'
 
-/** 坡度着色分档（Strava 坡度洞察配色）：下坡蓝 → 平路绿 → 缓坡黄 → 中坡橙 → 陡坡红 */
-const GRADE_COLORS: ReadonlyArray<{ max: number; color: string; label: string }> = [
-  { max: -2, color: '#3b82f6', label: '下坡' },
-  { max: 1, color: '#22c55e', label: '平路' },
-  { max: 3, color: '#eab308', label: '缓坡' },
-  { max: 6, color: '#f97316', label: '中坡' },
-  { max: Infinity, color: '#ef4444', label: '陡坡' },
-]
+/** 网格线颜色 */
+const GRID_COLOR = 'var(--border)'
 
-/** 剖面点（归一化到视口 + 保留原始距离/海拔/时间戳） */
-interface ProfilePoint {
-  /** 视口 x（0-100） */
-  x: number
+/** 分段色带填充色（平路蓝 / 爬坡橙；悬停段加深） */
+const BAND_FILL = {
+  flat: 'rgba(59, 130, 246, 0.14)',
+  climb: 'rgba(249, 115, 22, 0.22)',
+} as const
 
-  /** 视口 y（0-100，越大越低） */
-  y: number
+const BAND_FILL_ACTIVE = {
+  flat: 'rgba(59, 130, 246, 0.30)',
+  climb: 'rgba(249, 115, 22, 0.42)',
+} as const
 
-  /** 累计距离（米） */
-  distance: number
-
-  /** 海拔（米） */
-  altitude: number
-
-  /** 原始时间戳（Unix 秒，共享时间轴匹配用） */
-  timestamp: number
-}
-
-/** 同色折线段（一条 polyline） */
-interface ColoredSegment {
-  /** 颜色 */
-  color: string
-
-  /** 归一化坐标串（'x,y x,y …'） */
-  points: string
-}
-
-/** 平路/爬坡色带（视口坐标 + 对应分段序号） */
-interface ProfileBand {
-  /** 视口 x 起点 */
-  x: number
-
-  /** 视口宽度 */
-  width: number
-
-  /** 分段类型 */
-  type: 'flat' | 'climb'
-
-  /** 对应分段在 segments 数组中的下标（悬浮联动用） */
-  index: number
-}
-
-/** UCI 级别徽章（悬浮于剖面峰值处） */
-interface ClimbBadge {
-  /** 对应分段下标（key） */
-  index: number
-
-  /** 坡级 */
-  level: UciCategory
-
-  /** 视口 x（徽章水平居中锚点，0-100） */
-  x: number
-
-  /** 峰值视口 y（徽章顶部锚点，0-100） */
-  y: number
-}
+/** UCI 徽章圆点半径（像素） */
+const BADGE_RADIUS = 11
 
 /**
  * 爬坡与分段分析区块 props。
@@ -135,56 +91,82 @@ export interface SegmentsSectionProps {
   onHover?: (timestamp: number | undefined) => void
 }
 
-/**
- * 按坡度选色。
- *
- * @param grade 坡度（百分比）
- * @returns 对应颜色
- */
-function gradeColor(grade: number): string {
-  return GRADE_COLORS.find((entry) => grade <= entry.max)?.color ?? GRADE_COLORS[0].color
-}
-
 /** 级别显示名 */
 function levelLabel(level: UciCategory): string {
   return level === 'HC' ? 'HC' : `${level} 级`
 }
 
+/** Recharts Tooltip 传入项（payload 内层为图表数据行） */
+interface TooltipEntry {
+  payload?: SegmentProfilePoint
+}
+
+/** 自定义 Tooltip 组件 props（segments/distanceUnit 经 content 元素透传） */
+interface SegmentTooltipProps {
+  active?: boolean
+  payload?: ReadonlyArray<TooltipEntry>
+  segments: readonly RideSegment[]
+  distanceUnit: DistanceUnit
+}
+
 /**
- * 距离开关对应的分段下标（整条路线连续分段，通常直接命中）。
+ * 分段详情悬浮卡（Recharts Tooltip 自定义内容）。
  *
- * @param segments 全部分段
- * @param distance 距离（米）
- * @returns 分段下标；空列表时 undefined
+ * @param props 组件参数
  */
-function segmentIndexAtDistance(
-  segments: readonly RideSegment[],
-  distance: number,
-): number | undefined {
-  if (segments.length === 0) {
-    return undefined
+function SegmentTooltipContent({ active, payload, segments, distanceUnit }: SegmentTooltipProps) {
+  const point = payload?.[0]?.payload
+  if (!active || point === undefined) {
+    return null
   }
-  for (let index = 0; index < segments.length; index++) {
-    const segment = segments[index]
-    if (distance >= segment.startDistanceMeters && distance <= segment.endDistanceMeters) {
-      return index
-    }
+  const segment = segments[point.segmentIndex]
+  if (segment === undefined) {
+    return null
   }
-  // 距离落在分段边界外（浮点余隙）：取最近分段
-  let bestIndex = 0
-  let bestDiff = Infinity
-  for (let index = 0; index < segments.length; index++) {
-    const segment = segments[index]
-    const diff = Math.min(
-      Math.abs(distance - segment.startDistanceMeters),
-      Math.abs(distance - segment.endDistanceMeters),
-    )
-    if (diff < bestDiff) {
-      bestDiff = diff
-      bestIndex = index
-    }
+
+  // 数据行：区间/长度为通用行，爬坡段补爬升与坡度，末尾是三项强度指标
+  const rows: Array<[string, string]> = [
+    [
+      '区间',
+      `${formatDistanceByUnit(segment.startDistanceMeters, distanceUnit)} – ${formatDistanceByUnit(
+        segment.endDistanceMeters,
+        distanceUnit,
+      )}`,
+    ],
+    ['长度', formatDistanceByUnit(segment.distanceMeters, distanceUnit)],
+  ]
+  if (segment.type === 'climb') {
+    rows.push(['爬升', `${Math.round(segment.elevationGain)} m`])
+    rows.push(['坡度', `${segment.avgGradePercent.toFixed(1)}%`])
   }
-  return bestIndex
+  rows.push(['此处海拔', `${Math.round(point.altitude)} m`])
+  rows.push(['此处坡度', `${point.grade.toFixed(1)}%`])
+  rows.push([
+    '速度',
+    segment.avgSpeedMps === undefined ? '—' : formatSpeedByUnit(segment.avgSpeedMps, distanceUnit),
+  ])
+  rows.push(['功率', segment.avgPowerW !== undefined ? `${Math.round(segment.avgPowerW)} W` : '—'])
+  rows.push([
+    '心率',
+    segment.avgHeartRateBpm !== undefined ? `${Math.round(segment.avgHeartRateBpm)} bpm` : '—',
+  ])
+
+  return (
+    <div className="segments-section__tooltip" data-testid="segment-tooltip">
+      <p className="segments-section__tooltip-title">
+        <i className={`segments-section__tooltip-type segments-section__tooltip-type--${segment.type}`} />
+        {segment.label}
+      </p>
+      <dl>
+        {rows.map(([label, value]) => (
+          <div className="segments-section__tooltip-row" key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
 }
 
 /**
@@ -198,185 +180,37 @@ function SegmentsSection({
   hoverTimestamp,
   onHover,
 }: SegmentsSectionProps) {
-  // 悬停分段下标（undefined = 未悬停）
+  // 悬停分段下标（undefined = 未悬停；色带高亮用）
   const [hoverIndex, setHoverIndex] = useState<number>()
-  // 本图鼠标 x（视口 0-100；undefined = 未悬停，回退外部共享时间轴）
-  const [hoverX, setHoverX] = useState<number>()
-  // 悬停点海拔（米；悬浮卡展示用）
-  const [hoverAltitude, setHoverAltitude] = useState<number>()
-  // 悬停点剖面视口 y（0-100；悬停圆点跟随剖面高度）
-  const [hoverY, setHoverY] = useState<number>()
 
   // 分段 + 洞察 + 剖面数据
   const { climbs, segments, insights, profile, climbCount, flatCount } = useMemo(() => {
     const climbs = buildClimbs(records)
-    const built = buildSegments(records, climbs)
-    const insights = climbInsights(built)
-    const climbCount = built.filter((segment) => segment.type === 'climb').length
-    const flatCount = built.filter((segment) => segment.type === 'flat').length
-
-    // 剖面点（抽稀 + 归一化；保留 timestamp 供共享时间轴匹配）
-    const simplified = simplifyRoute(records, PROFILE_SIMPLIFY_METERS).filter(
-      (point) => point.altitude !== undefined && point.distance !== undefined,
-    )
-    if (simplified.length < 2) {
-      return { climbs, segments: built, insights, profile: null, climbCount, flatCount }
-    }
-    let minAlt = Infinity
-    let maxAlt = -Infinity
-    let maxDist = 0
-    for (const point of simplified) {
-      const alt = point.altitude as number
-      if (alt < minAlt) {
-        minAlt = alt
-      }
-      if (alt > maxAlt) {
-        maxAlt = alt
-      }
-      maxDist = Math.max(maxDist, point.distance as number)
-    }
-    const altSpan = maxAlt - minAlt || 1
-    const points: ProfilePoint[] = simplified.map((point) => ({
-      x: ((point.distance as number) / maxDist) * PROFILE_WIDTH,
-      y: PROFILE_HEIGHT - (((point.altitude as number) - minAlt) / altSpan) * PROFILE_HEIGHT,
-      distance: point.distance as number,
-      altitude: point.altitude as number,
-      timestamp: point.timestamp,
-    }))
-
-    // 相邻点坡度（按距离窗口平滑，压掉海拔量化噪声）；窗口无样本时退化为直接坡度
-    const grades: number[] = []
-    for (let i = 0; i + 1 < points.length; i++) {
-      const a = points[i]
-      const b = points[i + 1]
-      const mid = (a.distance + b.distance) / 2
-      const half = GRADE_WINDOW_METERS / 2
-      let firstAlt: number | undefined
-      let lastAlt = 0
-      let lastDist = 0
-      for (const point of points) {
-        if (point.distance < mid - half) {
-          continue
-        }
-        if (point.distance > mid + half) {
-          break
-        }
-        if (firstAlt === undefined) {
-          firstAlt = point.altitude
-        }
-        lastAlt = point.altitude
-        lastDist = point.distance
-      }
-      if (firstAlt !== undefined && lastDist - a.distance > 0) {
-        grades.push(((lastAlt - firstAlt) / (lastDist - a.distance)) * 100)
-      } else {
-        const dDist = b.distance - a.distance
-        grades.push(dDist > 0 ? ((b.altitude - a.altitude) / dDist) * 100 : 0)
-      }
-    }
-
-    // 同色相邻段合并为一条折线，减少 SVG 节点
-    const coloredSegments: ColoredSegment[] = []
-    for (let i = 0; i + 1 < points.length; i++) {
-      const color = gradeColor(grades[i])
-      const pointStr = `${points[i].x.toFixed(1)},${points[i].y.toFixed(1)} ${points[i + 1].x.toFixed(1)},${points[i + 1].y.toFixed(1)}`
-      const last = coloredSegments[coloredSegments.length - 1]
-      if (last !== undefined && last.color === color) {
-        const trimmed = last.points.slice(0, last.points.lastIndexOf(' '))
-        last.points = `${trimmed} ${pointStr}`
-      } else {
-        coloredSegments.push({ color, points: pointStr })
-      }
-    }
-
-    // 分段色带：每段一个半透明矩形（下界 0.5 视口宽保证可见）
-    const bands: ProfileBand[] = built.map((segment, index) => {
-      const x1 = (segment.startDistanceMeters / maxDist) * PROFILE_WIDTH
-      const x2 = (segment.endDistanceMeters / maxDist) * PROFILE_WIDTH
-      return {
-        x: x1,
-        width: Math.max(x2 - x1, 0.5),
-        type: segment.type,
-        index,
-      }
-    })
-
-    // UCI 级别徽章：爬坡段缺失级别不渲染；锚点为段内最高海拔点
-    const badges: ClimbBadge[] = []
-    for (let index = 0; index < built.length; index++) {
-      const segment = built[index]
-      if (segment.type !== 'climb') {
-        continue
-      }
-      const level = uciCategory(segment.distanceMeters, segment.avgGradePercent)
-      if (level === null) {
-        continue
-      }
-      let peak: ProfilePoint | null = null
-      for (const point of points) {
-        if (
-          point.distance < segment.startDistanceMeters - 1 ||
-          point.distance > segment.endDistanceMeters + 1
-        ) {
-          continue
-        }
-        if (peak === null || point.altitude > peak.altitude) {
-          peak = point
-        }
-      }
-      const midX = ((segment.startDistanceMeters + segment.endDistanceMeters) / 2 / maxDist) * PROFILE_WIDTH
-      badges.push({
-        index,
-        level,
-        x: midX,
-        y: peak !== null ? peak.y : 0,
-      })
-    }
-
+    const segments = buildSegments(records, climbs)
+    const insights = climbInsights(segments)
+    const climbCount = segments.filter((segment) => segment.type === 'climb').length
+    const flatCount = segments.filter((segment) => segment.type === 'flat').length
     return {
       climbs,
-      segments: built,
+      segments,
       insights,
-      profile: { points, grades: coloredSegments, bands, badges, maxDist, minAlt, maxAlt },
+      profile: buildSegmentProfile(records, segments),
       climbCount,
       flatCount,
     }
   }, [records])
 
-  // 悬停距离换算 + 上报：鼠标 x → 视口 x → 距离 → 分段下标/最近剖面点时间戳
-  function handleProfileMove(event: React.MouseEvent<SVGSVGElement>) {
-    if (profile === null) {
-      return
-    }
-    const rect = event.currentTarget.getBoundingClientRect()
-    if (rect.width === 0) {
-      return
-    }
-    const x = ((event.clientX - rect.left) / rect.width) * PROFILE_WIDTH
-    setHoverX(x)
-    const distanceMeters = (x / PROFILE_WIDTH) * profile.maxDist
-    setHoverIndex(segmentIndexAtDistance(segments, distanceMeters))
-    // 按距离最近取剖面点，再取时间戳（剖面 x 轴即距离轴）
-    let nearest: ProfilePoint | undefined
-    let bestDiff = Infinity
-    for (const candidate of profile.points) {
-      const diff = Math.abs(candidate.distance - distanceMeters)
-      if (diff < bestDiff) {
-        bestDiff = diff
-        nearest = candidate
-      }
-    }
-    setHoverAltitude(nearest?.altitude)
-    setHoverY(nearest?.y)
-    onHover?.(nearest?.timestamp)
+  // 图表鼠标移动：Tooltip 命中剖面点 → 高亮所属分段色带 + 上报时间戳（共享时间轴）
+  const handleChartMove: CategoricalChartFunc = (state) => {
+    const index = activeTooltipIndexToNumber(state.activeTooltipIndex)
+    const point = profile !== null && index !== undefined ? profile.points[index] : undefined
+    setHoverIndex(point?.segmentIndex)
+    onHover?.(point?.timestamp)
   }
 
-  // 移出剖面：清除悬停与分段高亮并通知上层
-  function handleProfileLeave() {
-    setHoverX(undefined)
+  // 移出图表：清除分段高亮并通知上层
+  const handleChartLeave = () => {
     setHoverIndex(undefined)
-    setHoverAltitude(undefined)
-    setHoverY(undefined)
     onHover?.(undefined)
   }
 
@@ -388,58 +222,6 @@ function SegmentsSection({
     return findNearestByTimestamp(profile.points, hoverTimestamp)
   }, [profile, hoverTimestamp])
 
-  // 参考线位置：优先本图悬停（鼠标所在），否则外部悬停
-  const cursorX = hoverX ?? externalPoint?.x
-
-  // 悬停圆点 y：优先本图悬停点，否则外部参考点（未悬停时不渲染）
-  const cursorY = hoverY ?? externalPoint?.y
-
-  // 悬停分段（悬浮卡内容源；仅本图鼠标悬停时命中，外部共享时间轴不弹卡）
-  const hoveredSegment = hoverIndex !== undefined ? segments[hoverIndex] : undefined
-
-  // 悬浮卡数据行：区间/长度为通用行，爬坡段补爬升与坡度，末尾是三项强度指标
-  const tooltipRows: Array<[string, string]> = []
-  if (hoveredSegment !== undefined) {
-    tooltipRows.push([
-      '区间',
-      `${formatDistanceByUnit(hoveredSegment.startDistanceMeters, distanceUnit)} – ${formatDistanceByUnit(
-        hoveredSegment.endDistanceMeters,
-        distanceUnit,
-      )}`,
-    ])
-    tooltipRows.push(['长度', formatDistanceByUnit(hoveredSegment.distanceMeters, distanceUnit)])
-    if (hoveredSegment.type === 'climb') {
-      tooltipRows.push(['爬升', `${Math.round(hoveredSegment.elevationGain)} m`])
-      tooltipRows.push(['坡度', `${hoveredSegment.avgGradePercent.toFixed(1)}%`])
-    }
-    if (hoverAltitude !== undefined) {
-      tooltipRows.push(['此处海拔', `${Math.round(hoverAltitude)} m`])
-    }
-    tooltipRows.push([
-      '速度',
-      hoveredSegment.avgSpeedMps === undefined
-        ? '—'
-        : formatSpeedByUnit(hoveredSegment.avgSpeedMps, distanceUnit),
-    ])
-    tooltipRows.push(['功率', hoveredSegment.avgPowerW !== undefined ? `${Math.round(hoveredSegment.avgPowerW)} W` : '—'])
-    tooltipRows.push([
-      '心率',
-      hoveredSegment.avgHeartRateBpm !== undefined
-        ? `${Math.round(hoveredSegment.avgHeartRateBpm)} bpm`
-        : '—',
-    ])
-  }
-
-  // 悬浮卡水平定位：跟随光标；贴近左右边缘时翻转对齐方向避免被裁切
-  const tooltipStyle =
-    hoveredSegment !== undefined && hoverX !== undefined
-      ? hoverX > TOOLTIP_FLIP_RIGHT
-        ? { left: `${hoverX.toFixed(1)}%`, transform: 'translateX(-100%)' }
-        : hoverX < TOOLTIP_FLIP_LEFT
-          ? { left: `${hoverX.toFixed(1)}%` }
-          : { left: `${hoverX.toFixed(1)}%`, transform: 'translateX(-50%)' }
-      : undefined
-
   // 无爬坡时区块不渲染（纯平路骑行无爬坡/分段分析）
   if (climbs.length === 0 || segments.length === 0) {
     return null
@@ -449,119 +231,116 @@ function SegmentsSection({
     <section className="segments-section" aria-label="爬坡与分段分析">
       <h2 className="segments-section__title">爬坡与分段分析</h2>
       <p className="segments-section__summary">
-        共 {climbCount} 段爬坡、{flatCount} 段平路（连续爬升 ≥ 30 米且平均坡度 ≥ 1.5% 记为爬坡；悬停剖面查看分段详情）
+        共 {climbCount} 段爬坡、{flatCount} 段平路（连续爬升 ≥ 30 米且平均坡度 ≥ 1.5% 记为爬坡；悬停剖面查看分段详情，拖动下方滑块可缩放）
       </p>
 
       {profile !== null && (
-        <div className="segments-section__profile-wrap">
-          <svg
-            className="segments-section__profile"
-            viewBox={`0 0 ${PROFILE_WIDTH} ${PROFILE_HEIGHT}`}
-            preserveAspectRatio="none"
-            onMouseMove={handleProfileMove}
-            onMouseLeave={handleProfileLeave}
-            role="img"
-            aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停显示分段详情"
-          >
-            {/* 平路/爬坡色带 */}
-            {profile.bands.map((band) => (
-              <rect
-                key={band.index}
-                x={band.x.toFixed(1)}
-                y={0}
-                width={band.width.toFixed(1)}
-                height={PROFILE_HEIGHT}
-                className={
-                  hoverIndex === band.index
-                    ? `segments-section__band segments-section__band--${band.type} segments-section__band--active`
-                    : `segments-section__band segments-section__band--${band.type}`
-                }
-                data-testid="segment-band"
-              />
-            ))}
-            {/* 坡度着色海拔折线 */}
-            {profile.grades.map((segment, index) => (
-              <polyline
-                key={index}
-                points={segment.points}
-                fill="none"
-                stroke={segment.color}
-                strokeWidth="2.2"
-                strokeLinejoin="round"
-              />
-            ))}
-            {/* 悬停参考线 + 圆点 */}
-            {cursorX !== undefined && (
-              <g>
-                <line
-                  x1={cursorX}
-                  y1={0}
-                  x2={cursorX}
-                  y2={PROFILE_HEIGHT}
-                  stroke={HOVER_LINE_COLOR}
-                  strokeWidth="0.8"
-                  strokeDasharray="2 1.5"
-                  data-testid="hover-line"
-                />
-                <circle
-                  cx={cursorX}
-                  cy={cursorY ?? PROFILE_HEIGHT / 2}
-                  r={2.2}
-                  fill={HOVER_DOT_COLOR}
-                  stroke={HOVER_LINE_COLOR}
-                  strokeWidth="1"
-                />
-              </g>
-            )}
-          </svg>
-
-          {/* 海拔轴标注 */}
-          <div className="segments-section__profile-labels" aria-hidden="true">
-            <span className="segments-section__profile-label">{Math.round(profile.maxAlt)} m</span>
-            <span className="segments-section__profile-label">{Math.round(profile.minAlt)} m</span>
-          </div>
-
-          {/* UCI 级别徽章（HTML 覆盖，坐标与视口 0-100 对齐） */}
-          {profile.badges.map((badge) => (
-            <span
-              key={badge.index}
-              className="segments-section__badge"
-              style={{
-                left: `${badge.x.toFixed(1)}%`,
-                top: `calc(${badge.y.toFixed(1)}% - 14px)`,
-                backgroundColor: LEVEL_COLORS[badge.level],
-              }}
+        <div
+          className="segments-section__chart"
+          role="img"
+          aria-label="海拔剖面图，按坡度着色标注平路与爬坡分段，鼠标悬停显示分段详情"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={profile.points}
+              margin={{ top: 16, right: 8, bottom: 0, left: 0 }}
+              onMouseMove={handleChartMove}
+              onMouseLeave={handleChartLeave}
             >
-              {levelLabel(badge.level)}
-            </span>
-          ))}
+              <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="x"
+                type="number"
+                domain={['auto', 'auto']}
+                tickCount={6}
+                tickFormatter={formatAxisDistance}
+                tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+                stroke={GRID_COLOR}
+              />
+              <YAxis
+                width={44}
+                domain={['auto', 'auto']}
+                tickFormatter={(value: number) => formatValue(value, 'm', false)}
+                tick={{ fill: AXIS_TICK_COLOR, fontSize: 11 }}
+                stroke={GRID_COLOR}
+              />
 
-          {/* 分段详情悬浮卡（跟随光标，边缘翻转；不拦截鼠标事件） */}
-          {hoveredSegment !== undefined && tooltipStyle !== undefined && (
-            <div className="segments-section__tooltip" style={tooltipStyle} data-testid="segment-tooltip">
-              <p className="segments-section__tooltip-title">
-                <i className={`segments-section__tooltip-type segments-section__tooltip-type--${hoveredSegment.type}`} />
-                {hoveredSegment.label}
-              </p>
-              <dl>
-                {tooltipRows.map(([label, value]) => (
-                  <div className="segments-section__tooltip-row" key={label}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
+              {/* 平路/爬坡分段色带（悬停段加深 + 虚线描边） */}
+              {segments.map((segment, index) => (
+                <ReferenceArea
+                  key={index}
+                  x1={segment.startDistanceMeters}
+                  x2={segment.endDistanceMeters}
+                  fill={hoverIndex === index ? BAND_FILL_ACTIVE[segment.type] : BAND_FILL[segment.type]}
+                  stroke={hoverIndex === index ? 'var(--text-secondary)' : 'none'}
+                  strokeDasharray="4 3"
+                  ifOverflow="extendDomain"
+                />
+              ))}
+
+              {/* 坡度分档着色折线（每档一条 Line，边界点双档衔接） */}
+              {GRADE_BANDS.map((band, bandIndex) => (
+                <Line
+                  key={band.label}
+                  type="linear"
+                  dataKey={`alt${bandIndex}`}
+                  name={band.label}
+                  stroke={band.color}
+                  strokeWidth={2.2}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                  activeDot={false}
+                />
+              ))}
+
+              {/* 外部共享时间轴光标 */}
+              {externalPoint !== undefined && (
+                <ReferenceLine
+                  x={externalPoint.x}
+                  stroke={TIMELINE_CURSOR_COLOR}
+                  strokeDasharray={TIMELINE_CURSOR_DASH}
+                  ifOverflow="discard"
+                />
+              )}
+
+              {/* UCI 级别徽章（爬坡段峰值处圆点 + 白字级别） */}
+              {profile.badges.map((badge) => (
+                <ReferenceDot
+                  key={badge.segmentIndex}
+                  x={badge.x}
+                  y={badge.y}
+                  r={BADGE_RADIUS}
+                  fill={LEVEL_COLORS[badge.level]}
+                  stroke="none"
+                  ifOverflow="discard"
+                  label={{
+                    value: levelLabel(badge.level),
+                    position: 'center',
+                    fill: '#ffffff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                />
+              ))}
+
+              <Tooltip
+                content={<SegmentTooltipContent segments={segments} distanceUnit={distanceUnit} />}
+                cursor={{ stroke: 'var(--text-secondary)', strokeDasharray: '3 3' }}
+                isAnimationActive={false}
+              />
+              <Brush dataKey="x" height={22} travellerWidth={8} stroke={GRID_COLOR} fill="transparent" />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       )}
 
       {/* 坡度色阶图例 */}
       <div className="segments-section__legend" role="img" aria-label="坡度色阶图例">
-        {GRADE_COLORS.map((entry) => (
-          <span key={entry.label} className="segments-section__legend-item">
-            <i className="segments-section__legend-swatch" style={{ backgroundColor: entry.color }} />
-            {entry.label}
+        {GRADE_BANDS.map((band) => (
+          <span key={band.label} className="segments-section__legend-item">
+            <i className="segments-section__legend-swatch" style={{ backgroundColor: band.color }} />
+            {band.label}
           </span>
         ))}
         <span className="segments-section__legend-item">
