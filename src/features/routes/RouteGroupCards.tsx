@@ -34,7 +34,7 @@ export interface RouteGroupCardsProps {
 function RouteGroupCards({ groups, failed = false, distanceUnit = 'km' }: RouteGroupCardsProps) {
   return (
     <section className="route-groups" aria-label="路线分析">
-      <h2 className="route-groups__title">路线分析</h2>
+      <h3 className="route-groups__title">路线分析</h3>
       {failed ? (
         <p className="route-groups__hint">路线分析加载失败</p>
       ) : groups === null ? (

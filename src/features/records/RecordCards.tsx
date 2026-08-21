@@ -105,7 +105,7 @@ function RecordCards({ rideRecords, powerRecords, powerRecordsFailed = false, di
 
   return (
     <section className="personal-records" aria-label="个人纪录">
-      <h2 className="personal-records__title">个人纪录</h2>
+      <h3 className="personal-records__title">个人纪录</h3>
       <div className="personal-records__grid">
         {rideItems.map((item) => (
           <RecordCard key={item.key} item={item} />

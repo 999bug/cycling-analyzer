@@ -1,6 +1,24 @@
 /**
- * 统计页面布局：范围选择器 + 指标卡片。
+ * 统计页面布局：范围选择器 + 叙事化分章（UI-8：我进步了吗/我骑什么路线/我用什么设备）。
  */
 .statistics__message {
   margin-top: 24px;
+}
+
+/* 叙事化章节：问题式标题 + 一句导语，章节间留白分隔 */
+.statistics-chapter {
+  margin-top: var(--space-xl, 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.statistics-chapter__title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.statistics-chapter__intro {
+  margin: var(--space-xs, 4px) 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
 }

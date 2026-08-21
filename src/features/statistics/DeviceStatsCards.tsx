@@ -34,7 +34,7 @@ function DeviceStatsCards({ entries, distanceUnit = 'km' }: DeviceStatsCardsProp
 
   return (
     <section className="device-stats" aria-label="设备统计">
-      <h2 className="device-stats__title">设备统计</h2>
+      <h3 className="device-stats__title">设备统计</h3>
       {hasKnownDevice ? (
         <div className="device-stats__grid">
           {entries.map((entry) => (

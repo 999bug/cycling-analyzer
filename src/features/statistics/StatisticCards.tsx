@@ -47,7 +47,7 @@ function StatisticCards({ title, metrics, distanceUnit = 'km' }: StatisticCardsP
 
   return (
     <section className="statistic-cards" aria-label="统计指标">
-      <h2 className="statistic-cards__title">{title}</h2>
+      <h3 className="statistic-cards__title">{title}</h3>
       <div className="statistic-cards__grid">
         {stats.map((stat) => (
           <div className="statistic-card" key={stat.label}>

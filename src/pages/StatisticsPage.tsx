@@ -259,20 +259,35 @@ function StatisticsPage() {
         customEnd={customRange.end}
         onCustomChange={(start, end) => setCustomRange({ start, end })}
       />
-      {metrics.count === 0 ? (
-        <p className="statistics__message">该时间范围内暂无骑行记录，请切换时间范围。</p>
-      ) : (
-        <StatisticCards title={RANGE_LABELS[rangeKey]} metrics={metrics} distanceUnit={distanceUnit} />
-      )}
-      <RecordCards
-        rideRecords={rideRecords}
-        powerRecords={powerRecords}
-        powerRecordsFailed={scanFailed}
-        distanceUnit={distanceUnit}
-      />
-      <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
-      <BikeStatsCards entries={bikeStats} distanceUnit={distanceUnit} />
-      <RouteGroupCards groups={routeGroups} failed={scanFailed} distanceUnit={distanceUnit} />
+      {/* 叙事化分章（UI-8）：按用户问题而非数据类型组织区块 */}
+      <section className="statistics-chapter" aria-label="我进步了吗">
+        <h2 className="statistics-chapter__title">我进步了吗？</h2>
+        <p className="statistics-chapter__intro">
+          所选时间范围的骑行概况，加上历史最佳纪录——数字变大就是进步的证据。
+        </p>
+        {metrics.count === 0 ? (
+          <p className="statistics__message">该时间范围内暂无骑行记录，请切换时间范围。</p>
+        ) : (
+          <StatisticCards title={RANGE_LABELS[rangeKey]} metrics={metrics} distanceUnit={distanceUnit} />
+        )}
+        <RecordCards
+          rideRecords={rideRecords}
+          powerRecords={powerRecords}
+          powerRecordsFailed={scanFailed}
+          distanceUnit={distanceUnit}
+        />
+      </section>
+      <section className="statistics-chapter" aria-label="我骑什么路线">
+        <h2 className="statistics-chapter__title">我骑什么路线？</h2>
+        <p className="statistics-chapter__intro">常骑的路线按起终点自动归组，看看你最爱刷的是哪条。</p>
+        <RouteGroupCards groups={routeGroups} failed={scanFailed} distanceUnit={distanceUnit} />
+      </section>
+      <section className="statistics-chapter" aria-label="我用什么设备">
+        <h2 className="statistics-chapter__title">我用什么设备？</h2>
+        <p className="statistics-chapter__intro">记录数据和陪你骑过的自行车。</p>
+        <DeviceStatsCards entries={deviceStats} distanceUnit={distanceUnit} />
+        <BikeStatsCards entries={bikeStats} distanceUnit={distanceUnit} />
+      </section>
     </>
   )
 }

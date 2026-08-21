@@ -31,7 +31,7 @@ function BikeStatsCards({ entries, distanceUnit = 'km' }: BikeStatsCardsProps) {
 
   return (
     <section className="bike-stats" aria-label="自行车统计">
-      <h2 className="bike-stats__title">自行车统计</h2>
+      <h3 className="bike-stats__title">自行车统计</h3>
       {hasKnownBike ? (
         <div className="bike-stats__grid">
           {entries.map((entry) => (
