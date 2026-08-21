@@ -206,6 +206,26 @@ describe('统计页面', () => {
     expect(await screen.findByText(/暂无骑行记录/)).toBeInTheDocument()
   })
 
+  it('叙事化分章：按三个问题组织区块且顺序正确（UI-8）', async () => {
+    await seedCrossRangeData()
+    const { container } = render(<StatisticsPage />, { wrapper: MemoryRouter })
+
+    // 三个章节标题
+    expect(await screen.findByText('我进步了吗？')).toBeInTheDocument()
+    expect(screen.getByText('我骑什么路线？')).toBeInTheDocument()
+    expect(screen.getByText('我用什么设备？')).toBeInTheDocument()
+    // 章节按「进步 → 路线 → 设备」顺序出现（叙事结构）
+    const chapters = Array.from(container.querySelectorAll('.statistics-chapter'))
+    expect(chapters).toHaveLength(3)
+    expect(chapters[0]).toHaveTextContent('我进步了吗？')
+    expect(chapters[0]).toHaveTextContent('个人纪录')
+    expect(chapters[1]).toHaveTextContent('我骑什么路线？')
+    expect(chapters[1]).toHaveTextContent('路线分析')
+    expect(chapters[2]).toHaveTextContent('我用什么设备？')
+    expect(chapters[2]).toHaveTextContent('设备统计')
+    expect(chapters[2]).toHaveTextContent('自行车统计')
+  })
+
   it('范围内活动均无功率数据时最高功率显示 —（缺失 ≠ 0，规格 §25）', async () => {
     const repo = new DexieActivityRepository(testDb)
     // 今日活动仅含速度、无功率
