@@ -1,0 +1,39 @@
+/**
+ * 骑行一句话总结条样式（UI-2 / 评审 P0-01）。
+ * 主色描边强调块：类型徽章 + 总结文案 + 质量档位短语。
+ */
+.ride-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 14px 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+}
+
+.ride-summary__type {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: var(--bg);
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+}
+
+.ride-summary__headline {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ride-summary__quality {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-secondary, #66707a);
+}

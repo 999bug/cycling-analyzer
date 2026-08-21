@@ -170,8 +170,8 @@ function intensityInsight(activity: Activity, options: RideInsightsOptions): Rid
   return undefined
 }
 
-/** 功率强度档位（按占 FTP 比例） */
-function intensityTierByPower(ratio: number): { label: string; note: string } {
+/** 功率强度档位（按占 FTP 比例；导出供骑行总结复用） */
+export function intensityTierByPower(ratio: number): { label: string; note: string } {
   if (ratio < 0.55) {
     return { label: '恢复骑', note: '主动恢复强度的轻松骑行' }
   }
@@ -184,8 +184,8 @@ function intensityTierByPower(ratio: number): { label: string; note: string } {
   return { label: '高强度', note: '达到或超过阈值，负荷很大' }
 }
 
-/** 心率强度档位（按占最大心率比例） */
-function intensityTierByHeartRate(ratio: number): { label: string; note: string } {
+/** 心率强度档位（按占最大心率比例；导出供骑行总结复用） */
+export function intensityTierByHeartRate(ratio: number): { label: string; note: string } {
   if (ratio < 0.65) {
     return { label: '恢复骑', note: '心率偏低，属轻松恢复强度' }
   }

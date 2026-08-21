@@ -433,7 +433,7 @@ describe('单位偏好显示（规格 §27）', () => {
     expect(await screen.findByText('10.00 mi')).toBeInTheDocument()
     // 平均速度限定在指标卡区块内断言（分段详情表格可能渲染相同值）
     expect(
-      within(screen.getByRole('region', { name: '活动指标' })).getByText('22.4 mph'),
+      within(screen.getByRole('region', { name: '核心指标' })).getByText('22.4 mph'),
     ).toBeInTheDocument()
   })
 
@@ -575,7 +575,7 @@ describe('成就栏（刷新纪录检测）', () => {
     renderPage()
 
     // 等待详情加载完成后断言缺席
-    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '本次成就' })).not.toBeInTheDocument()
   })
 
@@ -593,7 +593,7 @@ describe('成就栏（刷新纪录检测）', () => {
     await repo.addActivity(makeActivity('act-1', [100], [120]))
     renderPage()
 
-    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '本次成就' })).not.toBeInTheDocument()
   })
 })
@@ -623,7 +623,7 @@ describe('作者模式只读（规格 §6.3）', () => {
     useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
     renderPage()
 
-    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除活动' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '重命名' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '设为赛段' })).not.toBeInTheDocument()
@@ -635,7 +635,7 @@ describe('作者模式只读（规格 §6.3）', () => {
     await repo.addActivity(makeActivity('act-1', [100, 200, 300], [120, 140, 160]))
     renderPage()
 
-    expect(await screen.findByRole('region', { name: '活动指标' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '删除活动' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重命名' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '设为赛段' })).toBeInTheDocument()

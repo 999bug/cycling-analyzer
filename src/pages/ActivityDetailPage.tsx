@@ -1,7 +1,8 @@
 /**
  * 活动详情页（规格 §15/§16/§17/§25/§26/§32）。
  *
- * 布局：标题区（名称/类型/开始时间/删除按钮）→ 指标卡（距离/运动时长/总时长/爬升/累计下降等 12 项）→
+ * 布局：标题区（名称/类型/开始时间/删除按钮）→ 一句话总结条（骑行类型 + 真实数据总结 + 质量档位，
+ * UI-2）→ 核心指标精选 4~6 卡 + 「更多指标」折叠 → 质量评分 → 骑行洞察 → 成就 →
  * 轨迹着色切换 + 轨迹地图 → 六个图表（速度/踏频/海拔/功率/功率曲线/速度+心率组合）→
  * 训练区间区块（心率统计/折线图 + 心率/功率区间分布 + IF/TSS + 计算方式说明）。
  * 数据源：activityRepository.getById（摘要）+ getRecords（逐点），
@@ -39,7 +40,9 @@ import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
+import { computeQualityScore } from '@/features/analysis/qualityScore'
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
+import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
@@ -167,7 +170,7 @@ function displayNumber(value: number | undefined, unit: string): string {
 }
 
 /**
- * 组装指标卡（规格 §15；距离/速度按显示单位换算，规格 §27）。
+ * 指标卡（规格 §15；距离/速度按显示单位换算，规格 §27）。
  * 时长区分运动时长（计时）与总时长（含暂停），爬升/下降成对展示。
  *
  * @param activity 活动摘要
@@ -188,6 +191,40 @@ function buildMetrics(activity: ActivitySummary, distanceUnit: DistanceUnit): Me
     { label: '平均踏频', value: displayNumber(activity.avgCadence, 'rpm') },
     { label: '卡路里', value: displayNumber(activity.calories, '千卡') },
   ]
+}
+
+/** 核心指标固定项（UI-2：5 秒内回答骑多久/多远/多累） */
+const CORE_METRIC_LABELS = ['距离', '运动时长', '爬升', '平均速度']
+
+/** 动态指标候选（按优先级；值缺失即跳过） */
+const DYNAMIC_METRIC_LABELS = ['标准化功率', '平均功率', '平均心率', '平均踏频']
+
+/** 核心指标动态项上限（核心卡总数 = 4 固定 + 至多 2 动态） */
+const MAX_DYNAMIC_METRICS = 2
+
+/**
+ * 核心指标精选（UI-2 / 评审 P0-01）：固定 4 项 + 按数据有无追加动态指标，
+ * 其余归入「更多指标」折叠区。值缺失（'—'）的动态候选不入选。
+ *
+ * @param metrics 全量指标卡
+ * @returns 核心 + 折叠两部分
+ */
+function selectMetrics(metrics: MetricItem[]): { coreMetrics: MetricItem[]; extraMetrics: MetricItem[] } {
+  const byLabel = new Map(metrics.map((metric) => [metric.label, metric]))
+  const coreLabels = new Set(CORE_METRIC_LABELS)
+  for (const label of DYNAMIC_METRIC_LABELS) {
+    if (coreLabels.size >= CORE_METRIC_LABELS.length + MAX_DYNAMIC_METRICS) {
+      break
+    }
+    const metric = byLabel.get(label)
+    if (metric !== undefined && metric.value !== '—') {
+      coreLabels.add(label)
+    }
+  }
+  return {
+    coreMetrics: metrics.filter((metric) => coreLabels.has(metric.label)),
+    extraMetrics: metrics.filter((metric) => !coreLabels.has(metric.label)),
+  }
 }
 
 /**
@@ -359,6 +396,13 @@ function ActivityDetailPage() {
     () => ({ ftp, maxHeartRate, distanceUnit: settings?.units.distance ?? 'km' }),
     [ftp, maxHeartRate, settings],
   )
+  // 骑行质量综合分（总结条展示档位短语用；须位于条件早退之前）
+  const qualityOverall = useMemo(() => computeQualityScore(records).overall, [records])
+  // 总结条参数（含质量分；对象引用稳定）
+  const summaryOptions = useMemo(
+    () => ({ ...insightsOptions, qualityScore: qualityOverall }),
+    [insightsOptions, qualityOverall],
+  )
 
   // 强度因子（IF）：FTP 存在且可算出 NP 时才有意义
   const intensityFactor = useMemo(() => {
@@ -503,11 +547,13 @@ function ActivityDetailPage() {
   // 单位偏好（设置未加载完成时回退默认公制，规格 §27）
   const distanceUnit = settings?.units.distance ?? 'km'
   const timeFormat = settings?.units.timeFormat ?? '24h'
-  // 指标卡：基础 10 卡（运动时长/总时长/累计下降等）+ 标准化功率（无功率数据/样本不足时显示 '—'）
-  const metrics = [
+  // 全量指标：基础 10 卡（运动时长/总时长/累计下降等）+ 标准化功率（无功率数据/样本不足时显示 '—'）
+  const allMetrics = [
     ...buildMetrics(activity, distanceUnit),
     { label: '标准化功率', value: displayNumber(normalizedPower, 'W') },
   ]
+  // 核心指标精选（UI-2）：固定 4 项 + 按数据有无追加动态指标至多 2 项（缺失值 '—' 不入选）
+  const { coreMetrics, extraMetrics } = selectMetrics(allMetrics)
 
   return (
     <div className="activity-detail">
@@ -604,14 +650,30 @@ function ActivityDetailPage() {
         </div>
       </header>
 
-      <section className="activity-detail__stats" aria-label="活动指标">
-        {metrics.map((metric) => (
+      <RideSummaryBanner activity={activity} options={summaryOptions} />
+
+      <section className="activity-detail__stats" aria-label="核心指标">
+        {coreMetrics.map((metric) => (
           <div key={metric.label} className="activity-detail__stat-card">
             <div className="activity-detail__stat-value">{metric.value}</div>
             <div className="activity-detail__stat-label">{metric.label}</div>
           </div>
         ))}
       </section>
+
+      {extraMetrics.length > 0 && (
+        <details className="activity-detail__more">
+          <summary>更多指标（{extraMetrics.length} 项）</summary>
+          <div className="activity-detail__stats activity-detail__stats--extra">
+            {extraMetrics.map((metric) => (
+              <div key={metric.label} className="activity-detail__stat-card">
+                <div className="activity-detail__stat-value">{metric.value}</div>
+                <div className="activity-detail__stat-label">{metric.label}</div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <QualityScoreSection records={records} />
 

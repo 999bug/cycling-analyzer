@@ -18,7 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
-| 🔄 运行中 | **UI 体验改造系列**（2026-08-21 评审立项，任务明细见 §6） | ①UI-1 动态骑行洞察 **已实现待提交**（`src/features/insights/rideInsights.ts` 纯函数 8 类洞察 + `RideInsightsSection` 组件挂详情页质量评分后，测试 19 新增，全量 816/816 + lint/build 绿）；②UI-2 详情页报告化 ⏳；③UI-3 Design Token ⏳；④UI-4 移动端 ⏳；⑤UI-5 隐私可信度 ⏳；⑥UI-6 杂项修复 ⏳ | 提交 UI-1 → 开始 UI-2（顶部一句话总结 + 核心指标精选 + 区块重排） |
+| 🔄 运行中 | **UI 体验改造系列**（2026-08-21 评审立项，任务明细见 §6） | ①UI-1 动态骑行洞察 ✅ 已提交 `83992ae`（8 类洞察纯函数 + RideInsightsSection 组件，测试 19 新增）；②UI-2 详情页报告化 ✅ 已实现待提交（rideSummary.ts 类型推断 + RideSummaryBanner + 核心指标精选/折叠，测试 14 新增，全量 830/830 + lint/build 绿）；③UI-3 Design Token ⏳；④UI-4 移动端 ⏳；⑤UI-5 隐私可信度 ⏳；⑥UI-6 杂项修复 ⏳ | 提交 UI-2 → 开始 UI-3 Design Token 体系化 |
 | ✅ 已提交 | **爬坡/分段区块合并 + 悬浮联动 + 表现趋势分析增强**（用户反馈三项） | ①`ClimbSection` 与 `SegmentsSection` 合并为「爬坡与分段分析」区块（`SegmentsSection.tsx` 重构：海拔剖面按坡度着色 + 平路/爬坡色带 + UCI 徽章，下方**平路 + 爬坡全量分段卡片**（修复平路路段无展示），卡片↔色带悬停高亮联动 + 共享时间轴参考线（hoverTimestamp/onHover 透传），剖面视口改 100×100 + preserveAspectRatio=none 使 HTML 徽章坐标精确对齐；删除 ClimbSection.tsx/.css + 旧测试，详情页合并接线）；②表现趋势页（`PerformancePage.tsx`）：**修复 EF 与 TSS 共轴被 TSS 数量级吞没导致的「看不到 EF 线」**（拆独立右轴 + 仅 FTP 时渲染 TSS 轴）、叠加距离/EF 4 周移动平均虚线、周综述卡片加「较上周 ↑/↓」增减、新增 `performanceTrend.ts` `analyzePerformanceTrend`（近 4 周 vs 前 4 周距离/EF/TSS 变化 + 最强周/效率最高周 + 活跃/空周数）与「趋势解读」区块（量化卡片 + 一段式解读文案）；测试 15 新增（segmentsSection 7 重写 + performanceTrend 6 + PerformancePage 断言 2），全量 797/797 + lint/build 绿，版本 2.3.0 → 2.4.0 | push 触发 CI |
 | ✅ 已提交 | Strava 描述 + 估算功率展示 + 详情页铺满 | 已提交 `1604b98`（测试 631/631、lint/build 绿、本地快照验证 28 条描述 + 估算功率填充） | push 触发 CI（此前网络异常，随下次提交一起推送） |
 | ✅ 已提交 | **详情页三连：共享时间轴联动 + 分段分析 + 骑行质量评分** | 已提交 `9250ae5`（①`src/charts/timeline.ts` + 六图/地图/爬坡剖面共享 hover 联动；②`segments.ts` 平路/爬坡分段 + `climbInsights` 相邻爬坡对比 + SegmentsSection；③`qualityScore.ts` 五维度评分 + QualityScoreSection；测试 36 新增，全量 746/746 + lint/build 绿，版本 2.0.0 → 2.1.0） | 已推送 |
@@ -314,7 +314,7 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 | 编号 | 任务 | 优先级 | 状态 | 内容与验收标准 | 预计规模 |
 |---|---|---|---|---|---|
 | UI-1 | **动态骑行洞察（P0-02）** | ⭐ 最高 | ✅ 已实现 | `src/features/insights/rideInsights.ts` 纯函数（输入 `Activity + Record[]`，输出 `Insight[]`）+ `RideInsightsSection` 组件挂详情页（质量评分后、地图前）。已实现 8 类洞察：后半程衰减（前 30% vs 后 30% 速度/功率）、爬升占比/爬坡日、心率漂移、心率-功率耦合、配速波动、长距离、强度档位（IF）、GPS 漂移数——全部真实数据条件生成，不足 3 条用概览兜底；无写死示例文案。测试 19 新增（rideInsights 12 + section 7） | ~330 行 + 19 测试 |
-| UI-2 | **详情页报告化（P0-01）** | ⭐ 高 | ⏳ | 顶部新增一句话总结（骑行类型推断「恢复/耐力/节奏/高强度/爬坡/长距离」纯函数 + qualityScore 档位 + 洞察头条）；核心指标精选 4~6 张卡（固定：距离/时长/爬升/均速；按数据有无可追加功率/心率）；重排区块顺序：标题→总结→核心指标→质量评分→洞察→地图→图表→分段类→专业指标（NP/IF/TSS/区间/功率曲线）折叠收纳。验收：**5 秒内回答"骑多久、多少公里、骑得怎么样"** | 1-2 commit |
+| UI-2 | **详情页报告化（P0-01）** | ⭐ 高 | ✅ 已实现 | 新增 `rideSummary.ts` 纯函数 `buildRideSummary`：骑行类型推断（长距离/爬坡/恢复骑/耐力骑/节奏骑/高强度/长骑行/骑行）+ 质量档位短语 + 数据驱动总结文案；新增 `RideSummaryBanner` 组件挂详情页顶部（标题下、指标前）；核心指标精选 4 固定（距离/运动时长/爬升/平均速度）+ 至多 2 动态（标准化功率/平均功率/平均心率/平均踏频，缺失值 '—' 不入选），其余指标折叠为「更多指标」`<details>`。验收：5 秒内回答"骑多久、多少公里、骑得怎么样"。测试 14 新增（rideSummary 10 + banner 4），全量 830/830 + lint/build 绿 | ~280 行 + 14 测试 |
 | UI-3 | **Design Token 体系化（P0-04）** | 高 | ⏳ | 扩 `index.css`：`--success/--warning/--danger/--info/--muted` 语义色 + `--space-*/--radius-*/--shadow-*`；各页面 CSS 硬编码色改引用 token；图表调色板与 `ZONE_COLORS` 按语义色统一（品牌绿只用于品牌强调，不刷满图表）。验收：深浅主题下卡片/标题/数字/按钮/间距/状态色一致 | 1 commit |
 | UI-4 | **移动端重构（P0-05）** | 中高（依赖 UI-2/3） | ⏳ | 375/390/430px 三档断点逐页审查：无横向滚动；详情页指标 2 列；图表触屏可拖（页面不溢出）；hover 交互补 touch 方案；日历页下半屏留白填充；统计页窄屏卡片堆叠。验收：三档宽度全页面无横向滚动条、核心操作可触达 | 1-2 commit |
 | UI-5 | **隐私可信度（P1）** | 中 | ⏳ | 仪表盘顶部 + 导入弹窗首屏加"本地解析、不上传服务器"文案；设置页数据管理补"数据存哪/清空浏览器数据会怎样"说明；清空数据危险操作加影响提示；作者模式提示条配色改中性 info 色去警告感 | 1 commit，纯文案+样式 |

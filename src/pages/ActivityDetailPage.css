@@ -213,6 +213,30 @@
   color: var(--text-secondary);
 }
 
+/* 更多指标折叠区（UI-2：核心指标之外的次要数据收纳） */
+.activity-detail__more {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.activity-detail__more summary {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.activity-detail__more summary:hover {
+  color: var(--text);
+}
+
+.activity-detail__stats--extra {
+  padding: 0 12px 12px;
+}
+
 /* 地图区：着色切换按钮组 + 地图（规格 §16） */
 .activity-detail__map {
   width: 100%;
