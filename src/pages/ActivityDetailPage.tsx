@@ -39,6 +39,7 @@ import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
+import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
@@ -353,6 +354,11 @@ function ActivityDetailPage() {
   // 用户配置（设置未加载完成时为 undefined）：IF/TSS/区间分布均依赖它们
   const ftp = profile?.ftp
   const maxHeartRate = profile?.maxHeartRate
+  // 骑行洞察计算参数（对象引用稳定，避免逐次渲染重复计算；须位于条件早退之前）
+  const insightsOptions = useMemo(
+    () => ({ ftp, maxHeartRate, distanceUnit: settings?.units.distance ?? 'km' }),
+    [ftp, maxHeartRate, settings],
+  )
 
   // 强度因子（IF）：FTP 存在且可算出 NP 时才有意义
   const intensityFactor = useMemo(() => {
@@ -608,6 +614,12 @@ function ActivityDetailPage() {
       </section>
 
       <QualityScoreSection records={records} />
+
+      <RideInsightsSection
+        activity={activity}
+        records={records}
+        options={insightsOptions}
+      />
 
       <AchievementsSection achievements={achievements} distanceUnit={distanceUnit} />
 

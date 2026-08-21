@@ -1,0 +1,60 @@
+/**
+ * 骑行洞察区块样式。
+ * 卡片容器 + 左色条列表项：语气由色条与图标颜色表达（positive 绿/negative 橙红/info 蓝）。
+ */
+.insights-section {
+  padding: 16px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.insights-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.insights-section__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+
+.insights-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background-color: var(--bg);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+}
+
+.insights-item__icon {
+  font-size: 10px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+
+.insights-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.insights-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.insights-item__text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
