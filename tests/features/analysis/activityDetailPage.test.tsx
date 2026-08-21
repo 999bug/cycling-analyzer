@@ -2,8 +2,8 @@
  * 活动详情页训练分析集成测试（规格 §16/§17/§26）。
  *
  * 通过 vi.mock 注入独立数据库实例 + fake-indexeddb：造带功率/心率/踏频/坐标数据，
- * 断言踏频图/组合图挂载、轨迹着色切换按钮组、无 FTP/最大心率时引导文案、
- * 配置 FTP/最大心率后显示区间分布与 IF/TSS、标准化功率卡。
+ * 断言多指标曲线卡（指标开关默认海拔）、轨迹着色切换按钮组、无 FTP/最大心率时
+ * 引导文案、配置 FTP/最大心率后显示区间分布与 IF/TSS、标准化功率卡。
  * 设置经 saveSettings（默认仓库指向被 mock 的 db）写入。
  */
 import 'fake-indexeddb/auto'
@@ -115,14 +115,24 @@ describe('活动详情页训练分析集成', () => {
     } as DOMRect)
   })
 
-  it('挂载踏频图与速度+心率组合图', async () => {
+  it('挂载数据曲线卡片：指标开关默认海拔开启，点击叠加', async () => {
     await repo.addActivity(makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130]))
     renderPage()
 
-    // 组合图标题（'速度 + 心率'）与踏频标题（区别于指标卡'平均踏频'）
-    expect(await screen.findByText('速度 + 心率')).toBeInTheDocument()
-    expect(screen.getByText('踏频')).toBeInTheDocument()
-    expect(screen.queryByText('该活动没有踏频数据')).not.toBeInTheDocument()
+    expect(await screen.findByText('数据曲线')).toBeInTheDocument()
+    const toggles = screen.getByRole('group', { name: '指标开关' })
+    // 有数据的指标出开关（该活动无温度数据，不出温度开关）
+    expect(within(toggles).queryByRole('button', { name: '温度' })).not.toBeInTheDocument()
+    // 默认海拔开启，其余关闭
+    expect(within(toggles).getByRole('button', { name: '海拔' })).toHaveAttribute('aria-pressed', 'true')
+    for (const name of ['速度', '心率', '踏频', '功率']) {
+      expect(within(toggles).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false')
+    }
+
+    // 点击速度开关 → 叠加曲线，开关变为开启
+    await user.click(within(toggles).getByRole('button', { name: '速度' }))
+    expect(within(toggles).getByRole('button', { name: '速度' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(toggles).getByRole('button', { name: '海拔' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('有 Strava 描述时标题下方展示描述', async () => {
@@ -144,8 +154,8 @@ describe('活动详情页训练分析集成', () => {
     expect(screen.queryByText('去程休闲骑，返程被拉爆')).not.toBeInTheDocument()
   })
 
-  it('无踏频/速度/心率数据时图表显示空态提示', async () => {
-    // 仅功率数据：踏频图/速度+心率组合图均无对应指标
+  it('仅功率数据时指标开关只显示功率且默认开启', async () => {
+    // 仅功率数据：无海拔/速度/心率/踏频，开关只剩功率且默认开启
     const records: ActivityRecord[] = [
       { timestamp: 0, power: 200 },
       { timestamp: 10, power: 220 },
@@ -155,30 +165,34 @@ describe('活动详情页训练分析集成', () => {
     )
     renderPage()
 
-    expect(await screen.findByText('该活动没有踏频数据')).toBeInTheDocument()
-    expect(screen.getByText('该活动没有速度和心率数据')).toBeInTheDocument()
+    const toggles = await screen.findByRole('group', { name: '指标开关' })
+    expect(within(toggles).getByRole('button', { name: '功率' })).toHaveAttribute('aria-pressed', 'true')
+    for (const name of ['海拔', '速度', '心率', '踏频']) {
+      expect(within(toggles).queryByRole('button', { name })).not.toBeInTheDocument()
+    }
   })
 
   it('轨迹着色切换按钮组：默认选中，点击切换高亮', async () => {
     await repo.addActivity(makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130]))
     renderPage()
 
-    // 全部 5 个模式按钮存在，默认选中"默认"
-    const noneButton = await screen.findByRole('button', { name: '默认' })
+    // 全部 5 个模式按钮存在，默认选中"默认"（限定在轨迹着色组内，避免与指标开关同名按钮冲突）
+    const coloringGroup = await screen.findByRole('group', { name: '轨迹着色' })
+    const noneButton = within(coloringGroup).getByRole('button', { name: '默认' })
     expect(noneButton).toHaveAttribute('aria-pressed', 'true')
     for (const name of ['速度', '心率', '功率', '海拔']) {
-      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false')
+      expect(within(coloringGroup).getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false')
     }
 
     // 点击"速度"→ 高亮切换
-    await user.click(screen.getByRole('button', { name: '速度' }))
-    expect(screen.getByRole('button', { name: '速度' })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(within(coloringGroup).getByRole('button', { name: '速度' }))
+    expect(within(coloringGroup).getByRole('button', { name: '速度' })).toHaveAttribute('aria-pressed', 'true')
     expect(noneButton).toHaveAttribute('aria-pressed', 'false')
 
     // 点击"心率"→ 高亮再次切换，速度取消
-    await user.click(screen.getByRole('button', { name: '心率' }))
-    expect(screen.getByRole('button', { name: '心率' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '速度' })).toHaveAttribute('aria-pressed', 'false')
+    await user.click(within(coloringGroup).getByRole('button', { name: '心率' }))
+    expect(within(coloringGroup).getByRole('button', { name: '心率' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(coloringGroup).getByRole('button', { name: '速度' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('有功率数据时标准化功率卡显示 NP，无功率数据时显示占位符', async () => {
@@ -229,9 +243,10 @@ describe('活动详情页训练分析集成', () => {
     expect(within(zonesSection).getByText('最小心率 120 bpm')).toBeInTheDocument()
     // 心率折线图移入训练区间区块（x 轴时间/距离可切换）
     expect(within(zonesSection).getByText('心率')).toBeInTheDocument()
-    // 图表区不再重复心率图
+    // 图表区不再有独立的「心率」图表卡（多指标卡里心率仅作开关/Tooltip 行出现）
     const chartsSection = screen.getByRole('region', { name: '活动图表' })
-    expect(within(chartsSection).queryByText('心率')).not.toBeInTheDocument()
+    expect(within(chartsSection).getByText('数据曲线')).toBeInTheDocument()
+    expect(within(chartsSection).queryByRole('heading', { name: '心率' })).not.toBeInTheDocument()
   })
 
   it('无心率数据时训练区间区块不显示心率统计与折线图', async () => {

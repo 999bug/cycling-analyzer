@@ -7,7 +7,7 @@
  * 本模块只提供与 UI 无关的纯函数与常量，便于单测。
  */
 import type { ActivityRecord, RoutePoint } from '@/types/activity'
-import type { ChartSeriesPoint, CombinedSeriesPoint } from '@/charts/series'
+import type { ChartSeriesPoint } from '@/charts/series'
 
 /** 悬停光标颜色（与 recharts 默认 tooltip cursor 一致，浅色主题下仍可辨） */
 export const TIMELINE_CURSOR_COLOR = 'var(--text-secondary)'
@@ -157,8 +157,8 @@ export function recordAtTimestamp(
   return findNearestByTimestamp(records, timestamp)
 }
 
-/** 可匹配 timestamp 的 series 点类型（单指标图与组合图共有字段） */
-export type TimelineSeriesPoint = ChartSeriesPoint | CombinedSeriesPoint
+/** 可匹配 timestamp 的 series 点类型 */
+export type TimelineSeriesPoint = ChartSeriesPoint
 
 /**
  * 悬停时间戳 → 图表序列点（用于 ReferenceLine 定位 x）。

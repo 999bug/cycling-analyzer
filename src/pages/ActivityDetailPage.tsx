@@ -3,7 +3,8 @@
  *
  * 布局：标题区（名称/类型/开始时间/删除按钮）→ 一句话总结条（骑行类型 + 真实数据总结 + 质量档位，
  * UI-2）→ 核心指标精选 4~6 卡 + 「更多指标」折叠 → 质量评分 → 骑行洞察 → 成就 →
- * 轨迹着色切换 + 轨迹地图 → 六个图表（速度/踏频/海拔/功率/功率曲线/速度+心率组合）→
+ * 轨迹着色切换 + 轨迹地图 → 数据曲线（多指标开关式：海拔/速度/心率/踏频/功率/温度
+ * chip 切换叠加，默认海拔，悬停显示全部已开指标）+ 功率曲线 →
  * 训练区间区块（心率统计/折线图 + 心率/功率区间分布 + IF/TSS + 计算方式说明）。
  * 数据源：activityRepository.getById（摘要）+ getRecords（逐点），
  * 逐点数据按需加载，不参与列表查询。
@@ -61,14 +62,9 @@ import { routePointAtTimestamp } from '@/charts/timeline'
 import ActivityMap from '@/map/ActivityMap'
 import ColoringLegend from '@/map/ColoringLegend'
 import { ZONE_COLORS } from '@/theme/colors'
-import SpeedChart from '@/charts/SpeedChart'
 import HeartRateChart from '@/charts/HeartRateChart'
-import CadenceChart from '@/charts/CadenceChart'
-import ElevationChart from '@/charts/ElevationChart'
-import PowerChart from '@/charts/PowerChart'
-import TemperatureChart from '@/charts/TemperatureChart'
+import MultiMetricChart from '@/charts/MultiMetricChart'
 import PowerCurveChart from '@/charts/PowerCurveChart'
-import CombinedChart from '@/charts/CombinedChart'
 import '@/pages/ActivityDetailPage.css'
 
 /** 本地库仓库（删除/重命名等写操作永远只进本地库） */
@@ -718,18 +714,12 @@ function ActivityDetailPage() {
       </section>
 
       <section className="activity-detail__charts" aria-label="活动图表">
-        <SpeedChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
-        <CadenceChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
-        <ElevationChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
-        <PowerChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
-        <TemperatureChart records={chartRecords} hoverTimestamp={hoverTimestamp} onHover={setHoverTimestamp} />
-        <PowerCurveChart records={records} />
-        <CombinedChart
-          mode="speedHeartRate"
+        <MultiMetricChart
           records={chartRecords}
           hoverTimestamp={hoverTimestamp}
           onHover={setHoverTimestamp}
         />
+        <PowerCurveChart records={records} />
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />

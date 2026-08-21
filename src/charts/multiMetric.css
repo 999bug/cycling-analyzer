@@ -1,0 +1,80 @@
+/**
+ * 多指标曲线卡片样式：指标开关 chips + 悬浮卡。
+ * 卡片容器复用 charts.css 的 .chart-card 系列，颜色取全局 CSS 变量。
+ */
+
+/* 指标开关行（海拔/速度/心率/踏频/功率/温度 chips） */
+.multi-metric__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.multi-metric__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.multi-metric__toggle:hover {
+  color: var(--text);
+}
+
+.multi-metric__toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* 悬浮卡（Recharts Tooltip 自定义内容） */
+.multi-metric__tooltip {
+  min-width: 148px;
+  padding: 8px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.multi-metric__tooltip-title {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.multi-metric__tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.7;
+}
+
+.multi-metric__tooltip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.multi-metric__tooltip-name {
+  color: var(--text-secondary);
+}
+
+.multi-metric__tooltip-value {
+  margin-left: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}

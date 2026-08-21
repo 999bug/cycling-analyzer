@@ -47,3 +47,4 @@ miniprogram/config.local.js
 # 仓库根目录同名配置（开发者工具以仓库根打开时生成）
 /project.config.json
 /project.private.config.json
+%SystemDrive%/
