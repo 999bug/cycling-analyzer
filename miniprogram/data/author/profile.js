@@ -1,0 +1,1 @@
+module.exports = {"nickname":"Saul","weightKg":72,"heightCm":170,"maxHeartRate":193,"restingHeartRate":44};

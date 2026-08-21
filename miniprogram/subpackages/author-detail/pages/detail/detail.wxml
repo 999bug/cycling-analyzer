@@ -1,0 +1,28 @@
+<view class="detail" wx:if="{{loaded}}">
+  <view class="d-header">
+    <text class="d-name">{{name}}</text>
+    <text class="d-sub">{{date}} · {{activityType}}</text>
+  </view>
+
+  <view class="metrics">
+    <view class="metric" wx:for="{{metrics}}" wx:key="label">
+      <text class="m-val">{{item.value}}</text>
+      <text class="m-unit">{{item.unit}}</text>
+      <text class="m-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <view class="chart-card" wx:if="{{hasStream}}">
+    <text class="chart-title">运动曲线</text>
+    <canvas type="2d" id="streamChart" class="stream-chart"></canvas>
+    <view class="legend">
+      <view class="lg" wx:for="{{legend}}" wx:key="label">
+        <view class="lg-dot" style="background:{{item.color}}"></view>
+        <text class="lg-label">{{item.label}}</text>
+        <text class="lg-range">{{item.range}}</text>
+      </view>
+    </view>
+  </view>
+  <view wx:else class="no-stream">该活动暂无逐点流图</view>
+</view>
+<view wx:else class="notfound">未找到该活动数据</view>

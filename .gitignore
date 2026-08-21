@@ -23,15 +23,28 @@ dist-ssr
 *.sln
 *.sw?
 
-# ç”¨æˆ·æœ¬åœ°çœŸå®éª‘è¡Œæ•°æ®ï¼ˆä¸è¿›ä»“åº“ï¼‰
+# ÓÃ»§±¾µØÕæÊµÆïĞĞÊı¾İ£¨²»½ø²Ö¿â£©
 private-fixtures/
 
-# ä½œè€…æ•°æ®å¿«ç…§æ„å»ºäº§ç‰©ï¼ˆCI ç”± author-data/ æºæ•°æ®ç”Ÿæˆï¼Œè§ scripts/build-author-data.tsï¼‰
+# ×÷ÕßÊı¾İ¿ìÕÕ¹¹½¨²úÎï£¨CI ÓÉ author-data/ Ô´Êı¾İÉú³É£¬¼û scripts/build-author-data.ts£©
 public/author-data/
 
-# Playwright E2E äº§ç‰©
+# Playwright E2E ²úÎï
 test-results/
 playwright-report/
 
 # CodeGraph ÊØ»¤½ø³ÌÎÄ¼ş
 .codegraph/daemon.pid
+
+# WorkBuddy ±¾µØ¹¤×÷Êı¾İ£¨»á»°¼ÇÒä/ÈÎÎñ£¬²»Èë¿â£©
+.workbuddy/
+
+# === Î¢ĞÅĞ¡³ÌĞò£º¿ªÔ´²Ö¿âÒşË½£¨AppID / ÃÜÔ¿²»Èë¿â£© ===
+# ÕæÊµ project.config.json º¬ AppID£¬±ØĞëË½ÓĞ£»¿ËÂ¡ÕßÓÃ project.config.example.json ¸´ÖÆÉú³É
+miniprogram/project.config.json
+miniprogram/project.private.config.json
+# ²Ö¿â¸ùÄ¿Â¼µÄÍ¬ÃûÅäÖÃ£¨Î¢ĞÅ¿ª·¢Õß¹¤¾ßÒÔ²Ö¿â¸ù´ò¿ªÊ±Éú³É£¬Í¬Ñùº¬ AppID£©
+/project.config.json
+/project.private.config.json
+# ±¾µØÃÜÔ¿£¨ÌÚÑ¶µØÍ¼ Key µÈ£©£¬ÓÉ config.example.js ¸´ÖÆÉú³É
+miniprogram/config.local.js

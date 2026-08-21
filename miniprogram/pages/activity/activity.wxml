@@ -1,0 +1,4 @@
+<view class="placeholder">
+  <text class="ph-title">活动详情</text>
+  <text class="ph-sub">导入你的 FIT 后，在此查看完整逐点分析（功率 / 速度 / 心率 / 海拔曲线）。Phase 2 实现。</text>
+</view>

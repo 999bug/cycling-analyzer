@@ -1,0 +1,35 @@
+{
+  "pages": [
+    "pages/dashboard/dashboard",
+    "pages/activities/activities",
+    "pages/activity/activity",
+    "pages/import/import",
+    "pages/settings/settings"
+  ],
+  "window": {
+    "navigationBarTitleText": "骑了么",
+    "navigationBarBackgroundColor": "#1f2933",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f6f8"
+  },
+  "tabBar": {
+    "color": "#8a8f99",
+    "selectedColor": "#2f6df6",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/dashboard/dashboard", "text": "仪表盘" },
+      { "pagePath": "pages/activities/activities", "text": "活动" },
+      { "pagePath": "pages/import/import", "text": "导入" },
+      { "pagePath": "pages/settings/settings", "text": "我的" }
+    ]
+  },
+  "subpackages": [
+    {
+      "root": "subpackages/author-detail",
+      "pages": ["pages/detail/detail"]
+    }
+  ],
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

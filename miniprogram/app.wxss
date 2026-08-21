@@ -1,0 +1,21 @@
+page {
+  background: #f5f6f8;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+  color: #1f2933;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(31, 41, 51, 0.04);
+}
+
+.muted {
+  color: #8a8f99;
+}
+
+.primary {
+  color: #2f6df6;
+}

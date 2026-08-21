@@ -1,0 +1,20 @@
+<view class="list">
+  <view
+    class="ride-item"
+    wx:for="{{list}}"
+    wx:key="id"
+    bindtap="goDetail"
+    data-id="{{item.id}}"
+  >
+    <view class="ride-main">
+      <text class="ride-name">{{item.name}}</text>
+      <text class="ride-date">{{item.date}}</text>
+    </view>
+    <view class="ride-meta">
+      <text class="meta-dist">{{item.distanceKm}} km</text>
+      <text class="meta-dur">{{item.durationText}}</text>
+      <text class="meta-hr" wx:if="{{item.avgHr !== '—'}}">♥{{item.avgHr}}</text>
+    </view>
+  </view>
+  <view wx:if="{{list.length === 0}}" class="empty">暂无活动</view>
+</view>

@@ -1,0 +1,115 @@
+.page {
+  padding: 24rpx;
+}
+
+.hero {
+  padding: 32rpx 16rpx 24rpx;
+}
+
+.hero-title {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #1f2933;
+  display: block;
+}
+
+.hero-sub {
+  font-size: 26rpx;
+  color: #8a8f99;
+  margin-top: 8rpx;
+  display: block;
+}
+
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 16rpx;
+}
+
+.stat-card {
+  width: 48%;
+  margin: 1%;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 20rpx;
+  box-sizing: border-box;
+}
+
+.stat-num {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #2f6df6;
+  display: block;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #8a8f99;
+  margin-top: 6rpx;
+  display: block;
+}
+
+.section {
+  margin-top: 32rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.section-more {
+  font-size: 26rpx;
+  color: #2f6df6;
+}
+
+.ride-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f0f1f3;
+}
+
+.ride-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.ride-name {
+  font-size: 28rpx;
+  color: #1f2933;
+}
+
+.ride-date {
+  font-size: 22rpx;
+  color: #8a8f99;
+  margin-top: 4rpx;
+}
+
+.ride-meta {
+  font-size: 24rpx;
+  color: #5b6472;
+  text-align: right;
+}
+
+.ride-meta text {
+  margin-left: 16rpx;
+}
+
+.empty {
+  padding: 40rpx;
+  text-align: center;
+  color: #8a8f99;
+  font-size: 26rpx;
+}

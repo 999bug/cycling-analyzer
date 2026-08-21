@@ -1,0 +1,41 @@
+.settings {
+  padding: 24rpx;
+}
+
+.sec-title {
+  font-size: 26rpx;
+  color: #8a8f99;
+  margin: 12rpx 8rpx;
+}
+
+.opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx 24rpx;
+  margin: 14rpx 0;
+  border: 2rpx solid transparent;
+}
+
+.opt.on {
+  border-color: #2f6df6;
+  background: #eef4ff;
+}
+
+.opt-name {
+  font-size: 30rpx;
+  color: #1f2933;
+}
+
+.tag {
+  font-size: 22rpx;
+  color: #8a8f99;
+}
+
+.tip {
+  font-size: 24rpx;
+  color: #5b6472;
+  margin: 20rpx 8rpx;
+}

@@ -1,0 +1,12 @@
+<view class="settings">
+  <view class="sec-title">数据源</view>
+  <view class="opt {{source === 'author' ? 'on' : ''}}" data-src="author" bindtap="onSwitch">
+    <text class="opt-name">作者公开数据</text>
+    <text class="tag">只读 · 离线</text>
+  </view>
+  <view class="opt {{source === 'my' ? 'on' : ''}}" data-src="my" bindtap="onSwitch">
+    <text class="opt-name">我的本地数据</text>
+    <text class="tag">需先导入</text>
+  </view>
+  <view class="tip">当前展示：{{source === 'author' ? '作者公开快照' : '我的本地数据'}}</view>
+</view>

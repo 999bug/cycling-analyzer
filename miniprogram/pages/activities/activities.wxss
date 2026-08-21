@@ -1,0 +1,56 @@
+.list {
+  padding: 12rpx 16rpx;
+}
+
+.ride-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 26rpx 24rpx;
+  margin: 14rpx 0;
+}
+
+.ride-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.ride-name {
+  font-size: 30rpx;
+  color: #1f2933;
+  font-weight: 500;
+}
+
+.ride-date {
+  font-size: 22rpx;
+  color: #8a8f99;
+  margin-top: 6rpx;
+}
+
+.ride-meta {
+  font-size: 24rpx;
+  color: #5b6472;
+  text-align: right;
+}
+
+.ride-meta text {
+  margin-left: 16rpx;
+}
+
+.meta-dist {
+  color: #2f6df6;
+  font-weight: 600;
+}
+
+.meta-hr {
+  color: #e2574c;
+}
+
+.empty {
+  padding: 80rpx;
+  text-align: center;
+  color: #8a8f99;
+  font-size: 26rpx;
+}

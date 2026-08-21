@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="hero">
+    <text class="hero-title">骑了么</text>
+    <text class="hero-sub">{{nickname}} 的骑行</text>
+  </view>
+
+  <view class="stat-grid">
+    <view class="stat-card">
+      <text class="stat-num">{{summary.count}}</text>
+      <text class="stat-label">次骑行</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-num">{{summary.distanceKm}}</text>
+      <text class="stat-label">公里</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-num">{{summary.totalClimb}}</text>
+      <text class="stat-label">米爬升</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-num">{{summary.durationText}}</text>
+      <text class="stat-label">总时长</text>
+    </view>
+  </view>
+
+  <view class="section">
+    <view class="section-head">
+      <text class="section-title">最近骑行</text>
+      <text class="section-more" bindtap="goActivities">全部 ›</text>
+    </view>
+    <view class="ride-list">
+      <view
+        class="ride-item"
+        wx:for="{{recent}}"
+        wx:key="id"
+        bindtap="goDetail"
+        data-id="{{item.id}}"
+      >
+        <view class="ride-main">
+          <text class="ride-name">{{item.name}}</text>
+          <text class="ride-date">{{item.date}}</text>
+        </view>
+        <view class="ride-meta">
+          <text>{{item.distanceKm}} km</text>
+          <text>{{item.durationText}}</text>
+        </view>
+      </view>
+      <view wx:if="{{recent.length === 0}}" class="empty">暂无数据</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,108 @@
+.detail {
+  padding: 20rpx 24rpx 40rpx;
+}
+
+.d-header {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 20rpx;
+}
+.d-name {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f2933;
+}
+.d-sub {
+  font-size: 22rpx;
+  color: #8a8f99;
+  margin-top: 6rpx;
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 16rpx 0;
+}
+.metric {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14rpx 0;
+}
+.m-val {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #2f6df6;
+}
+.m-unit {
+  font-size: 18rpx;
+  color: #8a8f99;
+  margin-top: 2rpx;
+}
+.m-label {
+  font-size: 22rpx;
+  color: #5b6472;
+  margin-top: 8rpx;
+}
+
+.chart-card {
+  margin-top: 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx 16rpx 16rpx;
+}
+.chart-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1f2933;
+}
+.stream-chart {
+  width: 100%;
+  height: 240px;
+  margin-top: 12rpx;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8rpx;
+}
+.lg {
+  display: flex;
+  align-items: center;
+  margin-right: 28rpx;
+  margin-top: 6rpx;
+}
+.lg-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  margin-right: 8rpx;
+}
+.lg-label {
+  font-size: 22rpx;
+  color: #5b6472;
+}
+.lg-range {
+  font-size: 20rpx;
+  color: #8a8f99;
+  margin-left: 6rpx;
+}
+
+.no-stream {
+  margin-top: 24rpx;
+  padding: 40rpx;
+  text-align: center;
+  color: #8a8f99;
+  font-size: 26rpx;
+  background: #fff;
+  border-radius: 16rpx;
+}
+.notfound {
+  padding: 120rpx 40rpx;
+  text-align: center;
+  color: #8a8f99;
+  font-size: 28rpx;
+}
