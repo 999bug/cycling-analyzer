@@ -2,9 +2,12 @@
  * 导入执行器（规格 §8/§9/§21/§22/§24）。
  *
  * 逐文件 pipeline：读字节 → gzip 解压（如需要）→ 计算指纹 →
- * 指纹去重（存在则跳过，规格 §9）→ worker 解析（解码 + 标准化）→
+ * 指纹去重（存在则跳过，规格 §9）→ 按扩展名分发解析 →
  * Strava CSV 标题还原（规格 §31）→ 落库 + 台账。
  *
+ * 双格式解析：.fit / .fit.gz 走 FIT 解析链（worker 或降级主线程），
+ * .gpx / .gpx.gz 走主线程 GPX 解析（DOMParser 无 Worker 版本，动态 import
+ * 按需加载）；两者产出统一领域模型，后续流程完全共用。
  * 错误分类（规格 §24）：非 FIT / CRC 损坏映射为中文文案，其余保留原始错误。
  * 失败文件写入台账（fingerprint 在解压后字节上计算，解压本身失败的文件
  * 无法获得指纹，仅展示于失败列表）。
@@ -17,11 +20,12 @@ import { DexieActivityRepository, type ActivityRepository } from '@/storage/repo
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { db } from '@/storage/db'
 import { computeFingerprint } from '@/utils/fingerprint'
-import type { ParseFileFn } from '@/fit/worker/parseTask'
+import type { ParseFileFn, ParseTaskInput } from '@/fit/worker/parseTask'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
 import { createWorkerParser } from './parseClient'
+import { isGpxFileName } from './scanner'
 import {
   applyStravaMeta,
   buildStravaMetaLookup,
@@ -122,10 +126,35 @@ const defaultFileRepository = new DexieFileRepository(db)
  */
 export async function importFiles(files: ImportFile[], options: ImportOptions = {}): Promise<ImportSummary> {
   const {
-    parser = createDefaultParser(),
+    parser,
     activityRepository = defaultActivityRepository,
     fileRepository = defaultFileRepository,
   } = options
+  // 本批次的 FIT 解析器（懒建：纯 GPX 批次不创建 worker；失败随批次结束废弃）
+  let fitParser: ParseFileFn | undefined
+
+  /**
+   * 按文件扩展名选择解析器：
+   * - 显式注入的 parser 优先（测试替身，覆盖全部文件类型）；
+   * - .gpx / .gpx.gz 走主线程 GPX 解析（DOMParser 在 Worker 中不可用，
+   *   动态 import 使 GPX 模块不进首屏主包）；
+   * - 其余走本批次 FIT 解析链（浏览器 worker / 测试主线程降级）。
+   *
+   * @param fileName 源文件名
+   */
+  function selectParser(fileName: string): ParseFileFn {
+    if (parser) {
+      return parser
+    }
+    if (isGpxFileName(fileName)) {
+      return async (input: ParseTaskInput) => {
+        const { parseGpxActivity } = await import('@/gpx/gpxParser')
+        return parseGpxActivity(input)
+      }
+    }
+    fitParser ??= createDefaultParser()
+    return fitParser
+  }
   const metas = buildStravaMetaLookup(options.stravaCsv)
   const failedItems: FailedItem[] = []
   let newImported = 0
@@ -143,7 +172,11 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         skipped++
       } else {
         const meta = matchStravaMeta(entry.path, entry.name, metas)
-        const activity = await parser({ fileName: entry.name, bytes: content, fingerprint })
+        const activity = await selectParser(entry.name)({
+          fileName: entry.name,
+          bytes: content,
+          fingerprint,
+        })
         // 导入时顺带计算 NP 落库（原始派生值、与 FTP 无关）：
         // 训练状态等全量聚合直接读摘要，避免每次全量扫描逐点数据
         const normalizedPower = calculateNormalizedPower(activity.records ?? [])
@@ -160,7 +193,11 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
           activity.note = entry.note
         }
         const title =
-          entry.title || (meta?.name ? meta.name : undefined) || titleFromFileName(entry.name)
+          entry.title ||
+          (meta?.name ? meta.name : undefined) ||
+          // GPX 内部 <trk><name>（如 Strava 导出的骑行标题），FIT 无此字段恒 undefined
+          activity.name ||
+          titleFromFileName(entry.name)
         await activityRepository.addActivity(activity, title)
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
         await fileRepository.recordImported(
@@ -186,7 +223,7 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
 }
 
 /**
- * 按环境选择默认解析器：浏览器走 worker，测试环境（jsdom 无 Worker）走主线程。
+ * 按环境选择默认 FIT 解析器：浏览器走 worker，测试环境（jsdom 无 Worker）走主线程。
  * 主线程降级用动态 import（性能优化）：@garmin/fitsdk 只随 worker chunk
  * 或降级路径按需加载，不进首屏主包。
  */

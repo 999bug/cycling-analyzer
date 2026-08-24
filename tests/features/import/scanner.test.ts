@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest'
 import {
   collectFitFiles,
   isActivitiesCsvName,
+  isActivityFileName,
   isFitFileName,
+  isGpxFileName,
   scanDirectory,
   scanFilesLegacy,
 } from '@/features/import/scanner'
@@ -148,7 +150,7 @@ describe('scanDirectory 目录扫描', () => {
     expect(result.files[0].path).toBe('outer/nested/deep.fit')
   })
 
-  it('忽略非 FIT 文件', async () => {
+  it('忽略不可导入文件（GPX 现已支持，仅排除无关类型）', async () => {
     const root = makeDirHandle({
       'a.fit': makeFileHandle(makeFile('a.fit')),
       'b.gpx': makeFileHandle(makeFile('b.gpx')),
@@ -157,6 +159,45 @@ describe('scanDirectory 目录扫描', () => {
 
     const result = await scanDirectory(root)
 
-    expect(result.files.map((f) => f.name)).toEqual(['a.fit'])
+    expect(result.files.map((f) => f.name).sort()).toEqual(['a.fit', 'b.gpx'])
+  })
+
+  describe('GPX 文件收集（第二活动格式）', () => {
+    it('isGpxFileName 识别 .gpx 与 .gpx.gz（不区分大小写）', () => {
+      expect(isGpxFileName('route.gpx')).toBe(true)
+      expect(isGpxFileName('route.gpx.gz')).toBe(true)
+      expect(isGpxFileName('ROUTE.GPX')).toBe(true)
+      expect(isGpxFileName('ride.fit')).toBe(false)
+      expect(isGpxFileName('route.gpxx')).toBe(false)
+      expect(isGpxFileName('route.gp')).toBe(false)
+    })
+
+    it('isActivityFileName 涵盖 FIT 与 GPX 全部扩展名', () => {
+      expect(isActivityFileName('a.fit')).toBe(true)
+      expect(isActivityFileName('a.fit.gz')).toBe(true)
+      expect(isActivityFileName('a.gpx')).toBe(true)
+      expect(isActivityFileName('a.gpx.gz')).toBe(true)
+      expect(isActivityFileName('a.txt')).toBe(false)
+      expect(isActivityFileName('a.csv')).toBe(false)
+    })
+
+    it('collectFitFiles 收集 .gpx 文件', () => {
+      const result = collectFitFiles([makeFile('morning.gpx'), makeFile('evening.GPX.GZ')])
+
+      expect(result.files.map((f) => f.name)).toEqual(['morning.gpx', 'evening.GPX.GZ'])
+    })
+
+    it('scanDirectory 递归收集 .gpx 与 .gpx.gz', async () => {
+      const rides = makeDirHandle({ 'a.gpx': makeFileHandle(makeFile('a.gpx')) })
+      const root = makeDirHandle({
+        rides,
+        'b.gpx.gz': makeFileHandle(makeFile('b.gpx.gz')),
+        'c.txt': makeFileHandle(makeFile('c.txt')),
+      })
+
+      const result = await scanDirectory(root)
+
+      expect(result.files.map((f) => f.name).sort()).toEqual(['a.gpx', 'b.gpx.gz'])
+    })
   })
 })

@@ -29,7 +29,7 @@ export interface ScannedFile {
  * 扫描结果。
  */
 export interface ScanResult {
-  /** 找到的 FIT 文件（*.fit / *.fit.gz） */
+  /** 找到的活动文件（*.fit / *.fit.gz / *.gpx / *.gpx.gz） */
   files: ScannedFile[]
 
   /** 发现的 activities.csv（取第一个，用于标题还原），未找到时 undefined */
@@ -45,6 +45,21 @@ export function isFitFileName(fileName: string): boolean {
 }
 
 /**
+ * 判断文件名是否为 GPX 文件（.gpx / .gpx.gz，忽略大小写）。
+ */
+export function isGpxFileName(fileName: string): boolean {
+  const lower = fileName.toLowerCase()
+  return lower.endsWith('.gpx') || lower.endsWith('.gpx.gz')
+}
+
+/**
+ * 判断文件名是否为可导入的活动文件（FIT 或 GPX，忽略大小写）。
+ */
+export function isActivityFileName(fileName: string): boolean {
+  return isFitFileName(fileName) || isGpxFileName(fileName)
+}
+
+/**
  * 判断文件名是否为 Strava 元数据 CSV（activities.csv，忽略大小写）。
  */
 export function isActivitiesCsvName(fileName: string): boolean {
@@ -52,7 +67,7 @@ export function isActivitiesCsvName(fileName: string): boolean {
 }
 
 /**
- * 从文件集合中收集 FIT 文件与 activities.csv（拖拽与 FileList 共用）。
+ * 从文件集合中收集活动文件与 activities.csv（拖拽与 FileList 共用）。
  * 文件路径取 webkitRelativePath（webkitdirectory 场景），否则回退为文件名。
  *
  * @param files 文件集合（FileList 或 File[]）
@@ -62,7 +77,7 @@ export function collectFitFiles(files: Iterable<File>): ScanResult {
   for (const file of files) {
     if (isActivitiesCsvName(file.name)) {
       result.csvFile ??= file
-    } else if (isFitFileName(file.name)) {
+    } else if (isActivityFileName(file.name)) {
       result.files.push({
         path: file.webkitRelativePath || file.name,
         name: file.name,
@@ -84,7 +99,7 @@ export function scanFilesLegacy(files: FileList): ScanResult {
 
 /**
  * 递归扫描目录句柄（File System Access API）。
- * 任意层级收集 FIT 文件与 activities.csv（Strava 导出的 CSV 位于根目录）。
+ * 任意层级收集活动文件与 activities.csv（Strava 导出的 CSV 位于根目录）。
  *
  * @param dirHandle 目录句柄（showDirectoryPicker 获取）
  */
@@ -95,7 +110,7 @@ export async function scanDirectory(dirHandle: FileSystemDirectoryHandle): Promi
 }
 
 /**
- * 递归遍历目录，收集 FIT 文件并构造相对路径。
+ * 递归遍历目录，收集活动文件并构造相对路径。
  *
  * @param dirHandle 当前目录句柄
  * @param prefix 当前目录的相对路径前缀（根目录为空串）
@@ -115,7 +130,7 @@ async function scanDirHandle(
     const fileHandle = handle as FileSystemFileHandle
     if (isActivitiesCsvName(name)) {
       result.csvFile ??= await fileHandle.getFile()
-    } else if (isFitFileName(name)) {
+    } else if (isActivityFileName(name)) {
       result.files.push({
         path: prefix ? `${prefix}/${name}` : name,
         name,

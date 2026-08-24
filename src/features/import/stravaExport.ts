@@ -251,7 +251,7 @@ export function applyStravaMeta(activity: Activity, meta: StravaActivityMeta | u
  */
 export function titleFromFileName(name: string): string | undefined {
   const baseName = name.slice(name.lastIndexOf('/') + 1)
-  const match = /^(.+)\.(fit|fit\.gz)$/i.exec(baseName)
+  const match = /^(.+)\.(fit|fit\.gz|gpx|gpx\.gz)$/i.exec(baseName)
   if (!match) {
     return undefined
   }

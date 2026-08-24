@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.18.0',
+    date: '2026-08-24',
+    features: [
+      '新增 GPX 活动导入：手机骑行 App / 其他平台导出的 .gpx 轨迹也能导入分析（此前仅支持 FIT）',
+      '支持 .gpx.gz 压缩格式与多选批量导入：自动解析轨迹、海拔与心率/踏频/功率扩展字段，距离按 GPS 定位计算',
+      'GPX 活动与 FIT 同等分析能力：地图轨迹、爬坡分段、赛段匹配成绩榜全功能可用，同内容重复导入自动去重',
+    ],
+  },
+  {
     version: '2.17.0',
     date: '2026-08-24',
     features: [

@@ -59,7 +59,7 @@ test('导航：各页面路由可达', async ({ page }) => {
 test('核心链路：导入 FIT → 列表 → 详情', async ({ page }) => {
   // 打开导入面板，经隐藏文件输入上传合成 FIT 样例
   await page.getByRole('button', { name: '同步骑行数据' }).click()
-  await page.locator('input[accept=".fit,.fit.gz"]').setInputFiles(GPS_FIT_FIXTURE)
+  await page.locator('input[accept=".fit,.fit.gz,.gpx"]').setInputFiles(GPS_FIT_FIXTURE)
 
   // 导入完成后仪表盘出现统计数据（总距离不再是空态）
   await expect(page.getByText(/欢迎使用/)).not.toBeVisible({ timeout: 15_000 })

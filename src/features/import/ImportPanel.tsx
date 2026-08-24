@@ -6,7 +6,7 @@
  *
  * 目录批量导入区分数据源：Strava 目录解析 activities.csv 还原标题/描述/估算功率；
  * 其他设备（佳明/igpsport/行者等）无 CSV，标题按文件名兜底。
- * 单文件导入无需数据源（FIT 格式通用）：选择单个 FIT 时弹出编辑框（标题/说明/个人备注）。
+ * 单文件导入无需数据源（格式通用）：选择单个 FIT/GPX 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
  */
 import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react'
@@ -57,7 +57,7 @@ function ImportPanel() {
    */
   async function runScan(result: ScanResult, overrides?: Partial<ImportFile>): Promise<void> {
     if (result.files.length === 0) {
-      setNotice('未找到 FIT 文件')
+      setNotice('未找到可导入的骑行文件（支持 FIT / GPX）')
       return
     }
     const files: ImportFile[] = result.files.map((scanned) => ({
@@ -287,7 +287,7 @@ function ImportPanel() {
                     </svg>
                     <span className="import-panel__entry-text">
                       <span className="import-panel__entry-label">选择文件</span>
-                      <span className="import-panel__entry-hint">单个 .fit / .fit.gz 文件</span>
+                      <span className="import-panel__entry-hint">单个 .fit / .fit.gz / .gpx 文件</span>
                     </span>
                   </button>
                   <div
@@ -323,8 +323,8 @@ function ImportPanel() {
                       <path d="M12 16V4m0 0l-4 4m4-4l4 4" />
                       <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
                     </svg>
-                    <span className="import-panel__dropzone-title">拖拽 FIT 文件到此处</span>
-                    <span className="import-panel__dropzone-hint">可多选，支持 .fit / .fit.gz</span>
+                    <span className="import-panel__dropzone-title">拖拽 FIT / GPX 文件到此处</span>
+                    <span className="import-panel__dropzone-hint">可多选，支持 .fit / .fit.gz / .gpx</span>
                   </div>
                 </div>
                 </>
@@ -402,7 +402,7 @@ function ImportPanel() {
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".fit,.fit.gz"
+        accept=".fit,.fit.gz,.gpx"
         className="import-panel__hidden-input"
         onChange={(event) => {
           // FileList 为 live 集合：先转数组保留 File 引用，再重置 value 供下次选择
