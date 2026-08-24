@@ -35,9 +35,14 @@
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.activity-detail__rename-trigger:hover {
+.activity-detail__rename-trigger:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--text-secondary);
+}
+
+.activity-detail__rename-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* 重命名编辑行：输入框 + 保存/取消 */

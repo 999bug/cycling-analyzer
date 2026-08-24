@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.14.0',
+    date: '2026-08-24',
+    features: [
+      '作者源只读提示优化：详情页「重命名 / 设为赛段 / 删除活动」按钮不再凭空隐藏，改为置灰并提示切换到「我的数据」后操作',
+      '新增「导出作者赛段 JSON」：本地模式创建的赛段可一键导出 author-data/segments.json，放入仓库 push 后随快照上线作者赛段',
+    ],
+  },
+  {
     version: '2.13.0',
     date: '2026-08-24',
     features: [

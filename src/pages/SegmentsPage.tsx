@@ -19,6 +19,7 @@ import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceSt
 import { summariesScanKey } from '@/storage/scanCache'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
+import { downloadAuthorSegments } from '@/features/segments/authorSegmentsExport'
 import '@/pages/SegmentsPage.css'
 
 /** 赛段仓库单例 */
@@ -146,12 +147,25 @@ function SegmentsPage() {
   return (
     <>
       <h1>赛段</h1>
+      {source === 'local' && (
+        <div className="segments-page__toolbar">
+          <button
+            type="button"
+            className="segments-page__export"
+            onClick={() => downloadAuthorSegments(segments ?? [])}
+            disabled={segments === null || segments.length === 0}
+            title={segments !== null && segments.length > 0 ? '导出 author-data/segments.json（放入仓库 push 即可上线作者赛段）' : undefined}
+          >
+            导出作者赛段 JSON
+          </button>
+        </div>
+      )}
       {state === 'error' && <p className="segments-page__message">加载失败，请稍后重试。</p>}
       {state === 'loading' && <p className="segments-page__message">赛段加载中…</p>}
       {state === 'ready' && segments !== null && segments.length === 0 && (
         <p className="segments-page__message">
           {source === 'author'
-            ? '作者尚未创建赛段。'
+            ? '作者尚未创建赛段。作者可在本地数据模式创建赛段后，于赛段页导出 segments.json 提交到仓库发布。'
             : '还没有赛段。打开任意骑行详情页，点击「设为赛段」即可把该骑行的起终点创建为赛段。'}
         </p>
       )}

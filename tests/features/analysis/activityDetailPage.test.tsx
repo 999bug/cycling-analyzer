@@ -614,7 +614,7 @@ describe('成就栏（刷新纪录检测）', () => {
 })
 
 describe('作者模式只读（规格 §6.3）', () => {
-  it('隐藏删除/重命名/设为赛段按钮，保留导出 GPX', async () => {
+  it('作者模式写操作按钮置灰禁用（保留入口 + 只读提示），导出 GPX 可用', async () => {
     const activity = makeActivity('act-1', [100, 200, 300], [120, 140, 160])
     // 快照数据经 fetch stub 提供（作者仓库只读快照）
     const summary: Record<string, unknown> = { ...activity }
@@ -639,10 +639,12 @@ describe('作者模式只读（规格 §6.3）', () => {
     renderPage()
 
     expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除活动' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '重命名' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '设为赛段' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '导出 GPX' })).toBeInTheDocument()
+    // 写操作按钮不再隐藏：置灰 + title 提示只读，避免「按钮凭空消失」困惑
+    expect(screen.getByRole('button', { name: '删除活动' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '重命名' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '设为赛段' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '设为赛段' })).toHaveAttribute('title', '作者数据为只读快照，切换到「我的数据」后可创建赛段')
+    expect(screen.getByRole('button', { name: '导出 GPX' })).toBeEnabled()
   })
 
   it('本地模式显示删除/重命名/设为赛段按钮', async () => {

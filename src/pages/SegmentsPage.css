@@ -4,3 +4,35 @@
 .segments-page__message {
   color: var(--text-secondary);
 }
+
+/* 作者工作流工具条：右对齐，与标题同行视觉分组 */
+.segments-page__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4, 16px);
+}
+
+.segments-page__export {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.segments-page__export:hover:not(:disabled) {
+  background-color: var(--bg-surface);
+  border-color: var(--text-secondary);
+  color: var(--text);
+}
+
+.segments-page__export:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

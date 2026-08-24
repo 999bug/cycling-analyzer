@@ -591,16 +591,17 @@ function ActivityDetailPage() {
           ) : (
             <h1 className="activity-detail__title">
               {activity.name || `${formatDate(activity.startTime)} 骑行`}
-              {source === 'local' && (
-                <button
-                  type="button"
-                  className="activity-detail__rename-trigger"
-                  aria-label="重命名"
-                  onClick={handleStartRename}
-                >
-                  重命名
-                </button>
-              )}
+              {/* 作者源只读：按钮保留可见但禁用，避免写操作入口凭空消失（规格外设计文档 §6.3） */}
+              <button
+                type="button"
+                className="activity-detail__rename-trigger"
+                aria-label="重命名"
+                onClick={handleStartRename}
+                disabled={source === 'author'}
+                title={source === 'author' ? '作者数据为只读快照，切换到「我的数据」后可编辑' : undefined}
+              >
+                重命名
+              </button>
             </h1>
           )}
           <div className="activity-detail__meta">
@@ -620,27 +621,31 @@ function ActivityDetailPage() {
           >
             导出 GPX
           </button>
-          {source === 'local' && (
-            <>
-              <button
-                type="button"
-                className="activity-detail__export"
-                onClick={handleCreateSegment}
-                disabled={!hasTrack}
-                title={hasTrack ? '以本骑行起终点创建赛段' : '该活动无轨迹坐标，无法创建赛段'}
-              >
-                设为赛段
-              </button>
-              <button
-                type="button"
-                className="activity-detail__delete"
-                onClick={handleDelete}
-                disabled={deleting}
-              >
-                {deleting ? '删除中…' : '删除活动'}
-              </button>
-            </>
-          )}
+          {/* 设为赛段 / 删除活动：作者源只读时保留可见但禁用（提示切源），不再凭空隐藏 */}
+          <button
+            type="button"
+            className="activity-detail__export"
+            onClick={handleCreateSegment}
+            disabled={source === 'author' || !hasTrack}
+            title={
+              source === 'author'
+                ? '作者数据为只读快照，切换到「我的数据」后可创建赛段'
+                : hasTrack
+                  ? '以本骑行起终点创建赛段'
+                  : '该活动无轨迹坐标，无法创建赛段'
+            }
+          >
+            设为赛段
+          </button>
+          <button
+            type="button"
+            className="activity-detail__delete"
+            onClick={handleDelete}
+            disabled={source === 'author' || deleting}
+            title={source === 'author' ? '作者数据为只读快照，切换到「我的数据」后可删除' : undefined}
+          >
+            {deleting ? '删除中…' : '删除活动'}
+          </button>
         </div>
       </header>
 

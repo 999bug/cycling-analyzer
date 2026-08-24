@@ -146,6 +146,30 @@ describe('赛段页面', () => {
     )
   })
 
+  it('本地模式提供导出作者赛段 JSON 按钮（作者工作流）', async () => {
+    await seedSegment()
+    const clickSpy = vi.fn()
+    vi.stubGlobal('URL', {
+      createObjectURL: () => 'blob:test',
+      revokeObjectURL: clickSpy,
+    })
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByText('滨江线')).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: '导出作者赛段 JSON' })
+    await userEvent.click(button)
+
+    // 触发了下载（revokeObjectURL 被调用即走完下载流程）
+    expect(clickSpy).toHaveBeenCalled()
+  })
+
+  it('无赛段时导出按钮禁用', async () => {
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByText(/还没有赛段/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出作者赛段 JSON' })).toBeDisabled()
+  })
+
   it('删除赛段后卡片消失', async () => {
     await seedSegment('待删赛段')
     render(<SegmentsPage />, { wrapper: MemoryRouter })
@@ -203,6 +227,6 @@ describe('赛段页面', () => {
     useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
     render(<SegmentsPage />, { wrapper: MemoryRouter })
 
-    expect(await screen.findByText('作者尚未创建赛段。')).toBeInTheDocument()
+    expect(await screen.findByText(/作者尚未创建赛段/)).toBeInTheDocument()
   })
 })

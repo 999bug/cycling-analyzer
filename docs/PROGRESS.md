@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（版本更新日志页面上线，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（作者源只读提示优化 + 作者赛段导出工作流，版本 2.14.0，见 §0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **作者源只读提示优化 + 作者赛段导出工作流**（用户反馈：详情页「设为赛段」按钮消失） | 根因：快照发布成功后线上默认落在作者源（只读），写操作按钮按设计隐藏但无任何提示。①`ActivityDetailPage.tsx`：作者源下「重命名 / 设为赛段 / 删除活动」不再隐藏，改为置灰 disabled + title 提示「切换到我的数据后操作」（CSS 补 rename-trigger disabled 态）；②新增 `src/features/segments/authorSegmentsExport.ts` 纯函数（本地赛段 → author-data/segments.json 格式 JSON + 浏览器下载），`SegmentsPage.tsx` 本地模式工具条加「导出作者赛段 JSON」按钮（无赛段禁用），作者模式空态文案补作者工作流引导；③测试：activityDetailPage 作者模式断言改可见+禁用+title、segmentsPage 新增导出按钮/无赛段禁用 2 用例；④changelogData.ts 追加 2.14.0 条目，版本 2.13.0 → 2.14.0 | push 触发 CI |
 | ✅ 已提交 | **版本更新日志页面**（用户需求：页面上一目了然看到每个版本新增功能） | ①新建 `src/features/changelog/changelogData.ts`：近期版本功能清单静态数据（倒序维护，每版发布时在头部追加）；②新建 `src/pages/ChangelogPage.tsx` + CSS：时间线卡片展示版本徽章/日期/功能列表，当前运行版本（`__APP_VERSION__`）高亮品牌色左边线 + 「当前版本」徽章；③路由 `/changelog`（ROUTES[12] 懒加载）+ 侧边栏导航「更新日志」+ 底部版本号改可点击链接直达本页（hover 提示）；④测试 `tests/pages/changelogPage.test.tsx` 4 用例（标题引导/全量条目倒序/当前版本徽章唯一/功能列表抽查），全量 852/852 + lint/build 绿；⑤版本 2.12.0 → 2.13.0 | push 触发 CI |
 | ✅ 已提交 | **赛段排行榜 UI 增强 + 有氧效率趋势**（用户确认开发；无功率计场景） | ①`SegmentCards.tsx` 展开完整成绩排行列表（`<ol>` 排名/日期/用时整行链接详情，按用时升序 = 排名顺序，空榜显示「暂无穿越记录」；本地与作者快照双源一致生效）；②新建 `src/features/analysis/aerobicEfficiency.ts` 纯函数：AE = 平均速度 ÷ 平均心率，按自然月时长加权（Σ速度×时长 ÷ Σ心率×时长），输出连续 N 月序列、空月 value=undefined 不伪造；③`PerformancePage.tsx` 新增「有氧效率趋势」区块：Recharts LineChart 近 12 月 AE + 4 月移动平均虚线，全部月份无可参与活动（缺平均速度或平均心率）时整块隐藏；④测试：新增 `tests/features/analysis/aerobicEfficiency.test.ts` 4 用例 + `segmentsPage.test.tsx` 补完整排行断言（排名/日期/用时/链接），全量 848/848 + lint/build 绿；⑤版本 2.11.0 → 2.12.0 | push 触发 CI |
 | ✅ 已提交 | **分段剖面悬停 Tooltip 速度/功率/心率改显示实时值**（用户需求：悬停点处的实时速度/功率/心率，非整段平均；功率为空则整行不显示） | ①`segmentsProfile.ts` `SegmentProfilePoint` 增可选 `speed?/power?/heartRate?`，`buildSegmentProfile` 构建点时从原始 `ActivityRecord` 携带（simplifyRoute 保留完整记录，抽稀不影响字段）；②`SegmentsSection.tsx` `SegmentTooltipContent` 速度/功率/心率三行改用 `point.*` 悬停点实时值，功率 `undefined` 时整行不 push（连标签都不渲染——功率计缺失常见场景），速度/心率为空仍显示 `—`；③测试：双爬坡纯函数用例补实时值携带断言 + 无速度/功率/心率记录剖面点字段 undefined 断言，新增无功率爬坡悬停用例（实时 18.0 km/h / 150 bpm，功率行整体隐藏），全量 844/844 + lint/build 绿；④版本 2.10.0 → 2.11.0 | push 触发 CI |
