@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.213.0",
