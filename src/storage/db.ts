@@ -207,6 +207,9 @@ export interface SegmentEntity {
 
   /** Strava 赛段 ID（从 Strava 导入时记录，用于去重；非索引字段免升 DB_VERSION） */
   stravaId?: number;
+
+  /** 赛段轨迹点（GPX 导入时存储，[纬度, 经度] 数组；非索引字段免升 DB_VERSION） */
+  trackPoints?: [number, number][];
 }
 
 /**

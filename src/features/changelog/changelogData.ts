@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.17.0',
+    date: '2026-08-24',
+    features: [
+      '赛段卡片新增迷你地图：GPX 导入的赛段直接显示轨迹路线，手动/API 导入的显示起终点标记',
+      'GPX 导入保留完整轨迹：匹配时校验骑行轨迹与赛段路径相似度，消除盘山路折返导致的误匹配',
+      '成绩更准确：只有实际走过赛段路线的骑行才计入成绩榜',
+    ],
+  },  {
     version: '2.16.0',
     date: '2026-08-24',
     features: [

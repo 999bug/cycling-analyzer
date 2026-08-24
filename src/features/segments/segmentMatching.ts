@@ -14,6 +14,9 @@ import { haversineMeters } from '@/features/routes/routeGrouping'
 /** 起终点圆半径（米）：GPS 漂移容差 */
 export const SEGMENT_RADIUS_METERS = 200
 
+/** 路径相似度阈值（米）：活动轨迹点到赛段轨迹中位数距离超过该值判定为路径不重合 */
+const PATH_SIMILARITY_THRESHOLD_METERS = 100
+
 /**
  * 赛段几何（起终点圆心）。
  */
@@ -29,6 +32,9 @@ export interface SegmentGeometry {
 
   /** 终点经度（十进制度） */
   endLongitude: number
+
+  /** 赛段完整轨迹（GPX 导入时有值；用于路径相似度校验消除折返误匹配） */
+  trackPoints?: readonly (readonly [number, number])[]
 }
 
 /**
@@ -99,6 +105,48 @@ function withinCircle(
  * @param records 完整逐点数据（按时间升序）
  * @returns 多次穿越的最佳用时（秒）；未完整穿越返回 undefined
  */
+/**
+ * 路径校验：赛段带完整轨迹时，检查活动轨迹与赛段轨迹的路径相似度。
+ *
+ * 对活动轨迹中进入起点圆到进入终点圆之间的每个 GPS 点，
+ * 计算到赛段轨迹的最近距离；中位数超过阈值则判定为「路径不重合」
+ * （例如盘山路折返：起终点圆距离近但实际路径完全不同）。
+ *
+ * @param trackPoints 赛段完整轨迹（[纬度, 经度] 数组）
+ * @param records 活动逐点记录（已截取起点圆到终点圆之间）
+ * @returns 路径重合返回 true；点数不足或赛段轨迹过短返回 true（退化为仅圆匹配）
+ */
+function trackMatchesPath(
+  trackPoints: readonly (readonly [number, number])[],
+  records: readonly ActivityRecord[],
+): boolean {
+  if (trackPoints.length < 3) {
+    return true
+  }
+  const gpsRecords = records.filter(
+    (record) => record.latitude !== undefined && record.longitude !== undefined,
+  )
+  if (gpsRecords.length < 3) {
+    return true
+  }
+  const distances: number[] = []
+  for (const record of gpsRecords) {
+    let minDistance = Number.POSITIVE_INFINITY
+    for (const [segLat, segLng] of trackPoints) {
+      const d = haversineMeters(
+        { latitude: record.latitude!, longitude: record.longitude! },
+        { latitude: segLat, longitude: segLng },
+      )
+      if (d < minDistance) {
+        minDistance = d
+      }
+    }
+    distances.push(minDistance)
+  }
+  distances.sort((a, b) => a - b)
+  const median = distances[Math.floor(distances.length / 2)]
+  return median <= PATH_SIMILARITY_THRESHOLD_METERS
+}
 export function matchSegmentEffort(
   segment: SegmentGeometry,
   records: readonly ActivityRecord[],
@@ -152,9 +200,17 @@ export function matchSegmentEffort(
 
     // startTimestamp 在 leftStartCircle=true 时必已定义，显式判断仅为通过 TS 窄化
     if (inEnd && startTimestamp !== undefined && record.timestamp > startTimestamp) {
-      const duration = record.timestamp - startTimestamp
-      if (best === undefined || duration < best) {
-        best = duration
+      // 路径校验：截取起点圆到终点圆之间的记录，检查与赛段轨迹的相似度
+      // 不带轨迹的赛段（手动创建/API 导入）跳过校验，退化为仅圆匹配
+      const between = records.filter(
+        (r) => r.latitude !== undefined && r.longitude !== undefined &&
+               r.timestamp >= startTimestamp! && r.timestamp <= record.timestamp,
+      )
+      if (segment.trackPoints === undefined || trackMatchesPath(segment.trackPoints, between)) {
+        const duration = record.timestamp - startTimestamp
+        if (best === undefined || duration < best) {
+          best = duration
+        }
       }
       startTimestamp = inStart ? record.timestamp : undefined
       leftStartCircle = false

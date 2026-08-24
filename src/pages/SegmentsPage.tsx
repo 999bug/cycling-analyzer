@@ -151,6 +151,10 @@ function SegmentsPage() {
   const [importMessage, setImportMessage] = useState('')
   const [summaries, setSummaries] = useState<{ id: string; name: string }[]>([])
   const [exploreActivityId, setExploreActivityId] = useState('')
+  // 瓦片源：默认 OSM，降级高德后记忆（与热力图页共用 sessionStorage key）
+  const [mapSourceIndex, setMapSourceIndex] = useState(
+    () => (sessionStorage.getItem('cycling-map-tile-fallback') === 'amap' ? 1 : 0),
+  )
 
   // 本地模式加载活动下拉（最近 20 条，倒序）
   useEffect(() => {
@@ -413,6 +417,11 @@ function SegmentsPage() {
           segments={segments}
           leaderboards={leaderboards}
           onDelete={source === 'local' ? handleDelete : undefined}
+          sourceIndex={mapSourceIndex}
+          onMapFallback={() => {
+            setMapSourceIndex(1)
+            sessionStorage.setItem('cycling-map-tile-fallback', 'amap')
+          }}
         />
       )}
     </>

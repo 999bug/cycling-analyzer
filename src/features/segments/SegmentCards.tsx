@@ -7,6 +7,7 @@
  */
 import { Link } from 'react-router-dom'
 import type { SegmentEntity } from '@/storage/db'
+import { SegmentMiniMap } from './SegmentMiniMap'
 import type { SegmentEffort } from '@/features/segments/segmentMatching'
 import { formatDate, formatDuration } from '@/utils/format'
 import '@/features/segments/segmentCards.css'
@@ -26,6 +27,12 @@ export interface SegmentCardsProps {
 
   /** 删除回调（作者模式只读，不传则隐藏删除按钮） */
   onDelete?: (id: number) => void
+
+  /** 瓦片源索引（0 = OSM，1 = 高德降级） */
+  sourceIndex?: number
+
+  /** 瓦片降级回调（OSM 连续失败后切高德并记忆） */
+  onMapFallback?: () => void
 }
 
 /**
@@ -33,7 +40,7 @@ export interface SegmentCardsProps {
  *
  * @param props 组件参数
  */
-function SegmentCards({ segments, leaderboards, failed = false, onDelete }: SegmentCardsProps) {
+function SegmentCards({ segments, leaderboards, failed = false, onDelete, sourceIndex = 0, onMapFallback }: SegmentCardsProps) {
   return (
     <div className="segment-cards">
       {segments.map((segment) => {
@@ -41,6 +48,15 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete }: Segm
         const leaderboard = leaderboards?.get(id)
         return (
           <div key={id} className="segment-card">
+            <SegmentMiniMap
+              trackPoints={segment.trackPoints}
+              startLatitude={segment.startLatitude}
+              startLongitude={segment.startLongitude}
+              endLatitude={segment.endLatitude}
+              endLongitude={segment.endLongitude}
+              sourceIndex={sourceIndex}
+              onFallback={onMapFallback}
+            />
             <div className="segment-card__header">
               <span className="segment-card__name">{segment.name}</span>
               {onDelete !== undefined && (

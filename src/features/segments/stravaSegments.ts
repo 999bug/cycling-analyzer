@@ -263,6 +263,7 @@ export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import(
     endLongitude: last.lng,
     sourceActivityId: 'strava',
     createdAt: new Date().toISOString(),
+    trackPoints: points.map((p) => [p.lat, p.lng] as [number, number]),
   } satisfies import('@/storage/db').SegmentEntity
 }
 

@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（赛段 GPX 文件导入，版本 2.16.0，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（赛段迷你地图 + 路径校验，版本 2.17.0，见 §0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -17,6 +17,7 @@
 > 避免重复工作或遗漏。**每开始一个新任务在此登记；每完成一步更新状态；全部完成并提交后移除**。
 
 | 状态 | 任务 | 进度 | 下一步 |
+| ✅ 已提交 | **赛段迷你地图 + 路径校验**（用户反馈：导入 GPX 后赛段卡片信息太少、35 秒爬妙峰山明显误匹配） | ①SegmentEntity 加可选 trackPoints（非索引字段免升 DB_VERSION），parseSegmentGpx 存完整轨迹；②segmentMatching.ts 新增 trackMatchesPath（活动穿越起终点圆之间的 GPS 点到赛段轨迹中位数距离 ≤ 100m 才计成绩，无轨迹退化仅圆匹配）；③新建 SegmentMiniMap.tsx（Leaflet 迷你地图，有轨迹画折线/无轨迹画起终点标记，fitBounds 禁交互，OSM→高德降级）；④SegmentCards.tsx 卡片顶部嵌迷你地图 + sourceIndex/onMapFallback 透传；⑤SegmentsPage.tsx 瓦片源 state + 降级记忆（sessionStorage 共享 key）；⑥segmentCards.css 补 .segment-card__map 样式 | 全量 874/874 + lint/build 绿；版本 2.16.0 → 2.17.0，changelog 已追加 |
 | ✅ 已提交 | **赛段 GPX 文件导入**（用户反馈：无 Strava 订阅无法创建 API 应用；改走免费路径——Strava 赛段页免费导出 GPX，本地解析建赛段） | ①`stravaSegments.ts` 增 `parseSegmentGpx`（DOMParser 解析 trkpt 首末点为起终点圆 + trk/metadata name 兜底文件名）与 `filterNewGpxSegments`（名称+起终点坐标 5 位小数去重）；②SegmentsPage 导入面板加 GPX 文件选择（支持多选），解析入库计数反馈；③纯函数测试 + 页面上传流程测试 | 全量 874/874 + lint/build 绿；版本 2.15.0 → 2.16.0，changelog 已追加 |
 | ✅ 已提交 | **Strava 赛段导入 + 自动匹配**（用户需求：不想手动设赛段，直接拉 Strava 已有赛段按起终点自动匹配成绩） | ①`src/features/segments/stravaSegments.ts` 纯函数模块（Strava API 类型/分页拉收藏赛段 fetchStarredSegments、范围探索 fetchExploreSegments、映射 SegmentEntity 带 stravaId、filterNewSegments 按 stravaId 去重、trackBounds 由活动逐点算 explore bounds）；②SegmentEntity 加可选 stravaId（非索引字段免升 DB_VERSION）；③SegmentsPage 本地模式折叠面板「从 Strava 导入赛段」：token 输入框存 localStorage + 过期提示、「导入收藏赛段」按钮、「按活动探索」选活动算 bounds 再探索，去重入库；④单测 mock fetch 覆盖映射/去重/bounds/UI 流程 | 全量 867/867 + lint/build 绿；版本 2.14.0 → 2.15.0，changelog 已追加；待提交推送 |
 |---|---|---|---|

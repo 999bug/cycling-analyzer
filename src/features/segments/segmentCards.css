@@ -127,3 +127,12 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 迷你地图：卡片顶部固定高度，圆角裁切 Leaflet 容器 */
+.segment-card__map {
+  border-radius: 8px;
+  height: 140px;
+  min-height: 140px;
+  width: 100%;
+  z-index: 0;
+}
