@@ -221,6 +221,78 @@ describe('赛段页面', () => {
     expect(within(card).queryByRole('button', { name: /删除赛段/ })).not.toBeInTheDocument()
   })
 
+  it('Strava 导入：粘贴 Token 拉收藏赛段去重入库', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          { id: 501, name: '外滩冲刺线', start_latlng: [31.23, 121.49], end_latlng: [31.25, 121.51] },
+          // 与 seedSegment 同位置不同 ID：仍会入库（stravaId 去重只看 stravaId）
+          { id: 502, name: '滨江线 Strava', start_latlng: [31.2, 121.5], end_latlng: [31.3, 121.6] },
+          // 缺坐标：被过滤
+          { id: 503, name: '无坐标线' },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    // 展开导入面板并输入 token
+    await userEvent.click(await screen.findByText('从 Strava 导入赛段'))
+    const tokenInput = screen.getByPlaceholderText(/粘贴 Strava Access Token/)
+    await userEvent.type(tokenInput, 'fake-token')
+    await userEvent.click(screen.getByRole('button', { name: '导入收藏赛段' }))
+
+    expect(await screen.findByText(/导入完成：新增 2 个/)).toBeInTheDocument()
+    // 新赛段出现在列表
+    expect(screen.getByText('外滩冲刺线')).toBeInTheDocument()
+    expect(screen.getByText('滨江线 Strava')).toBeInTheDocument()
+    // token 已持久化
+    expect(localStorage.getItem('strava-access-token')).toBe('fake-token')
+  })
+
+  it('Strava 导入：已存在 stravaId 的赛段跳过', async () => {
+    const repository = new DexieSegmentRepository(testDb)
+    await repository.addSegment({
+      name: '旧导入',
+      startLatitude: 31.0,
+      startLongitude: 121.0,
+      endLatitude: 31.1,
+      endLongitude: 121.1,
+      sourceActivityId: 'strava',
+      createdAt: '2026-08-01T00:00:00',
+      stravaId: 601,
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [{ id: 601, name: '旧导入新名', start_latlng: [31.0, 121.0], end_latlng: [31.1, 121.1] }],
+      }),
+    }))
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    await userEvent.click(await screen.findByText('从 Strava 导入赛段'))
+    await userEvent.type(screen.getByPlaceholderText(/粘贴 Strava Access Token/), 'fake-token')
+    await userEvent.click(screen.getByRole('button', { name: '导入收藏赛段' }))
+
+    expect(await screen.findByText(/导入完成：新增 0 个/)).toBeInTheDocument()
+    // 名称保持旧值（未覆盖）
+    expect(screen.getByText('旧导入')).toBeInTheDocument()
+  })
+
+  it('Strava 导入：401 时提示重新获取 Token', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: '' , json: async () => ({}) }))
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+
+    await userEvent.click(await screen.findByText('从 Strava 导入赛段'))
+    await userEvent.type(screen.getByPlaceholderText(/粘贴 Strava Access Token/), 'expired')
+    await userEvent.click(screen.getByRole('button', { name: '导入收藏赛段' }))
+
+    expect(await screen.findByText(/Token 无效或已过期/)).toBeInTheDocument()
+  })
+
   it('作者模式快照缺赛段文件时显示空态（不报错）', async () => {
     mockSnapshotClient.getSegments.mockRejectedValue(new Error('HTTP 404'))
     mockSnapshotClient.getSegmentResults.mockRejectedValue(new Error('HTTP 404'))

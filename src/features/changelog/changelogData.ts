@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.15.0',
+    date: '2026-08-24',
+    features: [
+      '新增「从 Strava 导入赛段」：粘贴 Access Token 即可拉取 Strava 收藏赛段，按起终点自动匹配本地骑行成绩',
+      '支持「按活动探索周边赛段」：选择一次骑行自动以轨迹范围查询该区域 Strava 赛段',
+      '导入的赛段按 Strava ID 自动去重，重复导入不会产生重复赛段；与手建赛段一样参与成绩榜计算',
+    ],
+  },
+  {
     version: '2.14.0',
     date: '2026-08-24',
     features: [

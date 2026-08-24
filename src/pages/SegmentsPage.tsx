@@ -20,6 +20,13 @@ import { summariesScanKey } from '@/storage/scanCache'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import { downloadAuthorSegments } from '@/features/segments/authorSegmentsExport'
+import {
+  fetchExploreSegments,
+  fetchStarredSegments,
+  filterNewSegments,
+  mapStravaSegment,
+  trackBounds,
+} from '@/features/segments/stravaSegments'
 import '@/pages/SegmentsPage.css'
 
 /** 赛段仓库单例 */
@@ -31,6 +38,12 @@ const segmentRepository = new DexieSegmentRepository(db)
  * 两者任一变化（导入/删除活动、增删赛段）都会改变 key 自动失效。
  */
 let leaderboardCache: { key: string; boards: ReadonlyMap<number, SegmentEffort[]> } | null = null
+
+/** localStorage key：Strava access token（6 小时过期，过期需重新粘贴） */
+const STRAVA_TOKEN_KEY = 'strava-access-token'
+
+/** Strava 导入状态：idle / importing / done / error */
+type ImportState = 'idle' | 'importing' | 'done' | 'error'
 
 /** 加载状态：loading / ready / error */
 type LoadState = 'loading' | 'ready' | 'error'
@@ -130,6 +143,111 @@ function SegmentsPage() {
     return cancel
   }, [reload, importSummary])
 
+  // ---- Strava 赛段导入状态（仅本地模式展示） ----
+  const [stravaToken, setStravaToken] = useState(() => localStorage.getItem(STRAVA_TOKEN_KEY) ?? '')
+  const [importState, setImportState] = useState<ImportState>('idle')
+  const [importMessage, setImportMessage] = useState('')
+  const [summaries, setSummaries] = useState<{ id: string; name: string }[]>([])
+  const [exploreActivityId, setExploreActivityId] = useState('')
+
+  // 本地模式加载活动下拉（最近 20 条，倒序）
+  useEffect(() => {
+    if (source !== 'local') {
+      return
+    }
+    let cancelled = false
+    void activityRepository
+      .listAllSummaries()
+      .then((all) => {
+        if (cancelled) {
+          return
+        }
+        const items = all
+          .slice()
+          .sort((a, b) => b.startTime.localeCompare(a.startTime))
+          .slice(0, 20)
+          .map((s) => ({ id: s.id, name: s.name || s.fileName }))
+        setSummaries(items)
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load summaries for explore', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activityRepository, source])
+
+  /**
+   * 导入 Strava 收藏赛段：分页拉取 → 映射 → 按 stravaId 去重入库。
+   */
+  async function handleImportStarred() {
+    if (!stravaToken.trim()) {
+      setImportState('error')
+      setImportMessage('请先粘贴 Strava Access Token。')
+      return
+    }
+    setImportState('importing')
+    setImportMessage('')
+    try {
+      localStorage.setItem(STRAVA_TOKEN_KEY, stravaToken.trim())
+      const existing = await segmentRepository.listSegments()
+      const starred = await fetchStarredSegments(stravaToken.trim())
+      const mapped = starred
+        .map((s) => mapStravaSegment(s))
+        .filter((s): s is NonNullable<typeof s> => s !== null)
+      const fresh = filterNewSegments(existing, mapped)
+      for (const segment of fresh) {
+        await segmentRepository.addSegment(segment)
+      }
+      setImportState('done')
+      setImportMessage(`导入完成：新增 ${fresh.length} 个（拉到 ${mapped.length} 个，其余已存在或缺坐标）。`)
+      reload()
+    } catch (error: unknown) {
+      console.error('Failed to import Strava segments', error)
+      setImportState('error')
+      setImportMessage(error instanceof Error && error.message.includes('401')
+        ? 'Strava Token 无效或已过期（401），请重新获取后粘贴。'
+        : 'Strava 导入失败，请检查网络与 Token 后重试。')
+    }
+  }
+
+  /**
+   * 按选中活动的轨迹范围探索周边赛段并去重入库。
+   */
+  async function handleExplore() {
+    if (!exploreActivityId) {
+      return
+    }
+    setImportState('importing')
+    setImportMessage('')
+    try {
+      const records = await activityRepository.getRecords(exploreActivityId)
+      const bounds = trackBounds(records)
+      if (!bounds) {
+        setImportState('error')
+        setImportMessage('该活动没有 GPS 数据，无法探索周边赛段。')
+        return
+      }
+      const existing = await segmentRepository.listSegments()
+      const explored = await fetchExploreSegments(stravaToken.trim(), bounds)
+      const mapped = explored
+        .map((s) => mapStravaSegment(s))
+        .filter((s): s is NonNullable<typeof s> => s !== null)
+      const fresh = filterNewSegments(existing, mapped)
+      for (const segment of fresh) {
+        await segmentRepository.addSegment(segment)
+      }
+      setImportState('done')
+      setImportMessage(`探索完成：新增 ${fresh.length} 个（发现 ${mapped.length} 个，其余已存在或缺坐标）。`)
+      reload()
+    } catch (error: unknown) {
+      console.error('Failed to explore Strava segments', error)
+      setImportState('error')
+      setImportMessage(error instanceof Error && error.message.includes('401')
+        ? 'Strava Token 无效或已过期（401），请重新获取后粘贴。'
+        : '探索失败，请检查网络与 Token 后重试。')
+    }
+  }
   /**
    * 删除赛段后重新加载列表与成绩。
    *
@@ -147,6 +265,57 @@ function SegmentsPage() {
   return (
     <>
       <h1>赛段</h1>
+      {source === 'local' && (
+        <details className="segments-page__strava">
+          <summary>从 Strava 导入赛段</summary>
+          <div className="segments-page__strava-body">
+            <label className="segments-page__strava-row">
+              <span>Access Token</span>
+              <input
+                type="password"
+                value={stravaToken}
+                onChange={(e) => setStravaToken(e.target.value)}
+                placeholder="粘贴 Strava Access Token（6 小时过期）"
+                autoComplete="off"
+              />
+            </label>
+            <p className="segments-page__strava-hint">
+              在 strava.com/settings/api 创建应用后获取；Token 过期后重新粘贴即可。
+            </p>
+            <div className="segments-page__strava-actions">
+              <button
+                type="button"
+                onClick={() => void handleImportStarred()}
+                disabled={importState === 'importing'}
+              >
+                导入收藏赛段
+              </button>
+              <select
+                value={exploreActivityId}
+                onChange={(e) => setExploreActivityId(e.target.value)}
+                aria-label="选择活动用于探索周边赛段"
+              >
+                <option value="">按活动探索周边赛段…</option>
+                {summaries.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleExplore()}
+                disabled={importState === 'importing' || exploreActivityId === ''}
+              >
+                探索周边赛段
+              </button>
+            </div>
+            {importMessage !== '' && (
+              <p className={`segments-page__strava-message segments-page__strava-message--${importState}`}>
+                {importMessage}
+              </p>
+            )}
+          </div>
+        </details>
+      )}
       {source === 'local' && (
         <div className="segments-page__toolbar">
           <button

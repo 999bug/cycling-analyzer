@@ -204,6 +204,9 @@ export interface SegmentEntity {
 
   /** 创建时间（ISO 8601） */
   createdAt: string;
+
+  /** Strava 赛段 ID（从 Strava 导入时记录，用于去重；非索引字段免升 DB_VERSION） */
+  stravaId?: number;
 }
 
 /**

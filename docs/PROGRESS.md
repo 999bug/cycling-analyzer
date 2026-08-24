@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（作者源只读提示优化 + 作者赛段导出工作流，版本 2.14.0，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（Strava 赛段导入 + 自动匹配，版本 2.15.0，见 §0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -17,6 +17,7 @@
 > 避免重复工作或遗漏。**每开始一个新任务在此登记；每完成一步更新状态；全部完成并提交后移除**。
 
 | 状态 | 任务 | 进度 | 下一步 |
+| ✅ 已提交 | **Strava 赛段导入 + 自动匹配**（用户需求：不想手动设赛段，直接拉 Strava 已有赛段按起终点自动匹配成绩） | ①`src/features/segments/stravaSegments.ts` 纯函数模块（Strava API 类型/分页拉收藏赛段 fetchStarredSegments、范围探索 fetchExploreSegments、映射 SegmentEntity 带 stravaId、filterNewSegments 按 stravaId 去重、trackBounds 由活动逐点算 explore bounds）；②SegmentEntity 加可选 stravaId（非索引字段免升 DB_VERSION）；③SegmentsPage 本地模式折叠面板「从 Strava 导入赛段」：token 输入框存 localStorage + 过期提示、「导入收藏赛段」按钮、「按活动探索」选活动算 bounds 再探索，去重入库；④单测 mock fetch 覆盖映射/去重/bounds/UI 流程 | 全量 867/867 + lint/build 绿；版本 2.14.0 → 2.15.0，changelog 已追加；待提交推送 |
 |---|---|---|---|
 | ✅ 已提交 | **作者源只读提示优化 + 作者赛段导出工作流**（用户反馈：详情页「设为赛段」按钮消失） | 根因：快照发布成功后线上默认落在作者源（只读），写操作按钮按设计隐藏但无任何提示。①`ActivityDetailPage.tsx`：作者源下「重命名 / 设为赛段 / 删除活动」不再隐藏，改为置灰 disabled + title 提示「切换到我的数据后操作」（CSS 补 rename-trigger disabled 态）；②新增 `src/features/segments/authorSegmentsExport.ts` 纯函数（本地赛段 → author-data/segments.json 格式 JSON + 浏览器下载），`SegmentsPage.tsx` 本地模式工具条加「导出作者赛段 JSON」按钮（无赛段禁用），作者模式空态文案补作者工作流引导；③测试：activityDetailPage 作者模式断言改可见+禁用+title、segmentsPage 新增导出按钮/无赛段禁用 2 用例；④changelogData.ts 追加 2.14.0 条目，版本 2.13.0 → 2.14.0 | push 触发 CI |
 | ✅ 已提交 | **版本更新日志页面**（用户需求：页面上一目了然看到每个版本新增功能） | ①新建 `src/features/changelog/changelogData.ts`：近期版本功能清单静态数据（倒序维护，每版发布时在头部追加）；②新建 `src/pages/ChangelogPage.tsx` + CSS：时间线卡片展示版本徽章/日期/功能列表，当前运行版本（`__APP_VERSION__`）高亮品牌色左边线 + 「当前版本」徽章；③路由 `/changelog`（ROUTES[12] 懒加载）+ 侧边栏导航「更新日志」+ 底部版本号改可点击链接直达本页（hover 提示）；④测试 `tests/pages/changelogPage.test.tsx` 4 用例（标题引导/全量条目倒序/当前版本徽章唯一/功能列表抽查），全量 852/852 + lint/build 绿；⑤版本 2.12.0 → 2.13.0 | push 触发 CI |
