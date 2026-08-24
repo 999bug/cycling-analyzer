@@ -282,6 +282,36 @@ describe('赛段页面', () => {
     expect(screen.getByText('旧导入')).toBeInTheDocument()
   })
 
+  it('GPX 导入：上传 Strava 导出的赛段文件自动建段并去重', async () => {
+    const repository = new DexieSegmentRepository(testDb)
+    await repository.addSegment({
+      name: '已导入线',
+      startLatitude: 10.0,
+      startLongitude: 20.0,
+      endLatitude: 10.1,
+      endLongitude: 20.1,
+      sourceActivityId: 'strava',
+      createdAt: '2026-08-01T00:00:00',
+    })
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+    await userEvent.click(await screen.findByText('从 Strava 导入赛段'))
+
+    const gpx = (name: string, xml: string) => new File([xml], name, { type: 'application/gpx+xml' })
+    const fileInput = screen.getByLabelText('导入 Strava 赛段 GPX 文件') as HTMLInputElement
+    await userEvent.upload(fileInput, [
+      gpx('新爬坡.gpx', '<gpx><trk><name>新爬坡</name><trkseg>' +
+        '<trkpt lat="31.4" lon="121.7"></trkpt><trkpt lat="31.5" lon="121.8"></trkpt>' +
+        '</trkseg></trk></gpx>'),
+      // 与已有赛段同名同起点：去重跳过
+      gpx('已导入线.gpx', '<gpx><trk><name>已导入线</name><trkseg>' +
+        '<trkpt lat="10" lon="20"></trkpt><trkpt lat="10.1" lon="20.1"></trkpt>' +
+        '</trkseg></trk></gpx>'),
+    ])
+
+    expect(await screen.findByText(/导入 2 个 GPX 文件：新增 1 个/)).toBeInTheDocument()
+    expect(screen.getByText('新爬坡')).toBeInTheDocument()
+  })
+
   it('Strava 导入：401 时提示重新获取 Token', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: '' , json: async () => ({}) }))
     render(<SegmentsPage />, { wrapper: MemoryRouter })

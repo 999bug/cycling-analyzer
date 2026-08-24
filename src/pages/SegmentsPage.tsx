@@ -23,6 +23,8 @@ import { downloadAuthorSegments } from '@/features/segments/authorSegmentsExport
 import {
   fetchExploreSegments,
   fetchStarredSegments,
+  filterNewGpxSegments,
+  parseSegmentGpx,
   filterNewSegments,
   mapStravaSegment,
   trackBounds,
@@ -248,6 +250,53 @@ function SegmentsPage() {
         : '探索失败，请检查网络与 Token 后重试。')
     }
   }
+
+  /**
+   * 导入 Strava 导出的赛段 GPX 文件（免费路径，无需 API 应用）：
+   * 浏览器解析轨迹首末点为起终点圆，按「名称+起终点坐标」去重入库。
+   *
+   * @param files 用户选择的 .gpx 文件列表
+   */
+  async function handleImportGpx(files: FileList) {
+    if (files.length === 0) {
+      return
+    }
+    setImportState('importing')
+    setImportMessage('')
+    try {
+      const parsed: Omit<SegmentEntity, 'id'>[] = []
+      let invalidCount = 0
+      for (const file of Array.from(files)) {
+        try {
+          const segment = parseSegmentGpx(await file.text(), file.name)
+          if (segment === null) {
+            invalidCount += 1
+          } else {
+            parsed.push(segment)
+          }
+        } catch (error: unknown) {
+          console.error('Failed to parse GPX file', file.name, error)
+          invalidCount += 1
+        }
+      }
+      const existing = await segmentRepository.listSegments()
+      const fresh = filterNewGpxSegments(existing, parsed)
+      for (const segment of fresh) {
+        await segmentRepository.addSegment(segment)
+      }
+      const skipped = invalidCount + (parsed.length - fresh.length)
+      setImportState(fresh.length > 0 ? 'done' : 'error')
+      setImportMessage(
+        `导入 ${files.length} 个 GPX 文件：新增 ${fresh.length} 个` +
+        (skipped > 0 ? `（跳过 ${skipped} 个无效或重复）。` : '。'),
+      )
+      reload()
+    } catch (error: unknown) {
+      console.error('Failed to import GPX segments', error)
+      setImportState('error')
+      setImportMessage('GPX 导入失败，请重试。')
+    }
+  }
   /**
    * 删除赛段后重新加载列表与成绩。
    *
@@ -280,7 +329,10 @@ function SegmentsPage() {
               />
             </label>
             <p className="segments-page__strava-hint">
-              在 strava.com/settings/api 创建应用后获取；Token 过期后重新粘贴即可。
+              API 方式：在 strava.com/settings/api 创建应用后获取；Token 过期后重新粘贴即可。
+            </p>
+            <p className="segments-page__strava-hint">
+              没有 Strava 订阅？免费方案：打开 Strava 赛段页 → 导出 GPX → 点「导入 GPX 文件」选择下载的 .gpx（可多选），自动解析建段并匹配成绩。
             </p>
             <div className="segments-page__strava-actions">
               <button
@@ -307,6 +359,24 @@ function SegmentsPage() {
               >
                 探索周边赛段
               </button>
+
+              <label className="segments-page__gpx-label">
+                <input
+                  type="file"
+                  accept=".gpx"
+                  multiple
+                  aria-label="导入 Strava 赛段 GPX 文件"
+                  disabled={importState === 'importing'}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      void handleImportGpx(e.target.files)
+                    }
+                    // 允许重复选择同一文件再次导入（去重由 filterNewGpxSegments 保证）
+                    e.target.value = ''
+                  }}
+                />
+                导入 GPX 文件
+              </label>
             </div>
             {importMessage !== '' && (
               <p className={`segments-page__strava-message segments-page__strava-message--${importState}`}>

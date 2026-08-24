@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.16.0',
+    date: '2026-08-24',
+    features: [
+      '新增「导入 GPX 文件」：无需 Strava 订阅/API 应用，把 Strava 赛段页免费导出的 GPX 拖进来即可自动建段',
+      'GPX 支持多选批量导入：自动解析轨迹首末点为起终点，按「名称+起终点坐标」去重，重复导入不会产生重复赛段',
+      '导入的赛段与手建/Strava API 导入赛段一样参与成绩榜计算，可继续导出作者赛段 JSON 发布到快照',
+    ],
+  },
+  {
     version: '2.15.0',
     date: '2026-08-24',
     features: [

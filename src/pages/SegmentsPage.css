@@ -142,3 +142,32 @@
   opacity: 0.5;
   cursor: default;
 }
+
+
+/* GPX 导入按钮：复用 strava-actions 按钮视觉，隐藏原生 file input 只留文字 */
+.segments-page__gpx-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.segments-page__gpx-label:hover {
+  background-color: var(--bg-surface);
+  border-color: var(--accent, currentColor);
+  color: var(--text);
+}
+
+.segments-page__gpx-label input[type='file'] {
+  display: none;
+}

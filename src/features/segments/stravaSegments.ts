@@ -7,6 +7,9 @@
  *
  * Token 说明：Strava access token 6 小时过期，纯前端无法安全自动刷新
  * （需 client secret），由用户在页面手动粘贴 token（存 localStorage，过期需重取）。
+ *
+ * GPX 导入说明：Strava 赛段页免费提供「导出 GPX」（无需订阅/API 应用），
+ * parseSegmentGpx 在浏览器解析 GPX 轨迹点，首末点作为起终点圆参与匹配。
  */
 
 /** Strava 收藏赛段 API 响应（仅本项目使用的字段） */
@@ -211,6 +214,94 @@ export function filterNewSegments<T extends { stravaId?: number }>(
       return false
     }
     seen.add(segment.stravaId)
+    return true
+  })
+}
+
+// ---------------------------------------------------------------------------
+// GPX 文件导入（免费路径：Strava 赛段页导出 GPX，无需订阅/API 应用）
+// ---------------------------------------------------------------------------
+
+/**
+ * 解析 Strava 导出的赛段 GPX 文件为本地赛段字段（不含自增 id）。
+ *
+ * 取全部 trkpt 经纬度，首点 = 起点圆心、末点 = 终点圆心，
+ * 复用 segmentMatching 200m 起终点圆匹配引擎自动计算成绩榜。
+ *
+ * @param xmlText GPX 文件文本内容
+ * @param fileName 文件名（名称兜底：trk/name → metadata/name → 文件名去 .gpx）
+ * @returns 本地赛段字段；无有效轨迹点时 null
+ * @throws Error XML 解析失败时抛出
+ */
+export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import('@/storage/db').SegmentEntity, 'id'> | null {
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml')
+  if (doc.querySelector('parsererror')) {
+    throw new Error('Invalid GPX file')
+  }
+  // 遍历全部 trkpt（Strava 导出通常单 track，但兼容多 track/多 segment 拼接）
+  const points = Array.from(doc.querySelectorAll('trkpt'))
+    .map((pt) => ({
+      lat: Number.parseFloat(pt.getAttribute('lat') ?? ''),
+      lng: Number.parseFloat(pt.getAttribute('lon') ?? ''),
+    }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+  if (points.length === 0) {
+    return null
+  }
+  const first = points[0]
+  const last = points[points.length - 1]
+  // 名称兜底链：track 名 → 元数据名 → 文件名去 .gpx 后缀
+  const name =
+    doc.querySelector('trk > name')?.textContent?.trim() ||
+    doc.querySelector('metadata > name')?.textContent?.trim() ||
+    fileName.replace(/\.gpx$/i, '')
+  return {
+    name,
+    startLatitude: first.lat,
+    startLongitude: first.lng,
+    endLatitude: last.lat,
+    endLongitude: last.lng,
+    sourceActivityId: 'strava',
+    createdAt: new Date().toISOString(),
+  } satisfies import('@/storage/db').SegmentEntity
+}
+
+/**
+ * GPX 赛段去重 key：名称 + 起终点坐标（5 位小数 ≈ 1m 精度）。
+ *
+ * GPX 无 stravaId，不能用 filterNewSegments（其对无 ID 项一律丢弃）。
+ */
+function gpxSegmentKey(name: string, lat: number, lng: number): string {
+  return `${name}|${lat.toFixed(5)},${lng.toFixed(5)}`
+}
+
+/**
+ * 过滤 GPX 导入中的重复赛段：按「名称 + 起终点坐标」比对已入库项。
+ *
+ * @param existing 已有赛段列表
+ * @param incoming 待导入赛段列表
+ * @returns incoming 中未入库的部分（incoming 内部同名同起终点也只保留一个）
+ */
+export function filterNewGpxSegments<T extends {
+  name: string
+  startLatitude: number
+  startLongitude: number
+  endLatitude: number
+  endLongitude: number
+}>(
+  existing: readonly T[],
+  incoming: readonly T[],
+): T[] {
+  const seen = new Set<string>()
+  for (const s of existing) {
+    seen.add(gpxSegmentKey(s.name, s.startLatitude, s.startLongitude))
+  }
+  return incoming.filter((s) => {
+    const key = gpxSegmentKey(s.name, s.startLatitude, s.startLongitude)
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
     return true
   })
 }
