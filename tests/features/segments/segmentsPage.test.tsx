@@ -129,9 +129,21 @@ describe('赛段页面', () => {
     const card = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
     // 参与 2 次（act-3 未穿越）
     expect(within(card).getByText('2 次')).toBeInTheDocument()
-    // 最佳成绩 600s = 00:10:00，链接 act-2 详情
-    const best = within(card).getByText('00:10:00')
-    expect(best.closest('a')).toHaveAttribute('href', '/activities/act-2')
+    // 完整成绩排行按用时升序：#1 = act-2（600s），#2 = act-1（800s）
+    const rows = within(card).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('1')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('2026-08-02')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('00:10:00').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/act-2',
+    )
+    expect(within(rows[1]).getByText('2')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('2026-08-01')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('00:13:20').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/act-1',
+    )
   })
 
   it('删除赛段后卡片消失', async () => {
@@ -168,9 +180,19 @@ describe('赛段页面', () => {
 
     const card = (await screen.findByText('温榆河绕圈')).closest('.segment-card') as HTMLElement
     expect(within(card).getByText('2 次')).toBeInTheDocument()
-    // 最佳成绩链接作者活动详情
-    const best = within(card).getByText('00:10:00')
-    expect(best.closest('a')).toHaveAttribute('href', '/activities/author-1')
+    // 快照成绩榜渲染完整排行，链接作者活动详情
+    const rows = within(card).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('1')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('00:10:00').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/author-1',
+    )
+    expect(within(rows[1]).getByText('2')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('00:11:40').closest('a')).toHaveAttribute(
+      'href',
+      '/activities/author-2',
+    )
     // 只读：无删除按钮
     expect(within(card).queryByRole('button', { name: /删除赛段/ })).not.toBeInTheDocument()
   })

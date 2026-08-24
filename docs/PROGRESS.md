@@ -1,7 +1,7 @@
-﻿# 项目进度与功能状态
+# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（分段悬停 Tooltip 改实时值，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（赛段排行榜 UI 增强 + 有氧效率趋势，见 §0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **赛段排行榜 UI 增强 + 有氧效率趋势**（用户确认开发；无功率计场景） | ①`SegmentCards.tsx` 展开完整成绩排行列表（`<ol>` 排名/日期/用时整行链接详情，按用时升序 = 排名顺序，空榜显示「暂无穿越记录」；本地与作者快照双源一致生效）；②新建 `src/features/analysis/aerobicEfficiency.ts` 纯函数：AE = 平均速度 ÷ 平均心率，按自然月时长加权（Σ速度×时长 ÷ Σ心率×时长），输出连续 N 月序列、空月 value=undefined 不伪造；③`PerformancePage.tsx` 新增「有氧效率趋势」区块：Recharts LineChart 近 12 月 AE + 4 月移动平均虚线，全部月份无可参与活动（缺平均速度或平均心率）时整块隐藏；④测试：新增 `tests/features/analysis/aerobicEfficiency.test.ts` 4 用例 + `segmentsPage.test.tsx` 补完整排行断言（排名/日期/用时/链接），全量 848/848 + lint/build 绿；⑤版本 2.11.0 → 2.12.0 | push 触发 CI |
 | ✅ 已提交 | **分段剖面悬停 Tooltip 速度/功率/心率改显示实时值**（用户需求：悬停点处的实时速度/功率/心率，非整段平均；功率为空则整行不显示） | ①`segmentsProfile.ts` `SegmentProfilePoint` 增可选 `speed?/power?/heartRate?`，`buildSegmentProfile` 构建点时从原始 `ActivityRecord` 携带（simplifyRoute 保留完整记录，抽稀不影响字段）；②`SegmentsSection.tsx` `SegmentTooltipContent` 速度/功率/心率三行改用 `point.*` 悬停点实时值，功率 `undefined` 时整行不 push（连标签都不渲染——功率计缺失常见场景），速度/心率为空仍显示 `—`；③测试：双爬坡纯函数用例补实时值携带断言 + 无速度/功率/心率记录剖面点字段 undefined 断言，新增无功率爬坡悬停用例（实时 18.0 km/h / 150 bpm，功率行整体隐藏），全量 844/844 + lint/build 绿；④版本 2.10.0 → 2.11.0 | push 触发 CI |
 | ✅ 已提交 | **详情页图表合并为多指标开关曲线卡**（用户需求：地图下方一张「数据曲线」卡，速度/踏频/海拔/温度等指标开关切换，默认海拔；悬停 Tooltip 显示全部已开指标；去掉「速度+心率」组合卡；保留爬坡与分段分析） | ①新增 `src/charts/multiMetricSeries.ts` 纯函数（`MULTI_METRIC_META` 六指标元数据/`availableMetrics` 可用指标探测/`buildMultiMetricSeries` 多指标对齐序列/`metricRanges`+`buildMultiMetricRenderData` 各指标独立归一化到 [0,1] 渲染数据，恒值 0.5、缺失 undefined 断线，原始值随点携带供 Tooltip）；②新增 `src/charts/MultiMetricChart.tsx`（指标 chip 开关组 aria-pressed + ComposedChart 归一化叠加——海拔面积渐变、其余折线、Y 轴隐藏 `norm_` 扁平字符串键规避 recharts 函数式 dataKey TS 限制 + 自定义 Tooltip 按已开指标展示真实数值（缺失 `—`）+ 距离/时间轴切换 + 共享时间轴 memo 子树 + 自悬停抑制 + downsample ≤1000 点；默认海拔、无海拔取首个可用指标，`enabled = (userEnabled ?? 默认) ∩ available` 防活动切换过期选择；全关/无数据引导文案）+ `multiMetric.css`；③`ActivityDetailPage` 换接线（多指标卡 + PowerCurveChart + 训练区间内心率图），删除 SpeedChart/CadenceChart/ElevationChart/PowerChart/TemperatureChart/CombinedChart 六个封装及 series.ts 组合图遗留（buildCombinedSeries 等）与对应 3 个测试文件；④新测试 `multiMetricChart.test.tsx` 16 用例（纯函数 11 + 组件 5，jsdom mock getBoundingClientRect 必须含 left/top）+ 详情页测试更新 4 处（数据曲线卡断言/仅功率数据默认开功率/轨迹着色组 within 作用域——与指标 chip 同名/心率 heading 断言）；⑤lint/build 绿 + 全量 843/843（PowerShell 通道：bash 下 vitest 4 因宿主进程注入 runner 上下文丢失，全量 0 用例执行，与代码无关）；⑥版本 2.9.0 → 2.10.0 | push 触发 CI |
 | ✅ 已提交 | **分段剖面图 Recharts 化（对齐海拔卡片交互）**（用户需求：剖面效果与「海拔」卡片一致——悬浮弹出详情 + 坡度着色） | ①新增 `src/features/activity/segmentsProfile.ts` 纯函数（抽稀 + 坡度窗口平滑 + 分档着色字段 alt0-4 + 分段下标 + UCI 徽章锚点，gradeBandIndex/segmentIndexAtDistance 可单测）；②`SegmentsSection.tsx` 手绘 SVG 改 Recharts ComposedChart：距离/海拔坐标轴 + 网格 + Brush 缩放 + 自定义 Tooltip 分段详情卡（区间/长度/爬升/坡度/此处海拔/此处坡度/速度/功率/心率）+ ReferenceArea 分段色带（悬停加深）+ ReferenceDot UCI 徽章 + 共享时间轴（onMouseMove 上报 / hoverTimestamp 参考线）；③`segmentsSection.css` 删手绘剖面样式；④**顺带修复 recharts 3 升级遗留 bug**：`activeTooltipIndex` 为字符串导致 MetricChart/分段图 `typeof number` 判断失效、图表悬停不再上报时间戳（共享时间轴联动地图失效），新增 `timeline.ts` `activeTooltipIndexToNumber` 归一化两处共用；⑤测试重写 12 用例（纯函数 8 + 组件 6，jsdom 需 waitFor 等 recharts raf 节流一帧），全量 844/844 + lint/build 绿，版本 2.7.0 → 2.8.0 | push 触发 CI |
@@ -149,6 +150,7 @@
 | Calendar 日历页（§29） | ✅ Agent H，24/24 测试 | `src/features/calendar/`（calendarData 聚合 + CalendarHeatmap）；**GitHub 贡献图横排布局（每周一列/每天一行）+ 月份标签（buildMonthLabels 定位每月 1 日所在列）+ 隔行星期标签 + 今天高亮 + 「回到今年」**；5 档距离色阶（20/50/100km 阈值）、tooltip（次数/距离/时长/爬升）、年份切换、订阅 importStore 自动刷新；**点击有骑行格子展开当日活动面板（活动列表跳详情）** |
 | Settings 设置页 + 导出/导入/清空（§27/§32/§33） | ✅ Agent I，34/34 测试 | `src/features/settings/`（settings.ts/exportImport.ts/dataClear.ts）；**key 规范：`'profile'`（UserProfile 对象）+ `'units'`（UnitPreferences），按域合并保存，数据恒存公制**；导出 JSON v1（app/version/activities/records/files/settings），导入按 fingerprint 去重 |
 | 高级数值筛选（§30） | ✅ Agent M，64/64 测试（含 6 新增） | `listActivities` options 新增 min/maxDistance（米）、min/maxElevationGain（米）、min/maxAvgPower（W），AND 组合含边界；**缺失 avgPower 的活动不满足功率条件**；UI 输入 km 自动转米 |
+| 有氧效率月度趋势（无功率计场景） | ✅ 4/4 测试 | `src/features/analysis/aerobicEfficiency.ts`：`buildMonthlyAerobicEfficiency` AE = Σ(平均速度×时长) ÷ Σ(平均心率×时长)，按自然月聚合连续 N 月序列（空月 undefined）；`PerformancePage.tsx` 「有氧效率趋势」区块（12 月折线 + 4 月移动平均，无心率数据整块隐藏） |
 | 训练分析 + 详情页集成（§26） | ✅ Agent L，41/41 测试 | `src/features/analysis/`（normalizedPower.ts NP 30s 滑动平均 4 次方、intensity.ts IF/TSS、zones.ts 心率 60/70/80/90% + 功率 55/75/90/105% 5 区间，按记录时间间隔累计）；ActivityDetailPage：标准化功率卡 + 踏频图/速度+心率组合图挂载 + 轨迹着色切换（默认/速度/心率/功率/海拔）+ 训练区间区块（**心率统计行——平均/最大/最小心率（最小心率逐点计算，缺失 —）+ 心率折线图（自图表区移入，x 轴时间/距离可切换）** + 区间分布条 + IF/TSS）；**无 FTP/最大心率配置不伪造计算，显示引导文案**；**区间区块附「计算方式说明」折叠块**（原生 details：心率按最大心率 60/70/80/90%、功率按 FTP 55/75/90/105%、NP=30s 滑动平均四次方均值开四次方、IF=NP÷FTP、TSS=时长×IF²×100÷3600） |
 
 ### 进行中

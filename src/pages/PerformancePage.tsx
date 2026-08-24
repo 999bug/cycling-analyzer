@@ -6,6 +6,8 @@
  * - 表现趋势：近 12 周训练量（距离/TSS/效率因子），EF 与 TSS 各自独立的右轴，
  *   叠加 4 周移动平均线便于识别趋势；FTP 未配置时隐藏 TSS（不伪造，规格 §26）
  * - 趋势解读：近 4 周 vs 前 4 周量化对比 + 最强/效率最高的一周（analyzePerformanceTrend）
+ * - 有氧效率趋势：近 12 个月 AE（平均速度÷平均心率，无功率计场景）+ 4 月移动平均；
+ *   全部月份均无可参与活动（缺平均速度或平均心率）时整块隐藏
  *
  * 数据流：摘要 → 周聚合纯函数（buildWeeklySeries / buildWeekReview）→ 趋势分析纯函数。
  * 依赖 FTP（训练配置）：无 FTP 仅隐藏 TSS 指标，其余照常展示。
@@ -33,6 +35,10 @@ import {
   type WeekSummary,
 } from '@/features/analysis/weeklyStats'
 import {
+  buildMonthlyAerobicEfficiency,
+  type MonthlyAerobicEfficiency,
+} from '@/features/analysis/aerobicEfficiency'
+import {
   analyzePerformanceTrend,
   formatPercentDelta,
   type PerformanceTrendInsights,
@@ -44,6 +50,12 @@ import '@/pages/PerformancePage.css'
 
 /** 表现趋势周数（规格 §39） */
 const TREND_WEEKS = 12
+
+/** 有氧效率趋势月数 */
+const AE_MONTHS = 12
+
+/** 有氧效率移动平均窗口（月，含当前月共 N 月） */
+const MA_WINDOW_MONTHS = 4
 
 /** 图表高度（px） */
 const CHART_HEIGHT = 280
@@ -106,6 +118,8 @@ function PerformancePage() {
   const [weeklySeries, setWeeklySeries] = useState<readonly WeekSummary[]>([])
   const [review, setReview] = useState<{ current: WeekSummary; previous: WeekSummary }>()
   const [ftp, setFtp] = useState<number>()
+  // 近 N 月有氧效率序列（无功率计场景：AE = 平均速度 ÷ 平均心率）
+  const [aeSeries, setAeSeries] = useState<readonly MonthlyAerobicEfficiency[]>([])
   // 订阅导入结果：数据导入完成后自动刷新（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -119,6 +133,12 @@ function PerformancePage() {
   const insights = useMemo(
     () => analyzePerformanceTrend(weeklySeries),
     [weeklySeries],
+  )
+
+  // 是否存在可绘制的有氧效率数据（无心率数据时整块隐藏）
+  const hasAeData = useMemo(
+    () => aeSeries.some((month) => month.value !== undefined),
+    [aeSeries],
   )
 
   useEffect(() => {
@@ -142,6 +162,7 @@ function PerformancePage() {
         setFtp(currentFtp)
         setWeeklySeries(buildWeeklySeries(summaries, TREND_WEEKS, currentFtp))
         setReview(buildWeekReview(summaries, weekStart.slice(0, 10), currentFtp))
+        setAeSeries(buildMonthlyAerobicEfficiency(summaries, AE_MONTHS))
         setState('ready')
       } catch (err: unknown) {
         if (!cancelled) {
@@ -172,6 +193,7 @@ function PerformancePage() {
             distanceUnit={distanceUnit}
             hasFtp={ftp !== undefined}
           />
+          {hasAeData && <AerobicTrendSection series={aeSeries} />}
           <TrendInsightsSection
             insights={insights}
             distanceUnit={distanceUnit}
@@ -425,6 +447,94 @@ function TrendSection({
   )
 }
 
+/**
+ * 有氧效率趋势区块：近 12 个月 AE 折线 + 4 月移动平均（无功率计场景）。
+ *
+ * AE = 平均速度 ÷ 平均心率（m/s/bpm），同样心率下骑得越快有氧能力越好。
+ * 空月 value=undefined 图表断线；无可绘制数据的月份由调用方整块隐藏。
+ *
+ * @param series 月度聚合序列（升序）
+ */
+function AerobicTrendSection({ series }: { series: readonly MonthlyAerobicEfficiency[] }) {
+  // 图表数据 + 4 月移动平均（value 无值的月移动平均跳过该月）
+  const chartData = useMemo(
+    () =>
+      series.map((month, index) => {
+        const window = series.slice(Math.max(0, index - MA_WINDOW_MONTHS + 1), index + 1)
+        const values = window
+          .map((item) => item.value)
+          .filter((value): value is number => value !== undefined)
+        return {
+          ...month,
+          aeMa4: values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : undefined,
+        }
+      }),
+    [series],
+  )
+
+  return (
+    <section className="performance-trend" aria-label="有氧效率趋势">
+      <h2 className="performance-trend__title">有氧效率趋势</h2>
+      <p className="performance-trend__hint">AE = 平均速度 ÷ 平均心率 · 绿线：月度值 · 虚线：4 月移动平均</p>
+      <div className="performance-trend__plot" role="img" aria-label="近 12 个月有氧效率图">
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT} initialDimension={INITIAL_DIMENSION}>
+          <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="month"
+              tickFormatter={(month: string) => month.replace('-', '/')}
+              tick={TICK_STYLE}
+              tickLine={false}
+              axisLine={{ stroke: 'var(--border)' }}
+              minTickGap={24}
+            />
+            <YAxis
+              yAxisId="ae"
+              tickFormatter={(v: number) => v.toFixed(1)}
+              tick={TICK_STYLE}
+              tickLine={false}
+              axisLine={false}
+              width={44}
+              domain={[0, 'auto']}
+            />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value, name) => {
+                const num = Number(value)
+                const text = Number.isFinite(num) ? num.toFixed(2) : '—'
+                return [text, name === 'aeMa4' ? 'AE 4 月均' : 'AE']
+              }}
+              labelFormatter={(label) => `${label} 月`}
+            />
+            <Line
+              yAxisId="ae"
+              type="monotone"
+              dataKey="value"
+              name="ae"
+              stroke={SERIES_COLORS.ef}
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+            <Line
+              yAxisId="ae"
+              type="monotone"
+              dataKey="aeMa4"
+              name="aeMa4"
+              stroke={SERIES_COLORS.efMa4}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  )
+}
 /**
  * 趋势解读区块：近 4 周 vs 前 4 周量化对比 + 最强周/效率最高周。
  *

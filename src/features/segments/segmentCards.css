@@ -66,15 +66,54 @@
   font-variant-numeric: tabular-nums;
 }
 
-.segment-card__best {
-  color: var(--primary);
-  font-size: 16px;
+/* 成绩排行列表：排名 + 日期 + 用时（整行链接） */
+.segment-card__leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.segment-card__row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.segment-card__rank {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+  min-width: 20px;
+  text-align: right;
+}
+
+.segment-card__effort {
+  border-radius: 6px;
+  color: var(--text);
+  display: flex;
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+  justify-content: space-between;
+  padding: 3px 8px;
   text-decoration: none;
 }
 
-.segment-card__best:hover {
-  text-decoration: underline;
+.segment-card__effort:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+  text-decoration: none;
+}
+
+.segment-card__date {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.segment-card__duration {
+  font-weight: 600;
 }
 
 .segment-card__hint {

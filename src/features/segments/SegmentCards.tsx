@@ -1,13 +1,14 @@
 /**
  * 赛段卡片墙（后续工作项：完整 Segment）。
  *
- * 每张卡片展示赛段名称、参与次数（完整穿越的活动数）、最佳成绩与
- * 最快骑行详情链接，附删除按钮；成绩扫描期间显示计算中文案。
+ * 每张卡片展示赛段名称、参与次数与完整成绩排行列表
+ * （排名/日期/用时/详情链接，按用时升序 = 排名顺序），
+ * 附删除按钮；成绩扫描期间显示计算中文案。
  */
 import { Link } from 'react-router-dom'
 import type { SegmentEntity } from '@/storage/db'
 import type { SegmentEffort } from '@/features/segments/segmentMatching'
-import { formatDuration } from '@/utils/format'
+import { formatDate, formatDuration } from '@/utils/format'
 import '@/features/segments/segmentCards.css'
 
 /**
@@ -38,7 +39,6 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete }: Segm
       {segments.map((segment) => {
         const id = segment.id ?? 0
         const leaderboard = leaderboards?.get(id)
-        const best = leaderboard?.[0]
         return (
           <div key={id} className="segment-card">
             <div className="segment-card__header">
@@ -59,22 +59,37 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete }: Segm
             ) : leaderboards === null ? (
               <p className="segment-card__hint">成绩计算中…</p>
             ) : (
-              <div className="segment-card__stats">
-                <div className="segment-card__stat">
-                  <span className="segment-card__stat-label">参与次数</span>
-                  <span className="segment-card__stat-value">{leaderboard?.length ?? 0} 次</span>
+              <>
+                <div className="segment-card__stats">
+                  <div className="segment-card__stat">
+                    <span className="segment-card__stat-label">参与次数</span>
+                    <span className="segment-card__stat-value">{leaderboard?.length ?? 0} 次</span>
+                  </div>
                 </div>
-                <div className="segment-card__stat">
-                  <span className="segment-card__stat-label">最佳成绩</span>
-                  {best === undefined ? (
-                    <span className="segment-card__stat-value">—</span>
-                  ) : (
-                    <Link className="segment-card__best" to={`/activities/${best.activityId}`}>
-                      {formatDuration(best.durationSeconds)}
-                    </Link>
-                  )}
-                </div>
-              </div>
+                {(leaderboard?.length ?? 0) > 0 ? (
+                  <ol className="segment-card__leaderboard" aria-label={`${segment.name}成绩排行`}>
+                    {leaderboard!.map((effort, index) => {
+                      const rank = index + 1
+                      return (
+                        <li key={effort.activityId} className="segment-card__row">
+                          <span className="segment-card__rank">{rank}</span>
+                          <Link
+                            className="segment-card__effort"
+                            to={`/activities/${effort.activityId}`}
+                          >
+                            <span className="segment-card__date">{formatDate(effort.startTime)}</span>
+                            <span className="segment-card__duration">
+                              {formatDuration(effort.durationSeconds)}
+                            </span>
+                          </Link>
+                        </li>
+                      )
+                    })}
+                  </ol>
+                ) : (
+                  <p className="segment-card__hint">暂无穿越记录</p>
+                )}
+              </>
             )}
           </div>
         )
