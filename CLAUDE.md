@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-个人骑行数据分析网站（Strava Lite）：纯前端、数据完全本地化，FIT 文件在浏览器内解析，数据存 IndexedDB，部署 GitHub Pages。产品规格与功能状态见 `docs/PROGRESS.md`（已实现/未实现清单、架构接口、agent 工作须知）。
+个人骑行数据分析网站（Strava Lite）：纯前端、数据完全本地化，FIT 文件在浏览器内解析，数据存 IndexedDB，部署 GitHub Pages。产品规格与功能状态见 `docs/PROGRESS.md`（进行中任务清单、未实现工作项、架构接口）；已完成功能的详细记录在 `docs/archive/PROGRESS-archive-2026-08.md`。
 
 ## 常用命令
 

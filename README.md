@@ -116,7 +116,8 @@ npm run lint                # ESLint
 
 ## 项目文档
 
-- [功能状态与开发进度](docs/PROGRESS.md)（已实现/未实现清单、架构接口、进行中任务）
+- [功能状态与开发进度](docs/PROGRESS.md)（进行中任务、未实现工作项、架构约定）
+- [历史归档（已完成功能明细）](docs/archive/PROGRESS-archive-2026-08.md)
 - [产品规格说明](docs/个人骑行数据分析网站——Agent%20开发规格说明.md)
 
 ## 开源协议
