@@ -5,8 +5,9 @@
  * 距离/海拔坐标轴 + 网格 + Brush 缩放；剖面线按坡度分档连续着色
  * （Strava 坡度洞察风格：下坡蓝/平路绿/缓坡黄/中坡橙/陡坡红，每档一条 Line），
  * 底下叠加平路/爬坡 ReferenceArea 色带（悬停段高亮），爬坡段在峰值处打
- * ReferenceDot UCI 级别徽章；分段详情（距离区间/爬升/坡度/速度/功率/心率）
- * 全部收进 Recharts Tooltip 悬浮卡，鼠标滑过即示，下方仅保留坡度色阶图例
+ * ReferenceDot UCI 级别徽章；分段详情（距离区间/爬升/坡度/此处海拔/坡度/速度/功率/心率）
+ * 全部收进 Recharts Tooltip 悬浮卡——速度/功率/心率为**悬停点实时值**（非整段平均），
+ * 功率为空（该点无功率数据）时整行隐藏；鼠标滑过即示，下方仅保留坡度色阶图例
  * 与相邻爬坡对比洞察。
  *
  * 悬浮联动：悬停剖面高亮所在分段色带，并上报时间戳（共享时间轴联动地图/图表）。
@@ -130,7 +131,7 @@ function SegmentTooltipContent({ active, payload, segments, distanceUnit }: Segm
     return null
   }
 
-  // 数据行：区间/长度为通用行，爬坡段补爬升与坡度，末尾是三项强度指标
+  // 数据行：区间/长度为通用行，爬坡段补爬升与坡度，末尾是三项强度指标（此处实时值，非整段平均）
   const rows: Array<[string, string]> = [
     [
       '区间',
@@ -149,12 +150,15 @@ function SegmentTooltipContent({ active, payload, segments, distanceUnit }: Segm
   rows.push(['此处坡度', `${point.grade.toFixed(1)}%`])
   rows.push([
     '速度',
-    segment.avgSpeedMps === undefined ? '—' : formatSpeedByUnit(segment.avgSpeedMps, distanceUnit),
+    point.speed === undefined ? '—' : formatSpeedByUnit(point.speed, distanceUnit),
   ])
-  rows.push(['功率', segment.avgPowerW !== undefined ? `${Math.round(segment.avgPowerW)} W` : '—'])
+  // 功率为空（该点无功率数据）时整行不显示——功率计缺失是常见场景
+  if (point.power !== undefined) {
+    rows.push(['功率', `${Math.round(point.power)} W`])
+  }
   rows.push([
     '心率',
-    segment.avgHeartRateBpm !== undefined ? `${Math.round(segment.avgHeartRateBpm)} bpm` : '—',
+    point.heartRate === undefined ? '—' : `${Math.round(point.heartRate)} bpm`,
   ])
 
   return (

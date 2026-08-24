@@ -3,7 +3,8 @@
  *
  * 覆盖：剖面数据纯函数（抽稀/坡度平滑分档/分段下标/UCI 徽章锚点）、
  * Recharts 剖面图（坡度着色折线 + 分段色带 + UCI 徽章 + 坐标轴 + 图例）、
- * 悬停 Tooltip 分段详情卡、共享时间轴（悬停上报时间戳 / 外部参考线）、
+ * 悬停 Tooltip 分段详情卡（速度/功率/心率为悬停点实时值；功率为空整行隐藏）、
+ * 共享时间轴（悬停上报时间戳 / 外部参考线）、
  * 无爬坡不渲染。
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -71,6 +72,19 @@ function makeSingleClimbRecords(): ActivityRecord[] {
     longitude: 121.5 + index * 0.001,
     altitude: 100 + index * 4.5,
     distance: index * 100,
+  }))
+}
+
+/** 无功率爬坡记录（有实时速度/心率、无功率——功率计缺失场景，Tooltip 功率行应隐藏） */
+function makeClimbNoPowerRecords(): ActivityRecord[] {
+  return Array.from({ length: 21 }, (_, index) => ({
+    timestamp: index * 10,
+    latitude: 31.2 + index * 0.001 + (index % 2) * 0.0005,
+    longitude: 121.5 + index * 0.001,
+    altitude: 100 + index * 4.5,
+    distance: index * 100,
+    speed: 5,
+    heartRate: 150,
   }))
 }
 
@@ -164,6 +178,18 @@ describe('buildSegmentProfile（剖面数据）', () => {
     const climbPoint = profile?.points.find((point) => point.x === 1250)
     expect(climbPoint?.alt4).toBe(125)
     expect(climbPoint?.segmentIndex).toBe(1)
+    // 剖面点携带原始记录的实时速度/功率/心率（供 Tooltip 显示实时值，非段平均）
+    expect(climbPoint?.speed).toBe(4)
+    expect(climbPoint?.power).toBe(200)
+    expect(climbPoint?.heartRate).toBe(150)
+    // 无速度/功率/心率的记录（makeSingleClimbRecords）→ 剖面点对应字段 undefined
+    const bareProfile = buildSegmentProfile(
+      makeSingleClimbRecords(),
+      buildSegmentsFrom(makeSingleClimbRecords()),
+    )
+    expect(bareProfile?.points[10].speed).toBeUndefined()
+    expect(bareProfile?.points[10].power).toBeUndefined()
+    expect(bareProfile?.points[10].heartRate).toBeUndefined()
     // 下坡段（2500m，-5%）归属下坡档
     const descentPoint = profile?.points.find((point) => point.x === 2500)
     expect(descentPoint?.alt0).toBe(175)
@@ -269,7 +295,7 @@ describe('爬坡与分段分析区块（Recharts 剖面图）', () => {
     expect(tooltip).toHaveTextContent('此处海拔')
     expect(tooltip).toHaveTextContent('150 m')
     expect(tooltip).toHaveTextContent('此处坡度')
-    // 强度指标行（速度 4 m/s → 14.4 km/h、功率 200W、心率 150bpm）
+    // 强度指标行（悬停点实时值：速度 4 m/s → 14.4 km/h、功率 200W、心率 150bpm）
     expect(tooltip).toHaveTextContent('14.4 km/h')
     expect(tooltip).toHaveTextContent('200 W')
     expect(tooltip).toHaveTextContent('150 bpm')
@@ -286,6 +312,27 @@ describe('爬坡与分段分析区块（Recharts 剖面图）', () => {
       expect(container.querySelector('[data-testid="segment-tooltip"]')).toBeNull()
     })
     expect(onHover).toHaveBeenLastCalledWith(undefined)
+  })
+
+  it('悬停无功率爬坡段：Tooltip 显示实时速度/心率，功率行整体隐藏', async () => {
+    mockChartLayout()
+    const { container } = render(
+      <SegmentsSection records={makeClimbNoPowerRecords()} distanceUnit="km" />,
+    )
+    const wrapper = container.querySelector('.recharts-wrapper') as Element
+
+    // 悬停到中部（≈1000m，落在爬坡段内）；recharts 3 raf 节流需等待一帧
+    fireEvent.mouseMove(wrapper, { clientX: 400, clientY: 110 })
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="segment-tooltip"]')).not.toBeNull()
+    })
+
+    const tooltip = container.querySelector('[data-testid="segment-tooltip"]') as Element
+    // 悬停点实时速度 5 m/s → 18.0 km/h、实时心率 150 bpm
+    expect(tooltip).toHaveTextContent('18.0 km/h')
+    expect(tooltip).toHaveTextContent('150 bpm')
+    // 该点无功率数据：功率行整体不渲染（连标签都不出现）
+    expect(tooltip.textContent).not.toContain('功率')
   })
 
   it('外部悬停时间戳渲染参考线（共享时间轴联动）', () => {

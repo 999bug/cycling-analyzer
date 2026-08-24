@@ -70,6 +70,15 @@ export interface SegmentProfilePoint {
   /** 此处坡度（%，窗口平滑；末点沿用前一段坡度） */
   grade: number
 
+  /** 此处速度（m/s；该点无速度数据时 undefined，Tooltip 显示实时值） */
+  speed?: number
+
+  /** 此处功率（W；该点无功率数据时 undefined，Tooltip 整行隐藏） */
+  power?: number
+
+  /** 此处心率（bpm；该点无心率数据时 undefined，Tooltip 显示实时值） */
+  heartRate?: number
+
   /** 下坡档海拔（undefined = 该点不属于此档线段） */
   alt0?: number
 
@@ -191,6 +200,9 @@ export function buildSegmentProfile(
     timestamp: point.timestamp,
     segmentIndex: segmentIndexAtDistance(segments, point.distance as number) ?? 0,
     grade: 0,
+    speed: point.speed,
+    power: point.power,
+    heartRate: point.heartRate,
   }))
 
   // 相邻点坡度（按距离窗口平滑，压掉海拔量化噪声）；窗口无样本时退化为直接坡度

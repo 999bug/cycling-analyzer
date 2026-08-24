@@ -1,7 +1,7 @@
 ﻿# 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-21（详情页图表合并为多指标开关曲线卡，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（分段悬停 Tooltip 改实时值，见 §0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **分段剖面悬停 Tooltip 速度/功率/心率改显示实时值**（用户需求：悬停点处的实时速度/功率/心率，非整段平均；功率为空则整行不显示） | ①`segmentsProfile.ts` `SegmentProfilePoint` 增可选 `speed?/power?/heartRate?`，`buildSegmentProfile` 构建点时从原始 `ActivityRecord` 携带（simplifyRoute 保留完整记录，抽稀不影响字段）；②`SegmentsSection.tsx` `SegmentTooltipContent` 速度/功率/心率三行改用 `point.*` 悬停点实时值，功率 `undefined` 时整行不 push（连标签都不渲染——功率计缺失常见场景），速度/心率为空仍显示 `—`；③测试：双爬坡纯函数用例补实时值携带断言 + 无速度/功率/心率记录剖面点字段 undefined 断言，新增无功率爬坡悬停用例（实时 18.0 km/h / 150 bpm，功率行整体隐藏），全量 844/844 + lint/build 绿；④版本 2.10.0 → 2.11.0 | push 触发 CI |
 | ✅ 已提交 | **详情页图表合并为多指标开关曲线卡**（用户需求：地图下方一张「数据曲线」卡，速度/踏频/海拔/温度等指标开关切换，默认海拔；悬停 Tooltip 显示全部已开指标；去掉「速度+心率」组合卡；保留爬坡与分段分析） | ①新增 `src/charts/multiMetricSeries.ts` 纯函数（`MULTI_METRIC_META` 六指标元数据/`availableMetrics` 可用指标探测/`buildMultiMetricSeries` 多指标对齐序列/`metricRanges`+`buildMultiMetricRenderData` 各指标独立归一化到 [0,1] 渲染数据，恒值 0.5、缺失 undefined 断线，原始值随点携带供 Tooltip）；②新增 `src/charts/MultiMetricChart.tsx`（指标 chip 开关组 aria-pressed + ComposedChart 归一化叠加——海拔面积渐变、其余折线、Y 轴隐藏 `norm_` 扁平字符串键规避 recharts 函数式 dataKey TS 限制 + 自定义 Tooltip 按已开指标展示真实数值（缺失 `—`）+ 距离/时间轴切换 + 共享时间轴 memo 子树 + 自悬停抑制 + downsample ≤1000 点；默认海拔、无海拔取首个可用指标，`enabled = (userEnabled ?? 默认) ∩ available` 防活动切换过期选择；全关/无数据引导文案）+ `multiMetric.css`；③`ActivityDetailPage` 换接线（多指标卡 + PowerCurveChart + 训练区间内心率图），删除 SpeedChart/CadenceChart/ElevationChart/PowerChart/TemperatureChart/CombinedChart 六个封装及 series.ts 组合图遗留（buildCombinedSeries 等）与对应 3 个测试文件；④新测试 `multiMetricChart.test.tsx` 16 用例（纯函数 11 + 组件 5，jsdom mock getBoundingClientRect 必须含 left/top）+ 详情页测试更新 4 处（数据曲线卡断言/仅功率数据默认开功率/轨迹着色组 within 作用域——与指标 chip 同名/心率 heading 断言）；⑤lint/build 绿 + 全量 843/843（PowerShell 通道：bash 下 vitest 4 因宿主进程注入 runner 上下文丢失，全量 0 用例执行，与代码无关）；⑥版本 2.9.0 → 2.10.0 | push 触发 CI |
 | ✅ 已提交 | **分段剖面图 Recharts 化（对齐海拔卡片交互）**（用户需求：剖面效果与「海拔」卡片一致——悬浮弹出详情 + 坡度着色） | ①新增 `src/features/activity/segmentsProfile.ts` 纯函数（抽稀 + 坡度窗口平滑 + 分档着色字段 alt0-4 + 分段下标 + UCI 徽章锚点，gradeBandIndex/segmentIndexAtDistance 可单测）；②`SegmentsSection.tsx` 手绘 SVG 改 Recharts ComposedChart：距离/海拔坐标轴 + 网格 + Brush 缩放 + 自定义 Tooltip 分段详情卡（区间/长度/爬升/坡度/此处海拔/此处坡度/速度/功率/心率）+ ReferenceArea 分段色带（悬停加深）+ ReferenceDot UCI 徽章 + 共享时间轴（onMouseMove 上报 / hoverTimestamp 参考线）；③`segmentsSection.css` 删手绘剖面样式；④**顺带修复 recharts 3 升级遗留 bug**：`activeTooltipIndex` 为字符串导致 MetricChart/分段图 `typeof number` 判断失效、图表悬停不再上报时间戳（共享时间轴联动地图失效），新增 `timeline.ts` `activeTooltipIndexToNumber` 归一化两处共用；⑤测试重写 12 用例（纯函数 8 + 组件 6，jsdom 需 waitFor 等 recharts raf 节流一帧），全量 844/844 + lint/build 绿，版本 2.7.0 → 2.8.0 | push 触发 CI |
 | ✅ 已提交 | **分段详情收进剖面悬停卡**（用户反馈：剖面下方「平路 1/爬坡 1…」卡片列表看着乱） | `SegmentsSection.tsx`：删除下方全量分段卡片列表，分段详情（标签/区间/长度/爬升/坡度/此处海拔/速度/功率/心率）全部收进剖面悬停卡——跟随光标、贴近左右边缘自动翻转对齐、`pointer-events: none` 不拦截悬停；悬停圆点 y 跟随剖面高度（原固定顶部）；CSS 删 segment-card 列表样式、新增 tooltip 样式（token 化）；aria-label 与摘要文案同步更新。测试重写：卡片断言改悬停卡断言（jsdom 固定 getBoundingClientRect 模拟 mousemove），全量 839/839 + lint/build 绿，版本 2.6.0 → 2.7.0 | push 触发 CI |
