@@ -28,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/training-plan', label: '训练计划' },
   { to: '/performance', label: '表现趋势' },
   { to: '/settings', label: '设置' },
+  { to: '/changelog', label: '更新日志' },
 ]
 
 /**
@@ -134,7 +135,7 @@ function AppLayout() {
         </nav>
         <div className="app-layout__sidebar-footer">
           <ImportPanel />
-          <span className="app-layout__version">v{__APP_VERSION__}</span>
+          <Link className="app-layout__version" to="/changelog" title="查看更新日志">v{__APP_VERSION__}</Link>
         </div>
       </aside>
       <main id="main-content" className="app-layout__content" tabIndex={-1}>

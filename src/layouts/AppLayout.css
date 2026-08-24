@@ -118,6 +118,13 @@
   color: var(--text-secondary);
   font-size: 12px;
   opacity: 0.7;
+  text-decoration: none;
+}
+
+/* 版本号可点击直达更新日志：悬停恢复不透明度 + 下划线提示 */
+.app-layout__version:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 /* skip link（a11y）：默认隐藏，聚焦时浮出到左上角 */

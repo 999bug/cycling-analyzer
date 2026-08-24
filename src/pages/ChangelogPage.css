@@ -1,0 +1,75 @@
+/**
+ * 更新日志页样式：时间线布局 + 版本徽章（深色主题，复用全局 CSS 变量）。
+ */
+.changelog-page__intro {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.changelog-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.changelog-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+/* 当前版本：品牌色左边线突出 */
+.changelog-item:has(.changelog-item__version--current) {
+  border-left-color: var(--primary);
+}
+
+.changelog-item__header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.changelog-item__version {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-item__badge {
+  background: var(--primary);
+  border-radius: 999px;
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+  padding: 1px 10px;
+}
+
+.changelog-item__date {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-item__features {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.changelog-item__feature {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
