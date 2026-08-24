@@ -1,0 +1,7 @@
+#!/bin/bash
+# Post-commit hook: 每次提交后自动同步 CodeGraph 索引
+
+# 仅在 .codegraph/ 存在时执行
+if [ -d ".codegraph" ]; then
+    codegraph sync
+fi
