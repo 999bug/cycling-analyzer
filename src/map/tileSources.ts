@@ -1,8 +1,9 @@
 /**
  * 地图瓦片源定义与坐标转换（WGS-84 → GCJ-02）。
  *
- * OSM 为默认瓦片源；国内直连 OSM 失败时降级到高德瓦片。
- * 高德瓦片基于 GCJ-02（火星坐标），展示前需将 WGS-84 轨迹坐标转换对齐。
+ * 高德为默认瓦片源（境内访问稳定快速）；高德不可用时降级到 OSM。
+ * 高德瓦片基于 GCJ-02（火星坐标），展示前需将 WGS-84 轨迹坐标转换对齐；
+ * OSM 为 WGS-84 原样展示。源标识用语义字符串存储记忆，调换顺序互不干扰。
  */
 
 /** 瓦片源配置（Leaflet TileLayer 参数） */
@@ -18,22 +19,65 @@ export interface TileSource {
 /** 连续瓦片加载失败达该次数后触发降级（期间有瓦片成功则重新计数） */
 export const FALLBACK_TILE_ERROR_THRESHOLD = 3
 
-/** 瓦片降级状态记忆 key（sessionStorage：本会话内直接使用降级源，不再重试 OSM） */
+/** 瓦片降级状态记忆 key（sessionStorage：本会话内直接使用降级源，不再重试默认源） */
 export const TILE_FALLBACK_STORAGE_KEY = 'cycling-map-tile-fallback'
 
-/** 瓦片源列表：索引 0 为默认源，后续为自动降级顺序 */
-export const TILE_SOURCES: TileSource[] = [  {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    subdomains: ['a', 'b', 'c'],
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  },
+/** 瓦片源列表：索引 0 为默认源（高德），后续为自动降级顺序 */
+export const TILE_SOURCES: TileSource[] = [
   {
     url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
     subdomains: ['1', '2', '3', '4'],
     attribution: '&copy; 高德地图',
   },
+  {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: ['a', 'b', 'c'],
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
 ]
+
+/** 瓦片源标识（与 TILE_SOURCES 同序；sessionStorage 记忆值用语义字符串而非索引） */
+type TileSourceId = 'amap' | 'osm'
+
+const SOURCE_IDS: readonly TileSourceId[] = ['amap', 'osm']
+
+/** 瓦片源索引 → 语义标识（未知索引回退默认源） */
+function tileSourceId(sourceIndex: number): TileSourceId {
+  return SOURCE_IDS[sourceIndex] ?? SOURCE_IDS[0]!
+}
+
+/**
+ * 判断瓦片源是否基于 GCJ-02（高德）：轨迹叠加前需 wgs84ToGcj02 纠偏。
+ *
+ * @param sourceIndex TILE_SOURCES 下标
+ */
+export function isGcjSource(sourceIndex: number): boolean {
+  return tileSourceId(sourceIndex) === 'amap'
+}
+
+/**
+ * 从 sessionStorage 读取记忆的瓦片源索引（无记忆/无效值返回默认源 0）。
+ *
+ * 记忆值为语义标识（'amap'/'osm'），调换源顺序后旧记忆仍正确解析。
+ */
+export function loadStoredSourceIndex(): number {
+  const raw = sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY)
+  if (raw === null) {
+    return 0
+  }
+  const index = SOURCE_IDS.indexOf(raw as TileSourceId)
+  return index >= 0 ? index : 0
+}
+
+/**
+ * 记忆当前瓦片源到 sessionStorage（本会话内后续地图直接复用）。
+ *
+ * @param sourceIndex TILE_SOURCES 下标
+ */
+export function storeSourceIndex(sourceIndex: number): void {
+  sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, tileSourceId(sourceIndex))
+}
 
 // ---- WGS-84 → GCJ-02 转换（标准火星坐标加密算法） ----
 

@@ -119,10 +119,11 @@ describe('降级瓦片层', () => {
   })
 
   it('渲染当前瓦片源配置（高德源带版权署名）', () => {
-    render(<FallbackTileLayer sourceIndex={1} onFallback={vi.fn()} />)
+    // 高德为默认源（索引 0）
+    render(<FallbackTileLayer sourceIndex={0} onFallback={vi.fn()} />)
 
     const layer = screen.getByTestId('tile-layer')
-    expect(layer).toHaveAttribute('data-url', TILE_SOURCES[1].url)
+    expect(layer).toHaveAttribute('data-url', TILE_SOURCES[0].url)
     expect(layer.getAttribute('data-attribution')).toContain('高德')
     // 瓦片缓存开关传给缓存瓦片层（mock hook 固定开启）
     expect(layer).toHaveAttribute('data-cache-enabled', 'true')

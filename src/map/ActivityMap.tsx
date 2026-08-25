@@ -20,7 +20,7 @@ import {
   type ColoringMode,
   type ColoredLine,
 } from '@/map/routeColoring'
-import { TILE_FALLBACK_STORAGE_KEY, wgs84ToGcj02 } from '@/map/tileSources'
+import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -137,20 +137,18 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: Activit
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // 当前瓦片源索引：默认 OSM；本会话已降级过则直接使用高德
-  const [sourceIndex, setSourceIndex] = useState(
-    () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
-  )
+  // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
+  const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
 
-  // 降级回调：切换高德源并记忆（单向，本会话内刷新页面仍直接使用降级源）
+  // 降级回调：切换 OSM 源并记忆（单向，本会话内刷新页面仍直接使用降级源）
   const handleFallback = useCallback(() => {
     setSourceIndex(1)
-    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'amap')
+    storeSourceIndex(1)
   }, [])
 
   // 展示坐标：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）
   const displayPoints = useMemo(
-    () => (sourceIndex === 0 ? points : points.map(wgs84ToGcj02)),
+    () => (isGcjSource(sourceIndex) ? points.map(wgs84ToGcj02) : points),
     [points, sourceIndex],
   )
 
@@ -159,7 +157,7 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: Activit
     if (hoverPoint === undefined) {
       return undefined
     }
-    return sourceIndex === 0 ? hoverPoint : wgs84ToGcj02(hoverPoint)
+    return isGcjSource(sourceIndex) ? wgs84ToGcj02(hoverPoint) : hoverPoint
   }, [hoverPoint, sourceIndex])
 
   // 经纬度元组列表：Polyline / CircleMarker / Marker 共用

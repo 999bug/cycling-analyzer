@@ -12,11 +12,13 @@ import SegmentCards from '@/features/segments/SegmentCards'
 import {
   type SegmentActivityInput,
   type SegmentEffort,
+  SUSPICIOUS_RIDE_SEGMENT_SECONDS,
 } from '@/features/segments/segmentMatching'
 import { computeLeaderboard } from '@/features/segments/leaderboardTask'
 import { createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { useImportStore } from '@/stores/importStore'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
 import { summariesScanKey } from '@/storage/scanCache'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
@@ -166,10 +168,8 @@ function SegmentsPage() {
   const [importMessage, setImportMessage] = useState('')
   const [summaries, setSummaries] = useState<{ id: string; name: string }[]>([])
   const [exploreActivityId, setExploreActivityId] = useState('')
-  // 瓦片源：默认 OSM，降级高德后记忆（与热力图页共用 sessionStorage key）
-  const [mapSourceIndex, setMapSourceIndex] = useState(
-    () => (sessionStorage.getItem('cycling-map-tile-fallback') === 'amap' ? 1 : 0),
-  )
+  // 瓦片源：默认高德，降级 OSM 后记忆（与热力图页共用 sessionStorage key）
+  const [mapSourceIndex, setMapSourceIndex] = useState(() => loadStoredSourceIndex())
 
   // 本地模式加载活动下拉（最近 20 条，倒序）
   useEffect(() => {
@@ -283,14 +283,23 @@ function SegmentsPage() {
     setImportState('importing')
     setImportMessage('')
     try {
-      const parsed: Omit<SegmentEntity, 'id'>[] = []
+      // 元素带 durationSeconds（疑似完整骑行提示用），入库前剔除
+      const parsed: (Omit<SegmentEntity, 'id'> & { durationSeconds?: number })[] = []
       let invalidCount = 0
+      // 疑似完整骑行名单（时长超阈值的 GPX）：建段可成功但无法有效匹配成绩
+      const longRideNames: string[] = []
       for (const file of Array.from(files)) {
         try {
           const segment = parseSegmentGpx(await file.text(), file.name)
           if (segment === null) {
             invalidCount += 1
           } else {
+            if (
+              segment.durationSeconds !== undefined &&
+              segment.durationSeconds > SUSPICIOUS_RIDE_SEGMENT_SECONDS
+            ) {
+              longRideNames.push(file.name)
+            }
             parsed.push(segment)
           }
         } catch (error: unknown) {
@@ -299,15 +308,26 @@ function SegmentsPage() {
         }
       }
       const existing = await segmentRepository.listSegments()
-      const fresh = filterNewGpxSegments(existing, parsed)
+      // existing（SegmentEntity）无 durationSeconds 字段，泛型参数统一为带可选字段的形状
+      type ParsedSegment = SegmentEntity & { durationSeconds?: number }
+      const fresh = filterNewGpxSegments<ParsedSegment>(
+        existing,
+        parsed as ParsedSegment[],
+      )
       for (const segment of fresh) {
-        await segmentRepository.addSegment(segment)
+        // durationSeconds 仅用于导入提示，不落库（SegmentEntity 无此字段）
+        const { durationSeconds: _ignored, ...entity } = segment
+        void _ignored
+        await segmentRepository.addSegment(entity)
       }
       const skipped = invalidCount + (parsed.length - fresh.length)
       setImportState(fresh.length > 0 ? 'done' : 'error')
       setImportMessage(
         `导入 ${files.length} 个 GPX 文件：新增 ${fresh.length} 个` +
-        (skipped > 0 ? `（跳过 ${skipped} 个无效或重复）。` : '。'),
+        (skipped > 0 ? `（跳过 ${skipped} 个无效或重复）。` : '。') +
+        (longRideNames.length > 0
+          ? `⚠️ 以下文件疑似完整骑行而非赛段（时长超 2 小时），可能无法匹配成绩，建议改为从活动详情页截取设段：${longRideNames.join('、')}`
+          : ''),
       )
       reload()
     } catch (error: unknown) {
@@ -435,7 +455,7 @@ function SegmentsPage() {
           sourceIndex={mapSourceIndex}
           onMapFallback={() => {
             setMapSourceIndex(1)
-            sessionStorage.setItem('cycling-map-tile-fallback', 'amap')
+            storeSourceIndex(1)
           }}
         />
       )}

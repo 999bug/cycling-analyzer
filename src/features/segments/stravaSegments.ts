@@ -233,7 +233,10 @@ export function filterNewSegments<T extends { stravaId?: number }>(
  * @returns 本地赛段字段；无有效轨迹点时 null
  * @throws Error XML 解析失败时抛出
  */
-export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import('@/storage/db').SegmentEntity, 'id'> | null {
+export function parseSegmentGpx(
+  xmlText: string,
+  fileName: string,
+): (Omit<import('@/storage/db').SegmentEntity, 'id'> & { durationSeconds?: number }) | null {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml')
   if (doc.querySelector('parsererror')) {
     throw new Error('Invalid GPX file')
@@ -243,11 +246,16 @@ export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import(
     .map((pt) => ({
       lat: Number.parseFloat(pt.getAttribute('lat') ?? ''),
       lng: Number.parseFloat(pt.getAttribute('lon') ?? ''),
+      time: readPointTime(pt),
     }))
     .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
   if (points.length === 0) {
     return null
   }
+  // 轨迹时长 = 首末点时间差（疑似完整骑行判定用，无时间不判）
+  const timed = points.filter((p) => p.time !== undefined)
+  const durationSeconds =
+    timed.length >= 2 ? timed[timed.length - 1]!.time! - timed[0]!.time! : undefined
   const first = points[0]
   const last = points[points.length - 1]
   // 名称兜底链：track 名 → 元数据名 → 文件名去 .gpx 后缀
@@ -255,7 +263,8 @@ export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import(
     doc.querySelector('trk > name')?.textContent?.trim() ||
     doc.querySelector('metadata > name')?.textContent?.trim() ||
     fileName.replace(/\.gpx$/i, '')
-  return {
+  // durationSeconds 仅用于导入提示（疑似完整骑行），不属于 SegmentEntity 字段
+  const entity: Omit<import('@/storage/db').SegmentEntity, 'id'> = {
     name,
     startLatitude: first.lat,
     startLongitude: first.lng,
@@ -264,7 +273,29 @@ export function parseSegmentGpx(xmlText: string, fileName: string): Omit<import(
     sourceActivityId: 'strava',
     createdAt: new Date().toISOString(),
     trackPoints: points.map((p) => [p.lat, p.lng] as [number, number]),
-  } satisfies import('@/storage/db').SegmentEntity
+  }
+  return { ...entity, durationSeconds }
+}
+
+/**
+ * 读取 trkpt 的 <time> 子元素时间为 Unix 秒（缺失或不可解析返回 undefined）。
+ *
+ * 遍历直接子元素而非 getElementsByTagName(NS)：后者对每个节点做子树搜索，
+ * 万点级文件下累计开销显著；GPX schema 保证 time 为 trkpt 直接子元素。
+ */
+function readPointTime(node: Element): number | undefined {
+  for (const child of node.children) {
+    if (child.localName !== 'time') {
+      continue
+    }
+    const raw = child.textContent?.trim()
+    if (!raw) {
+      return undefined
+    }
+    const millis = Date.parse(raw)
+    return Number.isFinite(millis) ? Math.floor(millis / 1000) : undefined
+  }
+  return undefined
 }
 
 /**

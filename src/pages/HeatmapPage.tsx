@@ -12,7 +12,7 @@ import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { simplifyRoute } from '@/map/simplify'
-import { TILE_FALLBACK_STORAGE_KEY, wgs84ToGcj02 } from '@/map/tileSources'
+import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { summariesScanKey } from '@/storage/scanCache'
 import {
@@ -74,10 +74,8 @@ function FitAllBounds({ tracks }: { tracks: LatLng[][] }) {
 function HeatmapPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [tracks, setTracks] = useState<LatLng[][]>([])
-  // 当前瓦片源索引：默认 OSM；本会话已降级过则直接使用高德
-  const [sourceIndex, setSourceIndex] = useState(
-    () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
-  )
+  // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
+  const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -149,16 +147,16 @@ function HeatmapPage() {
     }
   }, [repository, source])
 
-  // 降级回调：切换高德源并记忆（单向，本会话内刷新页面仍直接使用降级源）
+  // 降级回调：切换 OSM 源并记忆（单向，本会话内刷新页面仍直接使用降级源）
   const handleFallback = useCallback(() => {
     setSourceIndex(1)
-    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'amap')
+    storeSourceIndex(1)
   }, [])
 
   // 展示轨迹：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）；
   // 转换仅作用于渲染，模块级缓存中的 WGS-84 元组保持不变
   const displayTracks = useMemo(() => {
-    if (sourceIndex === 0) {
+    if (!isGcjSource(sourceIndex)) {
       return tracks
     }
     return tracks.map((track) =>

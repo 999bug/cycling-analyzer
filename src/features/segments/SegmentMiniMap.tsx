@@ -8,7 +8,7 @@ import { useEffect } from 'react'
 import { MapContainer, Polyline, CircleMarker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { wgs84ToGcj02 } from '@/map/tileSources'
+import { isGcjSource, wgs84ToGcj02 } from '@/map/tileSources'
 
 /** 赛段迷你地图 props */
 export interface SegmentMiniMapProps {
@@ -59,7 +59,7 @@ export function SegmentMiniMap({
 }: SegmentMiniMapProps) {
   // 高德底图需 GCJ-02 坐标转换（OSM 源用原始 WGS-84）
   const convert = (lat: number, lng: number): [number, number] => {
-    if (sourceIndex === 0) {
+    if (!isGcjSource(sourceIndex)) {
       return [lat, lng]
     }
     const point = wgs84ToGcj02({ longitude: lng, latitude: lat })

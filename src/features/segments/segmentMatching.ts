@@ -18,6 +18,13 @@ import { haversineMeters } from '@/features/routes/routeGrouping'
 /** 起终点圆半径（米）：GPS 漂移容差 */
 export const SEGMENT_RADIUS_METERS = 200
 
+/**
+ * 疑似完整骑行时长阈值（秒，2 小时）：赛段 GPX 导入时轨迹时长超过该值
+ * 提示用户「可能是完整活动而非赛段」——长距离折返路线的首末点圆无法定义
+ * 有效穿越（首末点通常都在出发地），建段后成绩榜恒空。
+ */
+export const SUSPICIOUS_RIDE_SEGMENT_SECONDS = 2 * 60 * 60
+
 /** 路径相似度阈值（米）：活动轨迹点到赛段轨迹中位数距离超过该值判定为路径不重合 */
 const PATH_SIMILARITY_THRESHOLD_METERS = 100
 

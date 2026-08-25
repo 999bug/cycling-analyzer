@@ -126,7 +126,11 @@ export function parseGpxActivity(input: ParseTaskInput): Activity {
  */
 function collectTrackPoints(doc: Document): GpxPoint[] {
   const points: GpxPoint[] = []
-  for (const node of Array.from(doc.getElementsByTagName('trkpt'))) {
+  // querySelectorAll 返回静态 NodeList：getElementsByTagName 的 live collection
+  // 在部分实现对大文件极慢（万点级文件可达百秒），静态快照为线性遍历
+  const nodes = doc.querySelectorAll('trkpt')
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i]!
     const latitude = Number.parseFloat(node.getAttribute('lat') ?? '')
     const longitude = Number.parseFloat(node.getAttribute('lon') ?? '')
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -221,12 +225,30 @@ function readUnixSeconds(parent: Element, tagName: string): number | undefined {
  * 命名空间无关的后代元素文本（按局部名匹配任意层级）。
  *
  * 用于 trkpt 子树内的 ele/time 与 extensions > TrackPointExtension > gpxtpx:*：
- * 必须用 getElementsByTagNameNS 按局部名匹配——getElementsByTagName 匹配的是
- * 限定名，带前缀的 <gpxtpx:hr> 用 'hr' 查不到；GPX schema 保证 trkpt
- * 子树内同名标签唯一，取首个即可。
+ * 必须按局部名匹配——getElementsByTagName 匹配的是限定名，带前缀的
+ * <gpxtpx:hr> 用 'hr' 查不到；GPX schema 保证 trkpt 子树内同名标签唯一。
+ *
+ * 手写先序遍历而非 getElementsByTagNameNS：后者每次调用都做全子树搜索，
+ * 万点级文件下每节点 ×4 字段的累计开销显著；本遍历每节点只走一次。
  */
 function childText(parent: Element, tagName: string): string {
-  return parent.getElementsByTagNameNS('*', tagName)[0]?.textContent?.trim() ?? ''
+  // 迭代栈避免递归开销：extensions 子树最深仅 2 层（extensions > TrackPointExtension > hr）
+  const stack: Element[] = [parent]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    for (const child of current.children) {
+      if (child.nodeType !== 1) {
+        continue
+      }
+      if (child.localName === tagName) {
+        return child.textContent?.trim() ?? ''
+      }
+      if (child.children.length > 0) {
+        stack.push(child)
+      }
+    }
+  }
+  return ''
 }
 
 /**

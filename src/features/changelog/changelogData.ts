@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.23.0',
+    date: '2026-08-25',
+    features: [
+      '地图默认瓦片源换为高德：境内加载更快更稳定，高德不可用时自动降级 OSM',
+      'GPX 建段新增防误导提示：导入完整骑行轨迹（时长超 2 小时）时提醒可能无法匹配成绩',
+      'GPX 活动导入大幅提速：大文件解析从分钟级降至秒级',
+    ],
+  },
+  {
     version: '2.22.0',
     date: '2026-08-25',
     features: [

@@ -7,7 +7,7 @@ import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { compareActivities } from '@/features/activity/compare'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { TILE_FALLBACK_STORAGE_KEY } from '@/map/tileSources'
+import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
 import { simplifyRoute } from '@/map/simplify'
 import {
   FullscreenSync,
@@ -80,9 +80,7 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
     points: [number, number][]
   } | null>(null)
   // 当前瓦片源索引（瓦片降级）
-  const [sourceIndex, setSourceIndex] = useState(
-    () => (sessionStorage.getItem(TILE_FALLBACK_STORAGE_KEY) === 'amap' ? 1 : 0),
-  )
+  const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
   const wrapperRef = useRef<HTMLDivElement>(null)
   const repository = useActivityRepository()
 
@@ -194,7 +192,7 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
             >
               <FallbackTileLayer sourceIndex={sourceIndex} onFallback={() => {
                 setSourceIndex(1)
-                sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'amap')
+                storeSourceIndex(1)
               }} />
               {currentPoints.length >= MIN_TRACK_POINTS && (
                 <Polyline
