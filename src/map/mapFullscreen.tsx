@@ -30,6 +30,30 @@ export function FullscreenSync() {
 }
 
 /**
+ * 容器尺寸变化后同步地图尺寸（ResizeObserver）。
+ *
+ * 地图容器改为 flex 自适应高度（铺满布局）后，首帧 flex 计算、窗口缩放、
+ * 列表展开等都会改变容器尺寸，Leaflet 需 invalidateSize 重算瓦片布局。
+ */
+export function ResizeSync({ targetRef }: { targetRef: RefObject<HTMLElement | null> }) {
+  const map = useMap()
+  useEffect(() => {
+    const element = targetRef.current
+    if (element === null || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize()
+    })
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+    }
+  }, [map, targetRef])
+  return null
+}
+
+/**
  * 缩放控件移到右下角（react-leaflet 的 zoomControl 属性仅支持开关，定位需操作 map 实例）。
  */
 export function ZoomControlBottomRight() {

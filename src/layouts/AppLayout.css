@@ -23,6 +23,18 @@
   padding: 24px;
 }
 
+/* 全屏地图页（路线图）：内容区变 flex 容器，页面自身擑满剩余高度。
+   用 :has() 而非硬编码 calc：无论作者横幅等兄弟节点是否存在都能正确适配 */
+.app-layout__content:has(.routes-map-page) {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+}
+
+.app-layout__content:has(.routes-map-page) > :not(.routes-map-page) {
+  flex-shrink: 0;
+}
+
 /* 侧边栏（桌面端常驻） */
 .app-layout__sidebar {
   display: flex;
@@ -286,6 +298,12 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px;
+  }
+
+  /* 移动端恢复常规文档流：路线图页堆叠布局，不启用桌面端的 flex 铺满 */
+  .app-layout__content:has(.routes-map-page) {
+    display: block;
+    overflow-y: auto;
   }
 
   /* 移动端隐藏热力图/路线图导航项（大屏地图功能不适合小屏） */

@@ -26,6 +26,7 @@ import {
 import {
   FullscreenSync,
   MapFullscreenButton,
+  ResizeSync,
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -225,6 +226,7 @@ function RoutesMapPage() {
                     'routes-map-page__item' +
                     (selected === route.index ? ' routes-map-page__item--active' : '')
                   }
+                  aria-pressed={selected === route.index}
                   onClick={() =>
                     setSelected(selected === route.index ? null : route.index)
                   }
@@ -280,6 +282,7 @@ function RoutesMapPage() {
                 }),
               )}
               <FitAllBounds tracks={visibleTracks} />
+              <ResizeSync targetRef={wrapperRef} />
               <FullscreenSync />
               <ZoomControlBottomRight />
             </MapContainer>

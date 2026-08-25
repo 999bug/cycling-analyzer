@@ -1,10 +1,26 @@
 /**
  * 骑行路线图页样式：左列表 + 右地图布局。
- * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深色基调与全局一致。
+ *
+ * 布局铺满：页面容器负 margin 抵消 AppLayout 内容区 padding，占满内容区
+ * 可视高度（calc(100vh - 内容区上下 padding)），地图列 flex:1 吃掉剩余宽度、
+ * 高度跟随容器——右侧与底部不再留白。列表列为同高独立滚动区。
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深浅主题一致。
  */
 .routes-map-page {
-  padding: 20px 24px;
-  /* 无宽度上限：地图铺满右侧剩余空间 */
+  /* 内容区在含本页时变 flex 容器（AppLayout.css :has 规则），
+     flex:1 撑满剩余高度；负 margin 抵消内容区 padding，
+     地图列贴到内容区右缘与下缘，呼吸空间保留在列表侧与顶部 */
+  margin: -24px;
+  margin-left: -24px;
+  padding: 20px 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.routes-map-page h1 {
+  margin-top: 0;
 }
 
 .routes-map-page__notice {
@@ -15,19 +31,26 @@
 .routes-map-page__layout {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
-  margin-top: 16px;
+  /* 撑满标题以下剩余高度；min-height:0 允许子项内部滚动 */
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  /* 列表与视口右/下缘的间距由地图贴边替代，仅保留下方安全距离 */
+  min-width: 0;
 }
 
 .routes-map-page__list {
   list-style: none;
+  margin: 0;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   width: 260px;
   flex-shrink: 0;
-  max-height: 70vh;
+  /* 与地图同高独立滚动；overscroll 隔离防止滚到底带崩页面 */
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .routes-map-page__item {
@@ -43,6 +66,8 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* 移动端消除双击缩放延迟 */
+  touch-action: manipulation;
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease;
@@ -50,6 +75,12 @@
 
 .routes-map-page__item:hover {
   background-color: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+/* 键盘焦点环：默认 outline 被圆角裁切观感差，显式声明 focus-visible 焦点样式 */
+.routes-map-page__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .routes-map-page__item--active {
@@ -77,17 +108,54 @@
   color: var(--text-secondary);
   font-size: 12px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .routes-map-page__map-wrapper {
   position: relative;
+  /* 吃掉列表以外全部宽度；高度随 layout 区撑满 */
   flex: 1;
   min-width: 0;
+  height: 100%;
 }
 
 .routes-map-page__map {
-  height: 70vh;
-  border-radius: 10px;
+  height: 100%;
+  /* 贴边模式下右侧圆角去除，视觉上与内容区融为一体 */
+  border-radius: 10px 0 0 0;
   border: 1px solid var(--border);
+  border-right: none;
+  border-bottom: none;
   background: var(--bg-surface);
+}
+
+/* ---- 移动端（≤768px）：恢复常规文档流，地图固定高度堆叠 ---- */
+@media (max-width: 768px) {
+  .routes-map-page {
+    margin: -16px;
+    padding: 16px;
+    /* 移动端恢复常规文档流（内容区不启用 flex :has 规则） */
+    height: auto;
+  }
+
+  .routes-map-page__layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .routes-map-page__list {
+    width: 100%;
+    max-height: 40vh;
+  }
+
+  .routes-map-page__map-wrapper {
+    height: auto;
+  }
+
+  .routes-map-page__map {
+    height: 60vh;
+    /* 移动端恢复常规圆角与边框（非贴边布局） */
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
 }

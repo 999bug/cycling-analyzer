@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.26.0',
+    date: '2026-08-25',
+    features: [
+      '路线图页全面改版：地图铺满内容区右侧与底部，列表与地图同高独立滚动',
+      '键盘操作优化：路线列表支持清晰的焦点指示，选中状态对屏幕阅读器可见',
+    ],
+  },
+  {
     version: '2.25.0',
     date: '2026-08-25',
     features: [
