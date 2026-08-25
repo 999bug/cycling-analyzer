@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.24.0',
+    date: '2026-08-25',
+    features: [
+      '地图加载大幅提速：作者骑行区域的高德瓦片已随站点预缓存，打开地图同域直读不再等待在线下载',
+      '覆盖全部骑行路线的 8-15 级共 1600+ 张瓦片，未覆盖区域自动回退在线加载',
+    ],
+  },
+  {
     version: '2.23.0',
     date: '2026-08-25',
     features: [

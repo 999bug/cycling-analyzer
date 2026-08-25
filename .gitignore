@@ -26,25 +26,26 @@ dist-ssr
 # Г■╗Ф┬╥Ф°╛Е°╟Г°÷Е╝·И╙▒Х║▄Ф∙╟Ф█╝О╪┬Д╦█Х©⌡Д╩⌠Е╨⌠О╪┴
 private-fixtures/
 
-# Д╫°Х─┘Ф∙╟Ф█╝Е©╚Г┘╖Ф·└Е╩╨Д╨╖Г┴╘О╪┬CI Г■? author-data/ Ф╨░Ф∙╟Ф█╝Г■÷Ф┬░О╪▄Х╖? scripts/build-author-data.tsО╪?
-public/author-data/
+# Д╫°Х─┘Ф∙╟Ф█╝Е©╚Г┘╖Ф·└Е╩╨Д╨╖Г┴╘О╪┬CI О©╫? author-data/ Ф╨░Ф∙╟Ф█╝Г■÷Ф┬░О╪▄О©╫? scripts/build-author-data.tsО©╫?
+public/author-data/*
+!public/author-data/tiles/
 
 # Playwright E2E Д╨╖Г┴╘
 test-results/
 playwright-report/
 
-# CodeGraph йь╩╓╫ЬЁлнд╪Ч
+# CodeGraph О©╫ь╩О©╫О©╫О©╫О©╫О©╫О©╫д╪О©╫
 .codegraph/daemon.pid
 
-# WorkBuddy ╠╬╣ь╧╓вВйЩ╬щё╗╩А╩╟╪грД/хннЯё╛╡╩хК©Бё╘
+# WorkBuddy О©╫О©╫О©╫ь╧О©╫О©╫О©╫О©╫О©╫О©╫щёО©╫О©╫А╩╟О©╫О©╫О©╫О©╫/О©╫О©╫О©╫Яё╛╡О©╫О©╫О©╫Бё╘
 .workbuddy/
 
-# н╒пеп║ЁлпРё╨╠╬╣ьк╫спеДжцё╗AppID / ╣ьм╪ Key ╡╩хК©Бё╘
-# ©кб║уъсц miniprogram/project.config.example.json ╦╢жфиЗЁивт╪╨╣деДжц
+# н╒О©╫О©╫п║О©╫О©╫О©╫Рё╨╠О©╫О©╫О©╫к╫О©╫О©╫О©╫О©╫О©╫цёО©╫AppID / О©╫О©╫м╪ Key О©╫О©╫О©╫О©╫Бё╘
+# О©╫О©╫б║О©╫О©╫О©╫О©╫ miniprogram/project.config.example.json О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫О©╫т╪О©╫О©╫О©╫О©╫О©╫О©╫О©╫
 miniprogram/project.config.json
 miniprogram/project.private.config.json
 miniprogram/config.local.js
-# ╡ж©Б╦Ыд©б╪м╛цШеДжцё╗©╙╥╒уъ╧╓╬ърт╡ж©Б╦Ы╢Р©╙й╠иЗЁиё╘
+# О©╫ж©О©╫О©╫д©б╪м╛О©╫О©╫О©╫О©╫О©╫цёО©╫О©╫О©╫О©╫О©╫О©╫ъ╧О©╫О©╫О©╫О©╫т╡ж©О©╫О©╫О©╫О©╫й╠О©╫О©╫О©╫иёО©╫
 /project.config.json
 /project.private.config.json
 %SystemDrive%/

@@ -13,6 +13,7 @@ import { createElementObject, createTileLayerComponent, updateGridLayer, withPan
 import { TileLayer as LeafletTileLayer, type Coords, type DoneCallback, type TileLayerOptions } from 'leaflet'
 import { db } from '@/storage/db'
 import { getCachedTile, putCachedTile } from '@/storage/tileCache'
+import { hasLocalTile, localTileUrl, parseAmapTileUrl } from '@/map/localTiles'
 
 /**
  * 缓存优先的瓦片图层（Leaflet 层，供 createTileLayerComponent 使用）。
@@ -83,6 +84,13 @@ class CachingTileLayer extends LeafletTileLayer {
   private async loadTile(tile: HTMLImageElement, url: string): Promise<void> {
     if (!this.cacheEnabled) {
       tile.src = url
+      return
+    }
+
+    // 预缓存静态瓦片优先（作者数据区域）：同域直读零跨域，命中则完全绕过在线请求
+    const amapCoords = parseAmapTileUrl(url)
+    if (amapCoords !== null && (await hasLocalTile(amapCoords.z, amapCoords.x, amapCoords.y))) {
+      tile.src = localTileUrl(amapCoords.z, amapCoords.x, amapCoords.y)
       return
     }
 
