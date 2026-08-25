@@ -110,6 +110,31 @@ describe('DexieActivityRepository', () => {
       expect(tail.map((r) => r.timestamp)).toEqual([8, 9]);
     });
 
+    it('getRecordsByActivityIds 单次批量查询分组返回', async () => {
+      const first = makeActivity({ records: [0, 1].map(makeRecord) });
+      const second = makeActivity({ records: [10, 11, 12].map(makeRecord) });
+      await repo.addActivities([first, second]);
+
+      const grouped = await repo.getRecordsByActivityIds([first.id, second.id]);
+
+      expect(grouped.size).toBe(2);
+      expect(grouped.get(first.id)!.map((r) => r.timestamp)).toEqual([0, 1]);
+      expect(grouped.get(second.id)!.map((r) => r.timestamp)).toEqual([10, 11, 12]);
+    });
+
+    it('getRecordsByActivityIds：无记录的活动返回空数组，空列表返回空 Map', async () => {
+      const withRecords = makeActivity({ records: [1].map(makeRecord) });
+      const withoutRecords = makeActivity();
+      await repo.addActivities([withRecords, withoutRecords]);
+
+      const grouped = await repo.getRecordsByActivityIds([withRecords.id, withoutRecords.id]);
+      expect(grouped.get(withRecords.id)).toHaveLength(1);
+      expect(grouped.get(withoutRecords.id)).toEqual([]);
+
+      const empty = await repo.getRecordsByActivityIds([]);
+      expect(empty.size).toBe(0);
+    });
+
     it('批量导入 addActivities', async () => {
       const first = makeActivity();
       const second = makeActivity();

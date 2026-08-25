@@ -51,7 +51,24 @@ export default defineConfig(({ command }) => {
       workbox: {
         // 预缓存应用壳资源；注意排除体积庞大的作者数据快照（运行时按需网络请求）
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        globIgnores: ['**/author-data/**'],
+        globIgnores: [
+          '**/author-data/**',
+          // 大体积懒加载 chunk 不预缓存（首访后台流量 ↓）：FIT 解析 worker（~384KB）
+          // 与 GPX 解析器只在导入动作时动态加载，改走下方运行时缓存
+          // （首次在线使用后离线可用）
+          '**/parseWorker-*.js',
+          '**/parseTask*.js',
+          '**/gpxParser-*.js',
+        ],
+        // 未预缓存的构建产物走 SWR 运行时缓存：首次在线使用后离线可用，
+        // 后台静默更新；已预缓存资源由 precache 路由优先接管不受影响
+        runtimeCaching: [
+          {
+            urlPattern: new RegExp(`${base.replace('/', '\\/')}/assets/[^/]+\\.(js|css)$`),
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'lazy-assets', expiration: { maxEntries: 60 } },
+          },
+        ],
         // SPA 路由回退：离线时深链（如 /activities/xxx）返回 index.html
         navigateFallback: `${base}index.html`,
         navigateFallbackDenylist: [/^\/cycling-analyzer\/author-data\//],
@@ -66,6 +83,17 @@ export default defineConfig(({ command }) => {
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 仅生产构建：主线程降级动态 import 指向轻量桩，避免与 worker chunk
+      // 重复打包一份完整 @garmin/fitsdk（~384KB）；worker 入口用相对路径
+      // './parseTask' 引用真实实现，不受此 alias 影响。
+      // vitest（command=serve）不替换，测试仍用真实解析。
+      ...(command === 'build'
+        ? {
+            '@/fit/worker/parseTask': fileURLToPath(
+              new URL('./src/fit/worker/parseTaskStub.ts', import.meta.url),
+            ),
+          }
+        : {}),
     },
   },
   test: {

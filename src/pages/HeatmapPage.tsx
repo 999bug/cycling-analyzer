@@ -114,10 +114,16 @@ function HeatmapPage() {
         return
       }
 
+      // 单次批量查询替代逐活动串行读（N 次 IndexedDB 事务 → 1 次）
+      const recordsByActivity = await repository.getRecordsByActivityIds(
+        summaries.map((summary) => summary.id),
+      )
       const loaded: LatLng[][] = []
       for (const summary of summaries) {
-        const records = await repository.getRecords(summary.id)
-        const points = simplifyRoute(records, HEATMAP_SIMPLIFY_TOLERANCE_METERS)
+        const points = simplifyRoute(
+          recordsByActivity.get(summary.id) ?? [],
+          HEATMAP_SIMPLIFY_TOLERANCE_METERS,
+        )
         if (points.length >= MIN_TRACK_POINTS) {
           loaded.push(points.map((point) => [point.latitude, point.longitude] as LatLng))
         }

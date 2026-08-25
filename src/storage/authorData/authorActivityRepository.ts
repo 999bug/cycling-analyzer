@@ -40,6 +40,13 @@ export class AuthorActivityRepository implements ActivityReadRepository {
     return limit > 0 ? records.slice(offset, offset + limit) : records.slice(offset)
   }
 
+  async getRecordsByActivityIds(activityIds: readonly string[]): Promise<Map<string, ActivityRecord[]>> {
+    // 作者源全量轨迹扫描走预计算产物（getTracks），不逐点拉取；
+    // 接口完整性起见返回空映射（调用方不应在作者源下依赖此方法）
+    void activityIds
+    return new Map()
+  }
+
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {
     return queryActivityList(await this.client.getActivities(), options)
   }

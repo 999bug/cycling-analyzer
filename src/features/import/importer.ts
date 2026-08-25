@@ -223,16 +223,21 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
 }
 
 /**
- * 按环境选择默认 FIT 解析器：浏览器走 worker，测试环境（jsdom 无 Worker）走主线程。
- * 主线程降级用动态 import（性能优化）：@garmin/fitsdk 只随 worker chunk
- * 或降级路径按需加载，不进首屏主包。
+ * 按环境选择默认 FIT 解析器：浏览器走 worker。
+ * 仅测试环境（jsdom 无 Worker）走主线程降级：用 import.meta.env.MODE 常量守卫，
+ * 生产构建时常量折叠消除该分支，避免 parseTask chunk 与 worker chunk
+ * 各打包一份完整 @garmin/fitsdk（约 384KB 重复）；vitest 内 MODE 为 test 分支保留。
+ * 降级路径动态 import：@garmin/fitsdk 不进首屏主包。
  */
 function createDefaultParser(): ParseFileFn {
   if (typeof Worker !== 'undefined') {
     return createWorkerParser()
   }
-  return async (input) => {
-    const { parseFitBytes } = await import('@/fit/worker/parseTask')
-    return parseFitBytes(input)
+  if (import.meta.env.MODE === 'test') {
+    return async (input) => {
+      const { parseFitBytes } = await import('@/fit/worker/parseTask')
+      return parseFitBytes(input)
+    }
   }
+  throw new Error('FIT parse worker unavailable in this environment')
 }

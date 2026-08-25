@@ -123,6 +123,17 @@ export interface ActivityReadRepository {
   getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]>;
 
   /**
+   * 批量查询多个活动的逐点记录（全量轨迹扫描类页面用：热力图等）。
+   *
+   * 单次索引查询替代逐活动串行 getRecords（N 次 IndexedDB 事务 → 1 次），
+   * 本地数据量增长时避免首次进入扫描页明显变慢。
+   *
+   * @param activityIds 活动 ID 列表（空列表返回空 Map）
+   * @returns 活动ID → 逐点记录 分组映射
+   */
+  getRecordsByActivityIds(activityIds: readonly string[]): Promise<Map<string, ActivityRecord[]>>;
+
+  /**
    * 列表查询：排序 + 分页 + 月份/类型筛选 + 文本搜索 + 距离/爬升/功率数值筛选。
    *
    * @param options 查询选项（数值条件均为含边界比较，组合语义为 AND）
@@ -354,6 +365,27 @@ export class DexieActivityRepository implements ActivityRepository {
       collection = collection.limit(limit);
     }
     return collection.toArray();
+  }
+
+  async getRecordsByActivityIds(
+    activityIds: readonly string[],
+  ): Promise<Map<string, ActivityRecord[]>> {
+    const grouped = new Map<string, ActivityRecord[]>();
+    if (activityIds.length === 0) {
+      return grouped;
+    }
+    // 单次 anyOf 索引查询替代 N 次串行 equals 查询（一次事务，热力图等全量扫描用）
+    const records = await this.db.activity_records.where('activityId').anyOf([...activityIds]).toArray();
+    for (const id of activityIds) {
+      grouped.set(id, []);
+    }
+    for (const record of records) {
+      const bucket = grouped.get(record.activityId);
+      if (bucket !== undefined) {
+        bucket.push(record);
+      }
+    }
+    return grouped;
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {

@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.21.0',
+    date: '2026-08-25',
+    features: [
+      '性能优化：消除 FIT 解析器重复打包（-384KB），应用整体更轻量',
+      '首访流量降低 36%：解析器等懒加载模块改为使用时按需下载（首次在线使用后离线仍可用）',
+      '热力图页本地数据加载提速：逐条串行读库改为单次批量查询',
+    ],
+  },
+  {
     version: '2.20.0',
     date: '2026-08-25',
     features: [
