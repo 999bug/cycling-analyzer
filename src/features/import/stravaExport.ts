@@ -3,9 +3,46 @@
  *
  * Strava 导出的 FIT 文件本身不含活动标题，标题保存在 activities.csv 中。
  * 导入时解析该 CSV，按文件名关联还原原标题（规格 §31）。
- * CSV 为 UTF-8（可能带 BOM），字段支持引号转义与换行。
+ * CSV 字段支持引号转义与换行；编码不统一（作者快照管线为 UTF-8，
+ * 部分中文账号导出为 GB18030），统一经 decodeTextAuto 探测解码，
+ * 固定按 UTF-8 读会把中文表头变乱码导致标题/描述/估算功率还原整体失效。
  */
 import type { Activity } from '@/types/activity'
+
+/**
+ * 智能解码 CSV 字节为文本：UTF-8 优先，非法序列回退 GB18030。
+ *
+ * 探测策略：
+ * 1. UTF-8 BOM → 直接按 UTF-8 解码；
+ * 2. 无 BOM 先严格解码（fatal: true，遇非法字节序列抛错）；
+ * 3. 严格解码失败 → 按 GB18030 解码（Strava 中文账号导出的实际编码，
+ *    TextDecoder 浏览器/Node 均原生支持）。
+ *
+ * 纯 ASCII 内容是合法 UTF-8，走严格解码路径不受影响。
+ *
+ * @param bytes CSV 文件字节
+ * @returns 解码后文本
+ */
+export function decodeTextAuto(bytes: Uint8Array): string {
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(bytes)
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return new TextDecoder('gb18030').decode(bytes)
+  }
+}
+
+/**
+ * 智能读取 CSV/Blob 文本（decodeTextAuto 的文件入口）。
+ *
+ * @param file 文件对象（File/Blob）
+ * @returns 解码后文本
+ */
+export async function readTextAuto(file: Blob): Promise<string> {
+  return decodeTextAuto(new Uint8Array(await file.arrayBuffer()))
+}
 
 /**
  * Strava 活动元数据。
@@ -37,7 +74,7 @@ export interface StravaActivityMeta {
  */
 export function parseStravaActivitiesCsv(csvText: string): Map<string, StravaActivityMeta> {
   const result = new Map<string, StravaActivityMeta>()
-  // 去除 UTF-8 BOM（U+FEFF）
+  // 兼容历史：BOM 在 decodeTextAuto 已处理，此处兜底去除（直接传字符串的旧调用方）
   const text = csvText.charCodeAt(0) === 0xfeff ? csvText.slice(1) : csvText
   const rows = parseCsvRows(text)
   if (rows.length < 2) {

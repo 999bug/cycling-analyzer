@@ -16,7 +16,7 @@ interface DirectoryPickerWindow extends Window {
   showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>
 }
 import { collectFitFiles, scanDirectory, type ScanResult } from './scanner'
-import { parseStravaActivitiesCsv, titleFromFileName, type StravaActivityMeta } from './stravaExport'
+import { parseStravaActivitiesCsv, readTextAuto, titleFromFileName, type StravaActivityMeta } from './stravaExport'
 import { IMPORT_SOURCE_OPTIONS, isStravaSource, type ImportSource } from './importSources'
 import type { ImportFile } from './importer'
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog'
@@ -68,7 +68,8 @@ function ImportPanel() {
     }))
     let stravaCsv: Map<string, StravaActivityMeta> | undefined
     if (result.csvFile && isStravaSource(source)) {
-      stravaCsv = parseStravaActivitiesCsv(await result.csvFile.text())
+      // 编码探测读取：Strava 中文账号导出为 GB18030，固定 UTF-8 会丢表头致标题还原失效
+      stravaCsv = parseStravaActivitiesCsv(await readTextAuto(result.csvFile))
     }
     setNotice('')
     await startImport(files, stravaCsv ? { stravaCsv } : undefined)

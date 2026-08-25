@@ -18,6 +18,7 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import {
   applyStravaMeta,
   buildStravaMetaLookup,
+  decodeTextAuto,
   matchStravaMeta,
   parseStravaActivitiesCsv,
   titleFromFileName,
@@ -212,7 +213,8 @@ async function loadMetaLookup(csvPath: string | undefined): Promise<Map<string, 
     return new Map()
   }
   try {
-    const text = await readFile(csvPath, 'utf8')
+    // 编码探测解码：Strava 中文账号导出的 activities.csv 可能为 GB18030，固定 utf8 会丢表头
+    const text = decodeTextAuto(new Uint8Array(await readFile(csvPath)))
     return buildStravaMetaLookup(parseStravaActivitiesCsv(text))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {

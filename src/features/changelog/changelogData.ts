@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.20.0',
+    date: '2026-08-25',
+    features: [
+      '修复 Strava 批量导入标题丢失：兼容 GB18030 编码的 activities.csv（部分中文账号导出），标题/描述/估算功率全部正常还原',
+      '此前受影响的导入数据需删除后重新导入才能恢复原标题',
+    ],
+  },
+  {
     version: '2.19.0',
     date: '2026-08-25',
     features: [
