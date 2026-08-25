@@ -31,6 +31,7 @@ beforeEach(async () => {
   // 清空各表而非删除数据库：vi.mock 共享单实例，delete() 后实例不可复用
   await testDb.activities.clear()
   await testDb.activity_records.clear()
+  await testDb.scan_cache.clear()
   // 数据源复位：默认有效源为本地
   localStorage.clear()
   useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })

@@ -14,7 +14,7 @@ import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { simplifyRoute } from '@/map/simplify'
 import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
-import { summariesScanKey } from '@/storage/scanCache'
+import { SCAN_CACHE_HEATMAP, loadScanCache, saveScanCache, summariesScanKey } from '@/storage/scanCache'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -104,10 +104,20 @@ function HeatmapPage() {
 
       const summaries = await repository.listAllSummaries()
       const scanKey = summariesScanKey(summaries)
+      // 两级缓存：内存（同会话二次进入零开销）→ IndexedDB 持久化（刷新后免重扫）
       if (trackScanCache !== null && trackScanCache.key === scanKey) {
         if (!cancelled) {
           setTracks(trackScanCache.tracks)
           setState(trackScanCache.tracks.length > 0 ? 'ready' : 'empty')
+        }
+        return
+      }
+      const persisted = await loadScanCache<LatLng[][]>(SCAN_CACHE_HEATMAP, scanKey)
+      if (persisted !== null) {
+        trackScanCache = { key: scanKey, tracks: persisted }
+        if (!cancelled) {
+          setTracks(persisted)
+          setState(persisted.length > 0 ? 'ready' : 'empty')
         }
         return
       }
@@ -130,6 +140,8 @@ function HeatmapPage() {
         }
       }
       trackScanCache = { key: scanKey, tracks: loaded }
+      // 抽稀产物持久化：刷新后首次进入免重扫（写入失败不阻塞展示）
+      void saveScanCache(SCAN_CACHE_HEATMAP, scanKey, loaded)
       if (!cancelled) {
         setTracks(loaded)
         setState(loaded.length > 0 ? 'ready' : 'empty')

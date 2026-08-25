@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.25.0',
+    date: '2026-08-25',
+    features: [
+      '热力图 / 路线图秒开：扫描结果持久化到本地数据库，刷新页面后不再重新扫描全部骑行数据',
+      '路线图批量读库提速：与热力图同等的单次查询优化，导入新数据后首次进入也更快',
+    ],
+  },
+  {
     version: '2.24.0',
     date: '2026-08-25',
     features: [

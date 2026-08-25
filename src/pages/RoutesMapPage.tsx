@@ -17,7 +17,12 @@ import { buildRouteMapRoutes, routeColor, type RouteMapRoute } from '@/features/
 import { simplifyRoute } from '@/map/simplify'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
-import { summariesScanKey } from '@/storage/scanCache'
+import {
+  SCAN_CACHE_ROUTES_MAP,
+  loadScanCache,
+  saveScanCache,
+  summariesScanKey,
+} from '@/storage/scanCache'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -124,6 +129,7 @@ function RoutesMapPage() {
 
       const summaries = await repository.listAllSummaries()
       const scanKey = summariesScanKey(summaries)
+      // 两级缓存：内存（同会话）→ IndexedDB 持久化（刷新后免重扫）
       if (routeScanCache !== null && routeScanCache.key === scanKey) {
         if (!cancelled) {
           setRoutes(routeScanCache.routes)
@@ -131,11 +137,24 @@ function RoutesMapPage() {
         }
         return
       }
+      const persisted = await loadScanCache<RouteMapRoute[]>(SCAN_CACHE_ROUTES_MAP, scanKey)
+      if (persisted !== null) {
+        routeScanCache = { key: scanKey, routes: persisted }
+        if (!cancelled) {
+          setRoutes(persisted)
+          setState(persisted.length > 0 ? 'ready' : 'empty')
+        }
+        return
+      }
 
       const routeItems: RouteActivityInput[] = []
       const trackById = new Map<string, LatLng[]>()
+      // 单次批量查询替代逐活动串行读（与热力图页同优化）
+      const recordsByActivity = await repository.getRecordsByActivityIds(
+        summaries.map((summary) => summary.id),
+      )
       for (const summary of summaries) {
-        const records = await repository.getRecords(summary.id)
+        const records = recordsByActivity.get(summary.id) ?? []
         if (cancelled) {
           return
         }
@@ -159,6 +178,8 @@ function RoutesMapPage() {
       }
       const built = buildRouteMapRoutes(buildRouteGroups(routeItems), trackById)
       routeScanCache = { key: scanKey, routes: built }
+      // 路线聚类产物持久化：刷新后首次进入免重扫（写入失败不阻塞展示）
+      void saveScanCache(SCAN_CACHE_ROUTES_MAP, scanKey, built)
       if (!cancelled) {
         setRoutes(built)
         setState(built.length > 0 ? 'ready' : 'empty')

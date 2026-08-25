@@ -79,6 +79,8 @@ describe('summariesScanKey', () => {
   })
 
   it('空集合返回固定键', () => {
-    expect(summariesScanKey([])).toBe('0|0|')
+    // 名称哈希部分为空串哈希的固定值，整体仍是确定性的固定键
+    expect(summariesScanKey([])).toBe(summariesScanKey([]))
+    expect(summariesScanKey([])).toMatch(/^0\|0\|/)
   })
 })

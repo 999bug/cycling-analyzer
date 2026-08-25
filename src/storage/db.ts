@@ -17,7 +17,7 @@ import type { ActivityRecord, DeviceInfo } from '@/types/activity';
 export const DB_NAME = 'cycling-data';
 
 /** 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表） */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -233,6 +233,24 @@ export interface TileCacheEntry {
 }
 
 /**
+ * 全量扫描持久化缓存实体（scan_cache 表，v4 新增）。
+ *
+ * 缓存热力图/路线图等页面的全量逐点扫描产物（抽稀轨迹、路线聚类结果），
+ * 避免每次刷新页面后首次进入都重扫全部 records（几十万点级）。
+ * fingerprint 为活动集合内容指纹（summariesScanKey），数据变化自动失效。
+ */
+export interface ScanCacheEntity {
+  /** 缓存名（主键）：如 'heatmap-tracks' / 'routes-map' */
+  name: string;
+
+  /** 活动集合内容指纹（不匹配即视为失效） */
+  fingerprint: string;
+
+  /** 扫描产物（结构化存储，各页面自定义形状） */
+  payload: unknown;
+}
+
+/**
  * cycling-data 数据库（规格 §18）。
  *
  * 索引设计：
@@ -264,6 +282,9 @@ export class CyclingDatabase extends Dexie {
   /** 瓦片缓存表（v3 新增） */
   declare tile_cache: EntityTable<TileCacheEntry, 'url'>;
 
+  /** 全量扫描持久化缓存表（v4 新增：热力图/路线图抽稀结果） */
+  declare scan_cache: EntityTable<ScanCacheEntity, 'name'>;
+
   /**
    * 构造数据库实例。
    *
@@ -284,6 +305,11 @@ export class CyclingDatabase extends Dexie {
     // v3：新增瓦片缓存表（url 主键 + lastAccess 索引用于 LRU 淘汰）
     this.version(3).stores({
       tile_cache: 'url, lastAccess',
+    });
+    // v4：新增全量扫描持久化缓存表（热力图/路线图抽稀结果，name 主键）
+    // 内容指纹存 payload 内层，非索引字段免索引声明
+    this.version(4).stores({
+      scan_cache: 'name',
     });
   }
 }
