@@ -19,6 +19,7 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { db } from '@/storage/db'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { DeferredMount } from '@/components/DeferredMount'
 import {
   formatDate,
   formatDuration,
@@ -719,12 +720,15 @@ function ActivityDetailPage() {
       </section>
 
       <section className="activity-detail__charts" aria-label="活动图表">
-        <MultiMetricChart
-          records={chartRecords}
-          hoverTimestamp={hoverTimestamp}
-          onHover={setHoverTimestamp}
-        />
-        <PowerCurveChart records={records} />
+        {/* 折叠线下的图表区块：视口外不挂载（共享时间轴在挂载后照常联动） */}
+        <DeferredMount minHeight={420} placeholderLabel="数据曲线">
+          <MultiMetricChart
+            records={chartRecords}
+            hoverTimestamp={hoverTimestamp}
+            onHover={setHoverTimestamp}
+          />
+          <PowerCurveChart records={records} />
+        </DeferredMount>
       </section>
 
       <SplitsSection records={records} distanceUnit={distanceUnit} />

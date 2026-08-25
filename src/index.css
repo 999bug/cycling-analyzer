@@ -112,3 +112,10 @@ h1 {
 p {
   color: var(--text-secondary);
 }
+
+/* 视口内懒挂载占位块（DeferredMount）：与目标内容同高，浅色底 + 虚线框 */
+.deferred-mount {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  border: 1px dashed var(--border);
+  box-sizing: border-box;
+}

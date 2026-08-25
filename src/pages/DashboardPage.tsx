@@ -12,6 +12,7 @@ import StatCards from '@/features/dashboard/StatCards'
 import TrendChart from '@/features/dashboard/TrendChart'
 import TrainingStatusSection from '@/features/dashboard/TrainingStatusSection'
 import RecentRidesSection from '@/features/dashboard/RecentRidesSection'
+import { DeferredMount } from '@/components/DeferredMount'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -95,8 +96,13 @@ function DashboardPage() {
         <StatCards title="本月" summary={data.month} distanceUnit={distanceUnit} />
         <StatCards title="总计" summary={data.total} distanceUnit={distanceUnit} />
       </div>
-      <TrendChart trends={data.trends} distanceUnit={distanceUnit} />
-      <TrainingStatusSection />
+      {/* 趋势图与训练状态在首屏折叠线下：视口外不挂载，降低首屏渲染开销 */}
+      <DeferredMount minHeight={340} placeholderLabel="距离趋势图">
+        <TrendChart trends={data.trends} distanceUnit={distanceUnit} />
+      </DeferredMount>
+      <DeferredMount minHeight={360} placeholderLabel="训练状态">
+        <TrainingStatusSection />
+      </DeferredMount>
       <RecentRidesSection rides={data.recentActivities} distanceUnit={distanceUnit} />
     </>
   )

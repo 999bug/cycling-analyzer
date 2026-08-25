@@ -80,6 +80,23 @@ export default defineConfig(({ command }) => {
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 钉住 recharts 到独立 chunk：rolldown 默认会把多异步页共享的
+        // 依赖提升进入口 chunk，导致 recharts（~350KB）拖慢首屏；
+        // 显式分组后入口更小，图表 chunk 由各页面按需并行加载
+        advancedChunks: {
+          groups: [
+            {
+              name: 'recharts',
+              test: /[\\/]node_modules[\\/]recharts[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.22.0',
+    date: '2026-08-25',
+    features: [
+      '首屏加载提速：主包体积从 629KB 减至 269KB（-57%），图表库拆分为按需加载的独立模块',
+      '图表滚动到可视区域才渲染，首屏打开更快、滚动更流畅',
+    ],
+  },
+  {
     version: '2.21.0',
     date: '2026-08-25',
     features: [
