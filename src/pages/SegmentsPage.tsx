@@ -10,10 +10,11 @@ import { db, type SegmentEntity } from '@/storage/db'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import SegmentCards from '@/features/segments/SegmentCards'
 import {
-  buildSegmentLeaderboard,
   type SegmentActivityInput,
   type SegmentEffort,
 } from '@/features/segments/segmentMatching'
+import { computeLeaderboard } from '@/features/segments/leaderboardTask'
+import { createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { useImportStore } from '@/stores/importStore'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { summariesScanKey } from '@/storage/scanCache'
@@ -119,14 +120,28 @@ function SegmentsPage() {
           inputs.push({ activityId: summary.id, startTime: summary.startTime, records })
         }
 
-        const boards = new Map<number, SegmentEffort[]>()
-        for (const segment of allSegments) {
-          boards.set(segment.id ?? 0, buildSegmentLeaderboard(segment, inputs))
+        // 成绩榜在 Web Worker 逐赛段计算（GPX 路径校验重量级，避免阻塞主线程）；
+        // jsdom/无 Worker 环境回退主线程同步纯函数；cancelled 时 terminate 终止
+        const runner = createLeaderboardRunner() ?? {
+          compute: async (request) => computeLeaderboard(request),
+          cancel: () => {},
         }
-        leaderboardCache = { key: cacheKey, boards }
-        if (!cancelled) {
+        try {
+          const boards = new Map<number, SegmentEffort[]>()
+          for (const segment of allSegments) {
+            if (cancelled) {
+              return
+            }
+            boards.set(segment.id ?? 0, await runner.compute({ segment, inputs }))
+          }
+          if (cancelled) {
+            return
+          }
+          leaderboardCache = { key: cacheKey, boards }
           setLeaderboards(boards)
           setState('ready')
+        } finally {
+          runner.cancel()
         }
       } catch (error: unknown) {
         if (!cancelled) {

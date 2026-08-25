@@ -7,6 +7,7 @@
  */
 import { Link } from 'react-router-dom'
 import type { SegmentEntity } from '@/storage/db'
+import { LazySegmentMap } from './LazySegmentMap'
 import { SegmentMiniMap } from './SegmentMiniMap'
 import type { SegmentEffort } from '@/features/segments/segmentMatching'
 import { formatDate, formatDuration } from '@/utils/format'
@@ -48,15 +49,17 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
         const leaderboard = leaderboards?.get(id)
         return (
           <div key={id} className="segment-card">
-            <SegmentMiniMap
-              trackPoints={segment.trackPoints}
-              startLatitude={segment.startLatitude}
-              startLongitude={segment.startLongitude}
-              endLatitude={segment.endLatitude}
-              endLongitude={segment.endLongitude}
-              sourceIndex={sourceIndex}
-              onFallback={onMapFallback}
-            />
+            <LazySegmentMap placeholderLabel={`${segment.name}迷你地图占位`}>
+              <SegmentMiniMap
+                trackPoints={segment.trackPoints}
+                startLatitude={segment.startLatitude}
+                startLongitude={segment.startLongitude}
+                endLatitude={segment.endLatitude}
+                endLongitude={segment.endLongitude}
+                sourceIndex={sourceIndex}
+                onFallback={onMapFallback}
+              />
+            </LazySegmentMap>
             <div className="segment-card__header">
               <span className="segment-card__name">{segment.name}</span>
               {onDelete !== undefined && (
@@ -115,3 +118,4 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
 }
 
 export default SegmentCards
+

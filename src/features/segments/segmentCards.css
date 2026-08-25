@@ -136,3 +136,9 @@
   width: 100%;
   z-index: 0;
 }
+/* 懒加载占位块：与地图同尺寸，进入视口前显示浅色底 */
+.segment-card__map--placeholder {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  border: 1px dashed var(--border);
+  box-sizing: border-box;
+}

@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.19.0',
+    date: '2026-08-25',
+    features: [
+      '修复赛段 GPX 导入后页面卡死：成绩榜路径校验移入 Web Worker 后台计算，主线程不再阻塞',
+      '性能大幅优化：路径校验新增包围盒预筛、轨迹抽稀与提前退出，同一穿越段只计算一次',
+      '迷你地图懒加载：滚动到可视区域才加载地图，批量导入大量赛段时页面依然流畅',
+    ],
+  },
+  {
     version: '2.18.0',
     date: '2026-08-24',
     features: [
@@ -27,8 +36,7 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
       '支持 .gpx.gz 压缩格式与多选批量导入：自动解析轨迹、海拔与心率/踏频/功率扩展字段，距离按 GPS 定位计算',
       'GPX 活动与 FIT 同等分析能力：地图轨迹、爬坡分段、赛段匹配成绩榜全功能可用，同内容重复导入自动去重',
     ],
-  },
-  {
+  },  {
     version: '2.17.0',
     date: '2026-08-24',
     features: [

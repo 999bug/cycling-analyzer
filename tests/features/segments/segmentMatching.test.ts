@@ -216,3 +216,142 @@ describe('buildSegmentLeaderboard', () => {
     expect(buildSegmentLeaderboard(SEGMENT, [])).toEqual([])
   })
 })
+
+/**
+ * 路径校验性能优化回归（GPX 导入卡死修复）：
+ * 包围盒预筛 + 轨迹抽稀 + 中位数提前退出 + 穿越段级校验缓存。
+ * 判定语义与旧实现一致：中位距离 ≤ 100m 通过，> 100m 拒绝。
+ */
+describe('路径校验性能优化', () => {
+  /** 构造沿给定折线均匀分布的轨迹点（每米约 1 点） */
+  function makeTrack(
+    points: ReadonlyArray<readonly [number, number]>,
+  ): [number, number][] {
+    return points.map(([lat, lng]) => [lat, lng] as [number, number])
+  }
+
+  it('带轨迹赛段：路径重合的活动计成绩，偏离路径的不计', () => {
+    // 赛段轨迹：起点 → 终点直线（约 14km）
+    const track = makeTrack([
+      [31.2, 121.5],
+      [31.25, 121.55],
+      [31.3, 121.6],
+    ])
+    const withTrack: SegmentGeometry = { ...SEGMENT, trackPoints: track }
+
+    const onPath = makeRecords([
+      [0, 31.2001, 121.5001],
+      [300, 31.25, 121.55],
+      [600, 31.3001, 121.6001],
+    ])
+    expect(matchSegmentEffort(withTrack, onPath)).toBe(600)
+
+    // 起终点圆命中但途中多数点偏到完全不同的位置（模拟另一条路/折返误匹配）。
+    // 中位数口径：起终点圆内的端点距轨迹≈0，需超过半数 GPS 点偏离才拒绝，
+    // 因此构造 6 点中 4 个偏离（>半数）的场景
+    const offPath = makeRecords([
+      [0, 31.2001, 121.5001],
+      [10, 31.28, 121.38], // 偏离赛段轨迹 > 100m（约 16km）
+      [20, 31.27, 121.39], // 偏离
+      [25, 31.26, 121.40], // 偏离
+      [30, 31.29, 121.37], // 偏离
+      [35, 31.3001, 121.6001],
+    ])
+    expect(matchSegmentEffort(withTrack, offPath)).toBeUndefined()
+  })
+
+  it('超长赛段轨迹抽稀后判定结果与短轨迹一致（≤200 点采样不翻转语义）', () => {
+    // 构造 5000 点的密集赛段轨迹（起终点之间线性插值 + 微小抖动）
+    const dense: [number, number][] = []
+    for (let i = 0; i < 5000; i += 1) {
+      const t = i / 4999
+      dense.push([31.2 + 0.1 * t, 121.5 + 0.1 * t])
+    }
+    const sparse: SegmentGeometry = { ...SEGMENT, trackPoints: [[31.2, 121.5], [31.3, 121.6]] }
+    const denseSegment: SegmentGeometry = { ...SEGMENT, trackPoints: dense }
+
+    const records = makeRecords([
+      [0, 31.2001, 121.5001],
+      [300, 31.25, 121.55],
+      [600, 31.3001, 121.6001],
+    ])
+    expect(matchSegmentEffort(denseSegment, records)).toBe(600)
+    expect(matchSegmentEffort(sparse, records)).toBe(600)
+  })
+
+  it('包围盒外的活动点直接判超阈值（盒内盒外混合仍按中位数口径）', () => {
+    // 赛段在 (31.2,121.5)~(31.3,121.6)；活动穿越途中大部分点远在包围盒外
+    const track: SegmentGeometry = {
+      ...SEGMENT,
+      trackPoints: [
+        [31.2, 121.5],
+        [31.21, 121.51],
+        [31.22, 121.52],
+        [31.23, 121.53],
+        [31.24, 121.54],
+        [31.25, 121.55],
+      ],
+    }
+    // 5 个 GPS 点中 3 个在盒外（>半数超阈值 → 提前失败）
+    const mostlyOutside = makeRecords([
+      [0, 31.2001, 121.5001],
+      [10, 30.5, 120.9],
+      [20, 30.6, 121.0],
+      [30, 30.7, 121.1],
+      [40, 31.3001, 121.6001],
+    ])
+    expect(matchSegmentEffort(track, mostlyOutside)).toBeUndefined()
+
+    // 仅 1 点在盒外（<半数超阈值 → 中位数仍 ≤ 阈值 → 通过）
+    const fewOutside = makeRecords([
+      [0, 31.2001, 121.5001],
+      [10, 30.5, 120.9],
+      [20, 31.21, 121.51], // 恰为赛段轨迹顶点（距离 0）
+      [30, 31.23, 121.53], // 恰为赛段轨迹顶点（距离 0）
+      [40, 31.3001, 121.6001],
+    ])
+    expect(matchSegmentEffort(track, fewOutside)).toBe(40)
+  })
+
+  it('同一穿越段反复撞终点圆只做一次路径校验（缓存生效，结果不变）', () => {
+    const track: SegmentGeometry = {
+      ...SEGMENT,
+      trackPoints: [
+        [31.2, 121.5],
+        [31.25, 121.55],
+        [31.3, 121.6],
+      ],
+    }
+    // 完赛后继续留在终点圈内多帧（每次 inEnd 都触发判定入口）
+    const records = makeRecords([
+      [0, 31.2001, 121.5001],
+      [300, 31.25, 121.55],
+      [600, 31.3001, 121.6001],
+      [620, 31.3002, 121.6002],
+      [640, 31.3003, 121.6003],
+    ])
+    expect(matchSegmentEffort(track, records)).toBe(600)
+  })
+
+  it('环形赛段带轨迹：绕圈回家路径重合才计成绩', () => {
+    const loop: SegmentGeometry = {
+      startLatitude: 31.2,
+      startLongitude: 121.5,
+      endLatitude: 31.2,
+      endLongitude: 121.5,
+      trackPoints: [
+        [31.2, 121.5],
+        [31.25, 121.55],
+        [31.2, 121.5],
+      ],
+    }
+    const records = makeRecords([
+      [0, 31.2001, 121.5001],
+      [60, 31.2005, 121.5005],
+      [120, 31.25, 121.55],
+      [1800, 31.2001, 121.5001],
+    ])
+    expect(matchSegmentEffort(loop, records)).toBe(1740)
+  })
+})
+

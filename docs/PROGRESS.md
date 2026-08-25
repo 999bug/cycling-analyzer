@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-24（赛段迷你地图 + 路径校验，版本 2.17.0，见 §0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-25（赛段 GPX 导入卡死修复：Worker 化 + 路径校验降复杂度 + 迷你地图懒加载，版本 2.19.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,7 +18,6 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
-| 🔄 运行中 | **赛段 GPX 导入卡死修复**（用户反馈：导入赛段 GPX 后页面卡死；根因 trackMatchesPath O(N×M) 主线程暴力计算 + 盘山折返反复撞终点圆重复校验 + 批量卡片多 Leaflet 实例放大） | 方案已与用户确认，拆 5 个子任务待开工：T1 trackMatchesPath 三层降复杂度（包围盒预筛+轨迹抽稀≤200点+中位数提前退出）；T2 matchSegmentEffort 以穿越段为 key 缓存路径校验结果（只算一次）；T3 Web Worker 化（segmentMatching.worker.ts + buildSegmentLeaderboardAsync 门面，jsdom 无 Worker 同步回退，reload 取消时 terminate）；T4 迷你地图懒加载（useInView IntersectionObserver rootMargin 200px + LazyMap 壳，SegmentCards 接入）；T5 全量回归+lint/build+版本 changelog | 等用户指令开始 T1 |
 | ✅ 已提交 | **GPX 活动导入（第二数据格式入口）**（产品评审结论：活动导入只认 FIT 覆盖面窄，手机骑行 App 用户只有 GPX；赛段已支持 GPX，扩展到活动导入） | ①新建 `src/gpx/gpxParser.ts`（与 FIT 解码平行的第二入口：getElementsByTagNameNS 局部名匹配解析 trkpt lat/lon/ele/time + TrackPointExtension hr/cad/atemp/power——getElementsByTagName 匹配限定名查不到带前缀扩展标签；累计距离按相邻点 haversine 累加，乱序轨迹时间排序防御；汇总复用 @/fit/calculator calculateSummary，速度不伪造恒 undefined；gpx creator → device.productName、trk type → activityType 缺省 cycling、trk name → Activity.name）；②scanner 增 isActivityFileName/isGpxFileName（.fit/.fit.gz/.gpx/.gpx.gz 统一入口），collectFitFiles/scanDirectory 改用；③importer 按扩展名分发解析器（批次内懒选择：GPX 主线程动态 import 独立分包不进首屏——DOMParser 无 Worker 版；FIT 仍走 worker 链每批一个），标题优先级插入 activity.name（手动 > CSV > GPX 内部名 > 文件名兜底）；④stravaExport titleFromFileName 正则扩展 .gpx/.gpx.gz（纯数字跳过规则复用）；⑤ImportPanel accept=.fit,.fit.gz,.gpx + 文案更新（选择文件/拖拽区/未找到提示）+ e2e smoke 选择器同步；⑥测试：tests/gpx/gpxParser.test.ts 12 用例（字段映射/haversine 赤道基准/缺失容错/多 trkseg/错误分支）+ scanner 4 新增（原「忽略非 FIT」断言改为 gpx 收集）+ importerGpx 6 端到端（标题链/.gpx.gz 解压/指纹判重一致/损坏失败台账/FIT+GPX 混合批次分发） | 全量 896/896 + lint/build 绿；版本 2.17.0 → 2.18.0，changelog 已追加 |
 | ✅ 已提交 | **赛段迷你地图 + 路径校验**（用户反馈：导入 GPX 后赛段卡片信息太少、35 秒爬妙峰山明显误匹配） | ①SegmentEntity 加可选 trackPoints（非索引字段免升 DB_VERSION），parseSegmentGpx 存完整轨迹；②segmentMatching.ts 新增 trackMatchesPath（活动穿越起终点圆之间的 GPS 点到赛段轨迹中位数距离 ≤ 100m 才计成绩，无轨迹退化仅圆匹配）；③新建 SegmentMiniMap.tsx（Leaflet 迷你地图，有轨迹画折线/无轨迹画起终点标记，fitBounds 禁交互，OSM→高德降级）；④SegmentCards.tsx 卡片顶部嵌迷你地图 + sourceIndex/onMapFallback 透传；⑤SegmentsPage.tsx 瓦片源 state + 降级记忆（sessionStorage 共享 key）；⑥segmentCards.css 补 .segment-card__map 样式 | 全量 874/874 + lint/build 绿；版本 2.16.0 → 2.17.0，changelog 已追加 |
 | ✅ 已提交 | **赛段 GPX 文件导入**（用户反馈：无 Strava 订阅无法创建 API 应用；改走免费路径——Strava 赛段页免费导出 GPX，本地解析建赛段） | ①`stravaSegments.ts` 增 `parseSegmentGpx`（DOMParser 解析 trkpt 首末点为起终点圆 + trk/metadata name 兜底文件名）与 `filterNewGpxSegments`（名称+起终点坐标 5 位小数去重）；②SegmentsPage 导入面板加 GPX 文件选择（支持多选），解析入库计数反馈；③纯函数测试 + 页面上传流程测试 | 全量 874/874 + lint/build 绿；版本 2.15.0 → 2.16.0，changelog 已追加 |
@@ -170,3 +169,4 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 - 所有新功能覆盖"有数据/数据缺失/空活动/解析失败/大数据量"场景；**缺失字段显示 `—` 不伪造**（规格 §25）
 - 每个任务单独 commit（前缀 `[NF]`/`[IM]` + 中文 Subject），改前先在 §0 登记、改后更新本节状态表
 - 完成后全绿：`npm run lint && npm run test && npm run build`；涉及主链路补 E2E；push 前升 minor 版本
+
