@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| 🔄 运行中 | **在线回放播放卡顿修复**（用户反馈：回放一卡一卡的；根因——rAF 每帧 setProgress 触发全子树 60fps 重渲，且每帧全量 slice+map 重建已走轨迹数组、整条重绘 SVG path） | ①进度架构重构：权威进度存 progressRef 由 rAF 推进，React 状态仅 100ms 节流同步（滑块/HUD/控制条 DOM 不再每帧 reconcile）；②光标命令式更新：ReplayCursor 内自跑 rAF 读 ref → 二分定位 → CircleMarker.setLatLng（不经 React 渲染），高倍速依然平滑；③已走折线抽稀：新增 replayCore.ts buildReplaySkeleton（≤2000 点均匀抽稀保末点），SVG 重绘成本封顶；④纯函数外移：findIndexAtTimestamp/buildReplaySkeleton 移至 src/map/replayCore.ts（react-refresh 导出限制 + 可单测）；⑤顺带修真实 bug：控制条在 MapContainer 内未隔离地图事件——双击按钮误触地图缩放、拖滑块误拖地图（DomEvent.disableClickPropagation/disableScrollPropagation）；⑥防御性修复：rAF 首帧时钟源切换负 dt 防御 + 单帧骑行时间上限 1s（后台切回不跳进度）；⑦测试：新增 tests/map/trackReplay.test.tsx 10 用例（二分边界/骨架抽稀/控制条渲染/倍速切换/拖动联动/fake rAF 确定性推进暂停/缺失字段不伪造） | Playwright 实测 5s 播放采样：301 帧/p95=p99=max=16.8ms/>50ms 帧数 0（稳定 60fps 零卡顿）；待提交推送 |
 | 🔄 运行中 | **轨迹在线回放 + 地形图叠加**（用户需求：地图轨迹上在线播放回放、可切换地形底图） | 已完成编码：TrackReplay 组件 + ActivityMap 集成 + 详情页回放开关；全量 953/953 + lint/build 绿 | 提交推送 + changelog 同步 |
 | ✅ 已提交 | **轨迹回放视频导出**（用户需求：详情页按钮一键导出当前活动轨迹回放视频） | ①`src/features/activity/trackVideoExport.ts`：Canvas 2D 逐帧绘制（暗色底 + 网格 + 蓝色进度线 + 当前位置光点 + 活动名/距离/时长 HUD）→ `canvas.captureStream(30fps)` → MediaRecorder 录制；MIME 优先 `video/mp4;codecs=avc1`（Chrome 126+/Safari 原生支持），降级 webm 并如实用 .webm 后缀；等距圆柱投影 + 等比缩放居中，1280×720 / 6Mbps / 默认 10 秒；文件名沿用 GPX 规则（去 .fit/.fit.gz 追加 -replay.mp4）；②ActivityDetailPage 新增「导出回放视频」按钮（导出 GPX 旁），录制中显示进度文案，无轨迹时禁用，作者源只读活动同样可导出 | 全量 953/953 + lint/build 绿；版本 2.27.0 → 2.28.0 |
 | ✅ 已提交 | **移动端恢复热力图/路线图导航入口**
