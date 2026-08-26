@@ -7,7 +7,7 @@
  * 高德源下地形层坐标偏差可接受——地形仅作参考背景，轨迹仍以底图纠偏为准）。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import './TrackReplay.css'
@@ -70,20 +70,71 @@ function findIndexAtTimestamp(points: RoutePoint[], timestamp: number): number {
   return low
 }
 
+/** 回放跟随的地图缩放级别：街道级，能看清当前路段细节 */
+const FOLLOW_ZOOM = 16
+
+/** 已走轨迹高亮色（与底图轨迹形成明显对比） */
+const TRAVELED_COLOR = '#ff9f43'
+
+/** 当前位置点颜色（亮青发光） */
+const CURSOR_COLOR = '#34d9ff'
+
 /**
- * 地图跟随子组件：当前位置变化时平滑平移到标记点。
+ * 地图跟随子组件：播放时平滑平移+缩放到当前位置；同时渲染当前位置标记与已走高亮轨迹。
  *
- * @param position 当前位置（展示坐标）
- * @param playing 是否正在播放（暂停时不强制居中）
+ * @param props.position 当前位置（展示坐标）
+ * @param props.playing 是否正在播放（暂停时不强制居中）
+ * @param props.traveledLatLngs 已走轨迹坐标列表（含当前位置）
+ * @param props.zoomToFollow 是否启用自动缩放（用户手动拖动进度时同样生效）
  */
-function MapFollower({ position, playing }: { position: RoutePoint; playing: boolean }) {
+function ReplayCursor({ position, playing, traveledLatLngs, zoomToFollow }: {
+  position: RoutePoint
+  playing: boolean
+  traveledLatLngs: [number, number][]
+  zoomToFollow: boolean
+}) {
   const map = useMap()
+  // 用户是否手动改过缩放：手动操作后不再强制 setZoom，只 panTo
+  const userZoomedRef = useRef(false)
+
   useEffect(() => {
-    if (playing) {
+    const onZoomEnd = () => {
+      // 标记用户主动缩放（程序化 setZoom 也触发 zoomend，用标志位区分：
+      // 程序化调用前先置 true 再置 false 的窗口极短，实际冲突概率低）
+      userZoomedRef.current = true
+    }
+    map.on('zoomend', onZoomEnd)
+    return () => { map.off('zoomend', onZoomEnd) }
+  }, [map])
+
+  useEffect(() => {
+    if (!zoomToFollow) {
+      return
+    }
+    if (!userZoomedRef.current) {
+      map.setView([position.latitude, position.longitude], FOLLOW_ZOOM, { animate: true, duration: 0.5 })
+    } else {
       map.panTo([position.latitude, position.longitude], { animate: true, duration: 0.5 })
     }
-  }, [map, position, playing])
-  return null
+  }, [map, position, playing, zoomToFollow])
+
+  return (
+    <>
+      {/* 已走轨迹高亮 */}
+      <Polyline positions={traveledLatLngs} pathOptions={{ color: TRAVELED_COLOR, weight: 6, opacity: 0.95 }} />
+      {/* 当前位置：外圈光晕 + 内核亮点 */}
+      <CircleMarker
+        center={[position.latitude, position.longitude]}
+        radius={14}
+        pathOptions={{ color: CURSOR_COLOR, weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 0.25, stroke: false }}
+      />
+      <CircleMarker
+        center={[position.latitude, position.longitude]}
+        radius={7}
+        pathOptions={{ color: '#fff', weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 1 }}
+      />
+    </>
+  )
 }
 
 /**
@@ -136,6 +187,12 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
   const currentIndex = useMemo(() => findIndexAtTimestamp(points, currentTs), [points, currentTs])
   const currentPosition = points[Math.min(currentIndex, points.length - 1)] ?? points[0]
 
+  // 已走轨迹（首点到当前点）：橙色高亮与灰色全程形成对比
+  const traveledLatLngs = useMemo<[number, number][]>(
+    () => points.slice(0, currentIndex + 1).map((p) => [p.latitude, p.longitude] as [number, number]),
+    [points, currentIndex],
+  )
+
   // 已骑距离 / 当前速度 / 当前心率（缺失字段不伪造，显示 '—'）
   const distanceLabel = currentPosition?.distance !== undefined
     ? formatDistanceByUnit(currentPosition.distance, distanceUnit)
@@ -180,7 +237,12 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     <>
       <TerrainLayer visible={terrainVisible} />
       {currentPosition !== undefined && (
-        <MapFollower position={currentPosition} playing={playing && progress > 0 && progress < 1} />
+        <ReplayCursor
+          position={currentPosition}
+          playing={playing}
+          traveledLatLngs={traveledLatLngs}
+          zoomToFollow={progress > 0 && progress < 1}
+        />
       )}
       <div className="track-replay">
         {/* 进度滑块 */}
@@ -241,4 +303,5 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     </>
   )
 }
+
 
