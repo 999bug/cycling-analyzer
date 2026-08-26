@@ -14,6 +14,7 @@ import { TrackReplay } from '@/map/TrackReplay'
 import {
   buildReplaySkeleton,
   findIndexAtTimestamp,
+  interpolatePositionAt,
 } from '@/map/replayCore'
 import type { RoutePoint } from '@/types/activity'
 
@@ -62,6 +63,36 @@ describe('buildReplaySkeleton（已走折线抽稀）', () => {
     expect(skeleton[0]).toBe(points[0])
     // 相邻抽样点步长一致
     expect(findIndexAtTimestamp(points, skeleton[1]!.timestamp)).toBe(10)
+  })
+})
+
+describe('interpolatePositionAt（邻点线性插值）', () => {
+  const points = [
+    { timestamp: 0, latitude: 31.2, longitude: 121.5 },
+    { timestamp: 10, latitude: 31.3, longitude: 121.6 },
+    { timestamp: 20, latitude: 31.4, longitude: 121.7 },
+  ]
+
+  it('段中间时刻取两端点的中点坐标', () => {
+    const pt = interpolatePositionAt(points, 0, 5)
+    expect(pt.latitude).toBeCloseTo(31.25, 10)
+    expect(pt.longitude).toBeCloseTo(121.55, 10)
+  })
+
+  it('段起点/终点分别与端点重合', () => {
+    expect(interpolatePositionAt(points, 0, 0).latitude).toBe(31.2)
+    expect(interpolatePositionAt(points, 0, 10).latitude).toBe(31.3)
+  })
+
+  it('末段无下一点时钳制到末点（含超出时间戳场景）', () => {
+    expect(interpolatePositionAt(points, 2, 20).longitude).toBe(121.7)
+    expect(interpolatePositionAt(points, 2, 999).longitude).toBe(121.7)
+  })
+
+  it('相邻点时间戳相同时不除零，直接返回左端点', () => {
+    const dup = [points[0]!, points[0]!]
+    const pt = interpolatePositionAt(dup, 0, 5)
+    expect(pt.latitude).toBe(31.2)
   })
 })
 

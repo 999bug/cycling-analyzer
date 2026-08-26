@@ -52,3 +52,32 @@ export function buildReplaySkeleton<T extends ReplayPoint>(points: T[], maxPoint
   }
   return sampled
 }
+
+/**
+ * 相邻记录点间线性插值：计算目标时刻的连续坐标。
+ * 记录间隔通常为秒级，直接取最近点会逐点跳动；插值后光标以帧率平滑滑行。
+ *
+ * @param points 轨迹点（timestamp 升序）
+ * @param index 目标时刻所在段的左端点索引（findIndexAtTimestamp 的返回值）
+ * @param timestamp 目标时刻
+ */
+export function interpolatePositionAt(
+  points: ReplayPoint[],
+  index: number,
+  timestamp: number,
+): { latitude: number; longitude: number } {
+  const current = points[Math.min(index, points.length - 1)]!
+  const next = points[index + 1]
+  if (next === undefined) {
+    return { latitude: current.latitude, longitude: current.longitude }
+  }
+  const span = next.timestamp - current.timestamp
+  if (span <= 0) {
+    return { latitude: current.latitude, longitude: current.longitude }
+  }
+  const t = Math.min(Math.max((timestamp - current.timestamp) / span, 0), 1)
+  return {
+    latitude: current.latitude + (next.latitude - current.latitude) * t,
+    longitude: current.longitude + (next.longitude - current.longitude) * t,
+  }
+}

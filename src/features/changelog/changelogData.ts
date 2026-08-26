@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.28.2',
+    date: '2026-08-26',
+    features: [
+      '在线回放更丝滑：位置标记在轨迹记录点之间平滑插值移动，不再逐点跳跃',
+      '跟随镜头仅做最小幅度平移把标记拉回画面内，跟随过程更平稳不甩动',
+    ],
+  },
+  {
     version: '2.28.1',
     date: '2026-08-26',
     features: [

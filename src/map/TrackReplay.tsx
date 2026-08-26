@@ -20,7 +20,7 @@ import { DomEvent } from 'leaflet'
 import type { CircleMarker as LeafletCircleMarker, LatLngTuple } from 'leaflet'
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
-import { buildReplaySkeleton, findIndexAtTimestamp } from '@/map/replayCore'
+import { buildReplaySkeleton, findIndexAtTimestamp, interpolatePositionAt } from '@/map/replayCore'
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
@@ -46,6 +46,9 @@ const CURSOR_COLOR = '#34d9ff'
 
 /** 跟随触发边距（比例）：光标超出视口该比例范围才平移，避免频繁 setView 打断动画 */
 const FOLLOW_EDGE_RATIO = 0.25
+
+/** 跟随镜头单次平移时长（秒）：小幅 panBy 配短动画，镜头平稳不甩动 */
+const FOLLOW_PAN_DURATION_SECONDS = 0.25
 
 /**
  * 格式化秒 → mm:ss 或 h:mm:ss。
@@ -81,20 +84,22 @@ export interface TrackReplayProps {
 
 /**
  * 地图跟随子组件：渲染当前位置标记与已走高亮轨迹。
- * 播放期间自跑 rAF 循环：每帧读权威进度 ref → 二分定位 → 光标 setLatLng + 按需平移；
- * 仅当光标越出视口边缘比例范围才 panTo，且进入跟随模式只缩放一次。
+ * 播放期间自跑 rAF 循环：每帧读权威进度 ref → 二分定位 → 邻点线性插值 →
+ * 光标 setLatLng + 按需最小幅度平移（丝滑关键：位置连续、镜头不居中跳变）。
+ * 暂停/拖动路径由 syncPosition 经 effect 命令式对齐——播放中 React 状态
+ * 不反向写入光标，避免节流同步造成的位置回跳。
  *
- * @param props.position 当前位置（展示坐标；暂停/拖动路径由 props 渲染驱动）
+ * @param props.syncPosition 展示进度对应的轨迹点（仅非播放态用于对齐光标）
  * @param props.progressRef 权威进度（0~1，父级 rAF 每帧推进）
  * @param props.traveledLatLngs 已走轨迹骨架坐标列表（节流更新）
  * @param props.following 是否处于跟随模式（播放中）
  */
-function ReplayCursor({ position, progressRef, traveledLatLngs, following, points, firstTs, totalSpan }: {
-  position: RoutePoint
+function ReplayCursor({ points, progressRef, traveledLatLngs, following, syncPosition, firstTs, totalSpan }: {
+  points: RoutePoint[]
   progressRef: { current: number }
   traveledLatLngs: [number, number][]
   following: boolean
-  points: RoutePoint[]
+  syncPosition: RoutePoint
   firstTs: number
   totalSpan: number
 }) {
@@ -105,6 +110,8 @@ function ReplayCursor({ position, progressRef, traveledLatLngs, following, point
   const zoomedOnceRef = useRef(false)
   // 用户手动改过缩放后不再强制 zoom
   const userZoomedRef = useRef(false)
+  // 跟随镜头动画进行中标志：动画未结束前不叠加新的平移，避免抖动
+  const panningRef = useRef(false)
 
   // 监听用户手势触发的缩放（程序化调用前置标志位跳过）
   useEffect(() => {
@@ -116,32 +123,49 @@ function ReplayCursor({ position, progressRef, traveledLatLngs, following, point
       }
       programmatic = false
     }
+    const onMoveStart = () => { panningRef.current = true }
+    const onMoveEnd = () => { panningRef.current = false }
     map.on('zoomstart', beforeZoom)
     map.on('zoomend', onZoomEnd)
+    map.on('movestart', onMoveStart)
+    map.on('moveend', onMoveEnd)
     return () => {
       map.off('zoomstart', beforeZoom)
       map.off('zoomend', onZoomEnd)
+      map.off('movestart', onMoveStart)
+      map.off('moveend', onMoveEnd)
     }
   }, [map])
 
-  // 光标位置 → 视口内则不动，越出边缘比例才平滑平移（首入跟随先一次性缩放）
+  /** 把光标拉回视口边距内的最小幅度平移（不居中，镜头稳）；首入跟随先一次性缩放 */
   const followCursor = (latLng: LatLngTuple) => {
     if (!zoomedOnceRef.current && !userZoomedRef.current) {
       zoomedOnceRef.current = true
       map.setView(latLng, FOLLOW_ZOOM, { animate: true })
       return
     }
+    if (panningRef.current) {
+      return
+    }
     const size = map.getSize()
     const point = map.latLngToContainerPoint(latLng)
     const edgeX = size.x * FOLLOW_EDGE_RATIO
     const edgeY = size.y * FOLLOW_EDGE_RATIO
-    if (
-      point.x >= edgeX && point.x <= size.x - edgeX &&
-      point.y >= edgeY && point.y <= size.y - edgeY
-    ) {
-      return
+    let dx = 0
+    let dy = 0
+    if (point.x < edgeX) {
+      dx = point.x - edgeX
+    } else if (point.x > size.x - edgeX) {
+      dx = point.x - (size.x - edgeX)
     }
-    map.panTo(latLng, { animate: true, duration: 0.4 })
+    if (point.y < edgeY) {
+      dy = point.y - edgeY
+    } else if (point.y > size.y - edgeY) {
+      dy = point.y - (size.y - edgeY)
+    }
+    if (dx !== 0 || dy !== 0) {
+      map.panBy([dx, dy], { animate: true, duration: FOLLOW_PAN_DURATION_SECONDS })
+    }
   }
 
   // 播放中每帧命令式更新光标与跟随（不经 React 渲染路径，保证高倍速平滑）
@@ -153,13 +177,12 @@ function ReplayCursor({ position, progressRef, traveledLatLngs, following, point
     const frame = () => {
       const ts = firstTs + progressRef.current * totalSpan
       const index = findIndexAtTimestamp(points, ts)
-      const pt = points[Math.min(index, points.length - 1)]
-      if (pt !== undefined) {
-        const latLng: LatLngTuple = [pt.latitude, pt.longitude]
-        haloRef.current?.setLatLng(latLng)
-        coreRef.current?.setLatLng(latLng)
-        followCursor(latLng)
-      }
+      // 邻点线性插值：消除记录点间隔导致的逐点跳动
+      const pt = interpolatePositionAt(points, index, ts)
+      const latLng: LatLngTuple = [pt.latitude, pt.longitude]
+      haloRef.current?.setLatLng(latLng)
+      coreRef.current?.setLatLng(latLng)
+      followCursor(latLng)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -167,25 +190,40 @@ function ReplayCursor({ position, progressRef, traveledLatLngs, following, point
     // eslint-disable-next-line react-hooks/exhaustive-deps -- followCursor 内部只依赖 map 与稳定 ref
   }, [following, points, firstTs, totalSpan, map])
 
+  // 非播放态（暂停/拖动进度）：光标对齐展示进度位置（播放中由 rAF 循环全权接管）
+  useEffect(() => {
+    if (following) {
+      return
+    }
+    const latLng: LatLngTuple = [syncPosition.latitude, syncPosition.longitude]
+    haloRef.current?.setLatLng(latLng)
+    coreRef.current?.setLatLng(latLng)
+  }, [following, syncPosition])
+
   return (
     <>
-      {/* 已走轨迹高亮（抽稀骨架，节流更新） */}
+      {/* 已走轨迹高亮（抽稀骨架，节流更新）；光标 center 仅作初值，后续全部命令式更新 */}
       <Polyline positions={traveledLatLngs} pathOptions={{ color: TRAVELED_COLOR, weight: 6, opacity: 0.95 }} />
-      {/* 当前位置：外圈光晕 + 内核亮点（center 兼顾暂停/拖动路径，播放中被命令式覆盖） */}
       <CircleMarker
         ref={haloRef}
-        center={[position.latitude, position.longitude]}
+        center={initialCenterOf(points)}
         radius={14}
         pathOptions={{ color: CURSOR_COLOR, weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 0.25, stroke: false }}
       />
       <CircleMarker
         ref={coreRef}
-        center={[position.latitude, position.longitude]}
+        center={initialCenterOf(points)}
         radius={7}
         pathOptions={{ color: '#fff', weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 1 }}
       />
     </>
   )
+}
+
+/** 光标初始中心（首点坐标）：组件内保持稳定引用，避免 props 变化反向驱动光标 */
+function initialCenterOf(points: RoutePoint[]): LatLngTuple {
+  const first = points[0]
+  return first !== undefined ? [first.latitude, first.longitude] : [0, 0]
 }
 
 /**
@@ -318,11 +356,11 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
       <TerrainLayer visible={terrainVisible} />
       {currentPosition !== undefined && (
         <ReplayCursor
-          position={currentPosition}
+          points={points}
           progressRef={progressRef}
           traveledLatLngs={traveledLatLngs}
           following={playing}
-          points={points}
+          syncPosition={currentPosition}
           firstTs={firstTs}
           totalSpan={totalSpan}
         />
