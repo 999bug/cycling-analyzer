@@ -248,6 +248,9 @@ function ActivityDetailPage() {
   const [saving, setSaving] = useState(false)
   /** 回放视频导出中标记 */
   const [exportingVideo, setExportingVideo] = useState(false)
+  // 在线轨迹回放模式开关 + 地形图叠加开关
+  const [replayMode, setReplayMode] = useState(false)
+  const [terrainVisible, setTerrainVisible] = useState(false)
   // 用户设置（单位/时间格式等本地显示偏好；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
   // 训练配置（随数据源：作者模式用快照 profile，本地模式用访客设置）
@@ -745,6 +748,20 @@ function ActivityDetailPage() {
         {coloring !== 'none' && (
           <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
         )}
+        <button
+          type="button"
+          className={
+            replayMode
+              ? 'activity-detail__coloring-btn activity-detail__coloring-btn--active'
+              : 'activity-detail__coloring-btn'
+          }
+          aria-pressed={replayMode}
+          onClick={() => setReplayMode(!replayMode)}
+          disabled={!hasTrack}
+          title="在线播放轨迹：标记沿路线推进，可叠加地形图"
+        >
+          {replayMode ? '⏹ 关闭回放' : '▶ 在线回放'}
+        </button>
         {cleanedRecords.removedCount > 0 && (
           <p className="activity-detail__drift-notice">
             已清理 {cleanedRecords.removedCount} 个 GPS 漂移点（仅影响轨迹展示与导出）
@@ -755,6 +772,10 @@ function ActivityDetailPage() {
           coloring={coloring}
           hoverPoint={hoverPoint}
           onHover={setHoverTimestamp}
+          replayEnabled={replayMode}
+          terrainVisible={terrainVisible}
+          onTerrainToggle={() => setTerrainVisible(!terrainVisible)}
+          distanceUnit={distanceUnit}
         />
       </section>
 
@@ -982,5 +1003,6 @@ function DetailNotice({ state }: { state: LoadState }) {
 }
 
 export default ActivityDetailPage
+
 
 

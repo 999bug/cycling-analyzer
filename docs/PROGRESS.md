@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| 🔄 运行中 | **轨迹在线回放 + 地形图叠加**（用户需求：地图轨迹上在线播放回放、可切换地形底图） | 已完成编码：TrackReplay 组件 + ActivityMap 集成 + 详情页回放开关；全量 953/953 + lint/build 绿 | 提交推送 + changelog 同步 |
 | ✅ 已提交 | **轨迹回放视频导出**（用户需求：详情页按钮一键导出当前活动轨迹回放视频） | ①`src/features/activity/trackVideoExport.ts`：Canvas 2D 逐帧绘制（暗色底 + 网格 + 蓝色进度线 + 当前位置光点 + 活动名/距离/时长 HUD）→ `canvas.captureStream(30fps)` → MediaRecorder 录制；MIME 优先 `video/mp4;codecs=avc1`（Chrome 126+/Safari 原生支持），降级 webm 并如实用 .webm 后缀；等距圆柱投影 + 等比缩放居中，1280×720 / 6Mbps / 默认 10 秒；文件名沿用 GPX 规则（去 .fit/.fit.gz 追加 -replay.mp4）；②ActivityDetailPage 新增「导出回放视频」按钮（导出 GPX 旁），录制中显示进度文案，无轨迹时禁用，作者源只读活动同样可导出 | 全量 953/953 + lint/build 绿；版本 2.27.0 → 2.28.0 |
 | ✅ 已提交 | **移动端恢复热力图/路线图导航入口**
 （用户发现：详情页地图在手机上正常，两页却被隐藏不合理；原隐藏于 c7127ee 顺手加入） | ①AppLayout.tsx：移除两项 `mobileHidden: true` 并删除整套隐藏机制（NavItem.mobileHidden 字段 / data-mobile-hidden 属性 / AppLayout.css 隐藏规则，不留死代码），注释更新说明恢复原因；②Playwright 390×844 实测 dist 预览：抽屉内两项可见、热力图/路线图页均正常渲染且无横向溢出、路线图移动端断点生效（列表在上 + 地图 358×506 堆叠）；③顺带定位 vite preview 本地预览坑：command=serve 时 base 回退 '/'，需显式 `--base=/cycling-analyzer/`（MSYS_NO_PATHCONV=1 防 Git Bash 路径转换），否则静态资源全部被 SPA 回退劫持 | 全量 953/953 + lint/build 绿；版本随未推送的 2.27.0 同组提交（策略：已升过则跳过），changelog 已并入该条目 |
@@ -180,6 +181,7 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 - 所有新功能覆盖"有数据/数据缺失/空活动/解析失败/大数据量"场景；**缺失字段显示 `—` 不伪造**（规格 §25）
 - 每个任务单独 commit（前缀 `[NF]`/`[IM]` + 中文 Subject），改前先在 §0 登记、改后更新本节状态表
 - 完成后全绿：`npm run lint && npm run test && npm run build`；涉及主链路补 E2E；push 前升 minor 版本
+
 
 
 

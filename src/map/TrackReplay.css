@@ -1,0 +1,100 @@
+/**
+ * 轨迹回放控制条样式。
+ */
+.track-replay {
+  position: absolute;
+  bottom: 56px;
+  left: 12px;
+  right: 12px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  color: #c9d1d9;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.track-replay__slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  outline: none;
+}
+
+.track-replay__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #34d9ff;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(52, 217, 255, 0.5);
+}
+
+.track-replay__slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: #34d9ff;
+  cursor: pointer;
+}
+
+.track-replay__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.track-replay__btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #c9d1d9;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.track-replay__btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.track-replay__btn--primary {
+  font-size: 16px;
+  min-width: 36px;
+  background: #4f8cff;
+  color: #fff;
+}
+
+.track-replay__btn--primary:hover {
+  background: #6ba1ff;
+}
+
+.track-replay__speed--active,
+.track-replay__terrain--active {
+  background: #34d9ff;
+  color: #0d1117;
+}
+
+.track-replay__clock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: #8b949e;
+}
+
+.track-replay__stat {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: #e6edf3;
+  white-space: nowrap;
+}

@@ -24,6 +24,7 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     date: '2026-08-26',
     features: [
       '活动详情页新增「导出回放视频」：一键把当前骑行轨迹录成 10 秒 MP4 回放（暗色底图 + 蓝色进度线 + 实时距离/时长），可直接分享',
+      '活动详情页地图新增「在线回放」：标记沿路线推进播放，支持倍速/拖动进度/实时数据，可叠加地形图底图',
     ],
   },
   {
@@ -217,3 +218,4 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     ],
   },
 ] as const
+

@@ -20,6 +20,7 @@ import {
   type ColoringMode,
   type ColoredLine,
 } from '@/map/routeColoring'
+import { TrackReplay } from '@/map/TrackReplay'
 import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
 import {
   FullscreenSync,
@@ -71,6 +72,18 @@ export interface ActivityMapProps {
 
   /** 地图悬停上报（共享时间轴反向联动）：鼠标移到轨迹附近时上报最近点时间戳 */
   onHover?: (timestamp: number | undefined) => void
+
+  /** 是否启用在线回放控制条 */
+  replayEnabled?: boolean
+
+  /** 地形图层是否可见（父级受控） */
+  terrainVisible?: boolean
+
+  /** 地形图层切换回调（父级受控） */
+  onTerrainToggle?: () => void
+
+  /** 距离单位偏好（回放 HUD 展示用；缺省 km） */
+  distanceUnit?: 'km' | 'mi'
 }
 
 /**
@@ -133,7 +146,7 @@ function MapHoverReporter({
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km' }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -234,6 +247,14 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: Activit
         )}
         <FitBounds points={displayPoints} />
         <MapHoverReporter displayPoints={displayPoints} onHover={onHover} />
+        {replayEnabled && (
+          <TrackReplay
+            points={displayPoints}
+            distanceUnit={distanceUnit}
+            terrainVisible={terrainVisible}
+            onTerrainToggle={onTerrainToggle ?? (() => {})}
+          />
+        )}
         <FullscreenSync />
         <ZoomControlBottomRight />
       </MapContainer>
@@ -243,3 +264,5 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover }: Activit
 }
 
 export default ActivityMap
+
+
