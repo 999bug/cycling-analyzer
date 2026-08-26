@@ -44,6 +44,15 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 ## 提交规范
 
 - 前缀 `[NF]`/`[BF]`/`[IM]`/`[CU]` + 中文 Subject；**无 AI 署名**
+- **提交格式（参照 `9d36a88`，勿回退到单行长 Subject 风格）**：
+  - Subject 一句话概括本次提交做了什么（简洁、不堆砌细节），前缀后无冒号
+  - 细节全部放正文 bullet list（`-` 开头）：新增/修改了什么文件与函数、关键实现点、测试情况（如「全量 NNN/NNN + lint/build 绿」）、文档同步说明
+  - 版本号变更写进正文 bullet（如 `- 版本 2.12.0 → 2.13.0`），不追加在 Subject 尾部
+  - 正例：Subject「[NF] 详情页报告化：一句话总结 + 核心指标精选 + 更多指标折叠」+ 正文逐条列文件与测试
+  - 反例（已废弃）：把全部功能点用「+」串进一行长 Subject 并以「版本 X.Y.Z」结尾
 - 提交身份固定 `999bug <999bug@users.noreply.github.com>`（项目 git config 已设，勿改）
-- 先同步更新 `docs/PROGRESS.md` 再提交；完成后 `codegraph sync`（如环境可用）
+- 改动前先读 `docs/PROGRESS.md` 确认现状，避免与进行中的任务冲突
+- **每完成一个功能/阶段必须同步更新 `docs/PROGRESS.md`**（状态与文件清单）再提交代码，保持文档与代码同步
+- 完成后 `codegraph sync`（如环境可用）
 - **版本策略**：每次 push 一组功能提交前，`package.json` 升一次 minor 版本（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）；如已升过则跳过
+
