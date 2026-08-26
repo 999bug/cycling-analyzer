@@ -12,11 +12,9 @@ import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import './TrackReplay.css'
 
-/** 回放速度选项（倍率） */
-const SPEED_OPTIONS = [1, 4, 16] as const
+/** 回放速度选项（倍率）：1x = 真实时间流速 */
+const SPEED_OPTIONS = [1, 8, 32, 128] as const
 
-/** 基准播放时长（秒）：1x 速度下走完全程的时间 */
-const BASE_PLAYBACK_SECONDS = 30
 
 /**
  * 格式化秒 → mm:ss 或 h:mm:ss。
@@ -79,44 +77,70 @@ const TRAVELED_COLOR = '#ff9f43'
 /** 当前位置点颜色（亮青发光） */
 const CURSOR_COLOR = '#34d9ff'
 
+/** 跟随触发边距（比例）：光标超出视口该比例范围才平移，避免每帧 setView 卡死动画队列 */
+const FOLLOW_EDGE_RATIO = 0.25
+
 /**
- * 地图跟随子组件：播放时平滑平移+缩放到当前位置；同时渲染当前位置标记与已走高亮轨迹。
+ * 地图跟随子组件：播放时仅在光标偏离视口边缘时平滑平移；首次启用跟随时缩放到街道级。
+ * 同时渲染当前位置标记与已走高亮轨迹。
  *
  * @param props.position 当前位置（展示坐标）
- * @param props.playing 是否正在播放（暂停时不强制居中）
  * @param props.traveledLatLngs 已走轨迹坐标列表（含当前位置）
- * @param props.zoomToFollow 是否启用自动缩放（用户手动拖动进度时同样生效）
+ * @param props.following 是否处于跟随模式（播放中或拖动进度）
  */
-function ReplayCursor({ position, playing, traveledLatLngs, zoomToFollow }: {
+function ReplayCursor({ position, traveledLatLngs, following }: {
   position: RoutePoint
-  playing: boolean
   traveledLatLngs: [number, number][]
-  zoomToFollow: boolean
+  following: boolean
 }) {
   const map = useMap()
-  // 用户是否手动改过缩放：手动操作后不再强制 setZoom，只 panTo
+  // 是否已执行过初始缩放（每次进入跟随模式只 zoom 一次，之后仅按需 pan）
+  const zoomedOnceRef = useRef(false)
+  // 用户手动改过缩放后不再强制 zoom
   const userZoomedRef = useRef(false)
 
+  // 监听用户手势触发的缩放（drag 后 wheel/pinch 才算手动；程序化调用前置标志位跳过）
   useEffect(() => {
+    let programmatic = false
+    const beforeZoom = () => { programmatic = true }
     const onZoomEnd = () => {
-      // 标记用户主动缩放（程序化 setZoom 也触发 zoomend，用标志位区分：
-      // 程序化调用前先置 true 再置 false 的窗口极短，实际冲突概率低）
-      userZoomedRef.current = true
+      if (!programmatic) {
+        userZoomedRef.current = true
+      }
+      programmatic = false
     }
+    map.on('zoomstart', beforeZoom)
     map.on('zoomend', onZoomEnd)
-    return () => { map.off('zoomend', onZoomEnd) }
+    return () => {
+      map.off('zoomstart', beforeZoom)
+      map.off('zoomend', onZoomEnd)
+    }
   }, [map])
 
   useEffect(() => {
-    if (!zoomToFollow) {
+    if (!following) {
       return
     }
-    if (!userZoomedRef.current) {
-      map.setView([position.latitude, position.longitude], FOLLOW_ZOOM, { animate: true, duration: 0.5 })
-    } else {
-      map.panTo([position.latitude, position.longitude], { animate: true, duration: 0.5 })
+    const latLng: [number, number] = [position.latitude, position.longitude]
+    // 首次进入跟随且用户没手动缩放过：一次性缩放到街道级
+    if (!zoomedOnceRef.current && !userZoomedRef.current) {
+      zoomedOnceRef.current = true
+      map.setView(latLng, FOLLOW_ZOOM, { animate: true })
+      return
     }
-  }, [map, position, playing, zoomToFollow])
+    // 光标在视口内边距范围内时不平移，减少动画抖动与瓦片重载
+    const size = map.getSize()
+    const point = map.latLngToContainerPoint(latLng)
+    const edgeX = size.x * FOLLOW_EDGE_RATIO
+    const edgeY = size.y * FOLLOW_EDGE_RATIO
+    if (
+      point.x >= edgeX && point.x <= size.x - edgeX &&
+      point.y >= edgeY && point.y <= size.y - edgeY
+    ) {
+      return
+    }
+    map.panTo(latLng, { animate: true, duration: 0.4 })
+  }, [map, position, following])
 
   return (
     <>
@@ -216,7 +240,8 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
       const dt = (now - lastTickRef.current) / 1000
       lastTickRef.current = now
       setProgress((prev) => {
-        const next = prev + (dt * speed) / BASE_PLAYBACK_SECONDS
+        // dt 秒真实时间 × 倍速 = 推进的骑行时间；除以总时长得 progress 增量
+        const next = prev + (dt * speed) / totalSpan
         if (next >= 1) {
           setPlaying(false)
           return 1
@@ -228,7 +253,7 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
 
     rafRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [playing, speed])
+  }, [playing, speed, totalSpan])
 
   // 卸载时清理 rAF
   useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
@@ -239,9 +264,8 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
       {currentPosition !== undefined && (
         <ReplayCursor
           position={currentPosition}
-          playing={playing}
           traveledLatLngs={traveledLatLngs}
-          zoomToFollow={progress > 0 && progress < 1}
+          following={playing}
         />
       )}
       <div className="track-replay">
@@ -303,5 +327,8 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     </>
   )
 }
+
+
+
 
 
