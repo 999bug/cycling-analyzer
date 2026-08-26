@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.28.0',
+    date: '2026-08-26',
+    features: [
+      '活动详情页新增「导出回放视频」：一键把当前骑行轨迹录成 10 秒 MP4 回放（暗色底图 + 蓝色进度线 + 实时距离/时长），可直接分享',
+    ],
+  },
+  {
     version: '2.27.0',
     date: '2026-08-26',
     features: [
