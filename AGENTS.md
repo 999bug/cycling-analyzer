@@ -54,5 +54,5 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 改动前先读 `docs/PROGRESS.md` 确认现状，避免与进行中的任务冲突
 - **每完成一个功能/阶段必须同步更新 `docs/PROGRESS.md`**（状态与文件清单）再提交代码，保持文档与代码同步
 - 完成后 `codegraph sync`（如环境可用）
-- **版本策略**：每次 push 一组功能提交前，`package.json` 升一次 minor 版本（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）；如已升过则跳过
+- **版本策略**：每次提交都必须前进版本号（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）——功能改动 `[NF]` 升中间位（如 2.28.0 → 2.29.0），其余提交（`[BF]`/`[IM]`/`[DOC]`/`[CU]`）升末尾位（如 2.28.0 → 2.28.1）；changelog 同步追加条目
 

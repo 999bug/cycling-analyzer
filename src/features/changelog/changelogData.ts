@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.28.1',
+    date: '2026-08-26',
+    features: [
+      '在线回放流畅度优化：播放不再一卡一卡，高倍速下依然平滑',
+      '回放控制条不再误触地图：双击播放/暂停按钮不再触发地图缩放，拖动进度条不再拖动地图',
+      '切到后台再回到页面时，回放进度不会突然跳一大段',
+    ],
+  },
+  {
     version: '2.28.0',
     date: '2026-08-26',
     features: [
