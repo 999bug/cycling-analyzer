@@ -38,6 +38,11 @@ import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
+import {
+  buildVideoFileName,
+  downloadVideo,
+  exportTrackReplayVideo,
+} from '@/features/activity/trackVideoExport'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
@@ -241,6 +246,8 @@ function ActivityDetailPage() {
   const [editing, setEditing] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [saving, setSaving] = useState(false)
+  /** 回放视频导出中标记 */
+  const [exportingVideo, setExportingVideo] = useState(false)
   // 用户设置（单位/时间格式等本地显示偏好；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
   // 训练配置（随数据源：作者模式用快照 profile，本地模式用访客设置）
@@ -467,7 +474,30 @@ function ActivityDetailPage() {
     if (gpx === undefined) {
       return
     }
+
     downloadGpx(buildGpxFileName(activity.fileName), gpx)
+  }
+
+  /**
+   * 导出轨迹回放视频：当前活动轨迹 → 10 秒 MP4/WebM 回放下载。
+   * 浏览器不支持 MediaRecorder 或无轨迹时按钮已禁用，此处兜底静默返回。
+   */
+  async function handleExportVideo() {
+    if (activity === undefined || exportingVideo) {
+      return
+    }
+    setExportingVideo(true)
+    try {
+      const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
+      const result = await exportTrackReplayVideo(cleanedRecords.cleaned, trackName)
+      if (result !== undefined) {
+        downloadVideo(buildVideoFileName(activity.fileName, result.extension), result.blob)
+      }
+    } catch (err: unknown) {
+      console.error('Failed to export track replay video', err)
+    } finally {
+      setExportingVideo(false)
+    }
   }
 
   /**
@@ -621,6 +651,15 @@ function ActivityDetailPage() {
             title={hasTrack ? undefined : '该活动无轨迹坐标，无法导出'}
           >
             导出 GPX
+          </button>
+          <button
+            type="button"
+            className="activity-detail__export"
+            onClick={() => void handleExportVideo()}
+            disabled={!hasTrack || exportingVideo}
+            title={hasTrack ? '导出 10 秒轨迹回放视频' : '该活动无轨迹坐标，无法导出'}
+          >
+            {exportingVideo ? '录制中…' : '导出回放视频'}
           </button>
           {/* 设为赛段 / 删除活动：作者源只读时保留可见但禁用（提示切源），不再凭空隐藏 */}
           <button
@@ -943,3 +982,5 @@ function DetailNotice({ state }: { state: LoadState }) {
 }
 
 export default ActivityDetailPage
+
+

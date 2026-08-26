@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-26（PWA 安装引导 + 移动端恢复热力图/路线图导航入口，版本 2.27.0；小程序线正式搁置，代码保留在 feature/miniprogram 分支）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-08-26（详情页新增轨迹回放视频导出按钮，Canvas + MediaRecorder 纯浏览器录制 10 秒 MP4，版本 2.28.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,7 +18,9 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
-| ✅ 已提交 | **移动端恢复热力图/路线图导航入口**（用户发现：详情页地图在手机上正常，两页却被隐藏不合理；原隐藏于 c7127ee 顺手加入） | ①AppLayout.tsx：移除两项 `mobileHidden: true` 并删除整套隐藏机制（NavItem.mobileHidden 字段 / data-mobile-hidden 属性 / AppLayout.css 隐藏规则，不留死代码），注释更新说明恢复原因；②Playwright 390×844 实测 dist 预览：抽屉内两项可见、热力图/路线图页均正常渲染且无横向溢出、路线图移动端断点生效（列表在上 + 地图 358×506 堆叠）；③顺带定位 vite preview 本地预览坑：command=serve 时 base 回退 '/'，需显式 `--base=/cycling-analyzer/`（MSYS_NO_PATHCONV=1 防 Git Bash 路径转换），否则静态资源全部被 SPA 回退劫持 | 全量 953/953 + lint/build 绿；版本随未推送的 2.27.0 同组提交（策略：已升过则跳过），changelog 已并入该条目 |
+| ✅ 已提交 | **轨迹回放视频导出**（用户需求：详情页按钮一键导出当前活动轨迹回放视频） | ①`src/features/activity/trackVideoExport.ts`：Canvas 2D 逐帧绘制（暗色底 + 网格 + 蓝色进度线 + 当前位置光点 + 活动名/距离/时长 HUD）→ `canvas.captureStream(30fps)` → MediaRecorder 录制；MIME 优先 `video/mp4;codecs=avc1`（Chrome 126+/Safari 原生支持），降级 webm 并如实用 .webm 后缀；等距圆柱投影 + 等比缩放居中，1280×720 / 6Mbps / 默认 10 秒；文件名沿用 GPX 规则（去 .fit/.fit.gz 追加 -replay.mp4）；②ActivityDetailPage 新增「导出回放视频」按钮（导出 GPX 旁），录制中显示进度文案，无轨迹时禁用，作者源只读活动同样可导出 | 全量 953/953 + lint/build 绿；版本 2.27.0 → 2.28.0 |
+| ✅ 已提交 | **移动端恢复热力图/路线图导航入口**
+（用户发现：详情页地图在手机上正常，两页却被隐藏不合理；原隐藏于 c7127ee 顺手加入） | ①AppLayout.tsx：移除两项 `mobileHidden: true` 并删除整套隐藏机制（NavItem.mobileHidden 字段 / data-mobile-hidden 属性 / AppLayout.css 隐藏规则，不留死代码），注释更新说明恢复原因；②Playwright 390×844 实测 dist 预览：抽屉内两项可见、热力图/路线图页均正常渲染且无横向溢出、路线图移动端断点生效（列表在上 + 地图 358×506 堆叠）；③顺带定位 vite preview 本地预览坑：command=serve 时 base 回退 '/'，需显式 `--base=/cycling-analyzer/`（MSYS_NO_PATHCONV=1 防 Git Bash 路径转换），否则静态资源全部被 SPA 回退劫持 | 全量 953/953 + lint/build 绿；版本随未推送的 2.27.0 同组提交（策略：已升过则跳过），changelog 已并入该条目 |
 | ✅ 已提交 | **PWA 安装引导**（决策：放弃小程序线——微信限制过多与网站核心能力冲突，代码保留在 feature/miniprogram 分支不再推进；移动端入口改走 Web 安装体验） | ①`src/features/pwa/install.ts` 纯逻辑模块：beforeinstallprompt 模块级全局捕获（事件早于 React 挂载，preventDefault 阻止默认 mini-infobar 改由自定义 UI 择机触发）/ appinstalled 监听 / iOS 检测（iPhone/iPad/iPod UA + iPadOS 13+ Mac UA 多点触控判定）/ standalone 已装检测（display-mode 三态媒体查询 + navigator.standalone）/ 「稍后」14 天冷却期（localStorage 时间戳，隐私模式写入失败静默降级）/ 订阅通知机制；②`usePwaInstall` hook：订阅模块状态派生 support/platform/coolingDown + install()/dismiss()；③`InstallBanner` 全局横幅挂 AppLayout 布局根（fixed 右下角卡片、移动端底部通栏留安全区、z-index 30 低于抽屉、prefers-reduced-motion 降级）：可安装且非冷却期时展示，Chromium 系一键触发原生弹窗、iOS 展示手动步骤，「稍后」与取消原生弹窗均进冷却期，安装成功自动消失；④设置页新增「安装应用」区块（`src/features/pwa/InstallSection.tsx`，位于外观与离线地图之间）：已装状态说明 / 一键安装按钮 / iOS 三步指引 / 不支持时替代浏览器建议；⑤测试 22 新增（install 纯逻辑 15 + installBanner 组件 7）+ settingsPage 补 2 用例（默认不支持提示 / beforeinstallprompt 后一键安装），全量 953/953 + lint/build 绿 | 版本 2.26.0 → 2.27.0，changelog 已追加 |
 | ✅ 已提交 | **路线图页右侧地图铺满 + Web Interface Guidelines 审查修复**（用户需求：右侧地图铺满；用 web-design-guidelines skill 按 Vercel 指南逐条审查） | ①布局铺满：AppLayout.css 新增 `.app-layout__content:has(.routes-map-page)` 规则（内容区变 flex column + overflow hidden，兄弟节点如作者横幅 flex-shrink:0 自动让位——不硬编码 calc 高度，banner 有无均自适应；移动端断点恢复 block 文档流）；RoutesMapPage.css 重写：页面 flex column + 负 margin 抵消内容区 padding（padding 20px 0 0 24px，右/下零内边距），layout 区 flex:1 min-height:0，列表列与地图列 stretch 同高、列表独立滚动，地图 wrapper height:100%、圆角只保留左上（贴边融合）；②地图尺寸同步：mapFullscreen.tsx 新增 ResizeSync 组件（ResizeObserver 监听 wrapper，尺寸变化 map.invalidateSize——flex 首帧计算/窗口缩放/列表展开均正确重排瓦片），RoutesMapPage 挂载；③a11y 修复：列表项 aria-pressed 选中态、:focus-visible 显式焦点环（默认 outline 被圆角裁切）、列表 overscroll-behavior: contain、按钮 touch-action: manipulation、次数数字 tabular-nums；④Playwright 实测：右侧留白 24px→0、底部留白 0、无滚动条、162 条 polyline 正常渲染，截图确认视觉效果 | 全量 929/929 + lint/build 绿；版本 2.25.0 → 2.26.0，changelog 已追加 |
 | ✅ 已提交 | **热力图/路线图首次进入提速：扫描结果持久化 + 路线图批量读库**（用户反馈本地数据两页首次进入慢；根因——抽稀产物仅存模块级内存缓存刷新即失效，每次刷新后首次进入都要全量读 records（几十万点级）+ Douglas-Peucker 抽稀；路线图页还遗留逐活动串行 getRecords） | ①db v3 → v4 新增 scan_cache 表（name 主键，ScanCacheEntity: name/fingerprint/payload）；②scanCache.ts 扩展 loadScanCache/saveScanCache（指纹失配自动失效并清旧记录，写入失败不阻塞主流程）+ SCAN_CACHE_HEATMAP/SCAN_CACHE_ROUTES_MAP 常量；summariesScanKey 指纹纳入名称哈希（重命名后路线图标题需刷新，djb2 hashString）；③HeatmapPage 两级缓存改造：内存 → IndexedDB 持久化 → 重扫，产物写回两级；④RoutesMapPage 同样接入持久化 + 串行 getRecords 换 getRecordsByActivityIds 单次批量查询；⑤测试：新增 scanCache.test.ts 4 用例（存取/指纹失配清除/覆盖写/名称纳入指纹），db.test 表清单更新为七张 + scan_cache 主键断言，downsample 空集合键断言适配新格式（确定性前缀匹配），heatmap/routesMap 页面测试 beforeEach 清 scan_cache 防缓存串台 | 全量 929/929 + lint/build 绿；版本 2.24.0 → 2.25.0，changelog 已追加 |
@@ -178,4 +180,6 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 - 所有新功能覆盖"有数据/数据缺失/空活动/解析失败/大数据量"场景；**缺失字段显示 `—` 不伪造**（规格 §25）
 - 每个任务单独 commit（前缀 `[NF]`/`[IM]` + 中文 Subject），改前先在 §0 登记、改后更新本节状态表
 - 完成后全绿：`npm run lint && npm run test && npm run build`；涉及主链路补 E2E；push 前升 minor 版本
+
+
 
