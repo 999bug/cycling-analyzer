@@ -4,7 +4,7 @@
  * 验证默认公制渲染、保存回填、导出下载、导入汇总与清空（二次确认）。
  */
 import 'fake-indexeddb/auto'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
@@ -17,6 +17,10 @@ import {
   type ExportBundle,
 } from '@/features/settings/exportImport'
 import { getSettings, saveSettings } from '@/features/settings/settings'
+import {
+  resetPwaInstallStateForTests,
+  type BeforeInstallPromptEvent,
+} from '@/features/pwa/install'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import type { Activity } from '@/types/activity'
 
@@ -332,5 +336,38 @@ describe('设置页离线地图（瓦片缓存）', () => {
     await user.click(clearButton)
     expect(await screen.findByText(/已清空地图瓦片缓存/)).toBeInTheDocument()
     expect(await testDb.tile_cache.count()).toBe(0)
+  })
+})
+
+describe('设置页安装应用区块（PWA）', () => {
+  const user = userEvent.setup()
+
+  beforeEach(() => {
+    localStorage.clear()
+    resetPwaInstallStateForTests()
+  })
+
+  it('默认环境（jsdom 不支持安装）展示替代浏览器说明', async () => {
+    render(<SettingsPage />)
+
+    const section = await screen.findByRole('region', { name: '安装应用' })
+    expect(section).toBeInTheDocument()
+    expect(screen.getByText(/当前浏览器不支持安装应用/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /安装到/ })).not.toBeInTheDocument()
+  })
+
+  it('捕获到 beforeinstallprompt 后展示一键安装按钮，点击触发原生弹窗', async () => {
+    const event = new Event('beforeinstallprompt') as BeforeInstallPromptEvent
+    event.prompt = vi.fn().mockResolvedValue(undefined)
+    event.userChoice = Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
+
+    render(<SettingsPage />)
+    act(() => {
+      window.dispatchEvent(event)
+    })
+
+    const installButton = await screen.findByRole('button', { name: '安装到桌面' })
+    await user.click(installButton)
+    expect(event.prompt).toHaveBeenCalledTimes(1)
   })
 })

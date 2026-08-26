@@ -1,0 +1,119 @@
+/* PWA 安装引导横幅：桌面右下角卡片，移动端底部通栏（低于抽屉层级） */
+
+.install-banner {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30; /* 低于抽屉遮罩(40)/抽屉(50)，移动端打开菜单时自然被覆盖 */
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 420px;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+  animation: install-banner-in 0.25s ease;
+}
+
+/* 尊重减弱动态偏好：直接出现，不做滑入动画 */
+@media (prefers-reduced-motion: reduce) {
+  .install-banner {
+    animation: none;
+  }
+}
+
+.install-banner__icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+}
+
+.install-banner__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.install-banner__title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.install-banner__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.install-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.install-banner__install {
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-banner__install:hover {
+  filter: brightness(1.08);
+}
+
+.install-banner__install:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.install-banner__dismiss {
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.install-banner__dismiss:hover {
+  color: var(--text);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+/* 移动端：底部通栏（留出安全区），图标缩小 */
+@media (max-width: 768px) {
+  .install-banner {
+    right: var(--space-md);
+    bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+    left: var(--space-md);
+    max-width: none;
+    padding: var(--space-md);
+  }
+
+  .install-banner__icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* 窄屏按钮组换行到文案下方 */
+  .install-banner {
+    flex-wrap: wrap;
+  }
+
+  .install-banner__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

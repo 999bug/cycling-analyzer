@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.27.0',
+    date: '2026-08-26',
+    features: [
+      '新增 PWA 安装引导：支持安装的环境下展示可关闭的安装横幅，一键把骑了么添加到桌面 / 主屏幕，离线也能用',
+      'iOS Safari 提供手动添加步骤指引；设置页新增「安装应用」区块，随时可查看安装状态与入口',
+      '「稍后」进入 14 天冷却期，不重复打扰；安装成功后引导自动消失',
+    ],
+  },
+  {
     version: '2.26.0',
     date: '2026-08-25',
     features: [

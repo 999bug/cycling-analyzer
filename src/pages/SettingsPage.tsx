@@ -23,6 +23,7 @@ import {
   type TimeFormat,
 } from '@/features/settings/settings'
 import { switchTheme, applyTheme } from '@/features/settings/theme'
+import InstallSection from '@/features/pwa/InstallSection'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import {
   defaultExportFilename,
@@ -664,6 +665,8 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
           </div>
         </div>
       </section>
+
+      <InstallSection />
 
       <section className="settings-section" aria-label="离线地图">
         <h2 className="settings-section__title">离线地图</h2>

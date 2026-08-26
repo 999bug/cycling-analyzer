@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import ImportPanel from '@/features/import/ImportPanel'
 import DataSourceSwitcher from '@/components/DataSourceSwitcher'
 import AuthorBanner from '@/components/AuthorBanner'
+import InstallBanner from '@/components/InstallBanner'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -142,6 +143,8 @@ function AppLayout() {
         <AuthorBanner />
         <Outlet />
       </main>
+      {/* PWA 安装引导横幅（可安装且非冷却期时展示；fixed 定位不受内容区影响） */}
+      <InstallBanner />
     </div>
   )
 }
