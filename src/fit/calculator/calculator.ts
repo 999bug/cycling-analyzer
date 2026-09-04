@@ -67,6 +67,49 @@ export function calculateSummary(
   const distance = lastDistance(records) ?? estimateDistance(records)
   const avgSpeed = duration > 0 && distance > 0 ? distance / duration : undefined
 
+  // 单次遍历聚合 max/avg：此前 7 个 maxOf/averageOf 各自 map 建 n 长中间数组，
+  // 3 万点活动一次摘要计算分配 ~200 万个中间元素（GC 压力）；语义与逐字段
+  // map+filter 完全一致（cadence 见下方行业口径注释）
+  let maxSpeed: number | undefined
+  let heartRateSum = 0
+  let heartRateCount = 0
+  let maxHeartRate: number | undefined
+  let cadenceSum = 0
+  let cadenceCount = 0
+  let maxCadence: number | undefined
+  let powerSum = 0
+  let powerCount = 0
+  let maxPower: number | undefined
+  for (const record of records) {
+    const { speed, heartRate, cadence, power } = record
+    if (speed !== undefined && (maxSpeed === undefined || speed > maxSpeed)) {
+      maxSpeed = speed
+    }
+    if (heartRate !== undefined) {
+      heartRateSum += heartRate
+      heartRateCount++
+      if (maxHeartRate === undefined || heartRate > maxHeartRate) {
+        maxHeartRate = heartRate
+      }
+    }
+    if (cadence !== undefined) {
+      if (maxCadence === undefined || cadence > maxCadence) {
+        maxCadence = cadence
+      }
+      if (cadence > 0) {
+        cadenceSum += cadence
+        cadenceCount++
+      }
+    }
+    if (power !== undefined) {
+      powerSum += power
+      powerCount++
+      if (maxPower === undefined || power > maxPower) {
+        maxPower = power
+      }
+    }
+  }
+
   return {
     duration,
     elapsedTime,
@@ -78,15 +121,15 @@ export function calculateSummary(
     elevationLoss: session?.totalDescent ?? calculateElevationLoss(records),
     calories: session?.totalCalories,
     avgSpeed,
-    maxSpeed: maxOf(records.map((r) => r.speed)),
-    avgHeartRate: averageOf(records.map((r) => r.heartRate)),
-    maxHeartRate: maxOf(records.map((r) => r.heartRate)),
+    maxSpeed,
+    avgHeartRate: heartRateCount > 0 ? heartRateSum / heartRateCount : undefined,
+    maxHeartRate,
     // 行业口径（Strava）：avgCadence 排除滑行点（cadence=0），仅对踩踏中的
     // 点求平均，否则被零值拉低；maxCadence 仍取全部记录的最大值（含 0 异常点）
-    avgCadence: averageExcludingZero(records.map((r) => r.cadence)),
-    maxCadence: maxOf(records.map((r) => r.cadence)),
-    avgPower: averageOf(records.map((r) => r.power)),
-    maxPower: maxOf(records.map((r) => r.power)),
+    avgCadence: cadenceCount > 0 ? cadenceSum / cadenceCount : undefined,
+    maxCadence,
+    avgPower: powerCount > 0 ? powerSum / powerCount : undefined,
+    maxPower,
   }
 }
 
@@ -159,43 +202,4 @@ function calculateElevationLoss(records: ActivityRecord[]): number | undefined {
     prevAltitude = record.altitude
   }
   return loss > 0 ? loss : undefined
-}
-
-/** 非空数值的平均值 */
-function averageOf(values: (number | undefined)[]): number | undefined {
-  const valid = values.filter((v): v is number => v !== undefined)
-  if (valid.length === 0) {
-    return undefined
-  }
-  return valid.reduce((sum, v) => sum + v, 0) / valid.length
-}
-
-/**
- * 排除零值的非空数值平均值（行业口径 avgCadence 用：滑行点 cadence=0
- * 不计入分母，避免被拉低；全为 0/缺失时返回 undefined）。
- */
-function averageExcludingZero(values: (number | undefined)[]): number | undefined {
-  const valid = values.filter((v): v is number => v !== undefined && v > 0)
-  if (valid.length === 0) {
-    return undefined
-  }
-  return valid.reduce((sum, v) => sum + v, 0) / valid.length
-}
-
-/**
- * 非空数值的最大值。用 for 循环而非 `Math.max(...valid)` 展开——
- * 后者 V8/WebKit 实参上限约 65536，5Hz 记录骑行 5 小时（≈9 万点）即
- * `RangeError: Maximum call stack size exceeded`。
- */
-function maxOf(values: (number | undefined)[]): number | undefined {
-  let max: number | undefined
-  for (const v of values) {
-    if (v === undefined) {
-      continue
-    }
-    if (max === undefined || v > max) {
-      max = v
-    }
-  }
-  return max
 }

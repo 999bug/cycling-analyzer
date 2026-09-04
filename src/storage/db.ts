@@ -314,24 +314,22 @@ export class CyclingDatabase extends Dexie {
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，
     // 新标签的 db.open() 会一直挂起。Dexie 触发 'blocked' 事件代表有
-    // 其他标签正在使用旧版本。默认提示用户关闭其他标签后点击重试；
-    // 当前表结构只增不减暂不需 .upgrade()，但为未来迁移预埋升级路径
+    // 其他标签正在使用旧版本。此处仅提示用户手动关闭其他标签——
+    // 浏览器会对所有持旧连接的标签自动触发其 'versionchange' 监听
+    // （见下），无需也无法从本标签跨标签页通知（window 事件不跨标签）
     this.on('blocked', () => {
       // 用 window.confirm 而非自定义弹窗：本场景是部署时出现一次
-      // （发布后老用户重新打开页面），频繁点需是 ok；用户确认后
-      // 其他标签应被提示关闭/重新加载
-      const shouldCloseOthers = window.confirm(
-        '检测到其他浏览器标签页正在使用旧版本数据。\n是否关闭其他标签以完成升级？\n（点击「确定」后请手动关闭其他同站标签页，然后重新加载当前页）',
+      // （发布后老用户重新打开页面），引导文案说清操作步骤即可
+      void window.confirm(
+        '检测到其他浏览器标签页正在使用旧版本数据。\n请关闭其他同站标签页，然后重新加载本页以完成数据升级。',
       )
-      if (shouldCloseOthers) {
-        // 主动关闭其他连接的提示：触发对方的 versionchange 监听
-        // （IndexedDB 规范：旧连接必须 close() 才能放行升级）
-        window.dispatchEvent(new CustomEvent('cycling-db-blocked'))
-      }
     })
 
-    // 本标签被新版本覆盖：v 升级需要本标签放弃旧连接
+    // 本标签持旧连接：close() 主动放行升级（IndexedDB 规范要求旧连接
+    // close 后新版本才能继续），再提示并重载——否则 alert 悬停期间
+    // 新标签会一直卡在 blocked
     this.on('versionchange', () => {
+      this.close()
       window.alert('数据已升级，请重新加载当前页面以使用新版本。')
       window.location.reload()
     })

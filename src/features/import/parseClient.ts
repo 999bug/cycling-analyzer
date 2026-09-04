@@ -108,9 +108,8 @@ export function createWorkerParser(): WorkerParserHandle {
       if (disposed) {
         return
       }
-      // 拒绝所有未决但不再销毁 worker（正常批次结束，
-      // dispose 是协作式释放，不应误伤尚在飞行中的请求）
-      // 但为简化语义：dispose 等价于「本批次结束」，未完成的请求一并拒绝
+      // dispose 等价于「本批次结束」：拒绝所有未决请求并销毁 worker，
+      // 释放含完整 fitsdk（~384KB）的 worker 实例
       rejectAll(new Error('Worker parser disposed'))
     },
   }
