@@ -512,17 +512,23 @@ function ActivityDetailPage() {
       return
     }
     const coordPoints = records.filter(
-      (record) => record.latitude !== undefined && record.longitude !== undefined,
+      (record): record is ActivityRecord & { latitude: number; longitude: number } =>
+        record.latitude !== undefined && record.longitude !== undefined,
     )
+    // 至少需首末两个点才能建起终点圆赛段；hasTrack 只保证 ≥1 个坐标点
+    if (coordPoints.length < 2) {
+      console.warn('Cannot create segment: fewer than two track points with coordinates')
+      return
+    }
     const first = coordPoints[0]
     const last = coordPoints[coordPoints.length - 1]
     segmentRepository
       .addSegment({
         name: activity.name || `${formatDate(activity.startTime)} 骑行`,
-        startLatitude: first.latitude ?? 0,
-        startLongitude: first.longitude ?? 0,
-        endLatitude: last.latitude ?? 0,
-        endLongitude: last.longitude ?? 0,
+        startLatitude: first.latitude,
+        startLongitude: first.longitude,
+        endLatitude: last.latitude,
+        endLongitude: last.longitude,
         sourceActivityId: activity.id,
         createdAt: new Date().toISOString(),
       })

@@ -165,11 +165,20 @@ function averageOf(values: (number | undefined)[]): number | undefined {
   return valid.reduce((sum, v) => sum + v, 0) / valid.length
 }
 
-/** 非空数值的最大值 */
+/**
+ * 非空数值的最大值。用 for 循环而非 `Math.max(...valid)` 展开——
+ * 后者 V8/WebKit 实参上限约 65536，5Hz 记录骑行 5 小时（≈9 万点）即
+ * `RangeError: Maximum call stack size exceeded`。
+ */
 function maxOf(values: (number | undefined)[]): number | undefined {
-  const valid = values.filter((v): v is number => v !== undefined)
-  if (valid.length === 0) {
-    return undefined
+  let max: number | undefined
+  for (const v of values) {
+    if (v === undefined) {
+      continue
+    }
+    if (max === undefined || v > max) {
+      max = v
+    }
   }
-  return Math.max(...valid)
+  return max
 }
