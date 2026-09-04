@@ -1,0 +1,72 @@
+/**
+ * ErrorBoundary 降级页样式。
+ *
+ * 设计目标：
+ * - 全屏居中卡片，token 化与全局设计一致
+ * - 警示色（--danger）仅用于标题点缀，避免误判为系统级错误
+ * - 重新加载按钮为主要操作（品牌色填充），保证视觉权重
+ * - 响应式：移动端宽度安全留白（viewport - 2*16px）
+ */
+.error-boundary {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background-color: var(--bg);
+  z-index: 100;
+}
+
+.error-boundary__card {
+  max-width: 480px;
+  width: 100%;
+  padding: var(--space-xl);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.error-boundary__title {
+  margin-bottom: var(--space-md);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.error-boundary__title::before {
+  /* 警示色前缀标记，与正常页面区分 */
+  content: '⚠ ';
+  color: var(--danger);
+}
+
+.error-boundary__message {
+  margin-bottom: var(--space-lg);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.error-boundary__action {
+  display: inline-block;
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--on-primary);
+  background-color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.error-boundary__action:hover {
+  filter: brightness(0.92);
+}
+
+.error-boundary__action:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

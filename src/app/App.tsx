@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { ROUTES } from '@/app/router'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import AppLayout from '@/layouts/AppLayout'
 import ActivitiesPage from '@/pages/ActivitiesPage'
 import DashboardPage from '@/pages/DashboardPage'
@@ -35,7 +36,8 @@ function LazyPage({ children }: { children: ReactNode }) {
  */
 function App() {
   return (
-    <Routes>
+    <ErrorBoundary>
+      <Routes>
       <Route element={<AppLayout />}>
         <Route path={ROUTES[0]} element={<DashboardPage />} />
         <Route path={ROUTES[1]} element={<ActivitiesPage />} />
@@ -52,6 +54,7 @@ function App() {
         <Route path={ROUTES[12]} element={<LazyPage><ChangelogPage /></LazyPage>} />
       </Route>
     </Routes>
+    </ErrorBoundary>
   )
 }
 
