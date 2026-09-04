@@ -311,6 +311,30 @@ export class CyclingDatabase extends Dexie {
     this.version(4).stores({
       scan_cache: 'name',
     });
+
+    // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，
+    // 新标签的 db.open() 会一直挂起。Dexie 触发 'blocked' 事件代表有
+    // 其他标签正在使用旧版本。默认提示用户关闭其他标签后点击重试；
+    // 当前表结构只增不减暂不需 .upgrade()，但为未来迁移预埋升级路径
+    this.on('blocked', () => {
+      // 用 window.confirm 而非自定义弹窗：本场景是部署时出现一次
+      // （发布后老用户重新打开页面），频繁点需是 ok；用户确认后
+      // 其他标签应被提示关闭/重新加载
+      const shouldCloseOthers = window.confirm(
+        '检测到其他浏览器标签页正在使用旧版本数据。\n是否关闭其他标签以完成升级？\n（点击「确定」后请手动关闭其他同站标签页，然后重新加载当前页）',
+      )
+      if (shouldCloseOthers) {
+        // 主动关闭其他连接的提示：触发对方的 versionchange 监听
+        // （IndexedDB 规范：旧连接必须 close() 才能放行升级）
+        window.dispatchEvent(new CustomEvent('cycling-db-blocked'))
+      }
+    })
+
+    // 本标签被新版本覆盖：v 升级需要本标签放弃旧连接
+    this.on('versionchange', () => {
+      window.alert('数据已升级，请重新加载当前页面以使用新版本。')
+      window.location.reload()
+    })
   }
 }
 

@@ -325,4 +325,11 @@ describe('classifyParseError 错误分类（规格 §24）', () => {
     expect(classifyParseError(new Error('boom'))).toBe('boom');
     expect(classifyParseError('oops')).toBe('oops');
   });
+
+  it('QuotaExceededError 映射为存储空间不足提示', () => {
+    // 真浏览器抛 DOMException(name='QuotaExceededError')；
+    // 测试以同名伪错误对象模拟，避免依赖 DOMException
+    const quotaError = Object.assign(new Error('quota'), { name: 'QuotaExceededError' });
+    expect(classifyParseError(quotaError)).toBe('浏览器存储空间不足，请清理浏览器数据后重试');
+  });
 });

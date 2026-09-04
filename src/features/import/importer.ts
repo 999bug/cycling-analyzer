@@ -24,7 +24,7 @@ import type { ParseFileFn, ParseTaskInput } from '@/fit/worker/parseTask'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { gunzipBytes, shouldGunzip } from './gzip'
 import { classifyParseError } from './errorClassifier'
-import { createWorkerParser } from './parseClient'
+import { createWorkerParser, type WorkerParserHandle } from './parseClient'
 import { isGpxFileName } from './scanner'
 import {
   applyStravaMeta,
@@ -130,8 +130,9 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
     activityRepository = defaultActivityRepository,
     fileRepository = defaultFileRepository,
   } = options
-  // 本批次的 FIT 解析器（懒建：纯 GPX 批次不创建 worker；失败随批次结束废弃）
-  let fitParser: ParseFileFn | undefined
+  // 本批次的 FIT 解析器句柄（懒建：纯 GPX 批次不创建 worker；
+  // 批次结束或中途失败必须 dispose() 终止 worker）
+  let fitHandle: WorkerParserHandle | undefined
 
   /**
    * 按文件扩展名选择解析器：
@@ -152,8 +153,8 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
         return parseGpxActivity(input)
       }
     }
-    fitParser ??= createDefaultParser()
-    return fitParser
+    fitHandle ??= createDefaultParser()
+    return fitHandle.parse
   }
   const metas = buildStravaMetaLookup(options.stravaCsv)
   const failedItems: FailedItem[] = []
@@ -219,6 +220,9 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
     options.onProgress?.(index + 1, files.length)
   }
 
+  // 批次结束：释放 worker（防止长期驻留含 fitsdk 的 worker）
+  fitHandle?.dispose()
+
   return { total: files.length, newImported, skipped, failed: failedItems.length, failedItems }
 }
 
@@ -229,14 +233,20 @@ export async function importFiles(files: ImportFile[], options: ImportOptions = 
  * 各打包一份完整 @garmin/fitsdk（约 384KB 重复）；vitest 内 MODE 为 test 分支保留。
  * 降级路径动态 import：@garmin/fitsdk 不进首屏主包。
  */
-function createDefaultParser(): ParseFileFn {
+function createDefaultParser(): WorkerParserHandle {
   if (typeof Worker !== 'undefined') {
     return createWorkerParser()
   }
   if (import.meta.env.MODE === 'test') {
-    return async (input) => {
-      const { parseFitBytes } = await import('@/fit/worker/parseTask')
-      return parseFitBytes(input)
+    // 测试环境（jsdom 无 Worker）：返回同步主线程解析句柄；
+    // dispose 是 noop（无 worker 可终止）
+    const noopDispose = (): void => {}
+    return {
+      parse: async (input) => {
+        const { parseFitBytes } = await import('@/fit/worker/parseTask')
+        return parseFitBytes(input)
+      },
+      dispose: noopDispose,
     }
   }
   throw new Error('FIT parse worker unavailable in this environment')
