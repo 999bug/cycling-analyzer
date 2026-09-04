@@ -14,8 +14,7 @@ import {
   type SegmentEffort,
   SUSPICIOUS_RIDE_SEGMENT_SECONDS,
 } from '@/features/segments/segmentMatching'
-import { computeLeaderboard } from '@/features/segments/leaderboardTask'
-import { createLeaderboardRunner } from '@/features/segments/leaderboardClient'
+import { computeLeaderboardsSync, createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { useImportStore } from '@/stores/importStore'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
@@ -113,31 +112,40 @@ function SegmentsPage() {
           return
         }
 
-        const inputs: SegmentActivityInput[] = []
-        for (const summary of summaries) {
-          const records = await activityRepository.getRecords(summary.id)
-          if (cancelled) {
-            return
-          }
-          inputs.push({ activityId: summary.id, startTime: summary.startTime, records })
+        // 批量取活动逐点记录（一次 anyOf 索引查询替代 N 次串行 equals），
+        // 代替 N+1 的 for-await getRecords 循环
+        const recordsByActivity = await activityRepository.getRecordsByActivityIds(
+          summaries.map((s) => s.id),
+        )
+        if (cancelled) {
+          return
         }
+        const inputs: SegmentActivityInput[] = summaries.map((summary) => ({
+          activityId: summary.id,
+          startTime: summary.startTime,
+          records: recordsByActivity.get(summary.id) ?? [],
+        }))
 
-        // 成绩榜在 Web Worker 逐赛段计算（GPX 路径校验重量级，避免阻塞主线程）；
+        // 成绩榜在 Web Worker 一次批量计算（避免 N 赛段 × N 记录的结构化
+        // 克隆风暴，200 活动×8000 点×N 赛段会让页面卡数十秒）；
         // jsdom/无 Worker 环境回退主线程同步纯函数；cancelled 时 terminate 终止
         const runner = createLeaderboardRunner() ?? {
-          compute: async (request) => computeLeaderboard(request),
+          compute: async (request) => computeLeaderboardsSync(request),
           cancel: () => {},
         }
         try {
-          const boards = new Map<number, SegmentEffort[]>()
-          for (const segment of allSegments) {
-            if (cancelled) {
-              return
-            }
-            boards.set(segment.id ?? 0, await runner.compute({ segment, inputs }))
-          }
+          const boardsBySegment = await runner.compute({
+            segments: allSegments,
+            inputs,
+          })
           if (cancelled) {
             return
+          }
+          // boardsBySegment 键为 SegmentGeometry 对象，转为按 id 索引的
+          // 业务 Map<number, SegmentEffort[]> 以便下游 SegmentCards 消费
+          const boards = new Map<number, SegmentEffort[]>()
+          for (const segment of allSegments) {
+            boards.set(segment.id ?? 0, boardsBySegment.get(segment) ?? [])
           }
           leaderboardCache = { key: cacheKey, boards }
           setLeaderboards(boards)

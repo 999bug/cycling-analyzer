@@ -1,28 +1,34 @@
 /**
  * 主线程侧成绩榜 worker 客户端（GPX 导入卡死修复）。
  *
- * createLeaderboardRunner 创建常驻 worker：每个赛段榜单一个请求，
- * 顺序复用；cancel() 终止 worker（页面卸载/重新加载时调用，
- * 未决 Promise 以取消错误拒绝）。jsdom 无 Worker 时返回 null，
- * 调用方回退主线程同步计算（computeLeaderboard 纯函数）。
+ * createLeaderboardRunner 创建常驻 worker：每批一次请求（segments + 共享 inputs），
+ * 避免 N 赛段 × N 记录的结构化克隆风暴。cancel() 终止 worker（页面卸载/重
+ * 新加载时调用，未决 Promise 以取消错误拒绝）。jsdom 无 Worker 时返回 null，
+ * 调用方回退主线程同步计算（computeBatchLeaderboards 纯函数）。
  */
-import type { LeaderboardRequest, LeaderboardResponse } from './leaderboardTask'
+import {
+  computeBatchLeaderboards,
+  segmentBoardKey,
+  type LeaderboardBatchRequest,
+  type LeaderboardWorkerMessage,
+} from './leaderboardTask'
+import type { SegmentEffort, SegmentGeometry } from './segmentMatching'
 
-/** 成绩榜计算函数（worker 异步版） */
-export type LeaderboardFn = (
-  request: LeaderboardRequest,
-) => Promise<import('@/features/segments/segmentMatching').SegmentEffort[]>
+/** 批量成绩榜计算函数（worker 异步版）：一次提交多赛段，返回按赛段键索引的榜 */
+export type LeaderboardBatchFn = (
+  request: LeaderboardBatchRequest,
+) => Promise<Map<SegmentGeometry, SegmentEffort[]>>
 
 /** 取消错误消息（调用方据此区分「主动取消」与真实失败） */
 export const LEADERBOARD_CANCELLED = 'leaderboard computation cancelled'
 
 /**
- * 创建基于 Web Worker 的榜单计算器。
+ * 创建基于 Web Worker 的批量榜单计算器。
  *
  * @returns 计算器（compute + cancel）；环境不支持 Worker 时返回 null
  */
 export function createLeaderboardRunner(): {
-  compute: LeaderboardFn
+  compute: LeaderboardBatchFn
   cancel: () => void
 } | null {
   if (typeof Worker === 'undefined') {
@@ -31,10 +37,10 @@ export function createLeaderboardRunner(): {
   const worker = new Worker(new URL('./leaderboardWorker.ts', import.meta.url), {
     type: 'module',
   })
-  const pending = new Map<number, (response: LeaderboardResponse) => void>()
+  const pending = new Map<number, (response: LeaderboardWorkerMessage) => void>()
   let nextId = 1
 
-  worker.onmessage = (event: MessageEvent<LeaderboardResponse>) => {
+  worker.onmessage = (event: MessageEvent<LeaderboardWorkerMessage>) => {
     const resolve = pending.get(event.data.id)
     if (resolve) {
       pending.delete(event.data.id)
@@ -55,8 +61,18 @@ export function createLeaderboardRunner(): {
       new Promise((resolvePromise, rejectPromise) => {
         const id = nextId++
         pending.set(id, (response) => {
-          if (response.ok) {
-            resolvePromise(response.efforts)
+          if (response.ok && 'boards' in response) {
+            // 批量响应：将 worker 返回的 record 反查回原 SegmentGeometry 对象
+            // （同一份 segment 对象不在 inputs 中，可靠 key 对齐）
+            const boards = new Map<SegmentGeometry, SegmentEffort[]>()
+            for (const segment of request.segments) {
+              const key = segmentBoardKey(segment)
+              boards.set(segment, response.boards[key] ?? [])
+            }
+            resolvePromise(boards)
+          } else if (response.ok) {
+            // 理论不会走到这里：单赛段协议已下架
+            resolvePromise(new Map())
           } else {
             rejectPromise(new Error(response.errorMessage))
           }
@@ -77,4 +93,19 @@ export function createLeaderboardRunner(): {
       worker.terminate()
     },
   }
+}
+
+/**
+ * 主线程同步回退路径（jsdom / 无 Worker 环境）：直接调纯函数，
+ * 返回与 worker 接口等价的 Map。
+ */
+export function computeLeaderboardsSync(
+  request: LeaderboardBatchRequest,
+): Map<SegmentGeometry, SegmentEffort[]> {
+  const boards = new Map<SegmentGeometry, SegmentEffort[]>()
+  for (const segment of request.segments) {
+    const key = segmentBoardKey(segment)
+    boards.set(segment, computeBatchLeaderboards(request)[key] ?? [])
+  }
+  return boards
 }
