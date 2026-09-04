@@ -98,15 +98,19 @@ describe('仪表盘页面', () => {
     expect(within(weekSection).getByText('01:30:00')).toBeInTheDocument()
     expect(within(weekSection).getByText('+300 m')).toBeInTheDocument()
 
-    // 本月：本周一 + 上周日（上周日跨月时仅剩本周一）
+    // 本月：本周一 + 上周日（都在本月时 2 次；都在上月时 0 次；仅其中之一在月时 1 次）
     const monthSection = screen.getByLabelText('本月')
+    const mondayInMonth =
+      monday.getFullYear() === today.getFullYear() && monday.getMonth() === today.getMonth()
     const lastSundayInMonth =
       lastSunday.getFullYear() === today.getFullYear() &&
       lastSunday.getMonth() === today.getMonth()
-    expect(within(monthSection).getByText(lastSundayInMonth ? '2 次' : '1 次')).toBeInTheDocument()
-    expect(
-      within(monthSection).getByText(lastSundayInMonth ? '70.00 km' : '50.00 km'),
-    ).toBeInTheDocument()
+    const monthCount = (mondayInMonth ? 1 : 0) + (lastSundayInMonth ? 1 : 0)
+    const monthDistanceMeters = (mondayInMonth ? 50000 : 0) + (lastSundayInMonth ? 20000 : 0)
+    // formatDistanceByUnit: < 1000m → \"0 m\" 字符串；≥ 1000m → xx.xx km
+    const monthDistanceText = monthDistanceMeters < 1000 ? '0 m' : `${(monthDistanceMeters / 1000).toFixed(2)} km`
+    expect(within(monthSection).getByText(`${monthCount} 次`)).toBeInTheDocument()
+    expect(within(monthSection).getByText(monthDistanceText)).toBeInTheDocument()
 
     // 总计：三个活动累计
     const totalSection = screen.getByLabelText('总计')

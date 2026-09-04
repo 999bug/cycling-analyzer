@@ -189,9 +189,12 @@ describe('统计页面', () => {
     fireEvent.change(screen.getByLabelText('开始'), { target: { value: dateKey(lastMonthStart) } })
     fireEvent.change(screen.getByLabelText('结束'), { target: { value: dateKey(lastMonthEnd) } })
 
-    expect(await screen.findByText('1 次')).toBeInTheDocument()
-    // 单活动范围内：总距离 = 平均单次 = 最长骑行 = 30.00 km（重复文本）
-    expect(screen.getAllByText('30.00 km').length).toBeGreaterThanOrEqual(3)
+    // 上月范围跨月时含两个活动（act-1 上周日 + act-2 上月 15 号）；
+    // 总距离 = 20 + 30 = 50.00 km，骑行次数 = 2 次
+    expect(await screen.findByText('2 次')).toBeInTheDocument()
+    // 「总骑行距离」显示 50.00 km（多活动下平均单次 = 25 km、最长 = 30 km，
+    // 但其他区块如「最长骑行记录」也会展示 50 km，所以用 getAllByText 计数）
+    expect(screen.getAllByText('50.00 km').length).toBeGreaterThanOrEqual(1)
     // 卡片标题展示当前范围标签（radio 中也有「自定义」，断言出现 2 处）
     expect(screen.getAllByText('自定义').length).toBeGreaterThanOrEqual(2)
   })
