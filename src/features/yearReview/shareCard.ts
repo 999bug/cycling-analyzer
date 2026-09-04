@@ -7,7 +7,7 @@
  */
 import type { StatisticsMetrics } from '@/features/statistics/statistics'
 import type { MonthlyDistance } from '@/features/yearReview/yearReview'
-import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
+import { formatDistanceByUnit, METERS_PER_MILE, type DistanceUnit } from '@/features/settings/settings'
 
 /** 卡片逻辑宽度（px，导出时 ×2） */
 export const SHARE_CARD_WIDTH = 640
@@ -79,7 +79,7 @@ export function buildShareCardModel(
       { label: '总爬升', value: `${numberFormatter.format(Math.round(metrics.totalElevationGain))} 米` },
     ],
     monthlyDistances: months.map((month) =>
-      distanceUnit === 'mi' ? month.distance / 1609.344 : month.distance / 1000,
+      distanceUnit === 'mi' ? month.distance / METERS_PER_MILE : month.distance / 1000,
     ),
     unitLabel: distanceUnit,
   }

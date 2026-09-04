@@ -10,6 +10,7 @@
  * - 趋势序列以今天为终点，向前补足 N 天，无活动天距离补 0
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
+import { localDateKey } from '@/utils/format'
 
 /**
  * 时间段聚合结果。
@@ -184,10 +185,8 @@ function startOfWeek(date: Date): Date {
  * @param date 日期
  * @returns 如 "2026-08-17"
  */
-function localDateKey(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
+// localDateKey 抽到 @/utils/format 共享，避免三处重复实现
+
 
 /**
  * 构建 N 天距离序列：以今天为终点，向前补足 days 天，无活动天补 0。

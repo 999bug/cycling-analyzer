@@ -18,6 +18,7 @@ import {
   formatSpeedByUnit,
   type DistanceUnit,
 } from '@/features/settings/settings'
+import { formatDurationText } from '@/utils/format'
 
 /** 骑行一句话总结 */
 export interface RideSummary {
@@ -152,20 +153,9 @@ function qualityTierPhrase(score: number | undefined): string | undefined {
 }
 
 /**
- * 时长口语化文案：'2 小时 15 分' / '48 分钟' / '36 秒'。
+ * 时长口语化文案：'2 小时 15 分钟' / '48 分钟' / '36 秒'。
  *
  * @param seconds 时长（秒）
  * @returns 文案
  */
-function formatDurationText(seconds: number): string {
-  const total = Math.floor(seconds)
-  const hours = Math.floor(total / 3600)
-  const minutes = Math.floor((total % 3600) / 60)
-  if (hours > 0) {
-    return minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
-  }
-  if (minutes > 0) {
-    return `${minutes} 分钟`
-  }
-  return `${total} 秒`
-}
+// formatDurationText 抽到 @/utils/format 共享，避免两处重复实现

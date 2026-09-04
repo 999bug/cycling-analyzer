@@ -11,6 +11,7 @@
  * NP 缺失的历史活动由调用方回填后再计算。
  */
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
+import { localDateKey } from '@/utils/format'
 
 /** CTL 指数加权时间常数（天） */
 export const CTL_TIME_CONSTANT_DAYS = 42
@@ -128,7 +129,5 @@ export function buildTrainingStatus(
  * @param date 日期
  * @returns 如 "2026-08-17"
  */
-function localDateKey(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
+// localDateKey 抽到 @/utils/format 共享，避免三处重复实现
+

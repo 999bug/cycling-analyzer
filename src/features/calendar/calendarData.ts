@@ -11,7 +11,7 @@
  * - 未来活动（startTime 晚于 now）不进入聚合
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
-import { formatDuration, formatElevation } from '@/utils/format'
+import { formatDuration, formatElevation, localDateKey } from '@/utils/format'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 
 /** 档位 2 距离阈值：20 km（米） */
@@ -268,7 +268,5 @@ export function buildYearSummary(year: number, data: CalendarData): YearSummary 
  * @param date 日期
  * @returns 如 "2026-08-17"
  */
-export function localDateKey(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
+// localDateKey 抽到 @/utils/format 共享（保持 re-export 以便老调用方不破）
+export { localDateKey }

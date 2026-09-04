@@ -95,3 +95,35 @@ export function formatDate(iso: string | null | undefined): string {
   const day = String(date.getDate()).padStart(2, '0')
   return `${date.getFullYear()}-${month}-${day}`
 }
+
+/**
+ * 本地时区日期键（YYYY-MM-DD，两位补零）。
+ *
+ * @param date 日期
+ * @returns 本地日期键 'YYYY-MM-DD'
+ */
+export function localDateKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+/**
+ * 格式化时长（秒）为中文叙事文案："X 小时 Y 分" / "Y 分" / "Z 秒"。
+ * 与 formatDuration（HH:MM:SS）不同：用于洞察/总结的自然语言呈现。
+ *
+ * @param seconds 时长（秒）
+ * @returns 中文时长文案
+ */
+export function formatDurationText(seconds: number): string {
+  const total = Math.floor(seconds)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
+  }
+  if (minutes > 0) {
+    return `${minutes} 分`
+  }
+  return `${total} 秒`
+}
