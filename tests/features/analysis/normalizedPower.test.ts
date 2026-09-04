@@ -1,64 +1,62 @@
 /**
  * 标准化功率（NP）单测（规格 §26）。
- * 覆盖：30 秒滑动平均手算小数据集、缺失功率过滤、样本不足 30 秒降级、全缺降级、乱序防御。
+ *
+ * 标准算法（TrainingPeaks / Garmin）：30 秒滑动平均 → 4 次方平均 → 4 次方根。
+ * 仅当窗口时间跨度 ≥ 30s 时才计入 4 次方平均（不满窗数据不参与 NP 计算，
+ * 避免前/后不满窗数据拉低 NP，对齐行业标准）。
  */
 import { describe, expect, it } from 'vitest'
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import type { ActivityRecord } from '@/types/activity'
 
-/**
- * 构造逐点记录（未提供的可选字段为 undefined，模拟缺失）。
- *
- * @param timestamp 时间（Unix 秒）
- * @param power 功率（W，可缺失）
- * @returns 逐点记录
- */
 function makeRecord(timestamp: number, power?: number): ActivityRecord {
   return { timestamp, power }
 }
 
 describe('calculateNormalizedPower', () => {
   it('恒功率序列：滑动平均恒等，NP 等于功率值', () => {
-    // 8 个点、间隔 10 秒、功率恒 200W，总跨度 70 秒
+    // 8 个点、间隔 10 秒、功率恒 200W，所有满窗均值 = 200
     const records = Array.from({ length: 8 }, (_, i) => makeRecord(i * 10, 200))
     expect(calculateNormalizedPower(records)).toBeCloseTo(200, 10)
   })
 
-  it('已知小数据集手算：滑动平均 [200, 200, 200, 300] → NP ≈ 238.3046', () => {
-    // 30 秒滑动平均（窗口 [t-30s, t]）：
-    // t=0  → [0]      → 200
-    // t=10 → [0,10]   → 200
-    // t=20 → [0,20]   → 200
-    // t=30 → [0,30]   → (200+200+200+600)/4 = 300
-    // NP = ((200⁴×3 + 300⁴)/4)^(1/4) ≈ 238.3046
+  it('已知小数据集：满窗均值 [300]，NP = 300', () => {
+    // 4 个点 t=0/10/20/30，跨度 30s 满足最低 30s 要求
+    // 满窗仅 t=30 时刻（窗口 [0,30] 跨度 30s）：
+    // t=0  → 跨度 0、< 30 → 不计入
+    // t=10 → 跨度 10、< 30 → 不计入
+    // t=20 → 跨度 20、< 30 → 不计入
+    // t=30 → 跨度 30、≥ 30 → 计入（窗口均值 = (200+200+200+600)/4 = 300）
+    // NP = 300
     const records = [
       makeRecord(0, 200),
       makeRecord(10, 200),
       makeRecord(20, 200),
       makeRecord(30, 600),
     ]
-    expect(calculateNormalizedPower(records)).toBeCloseTo(238.30460225938302, 10)
+    expect(calculateNormalizedPower(records)).toBeCloseTo(300, 10)
   })
 
-  it('滑动窗口只累计 30 秒内的记录（窗口滑出旧点）', () => {
-    // 交替 100/300W、间隔 10 秒，30 秒窗口：
-    // t=0→[0]=100、t=10→[0,10]=200、t=20→[0,20]=166.67、
-    // t=30→[0,30]=200、t=40→[10,40]=200（t=0 的 100 已滑出窗口）、t=50→[20,50]=200
-    // NP ≈ 186.5820
+  it('满窗数据点足够：仅满窗的滑动平均计入 NP', () => {
+    // 6 个点 t=0..50 间隔 10s，跨度 50s
+    // 满窗：t=30 [0,30]、t=40 [10,40]、t=50 [20,50]（各 30s，含 4 个点）
+    // 每个满窗均值 = (100+300+100+300)/4 = 200
+    // NP = 200
     const records = [100, 300, 100, 300, 100, 300].map((power, i) => makeRecord(i * 10, power))
-    expect(calculateNormalizedPower(records)).toBeCloseTo(186.5820053057386, 10)
+    expect(calculateNormalizedPower(records)).toBeCloseTo(200, 10)
   })
 
-  it('缺失功率的记录被过滤，剩余记录按时间重算窗口', () => {
-    // 原始序列 t=0/10/20/30 功率 100/缺/200/300，过滤后为 t=0/20/30
-    // 滑动平均：t=0→100、t=20→150、t=30→200；NP ≈ 164.6772
+  it('缺失功率的记录被过滤，仅满窗计入 NP', () => {
+    // 过滤后 3 个点 t=0/20/30，跨度 30s
+    // 满窗：t=30 [0,30] = (100+200+300)/3 = 200
+    // NP = 200
     const records = [
       makeRecord(0, 100),
       makeRecord(10),
       makeRecord(20, 200),
       makeRecord(30, 300),
     ]
-    expect(calculateNormalizedPower(records)).toBeCloseTo(164.67715939211172, 10)
+    expect(calculateNormalizedPower(records)).toBeCloseTo(200, 10)
   })
 
   it('总跨度恰好 30 秒时视为样本足量', () => {

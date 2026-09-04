@@ -81,7 +81,9 @@ export function calculateSummary(
     maxSpeed: maxOf(records.map((r) => r.speed)),
     avgHeartRate: averageOf(records.map((r) => r.heartRate)),
     maxHeartRate: maxOf(records.map((r) => r.heartRate)),
-    avgCadence: averageOf(records.map((r) => r.cadence)),
+    // 行业口径（Strava）：avgCadence 排除滑行点（cadence=0），仅对踩踏中的
+    // 点求平均，否则被零值拉低；maxCadence 仍取全部记录的最大值（含 0 异常点）
+    avgCadence: averageExcludingZero(records.map((r) => r.cadence)),
     maxCadence: maxOf(records.map((r) => r.cadence)),
     avgPower: averageOf(records.map((r) => r.power)),
     maxPower: maxOf(records.map((r) => r.power)),
@@ -162,6 +164,18 @@ function calculateElevationLoss(records: ActivityRecord[]): number | undefined {
 /** 非空数值的平均值 */
 function averageOf(values: (number | undefined)[]): number | undefined {
   const valid = values.filter((v): v is number => v !== undefined)
+  if (valid.length === 0) {
+    return undefined
+  }
+  return valid.reduce((sum, v) => sum + v, 0) / valid.length
+}
+
+/**
+ * 排除零值的非空数值平均值（行业口径 avgCadence 用：滑行点 cadence=0
+ * 不计入分母，避免被拉低；全为 0/缺失时返回 undefined）。
+ */
+function averageExcludingZero(values: (number | undefined)[]): number | undefined {
+  const valid = values.filter((v): v is number => v !== undefined && v > 0)
   if (valid.length === 0) {
     return undefined
   }

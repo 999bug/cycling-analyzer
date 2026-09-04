@@ -33,6 +33,8 @@ export function calculateNormalizedPower(records: readonly ActivityRecord[]): nu
   }
 
   // 30 秒滑动平均：双指针维护窗口 [t_i - 30s, t_i]
+  // 仅当窗口时间跨度 ≥ 30s 时才 push（不满窗的窗口均值不计入 4 次方平均，
+  // 避免前/后不满窗数据拉低 NP，符合标准算法）
   const windowAverages: number[] = []
   let windowStart = 0
   let windowSum = 0
@@ -42,7 +44,10 @@ export function calculateNormalizedPower(records: readonly ActivityRecord[]): nu
       windowSum -= sorted[windowStart].power as number
       windowStart++
     }
-    windowAverages.push(windowSum / (i - windowStart + 1))
+    const windowSpan = sorted[i].timestamp - sorted[windowStart].timestamp
+    if (windowSpan >= NP_WINDOW_SECONDS) {
+      windowAverages.push(windowSum / (i - windowStart + 1))
+    }
   }
 
   // 滑动平均的 4 次方求平均，再开 4 次方
