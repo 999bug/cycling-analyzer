@@ -71,8 +71,11 @@ export function calculateSummary(
     duration,
     elapsedTime,
     distance,
-    elevationGain: calculateElevationGain(records),
-    elevationLoss: calculateElevationLoss(records),
+    // 爬升/下降优先采用设备预计算（session.totalAscent/totalDescent）——
+    // 设备对原始气压高度已做平滑与尖刺过滤，避免我们按相邻正增量裸累加时
+    // 受到高度量化噪声（±0.5~1m@1Hz）的虚增影响；缺失时回退到记录累加
+    elevationGain: session?.totalAscent ?? calculateElevationGain(records),
+    elevationLoss: session?.totalDescent ?? calculateElevationLoss(records),
     calories: session?.totalCalories,
     avgSpeed,
     maxSpeed: maxOf(records.map((r) => r.speed)),
