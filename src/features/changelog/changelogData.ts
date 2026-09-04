@@ -20,6 +20,19 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.29.0',
+    date: '2026-09-01',
+    features: [
+      '更稳定：应用新增全局错误边界，单页崩溃不再导致整站白屏，发版后旧标签页可平滑升级',
+      '更健壮：解析 Worker 加超时与资源回收，导入崩溃/OOM 后不再永久卡死且不再长期驻留内存',
+      '更安全：Dexie 多标签页升级自动防死锁，浏览器存储空间不足时给出明确中文提示',
+      '更流畅：赛段页改为批量加载活动轨迹与一次提交所有赛段，200 活动×8000 点量级下从数十秒卡死降到秒级',
+      '更准确：爬升/下降优先采用设备预计算值（Garmin 已对气压高度量化噪声做平滑），消除原始累加被噪声虚增的影响',
+      '更贴近行业口径：平均踏频排除滑行零值，标准化功率 NP 仅满窗数据计入 4 次方平均，对齐 TrainingPeaks/Strava',
+      '更干净：localDateKey / formatDurationText 抽公共 utils 消除重复实现，年度分享图改用常量避免硬编码',
+    ],
+  },
+  {
     version: '2.28.2',
     date: '2026-08-26',
     features: [
