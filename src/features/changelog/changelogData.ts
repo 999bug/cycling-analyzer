@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.29.2',
+    date: '2026-09-04',
+    features: [
+      '更省资源：活动摘要的峰值/均值指标改为单次遍历聚合，长距离骑行导入时减少约 200 万个中间数组元素分配',
+      '更可靠：多标签页数据升级时，旧标签页主动释放数据库连接，新标签页升级不再被 alert 弹窗卡住',
+      '内部整理：清理多标签升级遗留的死代码事件，审计报告文档入库',
+    ],
+  },
+  {
     version: '2.29.0',
     date: '2026-09-01',
     features: [
