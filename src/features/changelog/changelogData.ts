@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.31.1',
+    date: '2026-09-07',
+    features: [
+      '全新界面预览：README 换上 14 张全功能实拍截图，覆盖数据地图、分段爬坡分析、活动对比、在线回放、回放视频导出等特色功能',
+    ],
+  },
+  {
     version: '2.31.0',
     date: '2026-09-07',
     features: [
