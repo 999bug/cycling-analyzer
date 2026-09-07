@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.31.0',
+    date: '2026-09-07',
+    features: [
+      '导出回放视频升级：真实地图底图（OpenStreetMap），与在线回放同款视觉——橙色已走轨迹、青色光标与实时速度/心率/功率数据牌；离线时自动降级为示意底图',
+      '更醒目："在线回放"按钮升级为主色实心大按钮，回放开启时转为橙色停止样式，一眼可见',
+    ],
+  },
+  {
     version: '2.30.0',
     date: '2026-09-07',
     features: [

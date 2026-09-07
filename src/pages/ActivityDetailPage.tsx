@@ -666,7 +666,7 @@ function ActivityDetailPage() {
             className="activity-detail__export"
             onClick={() => void handleExportVideo()}
             disabled={!hasTrack || exportingVideo}
-            title={hasTrack ? '导出 10 秒轨迹回放视频' : '该活动无轨迹坐标，无法导出'}
+            title={hasTrack ? '导出轨迹回放视频：真实地图底图，光标实时显示速度/心率/功率' : '该活动无轨迹坐标，无法导出'}
           >
             {exportingVideo ? '录制中…' : '导出回放视频'}
           </button>

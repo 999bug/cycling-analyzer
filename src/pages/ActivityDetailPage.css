@@ -261,9 +261,42 @@
   margin-bottom: 0;
 }
 
-/* 在线回放开关推到工具行最右端 */
+/* 在线回放开关：推到工具行最右端，主色实心大按钮——与灰色描边着色按钮形成强对比，一眼可见 */
 .activity-detail__coloring-btn--replay {
   margin-left: auto;
+  padding: 7px 18px;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 72%, #ff6a3d));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.activity-detail__coloring-btn--replay:hover:not(:disabled) {
+  border-color: transparent;
+  color: #fff;
+  filter: brightness(1.1);
+  box-shadow: 0 3px 14px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+.activity-detail__coloring-btn--replay:disabled {
+  background: none;
+  background-color: var(--bg-surface);
+  border-color: var(--border);
+  color: var(--text-secondary);
+  opacity: 0.55;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 回放开启态：转为"停止"样式（暖橙警示色系，暗示再点一次关闭） */
+.activity-detail__coloring-btn--replay.activity-detail__coloring-btn--active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #ff9f43, #f2711c);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(242, 113, 28, 0.45);
 }
 
 .activity-detail__coloring {

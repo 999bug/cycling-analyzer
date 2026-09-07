@@ -83,17 +83,17 @@ export function interpolatePositionAt(
 }
 
 /**
- * 构建光标数据牌 HTML：速度/心率/功率（缺失字段直接省略，不伪造）。
- * 全部缺失时返回空字符串（调用方据此隐藏数据牌）。
- * 纯函数：便于单测与避免 fast-refresh 导出限制。
+ * 构建光标数据牌条目文案：速度/心率/功率（缺失字段直接省略，不伪造）。
+ * 全部缺失时返回空数组（调用方据此隐藏数据牌）。
+ * 纯函数：在线回放（HTML）与回放视频导出（Canvas）共用同一规则。
  *
  * @param point 当前轨迹点（可为 undefined，如空轨迹兜底）
  */
-export function buildCursorTipHtml(
+export function formatCursorTipItems(
   point: { speed?: number; heartRate?: number; power?: number } | undefined,
-): string {
+): string[] {
   if (point === undefined) {
-    return ''
+    return []
   }
   const items: string[] = []
   if (point.speed !== undefined) {
@@ -105,5 +105,20 @@ export function buildCursorTipHtml(
   if (point.power !== undefined) {
     items.push(`${point.power} W`)
   }
-  return items.map((text) => `<span class="replay-cursor-tip__item">${text}</span>`).join('')
+  return items
+}
+
+/**
+ * 构建光标数据牌 HTML：速度/心率/功率（缺失字段直接省略，不伪造）。
+ * 全部缺失时返回空字符串（调用方据此隐藏数据牌）。
+ * 纯函数：便于单测与避免 fast-refresh 导出限制。
+ *
+ * @param point 当前轨迹点（可为 undefined，如空轨迹兜底）
+ */
+export function buildCursorTipHtml(
+  point: { speed?: number; heartRate?: number; power?: number } | undefined,
+): string {
+  return formatCursorTipItems(point)
+    .map((text) => `<span class="replay-cursor-tip__item">${text}</span>`)
+    .join('')
 }
