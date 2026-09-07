@@ -115,17 +115,16 @@ function dateKey(date: Date): string {
 /**
  * 写入跨时间范围测试数据（任意日期下断言稳定）：
  * - act-0 今天：在本周/本月/今年/过去 12 个月/全部
- * - act-1 上周日：不在本周，在 12 个月/全部
+ * - act-1 上月 1 号（起点边界日）：不在本周，在自定义上月范围/12 个月/全部
+ *   （旧版用"上周日"——今天恰为周一时会退化为昨天而落入本月，导致
+ *   自定义上月范围只含 1 个活动，断言随当前星期几漂移，故改为固定上月 1 号）
  * - act-2 上月 15 号：不在本周/本月，在 12 个月/全部
  * - act-3 去年同日：12 个月窗口起点当天（含边界），仅在 12 个月/全部
  * - act-4 去年同日 - 1 天：仅在全部
  */
 async function seedCrossRangeData(): Promise<void> {
   const today = new Date()
-  const dayOfWeek = today.getDay()
-  const sinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - sinceMonday)
-  const lastSunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 1, 22)
+  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1, 22)
   const lastMonth15 = new Date(today.getFullYear(), today.getMonth() - 1, 15, 8)
   const lastYearToday = new Date(today.getFullYear(), today.getMonth() - 12, today.getDate(), 8)
   const beforeLastYearToday = new Date(
@@ -138,7 +137,7 @@ async function seedCrossRangeData(): Promise<void> {
   const repo = new DexieActivityRepository(testDb)
   await repo.addActivities([
     makeActivity(0, today.toISOString(), 50000, 5400, 300, 12, 300),
-    makeActivity(1, lastSunday.toISOString(), 20000, 1800, 200),
+    makeActivity(1, lastMonthStart.toISOString(), 20000, 1800, 200),
     makeActivity(2, lastMonth15.toISOString(), 30000, 7200, 400),
     makeActivity(3, lastYearToday.toISOString(), 15000, 2700, 100),
     makeActivity(4, beforeLastYearToday.toISOString(), 8000, 900, 50),
@@ -189,7 +188,7 @@ describe('统计页面', () => {
     fireEvent.change(screen.getByLabelText('开始'), { target: { value: dateKey(lastMonthStart) } })
     fireEvent.change(screen.getByLabelText('结束'), { target: { value: dateKey(lastMonthEnd) } })
 
-    // 上月范围跨月时含两个活动（act-1 上周日 + act-2 上月 15 号）；
+    // 上月范围含两个活动：act-1 上月 1 号（起点边界日，验证边界日计入）+ act-2 上月 15 号；
     // 总距离 = 20 + 30 = 50.00 km，骑行次数 = 2 次
     expect(await screen.findByText('2 次')).toBeInTheDocument()
     // 「总骑行距离」显示 50.00 km（多活动下平均单次 = 25 km、最长 = 30 km，
