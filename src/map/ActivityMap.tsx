@@ -21,6 +21,7 @@ import {
   type ColoredLine,
 } from '@/map/routeColoring'
 import { TrackReplay } from '@/map/TrackReplay'
+import { clampMapHeight, loadSavedMapHeight, saveMapHeight } from '@/map/mapResize'
 import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
 import {
   FullscreenSync,
@@ -142,6 +143,24 @@ function MapHoverReporter({
 }
 
 /**
+ * 自动尺寸同步：容器尺寸变化（拖拽调整高度、全屏切换）时调用 invalidateSize，
+ * 保证瓦片与矢量图形按新尺寸重投影。jsdom 测试环境无 ResizeObserver 时跳过。
+ */
+function AutoInvalidate() {
+  const map = useMap()
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const container = map.getContainer()
+    const observer = new ResizeObserver(() => map.invalidateSize())
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [map])
+  return null
+}
+
+/**
  * 活动轨迹地图。
  *
  * @param props 组件参数
@@ -149,6 +168,55 @@ function MapHoverReporter({
 function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km' }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // 地图高度：拖拽把手调整并持久化；null = 未自定义，走 CSS 默认高度
+  const [mapHeight, setMapHeight] = useState<number | null>(() => loadSavedMapHeight())
+  // 拖拽会话状态：指针按下时的起始 y 与起始高度（拖拽中直接改 style，松手才 setState 避免高频重渲）
+  const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null)
+  const pendingHeightRef = useRef<number | null>(null)
+
+  /** 开始拖拽：捕获指针并记录起始位置 */
+  const handleResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const wrapper = wrapperRef.current
+    if (wrapper === null) {
+      return
+    }
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: wrapper.offsetHeight,
+    }
+  }, [])
+
+  /** 拖拽中：直接写包裹层高度（把手在顶部，向上拖 = 拉高地图），实时 invalidate 由 AutoInvalidate 完成 */
+  const handleResizeMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    const wrapper = wrapperRef.current
+    if (drag === null || wrapper === null || event.pointerId !== drag.pointerId) {
+      return
+    }
+    const height = clampMapHeight(drag.startHeight + (drag.startY - event.clientY), window.innerHeight)
+    wrapper.style.height = `${height}px`
+    pendingHeightRef.current = height
+  }, [])
+
+  /** 结束拖拽：提交高度到状态并持久化 */
+  const handleResizeEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (drag === null || event.pointerId !== drag.pointerId) {
+      return
+    }
+    dragRef.current = null
+    event.currentTarget.releasePointerCapture(event.pointerId)
+    const height = pendingHeightRef.current
+    pendingHeightRef.current = null
+    if (height !== null) {
+      setMapHeight(height)
+      saveMapHeight(height)
+    }
+  }, [])
 
   // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
   const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
@@ -213,7 +281,23 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
   const end = latLngs[latLngs.length - 1]
 
   return (
-    <div className="map-fullscreen-wrapper" ref={wrapperRef}>
+    <div
+      className="map-fullscreen-wrapper activity-map-wrapper"
+      ref={wrapperRef}
+      style={mapHeight !== null ? { height: mapHeight } : undefined}
+    >
+      {/* 高度拖拽把手：置于地图顶缘中央，上下拖动调整地图高度（松手持久化） */}
+      <div
+        className="map-resize-handle"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="拖动调整地图高度"
+        title="上下拖动调整地图高度"
+        onPointerDown={handleResizeStart}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+        onPointerCancel={handleResizeEnd}
+      />
       <MapContainer
         className="activity-map"
         center={start}
@@ -256,6 +340,7 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
           />
         )}
         <FullscreenSync />
+        <AutoInvalidate />
         <ZoomControlBottomRight />
       </MapContainer>
       <MapFullscreenButton targetRef={wrapperRef} />

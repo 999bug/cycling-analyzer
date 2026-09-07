@@ -2,8 +2,13 @@
  * 活动轨迹地图样式。
  * 地图容器与深色主题对齐；Leaflet 控件做最小深色适配。
  */
-.activity-map {
+/* 包裹层默认高度：未自定义高度时地图的基准尺寸（拖拽把手/内联样式可覆盖） */
+.activity-map-wrapper {
   height: 340px;
+}
+
+.activity-map {
+  height: 100%;
   border-radius: 12px;
   border: 1px solid var(--border);
   background-color: var(--bg-surface);
@@ -23,6 +28,51 @@
   height: 100%;
   border: none;
   border-radius: 0;
+}
+
+/* 全屏时强制占满视口（内联高度样式不可覆盖全屏尺寸），并隐藏拖拽把手 */
+.map-fullscreen-wrapper:fullscreen {
+  height: 100% !important;
+}
+
+/* 高度拖拽把手：地图顶缘中央的握把胶囊，上下拖动调整地图高度 */
+.map-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 16px;
+  border-radius: 0 0 8px 8px;
+  background: rgba(13, 17, 23, 0.55);
+  opacity: 0.7;
+  cursor: ns-resize;
+  touch-action: none;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.map-resize-handle::after {
+  content: '';
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.map-resize-handle:hover,
+.map-resize-handle:active {
+  opacity: 1;
+  background: rgba(13, 17, 23, 0.8);
+}
+
+.map-fullscreen-wrapper:fullscreen .map-resize-handle {
+  display: none;
 }
 
 /* 终点黑白格旗标（完赛旗）：repeating-conic-gradient 绘制 2x2 棋盘格平铺 */

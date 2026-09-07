@@ -15,8 +15,10 @@
  * - 光标每帧 setLatLng + 邻点线性插值（消除记录点间隔的逐点跳动）；
  * - 已走高亮折线增量 addLatLng（Leaflet 仅更新 path 尾段），仅 seek 回退时
  *   setLatLngs 全量对齐——杜绝整条折线周期性重绘；
- * - 跟随镜头每帧无动画最小平移：60fps 下等效匀速跟拍，无"动画阻塞 →
- *   结束猛蹿"的走停节奏。
+ * - 跟随镜头带动画最小平移（动画期 Leaflet 以 CSS transform 移动窗格，
+ *   零 moveend 重投影），并把光标拉回死区内 40% 深度拉长平移间隔——
+ *   消除逐帧无动画 panBy 导致的整图"刷新/闪烁感"。
+ * - 光标数据牌（速度/心率/功率）随帧命令式更新，内容仅跨点时刷新。
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CircleMarker, Polyline, TileLayer, useMap } from 'react-leaflet'
@@ -24,8 +26,8 @@ import { DomEvent } from 'leaflet'
 import type { CircleMarker as LeafletCircleMarker, Polyline as LeafletPolyline, LatLngTuple } from 'leaflet'
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
-import { ReplayEngine } from '@/map/replayEngine'
-import { buildReplaySkeleton, findIndexAtTimestamp } from '@/map/replayCore'
+import { ReplayEngine, type ReplayFrame } from '@/map/replayEngine'
+import { buildCursorTipHtml, buildReplaySkeleton, findIndexAtTimestamp } from '@/map/replayCore'
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
@@ -45,6 +47,13 @@ const CURSOR_COLOR = '#34d9ff'
 
 /** 跟随触发边距（比例）：光标超出视口该比例范围才平移，避免镜头持续微抖 */
 const FOLLOW_EDGE_RATIO = 0.25
+
+/** 跟随镜头回中深度（比例）：pan 时把光标拉回死区内 40% 深度，拉长两次平移的间隔 */
+const FOLLOW_PAN_RESERVE_RATIO = 0.4
+
+/** 跟随镜头单次平移时长（秒）：带动画平移期间 Leaflet 仅以 CSS transform 移动窗格，
+ * 不触发 moveend 全量重投影——这正是消除"光标闪烁/刷新感"的关键 */
+const FOLLOW_PAN_DURATION_SECONDS = 0.3
 
 /**
  * 格式化秒 → mm:ss 或 h:mm:ss。
@@ -97,12 +106,17 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
   const haloRef = useRef<LeafletCircleMarker | null>(null)
   const coreRef = useRef<LeafletCircleMarker | null>(null)
   const traveledRef = useRef<LeafletPolyline | null>(null)
+  // 光标数据牌（命令式 DOM：绕开 React 渲染路径，随帧更新位置与内容）
+  const tipRef = useRef<HTMLDivElement | null>(null)
+  const tipIndexRef = useRef(-1)
   // 是否已执行过初始缩放（每次进入跟随只 zoom 一次，之后仅按需 pan）
   const zoomedOnceRef = useRef(false)
   // 用户手动改过缩放后不再强制 zoom
   const userZoomedRef = useRef(false)
+  // 跟随镜头动画进行中标志：动画期间不叠加新平移（动画由 CSS transform 驱动，零重投影）
+  const panningRef = useRef(false)
 
-  // 监听用户手势触发的缩放（程序化调用前置标志位跳过）
+  // 监听用户手势触发的缩放（程序化调用前置标志位跳过）+ 镜头动画状态
   useEffect(() => {
     let programmatic = false
     const beforeZoom = () => { programmatic = true }
@@ -112,11 +126,31 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
       }
       programmatic = false
     }
+    const onMoveStart = () => { panningRef.current = true }
+    const onMoveEnd = () => { panningRef.current = false }
     map.on('zoomstart', beforeZoom)
     map.on('zoomend', onZoomEnd)
+    map.on('movestart', onMoveStart)
+    map.on('moveend', onMoveEnd)
     return () => {
       map.off('zoomstart', beforeZoom)
       map.off('zoomend', onZoomEnd)
+      map.off('movestart', onMoveStart)
+      map.off('moveend', onMoveEnd)
+    }
+  }, [map])
+
+  // 创建/销毁光标数据牌 DOM（挂在地图容器上，屏幕空间定位，不随窗格变换）
+  useEffect(() => {
+    const tip = document.createElement('div')
+    tip.className = 'replay-cursor-tip'
+    tip.style.display = 'none'
+    map.getContainer().appendChild(tip)
+    tipRef.current = tip
+    return () => {
+      tip.remove()
+      tipRef.current = null
+      tipIndexRef.current = -1
     }
   }, [map])
 
@@ -144,11 +178,22 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
     }
   }
 
-  /** 把光标拉回视口边距内的最小幅度平移（不居中，无动画 → 匀速镜头）；首入跟随先一次性缩放 */
+  /**
+   * 把光标拉回视口边距内：带动画的最小幅度平移（线性缓动，匀速感），
+   * 并把光标多拉回死区内 40% 深度——显著拉长两次平移间隔。
+   *
+   * 消除"光标闪烁/刷新感"的关键：此前每帧无动画 panBy → 每帧触发 moveend →
+   * Leaflet 渲染器频繁整幅更新 + 瓦片边界反复检查，视觉上像整图在刷新；
+   * 改为带动画平移后，动画期间 Leaflet 仅以 CSS transform 移动窗格
+   * （零重投影、零 moveend），moveend 频率从每秒十余次降至个位数。
+   */
   const followCursor = (latLng: LatLngTuple) => {
     if (!zoomedOnceRef.current && !userZoomedRef.current) {
       zoomedOnceRef.current = true
       map.setView(latLng, FOLLOW_ZOOM, { animate: true })
+      return
+    }
+    if (panningRef.current) {
       return
     }
     const size = map.getSize()
@@ -168,13 +213,45 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
       dy = point.y - (size.y - edgeY)
     }
     if (dx !== 0 || dy !== 0) {
-      // 无动画瞬时平移：每帧仅数像素，等效匀速跟拍；
-      // 带动画的 panBy 会产生"动画中阻塞 → 结束后猛蹿"的走停节奏
-      map.panBy([dx, dy], { animate: false })
+      const reserveX = dx !== 0 ? Math.sign(dx) * edgeX * FOLLOW_PAN_RESERVE_RATIO : 0
+      const reserveY = dy !== 0 ? Math.sign(dy) * edgeY * FOLLOW_PAN_RESERVE_RATIO : 0
+      map.panBy([dx + reserveX, dy + reserveY], {
+        animate: true,
+        duration: FOLLOW_PAN_DURATION_SECONDS,
+        easeLinearity: 1,
+      })
     }
   }
 
-  // 订阅引擎帧广播：光标 + 已走轨迹 + 镜头跟随，全部命令式（60fps）
+  /** 帧级更新光标数据牌：位置每帧跟随，内容仅跨点时刷新（避免逐帧 DOM 抖动） */
+  const updateTip = (frame: ReplayFrame, latLng: LatLngTuple) => {
+    const tip = tipRef.current
+    if (tip === null) {
+      return
+    }
+    // 播放中或已拖动过进度才显示（初始停在起点时不遮地图）
+    const html = engine.playing || engine.progress > 0
+      ? buildCursorTipHtml(points[Math.min(frame.index, points.length - 1)])
+      : ''
+    if (html === '') {
+      tip.style.display = 'none'
+      return
+    }
+    const p = map.latLngToContainerPoint(latLng)
+    const size = map.getSize()
+    // 横向钳制在视口内，纵向贴上边时翻转到光标下方
+    const x = Math.min(Math.max(p.x, 72), Math.max(size.x - 72, 72))
+    const below = p.y < 84
+    const y = below ? p.y + 20 : p.y - 20
+    tip.style.transform = `translate(${x}px, ${y}px) translate(-50%, ${below ? '0' : '-100%'})`
+    if (frame.index !== tipIndexRef.current) {
+      tipIndexRef.current = frame.index
+      tip.innerHTML = html
+    }
+    tip.style.display = 'block'
+  }
+
+  // 订阅引擎帧广播：光标 + 已走轨迹 + 镜头跟随 + 数据牌，全部命令式（60fps）
   useEffect(() => {
     const unsubscribe = engine.onFrame((frame) => {
       const latLng: LatLngTuple = [frame.latitude, frame.longitude]
@@ -182,9 +259,10 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
       coreRef.current?.setLatLng(latLng)
       syncTraveledTo(frame.index)
       followCursor(latLng)
+      updateTip(frame, latLng)
     })
     return unsubscribe
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncTraveledTo/followCursor 仅依赖稳定 props 与 map 实例
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncTraveledTo/followCursor/updateTip 仅依赖稳定 props 与 map 实例
   }, [engine, map])
 
   return (

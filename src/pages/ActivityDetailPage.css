@@ -247,6 +247,25 @@
   width: 100%;
 }
 
+/* 地图工具行：着色按钮组 + 行尾在线回放开关（同一行对齐，窄屏自动换行） */
+.activity-detail__map-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* 工具行内取消着色组自带的外边距（由 toolbar 统一控制间距） */
+.activity-detail__map-toolbar .activity-detail__coloring {
+  margin-bottom: 0;
+}
+
+/* 在线回放开关推到工具行最右端 */
+.activity-detail__coloring-btn--replay {
+  margin-left: auto;
+}
+
 .activity-detail__coloring {
   display: flex;
   align-items: center;

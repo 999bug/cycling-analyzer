@@ -734,40 +734,42 @@ function ActivityDetailPage() {
       <AchievementsSection achievements={achievements} distanceUnit={distanceUnit} />
 
       <section className="activity-detail__map">
-        <div className="activity-detail__coloring" role="group" aria-label="轨迹着色">
-          {COLORING_OPTIONS.map((option) => (
-            <button
-              key={option.mode}
-              type="button"
-              className={
-                coloring === option.mode
-                  ? 'activity-detail__coloring-btn activity-detail__coloring-btn--active'
-                  : 'activity-detail__coloring-btn'
-              }
-              aria-pressed={coloring === option.mode}
-              onClick={() => setColoring(option.mode)}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="activity-detail__map-toolbar">
+          <div className="activity-detail__coloring" role="group" aria-label="轨迹着色">
+            {COLORING_OPTIONS.map((option) => (
+              <button
+                key={option.mode}
+                type="button"
+                className={
+                  coloring === option.mode
+                    ? 'activity-detail__coloring-btn activity-detail__coloring-btn--active'
+                    : 'activity-detail__coloring-btn'
+                }
+                aria-pressed={coloring === option.mode}
+                onClick={() => setColoring(option.mode)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={
+              replayMode
+                ? 'activity-detail__coloring-btn activity-detail__coloring-btn--replay activity-detail__coloring-btn--active'
+                : 'activity-detail__coloring-btn activity-detail__coloring-btn--replay'
+            }
+            aria-pressed={replayMode}
+            onClick={() => setReplayMode(!replayMode)}
+            disabled={!hasTrack}
+            title="在线播放轨迹：标记沿路线推进，可叠加地形图"
+          >
+            {replayMode ? '⏹ 关闭回放' : '▶ 在线回放'}
+          </button>
         </div>
         {coloring !== 'none' && (
           <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
         )}
-        <button
-          type="button"
-          className={
-            replayMode
-              ? 'activity-detail__coloring-btn activity-detail__coloring-btn--active'
-              : 'activity-detail__coloring-btn'
-          }
-          aria-pressed={replayMode}
-          onClick={() => setReplayMode(!replayMode)}
-          disabled={!hasTrack}
-          title="在线播放轨迹：标记沿路线推进，可叠加地形图"
-        >
-          {replayMode ? '⏹ 关闭回放' : '▶ 在线回放'}
-        </button>
         {cleanedRecords.removedCount > 0 && (
           <p className="activity-detail__drift-notice">
             已清理 {cleanedRecords.removedCount} 个 GPS 漂移点（仅影响轨迹展示与导出）

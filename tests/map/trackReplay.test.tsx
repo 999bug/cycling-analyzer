@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { MapContainer } from 'react-leaflet'
 import { TrackReplay } from '@/map/TrackReplay'
 import {
+  buildCursorTipHtml,
   buildReplaySkeleton,
   findIndexAtTimestamp,
   interpolatePositionAt,
@@ -96,6 +97,21 @@ describe('interpolatePositionAt（邻点线性插值）', () => {
   })
 })
 
+describe('buildCursorTipHtml（光标数据牌）', () => {
+  it('速度/心率/功率齐全时全部展示（速度换算 km/h）', () => {
+    const html = buildCursorTipHtml({ speed: 5, heartRate: 145, power: 220 })
+    expect(html).toContain('18.0 km/h')
+    expect(html).toContain('145 bpm')
+    expect(html).toContain('220 W')
+  })
+
+  it('缺失字段直接省略不伪造，全缺返回空串', () => {
+    expect(buildCursorTipHtml({ speed: 5 })).not.toContain('bpm')
+    expect(buildCursorTipHtml({})).toBe('')
+    expect(buildCursorTipHtml(undefined)).toBe('')
+  })
+})
+
 describe('TrackReplay 控制条', () => {
   const points = makePoints(600)
 
@@ -173,6 +189,47 @@ describe('TrackReplay 控制条', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('拖动进度后光标数据牌显示速度/心率/功率，无指标点时隐藏', async () => {
+    setup()
+    // 初始未播放且进度为 0：数据牌隐藏
+    let tip = document.querySelector('.replay-cursor-tip') as HTMLElement | null
+    expect(tip).not.toBeNull()
+    expect(tip!.style.display).toBe('none')
+
+    // 拖动到 50%（模拟时间 300s，600 点均匀数据：speed=5 → 18.0 km/h，心率 120）
+    const slider = screen.getByLabelText('回放进度') as HTMLInputElement
+    fireEvent.change(slider, { target: { value: '500' } })
+    await waitFor(() => {
+      tip = document.querySelector('.replay-cursor-tip') as HTMLElement
+      expect(tip.style.display).toBe('block')
+      expect(tip.textContent).toContain('18.0 km/h')
+      expect(tip.textContent).toContain('120 bpm')
+    })
+
+    // 无任何指标的稀疏点：数据牌整体隐藏（缺失 ≠ 0，不伪造）
+    const sparse: RoutePoint[] = [
+      { timestamp: 0, latitude: 31.2, longitude: 121.5 },
+      { timestamp: 10, latitude: 31.201, longitude: 121.5 },
+    ]
+    render(
+      <MapContainer center={[31.2, 121.5]} zoom={14} style={{ width: 800, height: 600 }}>
+        <TrackReplay
+          points={sparse}
+          distanceUnit="km"
+          terrainVisible={false}
+          onTerrainToggle={() => {}}
+        />
+      </MapContainer>,
+    )
+    const sparseSlider = screen.getAllByLabelText('回放进度')[1] as HTMLInputElement
+    fireEvent.change(sparseSlider, { target: { value: '500' } })
+    await waitFor(() => {
+      const tips = Array.from(document.querySelectorAll('.replay-cursor-tip')) as HTMLElement[]
+      const sparseTip = tips[tips.length - 1]!
+      expect(sparseTip.style.display).toBe('none')
+    })
   })
 
   it('心率缺失时显示 — 不伪造数值', () => {
