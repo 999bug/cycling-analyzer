@@ -1,39 +1,38 @@
 /**
- * 轨迹在线回放（规格外：用户需求）。
+ * 轨迹在线回放（规格外：用户需求）——重写版。
  *
  * 在活动轨迹地图上叠加回放控制条：播放/暂停、进度拖动、倍速选择。
  * 播放时当前位置光标沿轨迹推进，地图自动跟随平移；HUD 展示已骑距离/当前速度/心率。
- * 可选叠加 OpenTopoMap 地形底图（免费无 key，WGS-84 坐标系与 OSM 一致；
- * 高德源下地形层坐标偏差可接受——地形仅作参考背景，轨迹仍以底图纠偏为准）。
+ * 可选叠加 OpenTopoMap 地形底图（免费无 key，WGS-84 坐标系与 OSM 一致）。
  *
- * 性能设计（修复播放卡顿）：
- * - 权威进度存 ref 由 rAF 每帧推进；React 状态仅 10Hz 节流同步，
- *   驱动滑块/HUD/已走轨迹——控制条 DOM 不再每帧 reconcile；
- * - 当前位置光标每帧经 Leaflet 实例 setLatLng 命令式更新（不触发 React 渲染），
- *   高倍速下依然平滑；
- * - 已走高亮折线用 ≤2000 点的均匀抽稀骨架渲染（原为全量点 slice + map 每帧
- *   重建数组并整条重绘 SVG path，是卡顿主因），抽稀在街道级缩放下视觉无损。
+ * 架构（重写）：全部时序逻辑收敛到 `ReplayEngine`（框架无关状态机，唯一 rAF 循环），
+ * 组件只做两件事：
+ * - 控制条：useSyncExternalStore 订阅引擎 10Hz 快照 → 滑块/时钟/HUD 常规渲染；
+ * - 地图覆盖层（ReplayOverlay）：订阅引擎 60Hz 帧广播 → 纯命令式 Leaflet 更新，
+ *   播放期间 React 状态零变化，DOM/SVG 不进入 reconcile 路径。
+ *
+ * 平滑关键：
+ * - 光标每帧 setLatLng + 邻点线性插值（消除记录点间隔的逐点跳动）；
+ * - 已走高亮折线增量 addLatLng（Leaflet 仅更新 path 尾段），仅 seek 回退时
+ *   setLatLngs 全量对齐——杜绝整条折线周期性重绘；
+ * - 跟随镜头每帧无动画最小平移：60fps 下等效匀速跟拍，无"动画阻塞 →
+ *   结束猛蹿"的走停节奏。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CircleMarker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import { DomEvent } from 'leaflet'
-import type { CircleMarker as LeafletCircleMarker, LatLngTuple } from 'leaflet'
+import type { CircleMarker as LeafletCircleMarker, Polyline as LeafletPolyline, LatLngTuple } from 'leaflet'
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
-import { buildReplaySkeleton, findIndexAtTimestamp, interpolatePositionAt } from '@/map/replayCore'
+import { ReplayEngine } from '@/map/replayEngine'
+import { buildReplaySkeleton, findIndexAtTimestamp } from '@/map/replayCore'
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
 const SPEED_OPTIONS = [1, 8, 32, 128] as const
 
-/** React 状态同步间隔（ms）：滑块/HUD/已走轨迹的刷新频率，光标不受此限制 */
-const REPLAY_SYNC_INTERVAL_MS = 100
-
 /** 已走高亮折线的最大点数（均匀抽稀上限，封顶 SVG path 重绘成本） */
 const REPLAY_LINE_MAX_POINTS = 2000
-
-/** 单帧推进的骑行时间上限（秒）：标签页切回后 rAF 恢复时不跳进度 */
-const MAX_FRAME_DT_SECONDS = 1
 
 /** 回放跟随的地图缩放级别：街道级，能看清当前路段细节 */
 const FOLLOW_ZOOM = 16
@@ -44,11 +43,8 @@ const TRAVELED_COLOR = '#ff9f43'
 /** 当前位置点颜色（亮青发光） */
 const CURSOR_COLOR = '#34d9ff'
 
-/** 跟随触发边距（比例）：光标超出视口该比例范围才平移，避免频繁 setView 打断动画 */
+/** 跟随触发边距（比例）：光标超出视口该比例范围才平移，避免镜头持续微抖 */
 const FOLLOW_EDGE_RATIO = 0.25
-
-/** 跟随镜头单次平移时长（秒）：小幅 panBy 配短动画，镜头平稳不甩动 */
-const FOLLOW_PAN_DURATION_SECONDS = 0.25
 
 /**
  * 格式化秒 → mm:ss 或 h:mm:ss。
@@ -83,35 +79,28 @@ export interface TrackReplayProps {
 }
 
 /**
- * 地图跟随子组件：渲染当前位置标记与已走高亮轨迹。
- * 播放期间自跑 rAF 循环：每帧读权威进度 ref → 二分定位 → 邻点线性插值 →
- * 光标 setLatLng + 按需最小幅度平移（丝滑关键：位置连续、镜头不居中跳变）。
- * 暂停/拖动路径由 syncPosition 经 effect 命令式对齐——播放中 React 状态
- * 不反向写入光标，避免节流同步造成的位置回跳。
+ * 地图覆盖层子组件：渲染当前位置标记与已走高亮轨迹。
+ * 订阅引擎帧广播做纯命令式更新——播放期间不经任何 React 渲染路径。
  *
- * @param props.syncPosition 展示进度对应的轨迹点（仅非播放态用于对齐光标）
- * @param props.progressRef 权威进度（0~1，父级 rAF 每帧推进）
- * @param props.traveledLatLngs 已走轨迹骨架坐标列表（节流更新）
- * @param props.following 是否处于跟随模式（播放中）
+ * @param props.engine 回放引擎（帧广播来源）
+ * @param props.points 全量轨迹点
+ * @param props.skeleton 已走轨迹抽稀骨架（skeleton[i] ↔ points[i*stride]）
+ * @param props.stride 抽稀步长
  */
-function ReplayCursor({ points, progressRef, traveledLatLngs, following, syncPosition, firstTs, totalSpan }: {
+function ReplayOverlay({ engine, points, skeleton, stride }: {
+  engine: ReplayEngine
   points: RoutePoint[]
-  progressRef: { current: number }
-  traveledLatLngs: [number, number][]
-  following: boolean
-  syncPosition: RoutePoint
-  firstTs: number
-  totalSpan: number
+  skeleton: RoutePoint[]
+  stride: number
 }) {
   const map = useMap()
   const haloRef = useRef<LeafletCircleMarker | null>(null)
   const coreRef = useRef<LeafletCircleMarker | null>(null)
-  // 是否已执行过初始缩放（每次进入跟随模式只 zoom 一次，之后仅按需 pan）
+  const traveledRef = useRef<LeafletPolyline | null>(null)
+  // 是否已执行过初始缩放（每次进入跟随只 zoom 一次，之后仅按需 pan）
   const zoomedOnceRef = useRef(false)
   // 用户手动改过缩放后不再强制 zoom
   const userZoomedRef = useRef(false)
-  // 跟随镜头动画进行中标志：动画未结束前不叠加新的平移，避免抖动
-  const panningRef = useRef(false)
 
   // 监听用户手势触发的缩放（程序化调用前置标志位跳过）
   useEffect(() => {
@@ -123,28 +112,43 @@ function ReplayCursor({ points, progressRef, traveledLatLngs, following, syncPos
       }
       programmatic = false
     }
-    const onMoveStart = () => { panningRef.current = true }
-    const onMoveEnd = () => { panningRef.current = false }
     map.on('zoomstart', beforeZoom)
     map.on('zoomend', onZoomEnd)
-    map.on('movestart', onMoveStart)
-    map.on('moveend', onMoveEnd)
     return () => {
       map.off('zoomstart', beforeZoom)
       map.off('zoomend', onZoomEnd)
-      map.off('movestart', onMoveStart)
-      map.off('moveend', onMoveEnd)
     }
   }, [map])
 
-  /** 把光标拉回视口边距内的最小幅度平移（不居中，镜头稳）；首入跟随先一次性缩放 */
+  /**
+   * 把已走高亮折线命令式对齐到目标轨迹点索引。
+   * 前进（播放推进）：仅增量 addLatLng 追加新跨过的骨架点，Leaflet 局部更新；
+   * 回退（拖动/重播/初始）：setLatLngs 全量重建。以折线实际点数判断，
+   * 不依赖额外状态，天然兼容 remount。
+   */
+  const syncTraveledTo = (pointIndex: number) => {
+    const line = traveledRef.current
+    if (line === null) {
+      return
+    }
+    const clamped = Math.min(Math.max(pointIndex, 0), points.length - 1)
+    const targetCount = Math.min(skeleton.length, Math.floor(clamped / stride) + 1)
+    const currentCount = line.getLatLngs().length
+    if (currentCount === 0 || currentCount > targetCount) {
+      line.setLatLngs(skeleton.slice(0, targetCount).map((p) => [p.latitude, p.longitude] as LatLngTuple))
+      return
+    }
+    for (let i = currentCount; i < targetCount; i++) {
+      const p = skeleton[i]!
+      line.addLatLng([p.latitude, p.longitude])
+    }
+  }
+
+  /** 把光标拉回视口边距内的最小幅度平移（不居中，无动画 → 匀速镜头）；首入跟随先一次性缩放 */
   const followCursor = (latLng: LatLngTuple) => {
     if (!zoomedOnceRef.current && !userZoomedRef.current) {
       zoomedOnceRef.current = true
       map.setView(latLng, FOLLOW_ZOOM, { animate: true })
-      return
-    }
-    if (panningRef.current) {
       return
     }
     const size = map.getSize()
@@ -164,46 +168,29 @@ function ReplayCursor({ points, progressRef, traveledLatLngs, following, syncPos
       dy = point.y - (size.y - edgeY)
     }
     if (dx !== 0 || dy !== 0) {
-      map.panBy([dx, dy], { animate: true, duration: FOLLOW_PAN_DURATION_SECONDS })
+      // 无动画瞬时平移：每帧仅数像素，等效匀速跟拍；
+      // 带动画的 panBy 会产生"动画中阻塞 → 结束后猛蹿"的走停节奏
+      map.panBy([dx, dy], { animate: false })
     }
   }
 
-  // 播放中每帧命令式更新光标与跟随（不经 React 渲染路径，保证高倍速平滑）
+  // 订阅引擎帧广播：光标 + 已走轨迹 + 镜头跟随，全部命令式（60fps）
   useEffect(() => {
-    if (!following) {
-      return
-    }
-    let raf = 0
-    const frame = () => {
-      const ts = firstTs + progressRef.current * totalSpan
-      const index = findIndexAtTimestamp(points, ts)
-      // 邻点线性插值：消除记录点间隔导致的逐点跳动
-      const pt = interpolatePositionAt(points, index, ts)
-      const latLng: LatLngTuple = [pt.latitude, pt.longitude]
+    const unsubscribe = engine.onFrame((frame) => {
+      const latLng: LatLngTuple = [frame.latitude, frame.longitude]
       haloRef.current?.setLatLng(latLng)
       coreRef.current?.setLatLng(latLng)
+      syncTraveledTo(frame.index)
       followCursor(latLng)
-      raf = requestAnimationFrame(frame)
-    }
-    raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- followCursor 内部只依赖 map 与稳定 ref
-  }, [following, points, firstTs, totalSpan, map])
-
-  // 非播放态（暂停/拖动进度）：光标对齐展示进度位置（播放中由 rAF 循环全权接管）
-  useEffect(() => {
-    if (following) {
-      return
-    }
-    const latLng: LatLngTuple = [syncPosition.latitude, syncPosition.longitude]
-    haloRef.current?.setLatLng(latLng)
-    coreRef.current?.setLatLng(latLng)
-  }, [following, syncPosition])
+    })
+    return unsubscribe
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- syncTraveledTo/followCursor 仅依赖稳定 props 与 map 实例
+  }, [engine, map])
 
   return (
     <>
-      {/* 已走轨迹高亮（抽稀骨架，节流更新）；光标 center 仅作初值，后续全部命令式更新 */}
-      <Polyline positions={traveledLatLngs} pathOptions={{ color: TRAVELED_COLOR, weight: 6, opacity: 0.95 }} />
+      {/* 已走轨迹高亮：初始为空，全部由帧广播命令式更新（增量 addLatLng） */}
+      <Polyline ref={traveledRef} positions={[]} pathOptions={{ color: TRAVELED_COLOR, weight: 6, opacity: 0.95 }} />
       <CircleMarker
         ref={haloRef}
         center={initialCenterOf(points)}
@@ -248,18 +235,17 @@ function TerrainLayer({ visible }: { visible: boolean }) {
 
 /**
  * 轨迹在线回放控制条（挂在 MapContainer 内部，使用 useMap 联动）。
+ * 时序逻辑全部委托 ReplayEngine；本组件仅按 10Hz 快照渲染 UI。
  *
  * @param props 组件参数
  */
 export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainToggle }: TrackReplayProps) {
-  const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState<number>(1)
-  // 权威进度（rAF 每帧推进，不触发渲染）；展示进度由循环节流同步
-  const progressRef = useRef(0)
-  const [displayProgress, setDisplayProgress] = useState(0)
+  // 引擎与轨迹点生命周期绑定：points 变更（切换活动）即重建引擎
+  const engine = useMemo(() => new ReplayEngine(points), [points])
+  useEffect(() => () => engine.dispose(), [engine])
 
-  // rAF 驱动的动画循环引用
-  const rafRef = useRef<number>(0)
+  // 10Hz 快照订阅：滑块/时钟/HUD 的唯一渲染驱动（播放中每秒仅 ~10 次 reconcile）
+  const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
 
   // 控制条根节点：阻断点击/滚轮事件冒泡到地图容器，
   // 避免双击按钮误触地图缩放、拖动滑块误拖地图（Leaflet 自定义控件标准做法）
@@ -272,26 +258,20 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     }
   }, [])
 
-  // 首末时间戳
   const firstTs = points[0]?.timestamp ?? 0
   const lastTs = points[points.length - 1]?.timestamp ?? 0
   const totalSpan = Math.max(lastTs - firstTs, 1)
 
-  // 展示进度对应的当前点索引（节流后 10Hz 重算，二分 O(log N) 可忽略）
+  // HUD 数据源：按快照进度定位当前点（10Hz × O(log N) 二分，成本可忽略）
   const currentIndex = useMemo(
-    () => findIndexAtTimestamp(points, firstTs + displayProgress * totalSpan),
-    [points, firstTs, displayProgress, totalSpan],
+    () => findIndexAtTimestamp(points, firstTs + snapshot.progress * totalSpan),
+    [points, firstTs, snapshot.progress, totalSpan],
   )
   const currentPosition = points[Math.min(currentIndex, points.length - 1)] ?? points[0]
 
-  // 已走高亮骨架：≤2000 点均匀抽稀，按展示进度切片（10Hz × O(≤2000)，成本可忽略）
+  // 已走高亮骨架：≤2000 点均匀抽稀，由覆盖层命令式增量消费（不进入渲染路径）
   const skeleton = useMemo(() => buildReplaySkeleton(points, REPLAY_LINE_MAX_POINTS), [points])
   const stride = points.length > 0 ? Math.max(1, Math.ceil(points.length / REPLAY_LINE_MAX_POINTS)) : 1
-  const traveledLatLngs = useMemo<[number, number][]>(
-    () => skeleton.slice(0, Math.min(skeleton.length, Math.floor(currentIndex / stride) + 1))
-      .map((p) => [p.latitude, p.longitude] as [number, number]),
-    [skeleton, stride, currentIndex],
-  )
 
   // 已骑距离 / 当前速度 / 当前心率（缺失字段不伪造，显示 '—'）
   const distanceLabel = currentPosition?.distance !== undefined
@@ -304,66 +284,16 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     ? `${currentPosition.heartRate} bpm`
     : '—'
 
-  // 播放循环：rAF 推进权威进度 ref，React 状态仅 100ms 节流同步
-  // （此前每帧 setState 导致全子树 60fps 重渲 + 已走轨迹全量重建，是卡顿根因）
-  useEffect(() => {
-    if (!playing) {
-      return
-    }
-    let lastTick: number | null = null
-    let lastSync = 0
-
-    function tick(now: number) {
-      // 首帧仅记录基准时钟（rAF 时间戳来源可能与 performance.now() 不同源，防负 dt）
-      if (lastTick === null) {
-        lastTick = now
-        rafRef.current = requestAnimationFrame(tick)
-        return
-      }
-      // 单帧上限：标签页后台一段时间后切回，不一次性跳进度
-      const dt = Math.min((now - lastTick) / 1000, MAX_FRAME_DT_SECONDS)
-      lastTick = now
-      // dt 秒真实时间 × 倍速 = 推进的骑行时间；除以总时长得 progress 增量
-      progressRef.current = Math.min(progressRef.current + (dt * speed) / totalSpan, 1)
-      if (progressRef.current >= 1) {
-        // 播完：终态同步后自动暂停（不再排下一帧）
-        setDisplayProgress(1)
-        setPlaying(false)
-        return
-      }
-      if (now - lastSync >= REPLAY_SYNC_INTERVAL_MS) {
-        lastSync = now
-        setDisplayProgress(progressRef.current)
-      }
-      rafRef.current = requestAnimationFrame(tick)
-    }
-
-    rafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [playing, speed, totalSpan])
-
-  // 卸载时清理 rAF
-  useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
-
-  /** 拖动进度：同时写权威 ref 与展示状态（立即生效，无需等待下一轮节流） */
+  /** 拖动进度：引擎立即出帧，覆盖层（光标/已走轨迹/镜头）实时对齐 */
   const handleSeek = (value: number) => {
-    progressRef.current = value
-    setDisplayProgress(value)
+    engine.seek(value)
   }
 
   return (
     <>
       <TerrainLayer visible={terrainVisible} />
-      {currentPosition !== undefined && (
-        <ReplayCursor
-          points={points}
-          progressRef={progressRef}
-          traveledLatLngs={traveledLatLngs}
-          following={playing}
-          syncPosition={currentPosition}
-          firstTs={firstTs}
-          totalSpan={totalSpan}
-        />
+      {points.length > 0 && (
+        <ReplayOverlay engine={engine} points={points} skeleton={skeleton} stride={stride} />
       )}
       <div className="track-replay" ref={barRef}>
         {/* 进度滑块 */}
@@ -372,7 +302,7 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
           className="track-replay__slider"
           min={0}
           max={1000}
-          value={Math.round(displayProgress * 1000)}
+          value={Math.round(snapshot.progress * 1000)}
           aria-label="回放进度"
           onChange={(event) => handleSeek(Number(event.target.value) / 1000)}
         />
@@ -380,30 +310,25 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
           <button
             type="button"
             className="track-replay__btn track-replay__btn--primary"
-            onClick={() => {
-              if (!playing && progressRef.current >= 1) {
-                handleSeek(0)
-              }
-              setPlaying(!playing)
-            }}
+            onClick={() => engine.toggle()}
           >
-            {playing ? '⏸' : '▶'}
+            {snapshot.playing ? '⏸' : '▶'}
           </button>
           {SPEED_OPTIONS.map((option) => (
             <button
               key={option}
               type="button"
               className={
-                speed === option
+                snapshot.speed === option
                   ? 'track-replay__btn track-replay__speed--active'
                   : 'track-replay__btn'
               }
-              onClick={() => setSpeed(option)}
+              onClick={() => engine.setSpeed(option)}
             >
               {option}×
             </button>
           ))}
-          <span className="track-replay__clock">{formatClock(displayProgress * totalSpan)}</span>
+          <span className="track-replay__clock">{formatClock(snapshot.progress * totalSpan)}</span>
           <span className="track-replay__stat">{distanceLabel}</span>
           <span className="track-replay__stat">{speedLabel}</span>
           <span className="track-replay__stat">{heartRateLabel}</span>

@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.29.3',
+    date: '2026-09-07',
+    features: [
+      '更流畅：在线回放重写为单引擎架构，光标与已走轨迹逐帧命令式渲染，修复高倍速下的周期性卡顿',
+      '更顺滑：修复光标插值失效问题（此前插值参数错位导致实际逐点跳动），1x 速度下光标沿轨迹连续滑行',
+      '更平稳：跟随镜头改为逐帧匀速平移，消除"动画阻塞→结束猛蹿"的走停节奏',
+    ],
+  },
+  {
     version: '2.29.2',
     date: '2026-09-04',
     features: [
