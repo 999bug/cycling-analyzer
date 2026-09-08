@@ -1,11 +1,12 @@
 /**
- * PWA 新版本更新状态 hook（提示式更新）。
+ * PWA 新版本更新状态 hook。
  *
- * 配合 vite.config 的 registerType: 'prompt'：新 Service Worker 预缓存
- * 就绪后进入 waiting 态，本 hook 收到 onNeedRefresh 信号，由 UpdateBanner
- * 展示醒目提示条，用户点击「立即更新」才让新 SW 接管并刷新页面。
+ * 更新主链路是导航网络优先 + SW 静默激活（见 src/sw.ts）：刷新即新版，
+ * 本 hook 的 needRefresh 信号常态为 false；UpdateBanner 横幅仅作为
+ * 兜底（若新版 SW 以 waiting 态存在则提示一键更新），平时不可见。
  *
- * 检测节奏（大厂通行做法：加载时 + 周期性 + 重新可见/聚焦时）：
+ * 本 hook 的主要职责是布置检测节奏（大厂通行做法：加载时 + 周期性 +
+ * 重新可见/聚焦时），让新 SW 尽早进入后台 install：
  * - 页面加载：useRegisterSW 内部注册 SW 时自动比对 sw.js
  * - 每小时：registration.update()，覆盖长挂后台不刷新的标签页
  * - visibilitychange/focus：用户切回标签页瞬间追上最新版

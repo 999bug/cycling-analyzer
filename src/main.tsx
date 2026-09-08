@@ -10,8 +10,9 @@ import '@/index.css'
 // 本地 dev 无前缀。仓库改名时同步更新此常量。
 const ROUTER_BASENAME = import.meta.env.PROD ? '/cycling-analyzer' : '/'
 
-// PWA 注册移至 UpdateBanner 组件内的 useSWUpdate hook（提示式更新：
-// 新版本就绪后由醒目横幅引导用户一键刷新，替代旧 autoUpdate 的多次刷新体验）
+// PWA 注册移至 UpdateBanner 组件内的 useSWUpdate hook（布置加载时/每小时/
+// 切回标签页的 sw.js 检查）。更新策略为导航网络优先 + SW 静默激活（见 src/sw.ts），
+// 横幅仅在极端情况下兜底出现，常态不可见
 
 // 发版兜底：部署更新后，旧页面/PWA 快照引用的哈希 chunk 已在服务器删除，
 // 动态 import（GPX/FIT 解析器等懒加载模块）会 404 报

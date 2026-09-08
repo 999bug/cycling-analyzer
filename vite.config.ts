@@ -23,10 +23,14 @@ export default defineConfig(({ command }) => {
     plugins: [
       react(),
       VitePWA({
-      // 提示式更新：新版本预缓存就绪后由 UpdateBanner 弹提示条，
-      // 用户点「立即更新」再接管（避免 autoUpdate 下"刷新五六次才生效"），
-      // 检测节奏（加载时 + 每小时 + 切回标签页）见 src/features/pwa/useSWUpdate.ts
-      registerType: 'prompt',
+      // 静默自动更新：导航请求网络优先（见 src/sw.ts）——刷新一次必得最新
+      // index.html，新 SW 后台 install+激活，全程无提示条、无多次刷新
+      registerType: 'autoUpdate',
+      // 自定义 SW 模式：插件按 srcDir + filename 定位 SW 源码（src/sw.ts），
+      // 编译产物 dist/sw.js 后由 workbox-build 注入预缓存清单
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['favicon.svg', 'qileme.png'],
       // Web 应用清单（PWA 离线可用：图标/独立窗口/主题色）
       manifest: {
@@ -50,31 +54,18 @@ export default defineConfig(({ command }) => {
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         // 预缓存应用壳资源；注意排除体积庞大的作者数据快照（运行时按需网络请求）
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         globIgnores: [
           '**/author-data/**',
           // 大体积懒加载 chunk 不预缓存（首访后台流量 ↓）：FIT 解析 worker（~384KB）
-          // 与 GPX 解析器只在导入动作时动态加载，改走下方运行时缓存
+          // 与 GPX 解析器只在导入动作时动态加载，改走 sw.ts 内的 SWR 运行时缓存
           // （首次在线使用后离线可用）
           '**/parseWorker-*.js',
           '**/parseTask*.js',
           '**/gpxParser-*.js',
         ],
-        // 未预缓存的构建产物走 SWR 运行时缓存：首次在线使用后离线可用，
-        // 后台静默更新；已预缓存资源由 precache 路由优先接管不受影响
-        runtimeCaching: [
-          {
-            urlPattern: new RegExp(`${base.replace('/', '\\/')}/assets/[^/]+\\.(js|css)$`),
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'lazy-assets', expiration: { maxEntries: 60 } },
-          },
-        ],
-        // SPA 路由回退：离线时深链（如 /activities/xxx）返回 index.html
-        navigateFallback: `${base}index.html`,
-        navigateFallbackDenylist: [/^\/cycling-analyzer\/author-data\//],
-        cleanupOutdatedCaches: true,
       },
     }),
   ],

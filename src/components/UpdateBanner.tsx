@@ -1,10 +1,9 @@
 /**
  * 新版本更新提示条（全局唯一实例，挂 AppLayout 布局根）。
  *
- * 触发条件：新版本 Service Worker 预缓存就绪（useSWUpdate.needRefresh）。
- * 设计要求「醒目」：页面顶部居中大尺寸品牌色横幅 + 呼吸光晕动画 +
- * role=alert 播报，点「立即更新」由新 SW 接管后自动刷新（零手动重试）；
- * 「稍后」仅本次会话隐藏，下次加载或再切回标签页命中新版本会重新出现。
+ * 常态不可见：更新主链路是导航网络优先 + SW 静默激活（见 src/sw.ts），
+ * 刷新一次即为新版。本组件仅作兜底——若新版 SW 仍以 waiting 态存在
+ * （如静默激活链路被浏览器策略打断），则弹出品牌色横幅引导一键更新。
  */
 import { useState } from 'react'
 import { useSWUpdate } from '@/features/pwa/useSWUpdate'

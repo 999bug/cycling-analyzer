@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.40.0',
+    date: '2026-09-08',
+    features: [
+      '版本更新全面无感化：页面导航改为网络优先，刷新一次必得最新版，不再需要提示条或多刷几次',
+      '离线能力保留：断网时回退上次页面缓存与离线应用壳，弱网（3 秒无响应）自动回退不干等',
+    ],
+  },
+  {
     version: '2.39.0',
     date: '2026-09-08',
     features: [
