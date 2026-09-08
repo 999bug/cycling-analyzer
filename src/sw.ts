@@ -73,6 +73,17 @@ registerRoute(
     } catch {
       // 网络异常（离线/超时/挂起）：落入下方兜底链
     }
+    // 回退缓存的同时后台静默 revalidate（SWR）：本次先给旧版保证可用，
+    // 缓存已被最新 HTML 覆盖，下次刷新即是新版——发版后最多"旧一次"
+    event.waitUntil(
+      fetch(request)
+        .then((res) => {
+          if (res.status === 200) {
+            return cache.put(request.url, res.clone())
+          }
+        })
+        .catch(() => {}),
+    )
     if (cached) {
       return cached
     }

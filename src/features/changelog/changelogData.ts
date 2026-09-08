@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.40.4',
+    date: '2026-09-08',
+    features: [
+      '网络不稳时刷新不再连续拿旧版：页面回退缓存的瞬间会在后台静默重新拉取最新版（SWR），发版后最多「旧一次」，下次刷新必是新版',
+    ],
+  },
+  {
     version: '2.40.3',
     date: '2026-09-08',
     features: [
