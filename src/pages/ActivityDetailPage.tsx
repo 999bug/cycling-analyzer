@@ -11,9 +11,10 @@
  * 训练分析在渲染层调用纯函数（records ≤ 万级，性能可接受），
  * 依赖用户配置的 FTP/最大心率（规格 §26：无配置不伪造计算）。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import type { ActivityRecord } from '@/types/activity'
+import type { ActivityRecord, TrackOffset } from '@/types/activity'
+import type { CoordinateSystem } from '@/geo/coordinateSystem'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { db } from '@/storage/db'
@@ -44,6 +45,9 @@ import {
   exportTrackReplayVideo,
 } from '@/features/activity/trackVideoExport'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
+import TrackFixPanel, { type TrackFixPreview } from '@/features/activity/TrackFixPanel'
+import '@/features/activity/TrackFixPanel.css'
+import { COORDINATE_SYSTEM_LABELS, sourceProfileById } from '@/geo/sourceProfiles'
 import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
@@ -251,6 +255,9 @@ function ActivityDetailPage() {
   // 在线轨迹回放模式开关 + 地形图叠加开关
   const [replayMode, setReplayMode] = useState(false)
   const [terrainVisible, setTerrainVisible] = useState(false)
+  // 轨迹纠偏：面板开关 + 预览参数（undefined = 无未保存的预览改动，地图按已保存标记渲染）
+  const [fixPanelOpen, setFixPanelOpen] = useState(false)
+  const [fixPreview, setFixPreview] = useState<TrackFixPreview>()
   // 用户设置（单位/时间格式等本地显示偏好；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
   // 训练配置（随数据源：作者模式用快照 profile，本地模式用访客设置）
@@ -566,6 +573,31 @@ function ActivityDetailPage() {
     }
   }
 
+  // 纠偏预览回调：面板选择 / 微调变化时更新预览参数，地图主轨迹实时重绘
+  const handleFixPreview = useCallback((preview: TrackFixPreview) => {
+    setFixPreview(preview)
+  }, [])
+
+  /**
+   * 保存轨迹纠偏：只改坐标系 / 来源 / 微调三个标记，逐点原始坐标不动
+   * （这是「任意次来回切换严格还原、零误差累积」的前提）。
+   * 保存后清除预览并关闭面板；热力图等缓存因 scanKey 指纹变化自动失效重建。
+   */
+  async function handleFixSave(patch: {
+    coordinateSystem: CoordinateSystem
+    sourceApp?: string
+    trackOffset?: TrackOffset
+  }) {
+    if (activity === undefined) {
+      return
+    }
+    await localRepository.updateTrackSystem(activity.id, patch)
+    // patch 中 undefined 的字段（如来源选「未知」）语义为清除，展开后覆盖旧值
+    setActivity({ ...activity, ...patch })
+    setFixPreview(undefined)
+    setFixPanelOpen(false)
+  }
+
   // 提示态：缺 ID / 出错 / 加载中 / 不存在
   if (id === undefined || errorKey === loadKey) {
     return <DetailNotice state="error" />
@@ -578,6 +610,9 @@ function ActivityDetailPage() {
   }
 
   const typeLabel = ACTIVITY_TYPE_LABELS[activity.activityType] ?? activity.activityType
+  // 来源标签展示「原始来自哪个软件」，与当前坐标系分列：纠偏只改坐标系，不动来源
+  const sourceProfile = sourceProfileById(activity.sourceApp)
+  const systemLabel = COORDINATE_SYSTEM_LABELS[activity.coordinateSystem ?? 'wgs84']
   // 单位偏好（设置未加载完成时回退默认公制，规格 §27）
   const distanceUnit = settings?.units.distance ?? 'km'
   const timeFormat = settings?.units.timeFormat ?? '24h'
@@ -646,6 +681,11 @@ function ActivityDetailPage() {
           )}
           <div className="activity-detail__meta">
             <span className="activity-detail__type">{typeLabel}</span>
+            {sourceProfile.id !== 'unknown' && (
+              <span className="activity-detail__source" title={`轨迹坐标系：${systemLabel}`}>
+                {sourceProfile.label}
+              </span>
+            )}
             <time className="activity-detail__time">{formatDateTime(activity.startTime, timeFormat)}</time>
           </div>
           {activity.description && <p className="activity-detail__description">{activity.description}</p>}
@@ -766,6 +806,24 @@ function ActivityDetailPage() {
           >
             {replayMode ? '⏹ 关闭回放' : '▶ 在线回放'}
           </button>
+          {source === 'local' && hasTrack && (
+            <button
+              type="button"
+              className={
+                fixPanelOpen
+                  ? 'activity-detail__coloring-btn activity-detail__coloring-btn--active'
+                  : 'activity-detail__coloring-btn'
+              }
+              aria-pressed={fixPanelOpen}
+              onClick={() => {
+                setFixPreview(undefined)
+                setFixPanelOpen(!fixPanelOpen)
+              }}
+              title="轨迹位置不对？选择数据来源的坐标系进行纠偏（行者 / Keep 等国内 App 常见）"
+            >
+              轨迹纠偏
+            </button>
+          )}
         </div>
         {coloring !== 'none' && (
           <ColoringLegend mode={coloring} points={routePoints} distanceUnit={distanceUnit} />
@@ -784,9 +842,27 @@ function ActivityDetailPage() {
           terrainVisible={terrainVisible}
           onTerrainToggle={() => setTerrainVisible(!terrainVisible)}
           distanceUnit={distanceUnit}
-          coordinateSystem={activity.coordinateSystem}
-          trackOffset={activity.trackOffset}
+          coordinateSystem={fixPreview?.coordinateSystem ?? activity.coordinateSystem}
+          trackOffset={fixPreview?.trackOffset ?? activity.trackOffset}
+          compare={
+            fixPreview !== undefined
+              ? { coordinateSystem: activity.coordinateSystem, trackOffset: activity.trackOffset }
+              : undefined
+          }
         />
+        {fixPanelOpen && (
+          <TrackFixPanel
+            sourceApp={activity.sourceApp}
+            coordinateSystem={activity.coordinateSystem ?? 'wgs84'}
+            trackOffset={activity.trackOffset}
+            onPreviewChange={handleFixPreview}
+            onSave={handleFixSave}
+            onClose={() => {
+              setFixPreview(undefined)
+              setFixPanelOpen(false)
+            }}
+          />
+        )}
       </section>
 
       <section className="activity-detail__charts" aria-label="活动图表">

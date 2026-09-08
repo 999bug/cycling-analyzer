@@ -86,6 +86,18 @@ export const UNKNOWN_SOURCE: SourceProfile = {
   keywords: [],
 }
 
+/**
+ * 坐标系展示名。
+ *
+ * 代号（WGS-84 / GCJ-02 / BD-09）用户大多不认识，UI 上以中文说明呈现，
+ * 并在来源旁边标注「行者 · 默认 GCJ-02」这类可读提示。
+ */
+export const COORDINATE_SYSTEM_LABELS: Record<CoordinateSystem, string> = {
+  wgs84: 'WGS-84（GPS 真值）',
+  gcj02: 'GCJ-02（火星坐标）',
+  bd09: 'BD-09（百度坐标）',
+}
+
 /** 来源匹配结果 */
 export interface SourceMatch {
   /** 命中的来源画像（未命中为 UNKNOWN_SOURCE） */

@@ -16,7 +16,9 @@ import {
 import { buildRouteMapRoutes, routeColor, type RouteMapRoute } from '@/features/routes/routeMap'
 import { simplifyRoute } from '@/map/simplify'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
+import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
+import { applyOffsetMeters, toWgs84 } from '@/geo/coordinateSystem'
+import { projectPoint } from '@/geo/projection'
 import {
   SCAN_CACHE_ROUTES_MAP,
   loadScanCache,
@@ -161,9 +163,19 @@ function RoutesMapPage() {
         }
         const points = simplifyRoute(records, ROUTES_SIMPLIFY_TOLERANCE_METERS)
         if (points.length >= MIN_TRACK_POINTS) {
+          // 按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：与热力图页同口径，
+          // 国内 App（行者等 GCJ-02）导入的活动不做归一化会整体偏移数百米
           trackById.set(
             summary.id,
-            points.map((point) => [point.latitude, point.longitude] as LatLng),
+            points.map((point) => {
+              const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
+              const shifted = applyOffsetMeters(
+                normalized,
+                summary.trackOffset?.northMeters ?? 0,
+                summary.trackOffset?.eastMeters ?? 0,
+              )
+              return [shifted.latitude, shifted.longitude] as LatLng
+            }),
           )
         }
         const endpoints = extractEndpoints(records)
@@ -198,13 +210,31 @@ function RoutesMapPage() {
     }
   }, [repository, source])
 
+  // 展示路线：扫描产物已统一为 WGS-84，渲染前投影到底图坐标系（与热力图页同口径）；
+  // 转换仅作用于渲染，routes 状态中的 WGS-84 轨迹保持不变
+  const displayRoutes = useMemo(() => {
+    const target = mapSystem(sourceIndex)
+    if (target === 'wgs84') {
+      return routes
+    }
+    return routes.map((route) => ({
+      ...route,
+      tracks: route.tracks.map((track) =>
+        track.map(([lat, lng]) => {
+          const point = projectPoint({ longitude: lng, latitude: lat }, { to: target })
+          return [point.latitude, point.longitude] as [number, number]
+        }),
+      ),
+    }))
+  }, [routes, sourceIndex])
+
   // 全部轨迹（fitBounds 视野用；选中时仅选中路线轨迹）
   const visibleTracks = useMemo(
     () =>
       selected === null
-        ? routes.flatMap((route) => route.tracks)
-        : (routes[selected]?.tracks ?? []),
-    [routes, selected],
+        ? displayRoutes.flatMap((route) => route.tracks)
+        : (displayRoutes[selected]?.tracks ?? []),
+    [displayRoutes, selected],
   )
 
   return (
@@ -251,7 +281,7 @@ function RoutesMapPage() {
               scrollWheelZoom
             >
               <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
-              {routes.map((route) =>
+              {displayRoutes.map((route) =>
                 route.tracks.map((track, trackIndex) => {
                   // 未选中时几乎隐藏；选中路线加粗 + 白描边光晕（浅色瓦片上醒目）
                   const isDimmed = selected !== null && selected !== route.index

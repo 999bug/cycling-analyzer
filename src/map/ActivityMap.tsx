@@ -93,6 +93,16 @@ export interface ActivityMapProps {
 
   /** 轨迹手动微调量（米，在归一化到 WGS-84 之后叠加） */
   trackOffset?: TrackOffset
+
+  /**
+   * 对比投影（纠偏面板用）：以此参数投影出一条灰虚线叠加在主轨迹下方，
+   * 展示「纠偏前」的位置，主轨迹则为「纠偏后」实时预览。
+   * undefined = 不显示对比线。
+   */
+  compare?: {
+    coordinateSystem?: CoordinateSystem
+    trackOffset?: TrackOffset
+  }
 }
 
 /**
@@ -173,7 +183,7 @@ function AutoInvalidate() {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -249,6 +259,20 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
 
   const displayPoints = useMemo(() => projectPoints(points, projection), [points, projection])
 
+  // 对比线（纠偏前位置）：按 compare 参数投影同一份原始坐标，灰虚线渲染
+  const compareLatLngs = useMemo(() => {
+    if (compare === undefined) {
+      return []
+    }
+    const before = projectPoints(points, {
+      from: compare.coordinateSystem,
+      to: mapSystem(sourceIndex),
+      northMeters: compare.trackOffset?.northMeters,
+      eastMeters: compare.trackOffset?.eastMeters,
+    })
+    return before.map((point) => [point.latitude, point.longitude] as [number, number])
+  }, [points, compare, sourceIndex])
+
   // 悬停圆点展示坐标：与轨迹走同一投影，保证联动不偏
   const hoverDisplay = useMemo(() => {
     if (hoverPoint === undefined) {
@@ -322,6 +346,12 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         scrollWheelZoom
       >
         <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
+        {compareLatLngs.length >= MIN_POINTS && (
+          <Polyline
+            positions={compareLatLngs}
+            pathOptions={{ color: '#8e8e93', weight: 2, dashArray: '6 6', opacity: 0.8 }}
+          />
+        )}
         {hasMetricData
           ? coloredLines.map((line, index) => (
               <Polyline

@@ -1,0 +1,161 @@
+/**
+ * 轨迹纠偏面板样式：悬浮于地图上方右侧，与详情页视觉变量保持一致。
+ */
+.track-fix-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1100; /* 高于 Leaflet 控件层（1000），悬浮在地图之上 */
+  width: 280px;
+  padding: 16px;
+  border-radius: 12px;
+  background-color: var(--bg-secondary, #1c1c1e);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.track-fix-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.track-fix-panel__header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.track-fix-panel__close {
+  border: none;
+  background: none;
+  color: var(--text-secondary, #999);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.track-fix-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary, #aaa);
+}
+
+.track-fix-panel__field select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background-color: var(--bg-primary, #111);
+  color: var(--text-primary, #eee);
+  font-size: 13px;
+}
+
+.track-fix-panel__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  line-height: 1.5;
+}
+
+.track-fix-panel__offset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary, #aaa);
+}
+
+.track-fix-panel__offset-label {
+  font-size: 12px;
+}
+
+.track-fix-panel__offset-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(2, 36px);
+  gap: 4px;
+  justify-content: center;
+}
+
+.track-fix-panel__offset-pad > button:first-child {
+  grid-column: 2;
+}
+
+.track-fix-panel__offset-pad > button:last-child {
+  grid-column: 2;
+}
+
+.track-fix-panel__offset-mid {
+  display: flex;
+  gap: 4px;
+}
+
+.track-fix-panel__offset-pad button {
+  width: 40px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background-color: var(--bg-primary, #111);
+  color: var(--text-primary, #eee);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.track-fix-panel__offset-pad button:hover {
+  background-color: var(--bg-hover, #2a2a2c);
+}
+
+.track-fix-panel__offset-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.track-fix-panel__reset {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--accent, #4f8cff);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.track-fix-panel__reset:disabled {
+  color: var(--text-secondary, #666);
+  cursor: default;
+}
+
+.track-fix-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.track-fix-panel__actions button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background-color: transparent;
+  color: var(--text-primary, #eee);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.track-fix-panel__save {
+  background-color: var(--accent, #4f8cff) !important;
+  border-color: var(--accent, #4f8cff) !important;
+  color: #fff !important;
+}
+
+.track-fix-panel__save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

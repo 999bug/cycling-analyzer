@@ -110,6 +110,16 @@
   font-size: 12px;
 }
 
+/* 来源标签（如「行者」）：与运动类型并排，title 提示当前轨迹坐标系 */
+.activity-detail__source {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--text-secondary) 15%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: help;
+}
+
 .activity-detail__time {
   color: var(--text-secondary);
   font-size: 14px;
@@ -244,6 +254,7 @@
 
 /* 地图区：着色切换按钮组 + 地图（规格 §16） */
 .activity-detail__map {
+  position: relative; /* 纠偏面板绝对定位的参照 */
   width: 100%;
 }
 

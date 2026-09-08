@@ -43,10 +43,11 @@ export function summariesScanKey(summaries: readonly ActivitySummary[]): string 
       latestStartTime = summary.startTime
     }
     namesHash += summary.name ?? ''
-    // 坐标系纳入指纹：轨迹纠偏只改 coordinateSystem，不影响数量/总距离/开始时间/名称，
-    // 若不纳入则纠偏后热力图、路线图、赛段、统计仍命中旧缓存（旧坐标算出的产物），
-    // 表现为「地图已经对了、热力图还歪着」
+    // 坐标系与微调纳入指纹：轨迹纠偏只改 coordinateSystem / trackOffset，不影响
+    // 数量/总距离/开始时间/名称，若不纳入则纠偏后热力图、路线图、赛段、统计仍命中
+    // 旧缓存（旧坐标算出的产物），表现为「地图已经对了、热力图还歪着」
     systemHash += summary.coordinateSystem ?? ''
+    systemHash += `${summary.trackOffset?.northMeters ?? 0},${summary.trackOffset?.eastMeters ?? 0};`
   }
   return `${summaries.length}|${totalDistance}|${latestStartTime}|${hashString(namesHash)}|${hashString(systemHash)}`
 }

@@ -13,7 +13,7 @@ import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { simplifyRoute } from '@/map/simplify'
 import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
-import { toWgs84 } from '@/geo/coordinateSystem'
+import { applyOffsetMeters, toWgs84 } from '@/geo/coordinateSystem'
 import { projectPoint } from '@/geo/projection'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { SCAN_CACHE_HEATMAP, loadScanCache, saveScanCache, summariesScanKey } from '@/storage/scanCache'
@@ -135,12 +135,17 @@ function HeatmapPage() {
           HEATMAP_SIMPLIFY_TOLERANCE_METERS,
         )
         if (points.length >= MIN_TRACK_POINTS) {
-          // 先按各活动自身坐标系归一化到 WGS-84 再缓存：不同来源的活动可能用不同
-          // 坐标系（行者 GCJ-02 / Garmin WGS-84），统一口径后叠加才不会互相错位
+          // 先按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：不同来源的
+          // 活动可能用不同坐标系（行者 GCJ-02 / Garmin WGS-84），统一口径后叠加才不会互相错位
           loaded.push(
             points.map((point) => {
               const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
-              return [normalized.latitude, normalized.longitude] as LatLng
+              const shifted = applyOffsetMeters(
+                normalized,
+                summary.trackOffset?.northMeters ?? 0,
+                summary.trackOffset?.eastMeters ?? 0,
+              )
+              return [shifted.latitude, shifted.longitude] as LatLng
             }),
           )
         }

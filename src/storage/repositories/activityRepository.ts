@@ -233,6 +233,17 @@ export interface ActivityRepository extends ActivityReadRepository {
   updateName(id: string, name: string): Promise<void>;
 
   /**
+   * 更新轨迹坐标系 / 来源 / 手动微调（纠偏写操作）。
+   *
+   * 只改标记与微调量，绝不改写 activity_records 中的原始坐标——
+   * 这是「来回切换来源可无限次还原、零误差累积」的前提。
+   */
+  updateTrackSystem(
+    id: string,
+    patch: Pick<Activity, 'coordinateSystem' | 'sourceApp' | 'trackOffset'>,
+  ): Promise<void>;
+
+  /**
    * 更新活动的标准化功率（历史活动 NP 回填；导入时计算，老数据按需补算）。
    *
    * @param id 活动 ID
@@ -488,6 +499,14 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async updateNormalizedPower(id: string, normalizedPower: number): Promise<void> {
     await this.db.activities.update(id, { normalizedPower });
+  }
+
+  async updateTrackSystem(
+    id: string,
+    patch: Pick<Activity, 'coordinateSystem' | 'sourceApp' | 'trackOffset'>,
+  ): Promise<void> {
+    // 纠偏只改摘要上的标记：逐点数据保持导入时的原始坐标不变
+    await this.db.activities.update(id, patch);
   }
 
   async deleteActivity(id: string): Promise<void> {
