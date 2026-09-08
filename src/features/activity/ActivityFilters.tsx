@@ -34,6 +34,18 @@ interface ActivityFiltersProps {
   onMinDistanceChange: (km: string) => void
   onMinElevationGainChange: (m: string) => void
   onMinAvgPowerChange: (w: string) => void
+
+  /** 重置全部筛选条件（仅手动点击触发） */
+  onReset: () => void
+
+  /** 打开批量重命名弹窗 */
+  onOpenBatchRename: () => void
+
+  /** 批量重命名入口是否禁用（作者快照源只读） */
+  batchRenameDisabled?: boolean
+
+  /** 禁用原因提示（tooltip） */
+  batchRenameDisabledReason?: string
 }
 
 /**
@@ -54,6 +66,10 @@ function ActivityFilters({
   onMinDistanceChange,
   onMinElevationGainChange,
   onMinAvgPowerChange,
+  onReset,
+  onOpenBatchRename,
+  batchRenameDisabled = false,
+  batchRenameDisabledReason,
 }: ActivityFiltersProps) {
   return (
     <div className="activity-filters">
@@ -137,6 +153,21 @@ function ActivityFilters({
           onChange={(event) => onMinAvgPowerChange(event.target.value)}
         />
       </label>
+      {/* 操作按钮与筛选输入同行：重置在前（弱化样式），批量重命名在后（主题色区分筛选输入） */}
+      <div className="activity-filters__actions">
+        <button type="button" className="activity-filters__reset" onClick={onReset}>
+          重置
+        </button>
+        <button
+          type="button"
+          className="activity-filters__rename"
+          disabled={batchRenameDisabled}
+          title={batchRenameDisabled ? batchRenameDisabledReason : undefined}
+          onClick={onOpenBatchRename}
+        >
+          批量重命名
+        </button>
+      </div>
     </div>
   )
 }

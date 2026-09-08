@@ -6,13 +6,14 @@
  */
 import 'fake-indexeddb/auto'
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import ActivitiesPage from '@/pages/ActivitiesPage'
 import { CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { useActivityFilterStore } from '@/stores/activityFilterStore'
 import { formatDate, formatDistance } from '@/utils/format'
 import type { Activity } from '@/types/activity'
 
@@ -72,18 +73,20 @@ describe('骑行记录列表页', () => {
   beforeEach(() => {
     db = new CyclingDatabase()
     repo = new DexieActivityRepository(db)
+    // 筛选条件为持久化 store（模块级单例），测试间重置避免串扰
+    useActivityFilterStore.getState().resetFilters()
   })
 
   afterEach(async () => {
     await db.delete()
   })
 
-  /** 渲染页面（MemoryRouter + 详情页占位路由） */
+  /** 渲染页面（MemoryRouter + 详情页占位路由；写仓库注入同一实例供批量重命名用） */
   function renderPage() {
     return render(
       <MemoryRouter initialEntries={['/activities']}>
         <Routes>
-          <Route path="/activities" element={<ActivitiesPage repository={repo} />} />
+          <Route path="/activities" element={<ActivitiesPage repository={repo} writeRepository={repo} />} />
           <Route path="/activities/:id" element={<DetailStub />} />
         </Routes>
       </MemoryRouter>,
@@ -344,5 +347,88 @@ describe('骑行记录列表页', () => {
     expect(screen.getAllByRole('row')[2]).toHaveTextContent(
       `${formatDate('2026-08-01T10:00:00.000Z')} 骑行`,
     )
+  })
+
+  it('筛选条件持久化：卸载重渲染后仍保留，不自动清理', async () => {
+    await repo.addActivities(makeSeed())
+    const { unmount } = renderPage()
+
+    const searchBox = screen.getByLabelText('搜索')
+    await user.type(searchBox, 'ride-02')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2))
+
+    // 卸载再挂载：筛选条件来自持久化 store，仍生效
+    unmount()
+    renderPage()
+    expect(screen.getByLabelText('搜索')).toHaveValue('ride-02')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2))
+  })
+
+  it('重置按钮：清空全部筛选条件，仅手动触发', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getByRole('option', { name: '2026-07' })).toBeInTheDocument())
+    await user.selectOptions(screen.getByLabelText('月份'), '2026-07')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(7))
+
+    const distanceInput = screen.getByLabelText('距离(km)')
+    await user.type(distanceInput, '30')
+    // 7 月记录距离 27~32km，≥30km 只剩 3 条
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(4))
+
+    // 重置 → 月份与数值筛选全部清空，恢复全量（第 1 页 20 条）
+    await user.click(screen.getByRole('button', { name: '重置' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(screen.getByLabelText('月份')).toHaveValue('')
+    // jest-dom 对 input[type=number] 空值返回 null，直接断言 value 字符串
+    expect((screen.getByLabelText('距离(km)') as HTMLInputElement).value).toBe('')
+  })
+
+  it('批量重命名：按模板预览并应用，全部命中记录写入新名称', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 打开弹窗：候选为筛选命中的全部记录（25 条，非仅当前页 20 条）
+    await user.click(screen.getByRole('button', { name: '批量重命名' }))
+    expect(await screen.findByRole('dialog', { name: '批量重命名' })).toBeInTheDocument()
+    expect(screen.getByText('批量重命名（25 条）')).toBeInTheDocument()
+
+    // 默认模板预览：act-01（距离 11000m）→ '2026-08-29 cycling 11km'
+    expect(screen.getByText('2026-08-29 cycling 11km')).toBeInTheDocument()
+
+    // 改为序号模板后应用（模板含 {} 占位符，userEvent 会误解析为按键，改用 fireEvent）
+    const templateInput = screen.getByLabelText('命名模板')
+    await user.clear(templateInput)
+    fireEvent.change(templateInput, { target: { value: '晨骑{序号}' } })
+    expect(screen.getByText('晨骑01')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '应用到全部' }))
+
+    // 应用成功后弹窗关闭、列表刷新，且数据已写入本地库
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '批量重命名' })).not.toBeInTheDocument(),
+    )
+    await waitFor(async () => {
+      const first = await repo.getById('act-01')
+      expect(first?.name).toBe('晨骑01')
+    })
+    const last = await repo.getById('act-25')
+    expect(last?.name).toBe('晨骑25')
+  })
+
+  it('批量重命名：模板为空白时禁止应用', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    await user.click(screen.getByRole('button', { name: '批量重命名' }))
+    expect(await screen.findByRole('dialog', { name: '批量重命名' })).toBeInTheDocument()
+
+    const templateInput = screen.getByLabelText('命名模板')
+    await user.clear(templateInput)
+    expect(screen.getByRole('button', { name: '应用到全部' })).toBeDisabled()
   })
 })

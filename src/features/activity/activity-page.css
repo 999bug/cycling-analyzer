@@ -43,6 +43,49 @@
   border-color: var(--primary);
 }
 
+/* 筛选行操作按钮组：底对齐输入框，重置在前、批量重命名在后 */
+.activity-filters__actions {
+  display: flex;
+  gap: 8px;
+  align-self: flex-end;
+}
+
+/* 重置按钮：弱化样式，与筛选输入区分 */
+.activity-filters__reset {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__reset:hover {
+  border-color: var(--text-secondary);
+  color: var(--text);
+}
+
+/* 批量重命名按钮：主题色底，视觉上区别于筛选输入 */
+.activity-filters__rename {
+  padding: 8px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background-color: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__rename:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.activity-filters__rename:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* 表格 */
 .activity-table {
   width: 100%;

@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.41.0',
+    date: '2026-09-08',
+    features: [
+      '骑行记录筛选不再自动清理：条件保留到切页/刷新之后，新增「重置」按钮手动恢复默认',
+      '筛选栏新增「批量重命名」：按模板（日期/类型/距离/爬升/序号变量）实时预览并一键改名，解决行者等工具导出的固定文件名问题；作者快照源为只读置灰',
+    ],
+  },
+  {
     version: '2.40.4',
     date: '2026-09-08',
     features: [
