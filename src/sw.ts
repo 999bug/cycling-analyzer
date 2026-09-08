@@ -57,9 +57,13 @@ registerRoute(
     const cache = await caches.open(HTML_CACHE_NAME)
     const cached = await cache.match(request.url)
     try {
-      const network = await fetch(request, {
-        signal: AbortSignal.timeout(NAV_TIMEOUT_MS),
-      })
+      // AbortSignal.timeout 需 Safari 16+/Chrome 103+：旧浏览器不传超时
+      // 直连网络（兜底链仍然有效），避免 API 缺失同步抛错导致永远拿缓存旧版
+      const init: RequestInit | undefined =
+        typeof AbortSignal.timeout === 'function'
+          ? { signal: AbortSignal.timeout(NAV_TIMEOUT_MS) }
+          : undefined
+      const network = await fetch(request, init)
       if (network.status === 200) {
         // 最新 HTML 入缓存（以 URL 字符串为键，规避 navigate 模式 Request 的
         // Cache.put 限制）；每次在线刷新都会覆盖为最新版本

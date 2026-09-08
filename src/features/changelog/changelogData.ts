@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.40.2',
+    date: '2026-09-08',
+    features: [
+      '修复旧移动端浏览器（Safari 16 以下）刷新拿不到新版的问题：SW 网络优先导航在不支持 AbortSignal.timeout 的环境改为直连网络，不再误入缓存回退',
+    ],
+  },
+  {
     version: '2.40.1',
     date: '2026-09-08',
     features: [
