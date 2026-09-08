@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.32.0',
+    date: '2026-09-08',
+    features: [
+      '佳明批量导入适配：支持直接导入佳明账户 GDPR 全量导出包（zip），自动解压内层 UploadedFiles 压缩包提取 FIT 文件',
+      '佳明标题还原：自动读取活动摘要 JSON，按活动开始时间匹配还原真实活动名（如「通州区 公路骑行」），告别 ID 串文件名',
+      '导入入口全面支持 zip：选择文件 / 拖拽 / 目录选择均可含 zip 压缩包（两层嵌套自动展开），Strava 导出 zip 同样受益',
+    ],
+  },
+  {
     version: '2.31.1',
     date: '2026-09-07',
     features: [

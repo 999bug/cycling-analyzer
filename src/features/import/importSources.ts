@@ -3,14 +3,15 @@
  *
  * FIT 文件本身是通用格式（Garmin SDK 可解析所有来源），各来源差异仅在元数据：
  * - Strava 批量导出目录含 activities.csv（标题/描述/估算功率还原，规格 §31）
- * - 佳明/igpsport/行者等来源无标准 CSV，标题按文件名兜底提取
- * 数据源仅影响目录批量导入（是否解析 CSV）；单文件导入/拖拽无需来源。
+ * - 佳明 GDPR 全量导出包 FIT 封装在内层 zip，活动摘要 JSON 按开始时间还原标题
+ * - igpsport/行者等来源无标准元数据，标题按文件名兜底提取
+ * 数据源仅影响目录批量导入（是否解析元数据）；单文件导入/拖拽无需来源。
  */
 
 /**
  * 批量导入数据源（目录导入入口区分，单文件导入不适用）。
  */
-export type ImportSource = 'strava' | 'other';
+export type ImportSource = 'strava' | 'garmin' | 'other';
 
 /**
  * 数据源入口配置（目录导入按钮展示）。
@@ -27,7 +28,7 @@ export interface ImportSourceOption {
 }
 
 /**
- * 目录批量导入入口（两种来源行为：是否解析 Strava activities.csv）。
+ * 目录批量导入入口（三种来源行为：解析 Strava CSV / 佳明摘要 / 文件名兜底）。
  */
 export const IMPORT_SOURCE_OPTIONS: ImportSourceOption[] = [
   {
@@ -36,9 +37,14 @@ export const IMPORT_SOURCE_OPTIONS: ImportSourceOption[] = [
     hint: '解析 activities.csv，自动还原标题/描述/估算功率',
   },
   {
+    value: 'garmin',
+    label: '选择目录（佳明导出）',
+    hint: '支持 GDPR 全量包（自动解压内层 zip），按活动摘要还原标题',
+  },
+  {
     value: 'other',
     label: '选择目录（其他设备）',
-    hint: '佳明 / igpsport / 行者等，标题按文件名还原',
+    hint: 'igpsport / 行者等，标题按文件名还原',
   },
 ];
 

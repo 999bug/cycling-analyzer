@@ -40,6 +40,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - **摘要与逐点分表**：activities 表不存 records；`getById` 返回摘要，`getRecords` 按需加载
 - **去重指纹基于解压后内容**（`.fit` 与 `.fit.gz` 同一活动判重一致）
 - **Strava 标题还原**：CSV 文件名匹配（`src/features/import/stravaExport.ts`），跨行引号感知
+- **佳明 GDPR 导出包适配**：FIT 封装在包内层 `UploadedFiles_*.zip`，扫描器 `expandArchives` 递归展开 zip（fflate，深度 2）；标题还原按摘要 JSON `startTimeGmt` 与 FIT 开始时间 ±2s 匹配（`src/features/import/garminExport.ts`，与文件名无键关联）
 - **SPA 路由**：`main.tsx` basename 生产 `/cycling-analyzer`、dev `/`；`public/404.html` 处理深链接
 - **导入在 Web Worker 解析**（jsdom 自动降级主线程），失败进台账可重试
 - **双数据源**：`dataSourceStore` 管理「作者的数据（CI 构建的静态快照，只读）/ 我的数据（本地 IndexedDB）」；组件统一经 `useActivityRepository()` 获取当前源的仓库，训练配置经 `getEffectiveProfile(source)` 随源切换；作者源下写操作 UI 一律隐藏
