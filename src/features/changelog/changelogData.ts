@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.33.0',
+    date: '2026-09-08',
+    features: [
+      '新增感谢名单：更新日志页底部新增「致谢」区块，感谢参与测试与使用的骑友，名单由独立数据文件统一维护（带身份说明与主页链接时一并展示）',
+    ],
+  },
+  {
     version: '2.32.1',
     date: '2026-09-08',
     features: [
