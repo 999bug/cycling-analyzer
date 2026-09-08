@@ -6,46 +6,80 @@ import { calculateSummary } from '@/fit/calculator/calculator'
 import type { ActivityRecord } from '@/types/activity'
 
 /**
- * 构造带海拔的测试记录。
+ * 构造带海拔的测试记录。默认 10s 间隔（自适应平滑窗收敛为 3 点，便于
+ * 推演精确值）、10m 点间距。
  */
-function recordsWithAltitude(altitudes: (number | undefined)[]): ActivityRecord[] {
+function recordsWithAltitude(
+  altitudes: (number | undefined)[],
+  overrides?: Partial<Pick<ActivityRecord, 'timestamp' | 'distance' | 'speed'>>,
+): ActivityRecord[] {
   return altitudes.map((altitude, i) => ({
-    timestamp: 1735689600 + i,
+    timestamp: 1735689600 + i * 10,
     altitude,
     distance: i * 10,
     speed: 5,
+    ...overrides,
   }))
 }
 
-describe('calculateSummary 爬升与下降', () => {
-  it('累计相邻正海拔增量（精确值）', () => {
-    const records = recordsWithAltitude([100, 102, 101, 105, 103])
+describe('calculateSummary 爬升与下降（平滑 + 滞回 + 坡度门限）', () => {
+  it('陡坡爬升/下降按滞回结算（设备级口径）', () => {
+    // 100 → 130 → 100 的纯净三角爬降，平滑后峰 126/谷 103
+    const records = recordsWithAltitude([100, 106, 112, 118, 124, 130, 124, 118, 112, 106, 100])
 
     const summary = calculateSummary(records)
 
-    // 100→102 +2、102→101 0、101→105 +4、105→103 0
-    expect(summary.elevationGain).toBe(6)
-    // 102→101 -1、105→103 -2
-    expect(summary.elevationLoss).toBe(3)
+    // 上升段 103→126、下降段 118→103（滞回回吐 3m 相邻段交界）
+    expect(summary.elevationGain).toBeCloseTo(23, 5)
+    expect(summary.elevationLoss).toBeCloseTo(15, 5)
   })
 
-  it('海拔缺失时跳过计算', () => {
-    const records = recordsWithAltitude([100, undefined, 104, 104, 101])
-
-    const summary = calculateSummary(records)
-
-    // 100→104（跳过中间缺失点）+4、104→101 0
-    expect(summary.elevationGain).toBe(4)
-    expect(summary.elevationLoss).toBe(3)
-  })
-
-  it('有海拔但全程无正增量为 0（真实测量值）', () => {
-    const records = recordsWithAltitude([105, 104, 103])
+  it('±1m 取整级噪声不产生虚假爬升/下降', () => {
+    // 缓坡地形高频 ±1m 抖动：平滑后坡度 ~3% 低于门限，滞回也不触发
+    const records = recordsWithAltitude([100, 101, 100, 101, 100, 101, 100, 101, 100])
 
     const summary = calculateSummary(records)
 
     expect(summary.elevationGain).toBe(0)
-    expect(summary.elevationLoss).toBe(2)
+    expect(summary.elevationLoss).toBe(0)
+  })
+
+  it('静止漂移（点间距 ≤0.5m）不延伸峰谷', () => {
+    // 海拔 ±1~2m 漂移但水平几乎没动：坡度按 0 处理，无虚假爬升
+    const records = recordsWithAltitude([100, 101, 100, 102, 101, 100, 101, 100], {
+      distance: undefined,
+      speed: undefined,
+    }).map((r, i) => ({ ...r, distance: i * 0.1 }))
+
+    const summary = calculateSummary(records)
+
+    expect(summary.elevationGain).toBe(0)
+    expect(summary.elevationLoss).toBe(0)
+  })
+
+  it('海拔缺失的点跳过后继续计算', () => {
+    // 有效点 100 → 104 → 108（缺失点跳过），平滑+门限后结算爬升 4m
+    const records = recordsWithAltitude([100, undefined, 104, undefined, 108])
+
+    const summary = calculateSummary(records)
+
+    expect(summary.elevationGain).toBeCloseTo(4, 5)
+    expect(summary.elevationLoss).toBe(0)
+  })
+
+  it('距离与速度均缺失时按坡度可通过处理，爬升不归零', () => {
+    const records: ActivityRecord[] = [
+      { timestamp: 1735689600, altitude: 100 },
+      { timestamp: 1735689610, altitude: 106 },
+      { timestamp: 1735689620, altitude: 112 },
+      { timestamp: 1735689630, altitude: 118 },
+    ]
+
+    const summary = calculateSummary(records)
+
+    // 平滑窗 3：103 → 106 → 112 → 115，无水平距离按可通过处理
+    expect(summary.elevationGain).toBeCloseTo(12, 5)
+    expect(summary.elevationLoss).toBe(0)
   })
 
   it('全部记录无海拔时爬升为 undefined 而非 0（规格 §25）', () => {
@@ -57,6 +91,7 @@ describe('calculateSummary 爬升与下降', () => {
     const summary = calculateSummary(records)
 
     expect(summary.elevationGain).toBeUndefined()
+    expect(summary.elevationLoss).toBeUndefined()
   })
 })
 

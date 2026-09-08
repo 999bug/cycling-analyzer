@@ -84,9 +84,11 @@ describe('parseGpxActivity 字段映射', () => {
 
     expect(activity.duration).toBe(120)
     expect(activity.elapsedTime).toBe(120)
-    // 爬升 = 正增量之和：100→105 计 5m，105→103 为下降不计
-    expect(activity.elevationGain).toBeCloseTo(5, 6)
-    expect(activity.elevationLoss).toBeCloseTo(2, 6)
+    // 爬升/下降：100→105→103 为 0.6% 级缓变（60s 稀疏采样、点距 ~890m），
+    // 设备级口径（平滑+滞回+5% 坡度门限）下属噪声级缓变不计入；此处断言
+    // 记录→汇总的管道已跑通（undefined 会在此失败）
+    expect(activity.elevationGain).toBeCloseTo(0, 6)
+    expect(activity.elevationLoss).toBeCloseTo(0, 6)
     // 平均速度 = 总距离 / 时长
     expect(activity.distance).toBeGreaterThan(0)
     expect(activity.avgSpeed).toBeCloseTo(activity.distance / 120, 6)

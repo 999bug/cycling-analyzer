@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.36.3',
+    date: '2026-09-08',
+    features: [
+      'GPX 爬升/下降估算对齐设备口径：无海拔会话值的数据源（GPX 等）从「相邻正增量裸累加」升级为「滑动平均平滑 + 3m 滞回 + 5% 坡度门限」，实测 Strava 导出 GPX 爬升 2818m → 1839m（设备气压计真值 1825m，虚高 54% → +0.75%）；行者手机版 GPX 本就不含海拔（显示「—」），FIT 不受影响（设备值直通）',
+    ],
+  },
+  {
     version: '2.36.2',
     date: '2026-09-08',
     features: [
