@@ -106,8 +106,13 @@ registerRoute(
   }),
 )
 
-// 新 SW install 完成后，由 vite-plugin-pwa（registerType: 'autoUpdate'）
-// 发送 SKIP_WAITING 消息触发立即接管，激活后自动清理旧缓存
+// autoUpdate 静默激活：插件在 auto 模式下不会发送 SKIP_WAITING 消息
+// （registerSW 仅非 auto 模式才 sendSkipWaitingMessage），SW 必须在
+// install 完成后自行立即接管——缺了这一步新 SW 会永远卡在 waiting，
+// 页面挂着多久都不会自动更新（2.41.0 实测踩坑）。消息监听保留作兜底。
+self.addEventListener('install', () => {
+  void self.skipWaiting()
+})
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     void self.skipWaiting()

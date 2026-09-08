@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.41.1',
+    date: '2026-09-08',
+    features: [
+      '修复自动更新失效：自定义 SW 缺少 install 时的 skipWaiting 调用，新版一直卡在等待状态不会静默激活；修复后页面挂着不动也会在后台完成更新并自动刷新',
+    ],
+  },
+  {
     version: '2.41.0',
     date: '2026-09-08',
     features: [
