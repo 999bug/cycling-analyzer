@@ -54,7 +54,8 @@ export function buildBikeStats(summaries: readonly ActivitySummary[]): BikeStats
         count: 1,
         totalDistance: activity.distance,
         totalDuration: activity.duration,
-        totalElevationGain: activity.elevationGain,
+        // 无海拔数据源（行者 GPX）爬升为 undefined：聚合按 0 参与
+        totalElevationGain: activity.elevationGain ?? 0,
         lastRideTime: activity.startTime,
       })
       continue
@@ -63,7 +64,7 @@ export function buildBikeStats(summaries: readonly ActivitySummary[]): BikeStats
     entry.count += 1
     entry.totalDistance += activity.distance
     entry.totalDuration += activity.duration
-    entry.totalElevationGain += activity.elevationGain
+    entry.totalElevationGain += activity.elevationGain ?? 0
     // ISO 8601 字符串字典序即时间序（与仓库排序口径一致）
     if (activity.startTime > entry.lastRideTime) {
       entry.lastRideTime = activity.startTime

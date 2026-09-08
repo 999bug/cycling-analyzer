@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.33.1',
+    date: '2026-09-08',
+    features: [
+      '爬升显示修复：无海拔数据源（如行者导出的 GPX）活动爬升不再显示「+0 m」，改为「—」——数据缺失不再伪造为 0',
+      '统计兼容：日历/统计/设备/单车等聚合中，无爬升数据的活动按 0 参与、不再误报异常值',
+    ],
+  },
+  {
     version: '2.33.0',
     date: '2026-09-08',
     features: [

@@ -91,13 +91,15 @@ export function buildCalendarData(
         count: 1,
         distance: activity.distance,
         duration: activity.duration,
-        elevationGain: activity.elevationGain,
+        // 无海拔数据源（行者 GPX）爬升为 undefined：日聚合按 0 参与
+        // （有海拔活动混合时总数仍正确；规格 §25 缺失≠0 只约束单活动展示）
+        elevationGain: activity.elevationGain ?? 0,
       })
     } else {
       entry.count += 1
       entry.distance += activity.distance
       entry.duration += activity.duration
-      entry.elevationGain += activity.elevationGain
+      entry.elevationGain += activity.elevationGain ?? 0
     }
   }
   return data

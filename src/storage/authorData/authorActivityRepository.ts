@@ -75,7 +75,8 @@ export class AuthorActivityRepository implements ActivityReadRepository {
       summary.count++
       summary.totalDistance += activity.distance
       summary.totalDuration += activity.duration
-      summary.totalElevationGain += activity.elevationGain
+      // 无海拔数据源（行者 GPX）爬升为 undefined：聚合按 0 参与
+      summary.totalElevationGain += activity.elevationGain ?? 0
     }
     return summary
   }

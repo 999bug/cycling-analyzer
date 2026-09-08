@@ -216,11 +216,15 @@ export function buildStatistics(summaries: ActivitySummary[], range: DateRange):
     metrics.count += 1
     metrics.totalDistance += activity.distance
     metrics.totalDuration += activity.duration
-    metrics.totalElevationGain += activity.elevationGain
+    // 无海拔数据源（行者 GPX）爬升为 undefined：累加按 0、最大值不参评（规格 §25）
+    metrics.totalElevationGain += activity.elevationGain ?? 0
     if (activity.distance > metrics.longestRide) {
       metrics.longestRide = activity.distance
     }
-    if (activity.elevationGain > metrics.maxElevationGain) {
+    if (
+      activity.elevationGain !== undefined &&
+      activity.elevationGain > metrics.maxElevationGain
+    ) {
       metrics.maxElevationGain = activity.elevationGain
     }
     if (activity.maxSpeed !== undefined && activity.maxSpeed > metrics.maxSpeed) {

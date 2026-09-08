@@ -64,8 +64,8 @@ export interface ActivityEntity {
   /** 总距离（米） */
   distance: number;
 
-  /** 累计爬升（米） */
-  elevationGain: number;
+  /** 累计爬升（米；无海拔数据源（如行者 GPX）为 undefined；非索引字段，放宽类型免升版本） */
+  elevationGain?: number;
 
   /** 累计下降（米） */
   elevationLoss?: number;

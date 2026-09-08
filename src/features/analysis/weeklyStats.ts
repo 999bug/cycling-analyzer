@@ -27,8 +27,8 @@ export interface WeekActivity {
   /** 总距离（米） */
   distance: number
 
-  /** 累计爬升（米） */
-  elevationGain: number
+  /** 累计爬升（米；无海拔数据源为 undefined，聚合按 0 参与） */
+  elevationGain?: number
 
   /** 标准化功率（W；缺失 = 无功率数据，不参与 EF/TSS） */
   normalizedPower?: number
@@ -99,7 +99,8 @@ export function buildWeeklySeries(
     summary.rides += 1
     summary.distance += activity.distance
     summary.duration += activity.duration
-    summary.elevationGain += activity.elevationGain
+    // 无海拔数据源（行者 GPX）爬升为 undefined：周聚合按 0 参与
+    summary.elevationGain += activity.elevationGain ?? 0
 
     // EF：仅同时具备 NP 与平均心率的活动参与
     if (activity.normalizedPower !== undefined && activity.avgHeartRate !== undefined) {

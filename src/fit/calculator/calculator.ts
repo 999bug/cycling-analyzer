@@ -38,8 +38,8 @@ export interface ActivitySummary {
   elapsedTime: number
   /** 总距离（米） */
   distance: number
-  /** 累计爬升（米） */
-  elevationGain: number
+  /** 累计爬升（米）；数据源无任何海拔字段时为 undefined（规格 §25 缺失≠0） */
+  elevationGain?: number
   /** 累计下降（米） */
   elevationLoss?: number
   /** 卡路里（千卡，仅会话提供时存在） */
@@ -77,7 +77,7 @@ export function calculateSummary(
       duration: 0,
       elapsedTime: 0,
       distance: 0,
-      elevationGain: 0,
+      elevationGain: undefined,
     }
   }
 
@@ -236,20 +236,26 @@ function estimateDistance(records: ActivityRecord[]): number {
 /**
  * 累计爬升：相邻有效海拔正增量之和。
  * 海拔缺失的点跳过，与下一个有效点比较。
+ *
+ * 全部记录均无海拔时返回 undefined（规格 §25 缺失≠0）：行者等 App 导出的
+ * GPX 不含 <ele>，爬升无从计算，UI 应显示「—」而非伪造的 +0 m；
+ * 有海拔但全程无正增量的平路活动仍返回 0（真实测量值）。
  */
-function calculateElevationGain(records: ActivityRecord[]): number {
+function calculateElevationGain(records: ActivityRecord[]): number | undefined {
   let gain = 0
+  let seenAltitude = false
   let prevAltitude: number | undefined = undefined
   for (const record of records) {
     if (record.altitude === undefined) {
       continue
     }
+    seenAltitude = true
     if (prevAltitude !== undefined && record.altitude > prevAltitude) {
       gain += record.altitude - prevAltitude
     }
     prevAltitude = record.altitude
   }
-  return gain
+  return seenAltitude ? gain : undefined
 }
 
 /**

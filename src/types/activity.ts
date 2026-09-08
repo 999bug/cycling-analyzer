@@ -58,8 +58,8 @@ export interface Activity {
   /** 总距离（米） */
   distance: number
 
-  /** 累计爬升（米） */
-  elevationGain: number
+  /** 累计爬升（米；数据源无任何海拔字段时为 undefined，规格 §25 缺失≠0） */
+  elevationGain?: number
 
   /** 累计下降（米） */
   elevationLoss?: number

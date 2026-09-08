@@ -149,7 +149,8 @@ describe('parseGpxActivity 缺失容错', () => {
     expect(records[0].altitude).toBeUndefined()
     expect(records[0].heartRate).toBeUndefined()
     expect(records[0].power).toBeUndefined()
-    expect(activity.elevationGain).toBe(0)
+    // 行者等 GPX 无 <ele>：爬升无从计算，undefined（UI 显示 —）而非伪造 +0 m（规格 §25）
+    expect(activity.elevationGain).toBeUndefined()
     expect(activity.maxHeartRate).toBeUndefined()
   })
 

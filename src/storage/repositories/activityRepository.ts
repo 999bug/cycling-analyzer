@@ -275,7 +275,8 @@ export function queryActivityList(
   }
 
   // 数值范围筛选（单位与领域模型一致：距离米、爬升米、功率 W；含边界，组合为 AND）。
-  // avgPower 为可选字段：缺失的活动不满足任何功率条件（显式排除 undefined）。
+  // 可选字段（avgPower/elevationGain）缺失的活动不满足任何对应条件（显式排除 undefined，
+  // 与 avgPower 同口径：无海拔数据源的 GPX 无法参与爬升筛选）
   if (minDistance !== undefined) {
     items = items.filter((a) => a.distance >= minDistance);
   }
@@ -283,10 +284,10 @@ export function queryActivityList(
     items = items.filter((a) => a.distance <= maxDistance);
   }
   if (minElevationGain !== undefined) {
-    items = items.filter((a) => a.elevationGain >= minElevationGain);
+    items = items.filter((a) => a.elevationGain !== undefined && a.elevationGain >= minElevationGain);
   }
   if (maxElevationGain !== undefined) {
-    items = items.filter((a) => a.elevationGain <= maxElevationGain);
+    items = items.filter((a) => a.elevationGain !== undefined && a.elevationGain <= maxElevationGain);
   }
   if (minAvgPower !== undefined) {
     items = items.filter((a) => a.avgPower !== undefined && a.avgPower >= minAvgPower);
@@ -438,7 +439,8 @@ export class DexieActivityRepository implements ActivityRepository {
     for (const activity of activities) {
       summary.totalDistance += activity.distance;
       summary.totalDuration += activity.duration;
-      summary.totalElevationGain += activity.elevationGain;
+      // 无海拔数据源（行者 GPX）爬升为 undefined：聚合按 0 参与
+      summary.totalElevationGain += activity.elevationGain ?? 0;
     }
     return summary;
   }

@@ -38,6 +38,26 @@ describe('calculateSummary 爬升与下降', () => {
     expect(summary.elevationGain).toBe(4)
     expect(summary.elevationLoss).toBe(3)
   })
+
+  it('有海拔但全程无正增量为 0（真实测量值）', () => {
+    const records = recordsWithAltitude([105, 104, 103])
+
+    const summary = calculateSummary(records)
+
+    expect(summary.elevationGain).toBe(0)
+    expect(summary.elevationLoss).toBe(2)
+  })
+
+  it('全部记录无海拔时爬升为 undefined 而非 0（规格 §25）', () => {
+    const records: ActivityRecord[] = [
+      { timestamp: 1, distance: 10 },
+      { timestamp: 2, distance: 20 },
+    ]
+
+    const summary = calculateSummary(records)
+
+    expect(summary.elevationGain).toBeUndefined()
+  })
 })
 
 describe('calculateSummary 基础统计', () => {
@@ -170,6 +190,7 @@ describe('calculateSummary 心率/功率/踏频', () => {
     expect(summary.avgPower).toBeUndefined()
     expect(summary.avgCadence).toBeUndefined()
     expect(summary.calories).toBeUndefined()
+    expect(summary.elevationGain).toBeUndefined()
   })
 
   it('卡路里从会话原始数据保留', () => {
@@ -187,7 +208,7 @@ describe('calculateSummary 边界', () => {
 
     expect(summary.distance).toBe(0)
     expect(summary.duration).toBe(0)
-    expect(summary.elevationGain).toBe(0)
+    expect(summary.elevationGain).toBeUndefined()
     expect(summary.avgSpeed).toBeUndefined()
   })
 

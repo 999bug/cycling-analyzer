@@ -70,7 +70,10 @@ export function buildRideRecords(summaries: readonly ActivitySummary[]): RideRec
   for (const activity of summaries) {
     collect(records, 'distance', activity.distance, activity)
     collect(records, 'duration', activity.duration, activity)
-    collect(records, 'elevationGain', activity.elevationGain, activity)
+    // 爬升缺失（无海拔数据源）不参评：无数据类型不出现在结果中（规格 §25）
+    if (activity.elevationGain !== undefined) {
+      collect(records, 'elevationGain', activity.elevationGain, activity)
+    }
   }
   return [...records.values()]
 }
