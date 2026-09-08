@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.35.0',
+    date: '2026-09-08',
+    features: [
+      '感谢名单扩展与前置：侧边栏底部新增常驻致谢区块——无论查看作者数据还是自己的数据都能看到（徽章悬停可看成员贡献说明，「更多」直达更新日志完整名单）',
+      '新增致谢成员：欢迎 qxlx（提供网站名「骑了么」）与 Menghs 加入感谢名单，感谢他们贡献的点子与网站规划',
+    ],
+  },
+  {
     version: '2.34.0',
     date: '2026-09-08',
     features: [

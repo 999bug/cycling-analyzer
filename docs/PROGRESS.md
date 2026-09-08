@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（无海拔 GPX 爬升显示「—」修复 + 导入关闭/清空数据后自动刷新页面；版本 2.33.1 → 2.34.0）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（侧边栏常驻致谢区块（作者数据/我的数据双源均显）+ 感谢名单扩充 qxlx/Menghs；版本 2.34.0 → 2.35.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **侧边栏常驻致谢区块 + 感谢名单扩充**（用户反馈：更新日志页底部的感谢名单不够显眼、页面上没找到，要求在作者数据与我的数据两种源下都展示；新增成员：qxlx——提供网站名「骑了么」，qxlx/Menghs——均贡献了许多点子与网站规划） | ①新建 `src/components/SidebarCredits.tsx`：侧边栏底部常驻致谢区块（数据源无关——作者数据/我的数据均渲染；徽章 title 悬停显示贡献说明，带 url 成员昵称渲染外链 target=_blank，「更多」Link 直达更新日志完整名单，空名单不渲染占位）；②`AppLayout.tsx` sidebar-footer 在 ImportPanel 上方插入（致谢 → 同步数据按钮 → 版本号）；③`AppLayout.css` 补 `app-layout__credits*` 样式（11px 紧凑胶囊徽章 + 全局 token 复用，属性字母序，桌面/移动端抽屉同源生效）；④数据文件 `acknowledgmentsData.ts` 追加 qxlx/Menghs 两条（role 措辞优化）；⑤测试 `tests/components/sidebarCredits.test.tsx` 2 用例（标题与「更多」链接直达 /changelog、成员徽章与数据文件一致含 role title 与外链/非链接分支） | 全量 1041/1041 + lint/build 绿；版本 2.34.0 → 2.35.0，changelog 已追加 |
 | ✅ 已提交 | **数据变更后自动刷新页面**（用户需求：①导入数据后关闭「同步骑行数据」弹窗自动刷新页面展示新数据；②清空全部数据后也自动刷新页面） | ①新建 `src/utils/navigation.ts`（reloadPage 薄包装——jsdom 的 location.reload 不可 stub，间接层供 vi.mock；ErrorBoundary 顺带迁移使重载按钮可测）；②ImportPanel：`importedSinceOpenRef` 标记本次弹窗会话是否有新活动落库（summary effect 统一覆盖导入与重试两条路径，只置位不清零——任何带新数据的关闭都以刷新收尾，页面重载后组件与 store 一并重建无循环），`closeDialog`（useCallback）在关闭（×/遮罩/Esc/toggle）时按标记 reloadPage，导入中仍禁止关闭；③SettingsPage.handleClearAll 清空成功后 reloadPage（成功提示保留兜底）；④测试：新 `importPanelReload.test.tsx` 6 用例（无新导入不刷新/有新导入刷新/全重复不刷新/清除结果后关闭仍刷新/Esc 刷新/导入中禁闭），ErrorBoundary 测试改断言 reloadPage 调用，settingsPage 清空用例补 reloadPage 断言 | 全量 1039/1039 + lint/build 绿；版本 2.33.1 → 2.34.0，changelog 已追加 |
 | ✅ 已提交 | **GPX 无海拔爬升显示修复**（用户反馈：行者 GPX 导入后爬升显示「+0 m」——源 GPX 仅 lat/lon/time 无 `<ele>`，违反规格 §25 缺失≠0，应显示「—」；诊断结论：行者导出 GPX 无海拔/无扩展字段，里程/时间/均速差异为数据源口径限制非网站 bug，见 2026-09-08 会话分析） | ①calculator.calculateElevationGain 无任何海拔记录时返回 undefined（有海拔但全平仍为真实 0）；②Activity/ActivitySummary/ActivityEntity.elevationGain 放宽可选（非索引字段免升 DB_VERSION）；③聚合防御 `?? 0`：calendarData/weeklyStats/statistics/deviceStats/bikeStats/dashboard.statistics/authorActivityRepository/activityRepository.summarizeByRange；④语义修正：personalRecords 无爬升不参评 PR、列表爬升筛选 undefined 不满足、统计 maxElevationGain 跳过 undefined；⑤测试：calculator 新增「全平为 0」「无海拔为 undefined」2 用例 + 空记录断言更新，gpxParser「缺失容错」断言改 undefined | 全量 1039/1039 + lint/build 绿；版本 2.33.0 → 2.33.1，changelog 已追加 |
 | ✅ 已提交 | **更新日志页新增致谢区块（感谢名单）**（用户需求：增加感谢名单，感谢测试与使用网站的人；落点确认——更新日志页底部：语境自然、测试用户看更新最频繁、不加侧边栏导航噪音；名单内容用户提供，首位成员 Wesley） | ①新建 `src/features/changelog/acknowledgmentsData.ts` 纯数据文件（Acknowledgment: name/role?/url?，数组顺序即展示顺序，增删名字只改此文件）；②`ChangelogPage.tsx` 时间线下方渲染「致谢」区块（h2 + 引导文案 + 徽章列表，带 url 成员昵称渲染为外链 target=_blank，role 作副文本）；③`ChangelogPage.css` 补区块样式（胶囊徽章 + 全局 token 复用，属性字母序）；④测试 `changelogPage.test.tsx` 补「致谢区块」3 用例（标题引导/名单成员与数据文件一致含 role 条件断言/带链接成员外链回归守护） | 全量 1031/1031 + lint/build 绿；版本 2.32.1 → 2.33.0，changelog 已追加 |

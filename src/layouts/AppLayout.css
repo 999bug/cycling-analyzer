@@ -124,6 +124,69 @@
   margin-top: auto;
 }
 
+/* 侧边栏致谢区块：双数据源常显，徽章悬停看贡献说明，「更多」直达更新日志完整名单 */
+.app-layout__credits {
+  margin-bottom: 14px;
+}
+
+.app-layout__credits-header {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.app-layout__credits-title {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-layout__credits-more {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.app-layout__credits-more:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.app-layout__credits-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.app-layout__credits-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: default;
+  display: inline-block;
+  font-size: 11px;
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 10px;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  transition: border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+a.app-layout__credits-badge {
+  cursor: pointer;
+}
+
+.app-layout__credits-badge:hover {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
 .app-layout__version {
   display: block;
   margin-top: 12px;

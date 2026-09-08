@@ -4,6 +4,7 @@ import ImportPanel from '@/features/import/ImportPanel'
 import DataSourceSwitcher from '@/components/DataSourceSwitcher'
 import AuthorBanner from '@/components/AuthorBanner'
 import InstallBanner from '@/components/InstallBanner'
+import SidebarCredits from '@/components/SidebarCredits'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -134,6 +135,7 @@ function AppLayout() {
           ))}
         </nav>
         <div className="app-layout__sidebar-footer">
+          <SidebarCredits />
           <ImportPanel />
           <Link className="app-layout__version" to="/changelog" title="查看更新日志">v{__APP_VERSION__}</Link>
         </div>

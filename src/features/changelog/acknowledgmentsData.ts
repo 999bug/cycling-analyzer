@@ -20,7 +20,15 @@ export interface Acknowledgment {
 /** 致谢名单（按展示顺序排列）。 */
 export const ACKNOWLEDGMENTS: readonly Acknowledgment[] = [
   {
+    name: 'qxlx',
+    role: '提供网站名「骑了么」，贡献了许多点子与网站规划',
+  },
+  {
+    name: 'Menghs',
+    role: '贡献了许多点子与网站规划',
+  },
+  {
     name: 'Wesley',
     role: '反馈了 GPX 导入与行者记录不准的问题',
-  },
-]
+  }
+];
