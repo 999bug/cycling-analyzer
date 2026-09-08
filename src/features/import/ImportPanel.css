@@ -300,9 +300,11 @@
 
 /* ===================== 导入向导（UI-9） ===================== */
 
-/* 弹窗加宽以容纳平台网格（原 420px） */
+/* 弹窗加宽以容纳平台网格（原 420px；向导内容多，800px 下 3×3 网格每卡约 240px） */
 .import-dialog--wizard {
-  width: min(480px, 100%);
+  width: min(800px, 90vw);
+  max-height: 88vh;
+  padding: 24px 28px;
 }
 
 /* 步骤条 */
@@ -387,9 +389,9 @@
 
 .import-direct__card {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 12px !important;
+  gap: 11px;
+  align-items: center;
+  padding: 13px 14px !important;
   border-radius: 10px !important;
   background-color: color-mix(in srgb, var(--info) 8%, transparent) !important;
   border: 1px solid color-mix(in srgb, var(--info) 40%, transparent) !important;
@@ -415,9 +417,9 @@
 }
 
 .import-direct__icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -431,7 +433,7 @@
 
 .import-direct__name {
   display: block;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
   margin-bottom: 2px;
@@ -479,16 +481,23 @@
   color: var(--text-secondary);
 }
 
-/* 平台网格 */
+/* 平台网格（800px 下 3 列，每卡 ~240px） */
 .import-platform-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 9px;
+  margin-bottom: 14px;
 }
 
+/* 横排卡片：图标跨两行居左，名称/摘要在右（网格布局无需改 TSX 结构） */
 .import-platform-card {
-  padding: 10px 8px !important;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 11px 12px !important;
   border-radius: 10px !important;
   background-color: var(--bg) !important;
   text-align: left;
@@ -508,24 +517,24 @@
 }
 
 .import-platform-ico {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  grid-row: 1 / 3;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  margin-bottom: 6px;
   color: #fff;
 }
 
 .import-platform-name {
   display: block;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 1px;
+  white-space: nowrap;
 }
 
 .import-platform-summary {
@@ -533,6 +542,9 @@
   font-size: 11px;
   color: var(--text-tertiary);
   line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 第 2 步：平台导出指引 */
@@ -629,27 +641,106 @@
   margin-top: 16px;
 }
 
-/* 图文教程外链（第 1/2 步共用：新标签页打开 public/tutorial 教程页） */
+/* 图文教程入口（第 1 步：高亮卡片，橙色系与蓝色直接导入卡区分） */
 .import-wz__tutorial {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-top: 14px;
+  padding: 13px 16px;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent);
+  border-radius: 11px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--warning) 13%, transparent),
+    color-mix(in srgb, var(--warning) 5%, transparent)
+  );
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.import-wz__tutorial:hover {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.import-wz__tutorial:focus-visible {
+  outline: 2px solid var(--warning);
+  outline-offset: 1px;
+}
+
+.import-wz__tutorial-badge {
+  position: absolute;
+  top: -9px;
+  right: 14px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--warning);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.import-wz__tutorial-ico {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+}
+
+.import-wz__tutorial-text {
+  min-width: 0;
+}
+
+.import-wz__tutorial-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--warning);
+}
+
+.import-wz__tutorial-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.import-wz__tutorial-go {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* 第 2 步指引页内的轻量变体：保持原细链接样式，不与指引内容抢视觉 */
+.import-wz__tutorial--inline {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 12px;
   padding: 8px 12px;
-  border: 1px solid var(--border);
+  border-color: var(--border);
   border-radius: 8px;
+  background: none;
   font-size: 12.5px;
   color: var(--text-secondary);
-  text-decoration: none;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
 }
 
-.import-wz__tutorial:hover {
+.import-wz__tutorial--inline:hover {
   color: var(--primary);
   border-color: var(--primary);
+  box-shadow: none;
 }
 
 /* 第 3 步：导入 */

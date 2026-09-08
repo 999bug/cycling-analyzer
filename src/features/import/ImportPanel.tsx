@@ -387,27 +387,40 @@ function ImportPanel() {
                       或者直接把 <strong>文件 / 文件夹 / ZIP 压缩包</strong> 拖到这里
                     </span>
                   </div>
+                  {/* 图文教程入口：高亮卡片（含界面截图，新标签页打开） */}
                   <a
                     className="import-wz__tutorial"
                     href={TUTORIAL_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
-                    图文完整教程：各平台导出方式速查（含界面截图）
+                    <span className="import-wz__tutorial-badge" aria-hidden="true">
+                      含界面截图
+                    </span>
+                    <span className="import-wz__tutorial-ico" aria-hidden="true">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M2 4h7a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H2z" />
+                        <path d="M22 4h-7a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H22z" />
+                      </svg>
+                    </span>
+                    <span className="import-wz__tutorial-text">
+                      <span className="import-wz__tutorial-name">图文完整教程</span>
+                      <span className="import-wz__tutorial-desc">
+                        9 大平台导出方式速查 · 每一步都有界面截图 · 新标签页打开
+                      </span>
+                    </span>
+                    <span className="import-wz__tutorial-go" aria-hidden="true">
+                      查看 ↗
+                    </span>
                   </a>
                 </>
               )}

@@ -64,7 +64,7 @@ function PlatformGuideView({ guide, onProceed, onBack }: PlatformGuideViewProps)
 
       {/* 图文教程外链：锚点与平台 id 一致，新标签页直达对应章节（含界面截图） */}
       <a
-        className="import-wz__tutorial"
+        className="import-wz__tutorial import-wz__tutorial--inline"
         href={`${TUTORIAL_URL}#${guide.id}`}
         target="_blank"
         rel="noopener noreferrer"

@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.40.3',
+    date: '2026-09-08',
+    features: [
+      '「同步骑行数据」弹窗加宽至 800px：平台卡片改为图标居左的横排布局，3×3 网格更从容不再拥挤',
+      '第 1 步底部新增高亮「图文完整教程」入口卡片（含界面截图徽章），更容易发现完整导出教程',
+    ],
+  },
+  {
     version: '2.40.2',
     date: '2026-09-08',
     features: [
