@@ -4,7 +4,7 @@
  * 验证：
  * - 正常 children 透传不渲染降级页
  * - 子组件抛错时降级页出现（标题 + 重新加载按钮）
- * - 降级页按钮可点击且不抛错（reload 本身在 jsdom 不可 stub）
+ * - 降级页按钮点击触发整页刷新（经 @/utils/navigation mock 断言）
  *
  * 注：React 18 内部对 console.error 做了引用缓存，spy 难以稳定验证；
  * componentDidCatch 日志的主要价值是线上聚合——测试不强制覆盖。
@@ -14,6 +14,12 @@ import type { ReactElement } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { reloadPage } from '@/utils/navigation'
+
+// reload 经 @/utils/navigation 间接调用（jsdom 的 location.reload 不可 stub）
+vi.mock('@/utils/navigation', () => ({
+  reloadPage: vi.fn(),
+}))
 
 /** 用于测试的子组件：通过 prop 触发抛错 */
 function Bomb({ shouldThrow }: { shouldThrow: boolean }): ReactElement {
@@ -56,17 +62,15 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText('正常内容')).not.toBeInTheDocument()
   })
 
-  it('点击重新加载按钮不抛错（reload 在 jsdom 为空实现）', async () => {
+  it('点击重新加载按钮调用整页刷新', async () => {
     const user = userEvent.setup()
     render(
       <ErrorBoundary>
         <Bomb shouldThrow={true} />
       </ErrorBoundary>,
     )
-    // jsdom 的 location.reload 是不可 stub 的只读属性，
-    // 仅验证点击不抛错——实际 reload 行为依赖浏览器
-    await expect(
-      user.click(screen.getByRole('button', { name: '重新加载' })),
-    ).resolves.not.toThrow()
+    await user.click(screen.getByRole('button', { name: '重新加载' }))
+
+    expect(reloadPage).toHaveBeenCalledTimes(1)
   })
 })

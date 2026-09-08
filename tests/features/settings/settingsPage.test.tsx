@@ -22,6 +22,7 @@ import {
   type BeforeInstallPromptEvent,
 } from '@/features/pwa/install'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
+import { reloadPage } from '@/utils/navigation'
 import type { Activity } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -29,6 +30,11 @@ vi.mock('@/storage/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/storage/db')>()
   return { ...actual, db: new actual.CyclingDatabase() }
 })
+
+// jsdom 的 location.reload 不可 stub：清空成功后的整页刷新经此模块断言
+vi.mock('@/utils/navigation', () => ({
+  reloadPage: vi.fn(),
+}))
 
 /** 测试数据库实例（vi.mock 注入，页面与测试共享） */
 const testDb = db
@@ -204,6 +210,8 @@ describe('设置页', () => {
       '确定清空全部本地数据？将删除你导入的全部骑行活动、赛段与训练配置（共本机数据，不含作者发布数据），此操作不可恢复',
     )
     expect(await screen.findByText('已清空全部本地数据')).toBeInTheDocument()
+    // 清空成功后整页刷新（数据变更后自动刷新需求）
+    expect(reloadPage).toHaveBeenCalledTimes(1)
     await waitFor(async () => {
       expect(await activityRepo.countActivities()).toBe(0)
     })

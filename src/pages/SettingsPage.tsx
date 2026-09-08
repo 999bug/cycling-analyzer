@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { db, type CyclingDatabase } from '@/storage/db'
+import { reloadPage } from '@/utils/navigation'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository, type SettingsRepository } from '@/storage/repositories/settingsRepository'
@@ -348,6 +349,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setClearing(true)
     try {
       await clearAllData(context)
+      // 清空后整页刷新：与导入关闭刷新同思路，数据已删但各页面为挂载时
+      // 快照，刷新立即回到空态初始视图。reload 失败时（极端环境）下方
+      // 成功提示仍可见，作为兜底反馈
+      reloadPage()
       resetForm()
       setMessage({ type: 'success', text: '已清空全部本地数据' })
     } catch (error) {

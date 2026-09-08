@@ -15,6 +15,7 @@
  * state 触发降级 UI 重渲，后者挂日志（默认 console.error，英文）。
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { reloadPage } from '@/utils/navigation'
 import './ErrorBoundary.css'
 
 interface ErrorBoundaryProps {
@@ -49,7 +50,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
    * 重新加载整页是最稳的恢复路径（清掉 React 树 + Service Worker 旧 chunk 缓存）。
    */
   private handleReload = (): void => {
-    window.location.reload()
+    reloadPage()
   }
 
   override render(): ReactNode {

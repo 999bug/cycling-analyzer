@@ -11,7 +11,7 @@
  * 单文件导入无需数据源（格式通用）：选择单个 FIT/GPX 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
  */
-import { useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import { useCallback, useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
 
 /** TS DOM 类型未包含 showDirectoryPicker（File System Access API），此处补充 */
 interface DirectoryPickerWindow extends Window {
@@ -35,6 +35,7 @@ import { IMPORT_SOURCE_OPTIONS, isStravaSource, type ImportSource } from './impo
 import type { ImportFile } from './importer';
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog';
 import { useImportStore } from '@/stores/importStore';
+import { reloadPage } from '@/utils/navigation';
 import './ImportPanel.css';
 
 /**
@@ -61,6 +62,21 @@ function ImportPanel() {
   const [notice, setNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * 本次弹窗打开期间是否有新活动落库（含重试成功）。
+   * 新数据已写入 IndexedDB，但各页面列表为挂载时快照——关闭弹窗时据此
+   * 决定整页刷新（用户关闭弹窗即看到新数据，无需手动刷新）。
+   * 只置位不清零：任何带新数据的关闭路径都以刷新收尾，页面重载后
+   * 组件与 store 一并重建，不存在复用旧标记的场景。
+   */
+  const importedSinceOpenRef = useRef(false);
+
+  // 导入汇总到达即检查新增数：runScan 与「重试失败文件」两条路径统一覆盖
+  useEffect(() => {
+    if (summary !== null && summary.newImported > 0) {
+      importedSinceOpenRef.current = true;
+    }
+  }, [summary]);
 
   /**
    * 将扫描结果送入导入 store（无 FIT 文件时仅提示）。
@@ -169,6 +185,24 @@ function ImportPanel() {
   }
 
   /**
+   * 关闭弹窗（×按钮/遮罩点击/Esc/toggle 共用；导入进行中禁止）。
+   *
+   * 本次会话有新活动落库时整页刷新：新数据已在 IndexedDB，但仪表盘/
+   * 记录/统计等页面的数据是挂载时快照，刷新是让全部页面立即展示新
+   * 数据的最直接方式。刷新后组件与 store 重建，不会循环触发。
+   */
+  const closeDialog = useCallback((): void => {
+    if (importing) {
+      return;
+    }
+    if (importedSinceOpenRef.current) {
+      reloadPage();
+      return;
+    }
+    setOpen(false);
+  }, [importing]);
+
+  /**
    * 弹窗打开时锁定背景滚动（模态语义）。
    */
   useEffect(() => {
@@ -183,29 +217,20 @@ function ImportPanel() {
   }, [open]);
 
   /**
-   * Esc 关闭弹窗（导入进行中禁止关闭，防止丢失进度反馈）。
+   * Esc 关闭弹窗（复用 closeDialog：导入进行中禁止关闭，有新数据时刷新页面）。
    */
   useEffect(() => {
     if (!open) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !importing) {
-        setOpen(false);
+      if (event.key === 'Escape') {
+        closeDialog();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, importing]);
-
-  /**
-   * 关闭弹窗（导入进行中禁止）。
-   */
-  function closeDialog(): void {
-    if (!importing) {
-      setOpen(false);
-    }
-  }
+  }, [open, closeDialog]);
 
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
@@ -215,7 +240,7 @@ function ImportPanel() {
         type="button"
         className="import-panel__toggle"
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? closeDialog() : setOpen(true))}
       >
         同步骑行数据
       </button>

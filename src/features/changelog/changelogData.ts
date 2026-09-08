@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.34.0',
+    date: '2026-09-08',
+    features: [
+      '导入完成自动刷新：关闭「同步骑行数据」弹窗时，若本次有新活动导入，页面自动刷新并展示最新数据，无需手动刷新（本次未导入新数据则不刷新）',
+      '清空全部本地数据后自动刷新页面，立即回到空态初始视图',
+    ],
+  },
+  {
     version: '2.33.1',
     date: '2026-09-08',
     features: [
