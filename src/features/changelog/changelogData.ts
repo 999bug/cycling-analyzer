@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.36.1',
+    date: '2026-09-08',
+    features: [
+      '行者 GPX 短停判定细化：30~60 秒短缺口改为按两端位移区分——有真实挪动（≥8m，推车挪步/极慢过路口）视为活动状态计时不停；几乎没动（GPS 漂移级）视为行者自动暂停已触发、计时冻结并剔除。实测行者码表 210km 长途样本时长偏差从 +15 分钟缩至 -1.7 分钟，手机版样本保持 -0.5 分钟内不受影响',
+    ],
+  },
+  {
     version: '2.36.0',
     date: '2026-09-08',
     features: [

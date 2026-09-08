@@ -8,8 +8,8 @@
  * avgSpeed / maxSpeed 是设备在活动结束时写入的最终值（佳明 App 显示同源），
  * 比记录点回推更可靠——记录点可能在 session 结束前停止写入、GPS 漂移修正
  * 也不会回写记录点；缺失时才回退到记录计算。GPX 无 session，时长按
- * 「移动时间」估算（剔除长暂停与静止段，短停计时不停），否则红灯暂停会
- * 拉低均速（行者/Strava 同口径）。
+ * 「移动时间」估算（剔除长暂停与完全静止段，有挪动的短停计时不停），
+ * 否则红灯暂停会拉低均速（行者/Strava 同口径）。
  *
  * 缺失字段一律返回 undefined（规格 §25：null ≠ 0）。
  */
@@ -30,11 +30,20 @@ const MOVING_GAP_LIMIT_SEC = 30
 
 /**
  * 暂停判定缺口（秒）：MOVING_GAP_LIMIT_SEC ～ 该值之间的记录缺口视为
- * 「短停但计时未停」——行者等 App 静止时会降频记录（几十秒一个点）或
- * 短暂停歇不触发自动暂停，App 侧计时持续走（行者实测口径：短缺口全额
- * 计入活动时间）；超过该值的缺口视为暂停/记录断档，整段剔除。
+ * 「短停」——行者等 App 静止时会降频记录（几十秒一个点）或短暂停歇，
+ * 是否计入活动时间按「行者是否检测到停止」区分（见 PAUSE_DRIFT_METERS）；
+ * 超过该值的缺口视为暂停/记录断档，整段剔除。
  */
 const PAUSE_GAP_LIMIT_SEC = 60
+
+/**
+ * 短缺口停止判定位移（米）：30~60s 短缺口两端的 haversine 位移低于该值
+ * 视为「完全停止」（GPS 漂移级位移，行者 App/码表自动暂停已触发、计时
+ * 冻结），时间不计入；有真实挪动（≥ 该值，如推车挪步、极慢通过路口）
+ * 视为仍在活动状态，行者计时未停，时间计入。实测两份行者导出样本：
+ * 手机版计入的短停两端位移均 ≥8m，码表版判停的短停两端位移中位 3.7m。
+ */
+const PAUSE_DRIFT_METERS = 8
 
 /**
  * 统计汇总结果（Activity 的部分字段）。
@@ -92,8 +101,8 @@ export function calculateSummary(
   // 距离：设备最终值优先（佳明 App 显示同源），记录点可能提前停写或受漂移修正影响
   const distance = session?.totalDistance ?? lastDistance(records) ?? estimateDistance(records)
   // 时长：FIT 用设备计时（移动口径）；GPX 无 session，按移动时间估算
-  // （剔除长暂停与静止段，30~60s 短缺口计时不停）；估算为 0（极稀疏轨迹/
-  // 无距离数据无法判定移动）时回退首末时间差保底
+  // （剔除长暂停与完全静止段，有挪动的短停计时不停）；估算为 0（极稀疏
+  // 轨迹/无距离数据无法判定移动）时回退首末时间差保底
   const duration = session?.totalTimerTime ?? (estimateMovingDuration(records) || recordsDuration(records))
   // 总耗时：含暂停，无会话时为记录首末时间差
   const elapsedTime = session?.totalElapsedTime ?? recordsDuration(records)
@@ -194,8 +203,9 @@ function recordsDuration(records: ActivityRecord[]): number {
  * 按移动时间显示均速）。三档判定：
  * - 正常间隔（≤ 30s）：位移速度高于 MOVING_SPEED_THRESHOLD_MPS 才计入，
  *   防静止 GPS 抖动虚增；
- * - 短缺口（30s ～ 60s）：行者等 App 静止降频/短歇不写点的痕迹，App 侧
- *   计时未停，全额计入（与行者 App 显示时间口径一致）；
+ * - 短缺口（30s ～ 60s）：行者等 App 静止降频/短歇不写点的痕迹，按两端
+ *   位移区分——挪动 ≥ PAUSE_DRIFT_METERS 视为活动状态计时不停（计入），
+ *   几乎没动视为已暂停（剔除）；
  * - 长缺口（> 60s）：视为暂停/记录断档，整段剔除。
  *
  * @param records 标准化逐点记录（依赖累计距离字段）
@@ -210,8 +220,13 @@ function estimateMovingDuration(records: ActivityRecord[]): number {
       continue
     }
     if (dt > MOVING_GAP_LIMIT_SEC) {
-      // 短缺口：静止降频/短停（如 35s 挪动 8m 的等灯段），计时未停全额计入
-      moving += dt
+      // 短缺口：行者是否计时取决于自动暂停是否触发——
+      // 两端有真实挪动（推车挪步/极慢过路口）计时未停，计入；
+      // 位移仅 GPS 漂移级（完全没动）为已暂停，剔除
+      const dd = (curr.distance ?? 0) - (prev.distance ?? 0)
+      if (dd >= PAUSE_DRIFT_METERS) {
+        moving += dt
+      }
       continue
     }
     const dd = (curr.distance ?? 0) - (prev.distance ?? 0)

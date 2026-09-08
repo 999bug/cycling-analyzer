@@ -161,20 +161,37 @@ describe('calculateSummary 基础统计', () => {
     expect(summary.avgSpeed).toBe(5)
   })
 
-  it('30~60s 短缺口全额计入时长（行者静止降频/短停计时不停口径）', () => {
-    // 骑行 10s + 45s 缺口（行者静止降频仅两点：位移 8m ≈ 0.18m/s）+ 骑行 10s
+  it('30~60s 短缺口有真实挪动时计入时长（行者活动短停计时不停口径）', () => {
+    // 骑行 10s + 45s 短停（行者静止降频仅两点：位移 12m，人还在挪动）+ 骑行 10s
     const records: ActivityRecord[] = [
       { timestamp: 1000, distance: 0 },
       { timestamp: 1010, distance: 50 },
-      // 45s 后恢复记录：短缺口 < 60s 暂停上限，计时未停
-      { timestamp: 1055, distance: 58 },
-      { timestamp: 1065, distance: 108 },
+      // 45s 后恢复记录：短缺口 < 60s 暂停上限，且两端位移 ≥ 8m 判定为活动状态
+      { timestamp: 1055, distance: 62 },
+      { timestamp: 1065, distance: 112 },
     ]
 
     const summary = calculateSummary(records)
 
-    // 移动时间 = 前后骑行各 10s + 45s 短缺口全额；静止 GPS 抖动（8m/45s < 0.5m/s）不剔除
+    // 移动时间 = 前后骑行各 10s + 45s 短停全额计入
     expect(summary.duration).toBe(65)
+    expect(summary.elapsedTime).toBe(65)
+  })
+
+  it('30~60s 短缺口几乎没动时视为已暂停剔除（行者自动暂停已触发口径）', () => {
+    // 骑行 10s + 45s 静止停顿（位移仅 3m，GPS 漂移级）+ 骑行 10s
+    const records: ActivityRecord[] = [
+      { timestamp: 1000, distance: 0 },
+      { timestamp: 1010, distance: 50 },
+      // 45s 后恢复记录：短缺口但两端位移 < 8m，行者自动暂停计时冻结
+      { timestamp: 1055, distance: 53 },
+      { timestamp: 1065, distance: 103 },
+    ]
+
+    const summary = calculateSummary(records)
+
+    // 移动时间只含前后骑行各 10s，45s 静止停顿不计
+    expect(summary.duration).toBe(20)
     expect(summary.elapsedTime).toBe(65)
   })
 
