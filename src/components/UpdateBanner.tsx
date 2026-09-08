@@ -12,6 +12,11 @@ import './UpdateBanner.css'
 /** 更新请求进行中文案 */
 const UPDATING_LABEL = '更新中…'
 
+/** 更新保险丝（毫秒）：正常链路（SKIP_WAITING → 激活 → 自动 reload）秒级完成；
+ * 超时仍未刷新（Chrome 多代 SW 过渡状态积压、跨境网络慢等）则强制 reload 兜底，
+ * 新版页面导航走网络优先，强制刷新后必为最新版 */
+const UPDATE_FAILSAFE_MS = 10_000
+
 function UpdateBanner() {
   const { needRefresh, applyUpdate } = useSWUpdate()
   // 「稍后」本次会话隐藏；更新请求已发出时禁用按钮防重复点击
@@ -26,6 +31,8 @@ function UpdateBanner() {
     setUpdating(true)
     // 新 SW 接管（SKIP_WAITING → controllerchange）后由插件自动刷新页面
     applyUpdate()
+    // 保险丝：正常链路触发自动 reload 时定时器随页面销毁，无副作用
+    window.setTimeout(() => window.location.reload(), UPDATE_FAILSAFE_MS)
   }
 
   return (

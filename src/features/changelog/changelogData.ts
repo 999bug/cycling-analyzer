@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.40.1',
+    date: '2026-09-08',
+    features: [
+      '更新提示条增加 10 秒保险丝：点「立即更新」后若自动刷新链路卡住，强制刷新兜底，不再无限「更新中」',
+    ],
+  },
+  {
     version: '2.40.0',
     date: '2026-09-08',
     features: [
