@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.38.1',
+    date: '2026-09-08',
+    features: [
+      '内部维护：开发进度文档瘦身归档（已完成条目移入 docs/archive/，无功能变化）',
+    ],
+  },
+  {
     version: '2.38.0',
     date: '2026-09-08',
     features: [
