@@ -1,0 +1,77 @@
+/**
+ * 致谢页样式：成员卡片列表（深浅主题复用全局 CSS 变量，
+ * 卡片风格与更新日志时间线条目一致）。
+ */
+
+/* 页面布局：与更新日志页同宽的窄栏，移动端自适应 */
+.acknowledgments-page {
+  max-width: 640px;
+}
+
+.acknowledgments-page__intro {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.acknowledgments-page__empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 24px;
+}
+
+.acknowledgments-page__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+
+/* 成员卡片：左侧头像 + 右侧昵称与贡献说明 */
+.acknowledgments-card {
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+.acknowledgments-card__avatar {
+  align-items: center;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  border-radius: 50%;
+  color: var(--primary);
+  display: flex;
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.acknowledgments-card__body {
+  min-width: 0;
+}
+
+.acknowledgments-card__name {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.acknowledgments-card__name:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.acknowledgments-card__role {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}

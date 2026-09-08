@@ -16,4 +16,5 @@ export const ROUTES = [
   '/training-plan',
   '/performance',
   '/changelog',
+  '/acknowledgments',
 ] as const
