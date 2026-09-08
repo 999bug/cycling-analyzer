@@ -298,6 +298,413 @@
   background-color: color-mix(in srgb, var(--border) 50%, transparent) !important;
 }
 
+/* ===================== 导入向导（UI-9） ===================== */
+
+/* 弹窗加宽以容纳平台网格（原 420px） */
+.import-dialog--wizard {
+  width: min(480px, 100%);
+}
+
+/* 步骤条 */
+.import-wz__steps {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.import-wz__step {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background-color: transparent !important;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.import-wz__step:hover {
+  border: none !important;
+  opacity: 0.8;
+}
+
+.import-wz__step--act,
+.import-wz__step--done {
+  opacity: 1;
+}
+
+.import-wz__step--skip {
+  opacity: 0.7;
+}
+
+.import-wz__step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  background-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.import-wz__step--act .import-wz__step-num {
+  background-color: color-mix(in srgb, var(--info) 15%, transparent);
+  color: var(--info);
+}
+
+.import-wz__step--done .import-wz__step-num {
+  background-color: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.import-wz__step--skip .import-wz__step-num {
+  font-style: italic;
+}
+
+.import-wz__step-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.import-wz__step--act .import-wz__step-label {
+  color: var(--info);
+  font-weight: 600;
+}
+
+/* 第 1 步：直接导入卡片 */
+.import-direct {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.import-direct__card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px !important;
+  border-radius: 10px !important;
+  background-color: color-mix(in srgb, var(--info) 8%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--info) 40%, transparent) !important;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.import-direct__card:hover {
+  border-color: var(--info) !important;
+  background-color: color-mix(in srgb, var(--info) 14%, transparent) !important;
+}
+
+.import-direct__card:active {
+  transform: translateY(1px);
+}
+
+.import-direct__card:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
+}
+
+.import-direct__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--info);
+}
+
+.import-direct__text {
+  min-width: 0;
+}
+
+.import-direct__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.import-direct__hint {
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* 分隔线（直接导入 / 平台引导两区之间） */
+.import-wz__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 10px;
+}
+
+.import-wz__divider::before,
+.import-wz__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--border);
+}
+
+.import-wz__divider span {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.import-wz__section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.import-wz__section-desc {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 平台网格 */
+.import-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.import-platform-card {
+  padding: 10px 8px !important;
+  border-radius: 10px !important;
+  background-color: var(--bg) !important;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.import-platform-card:hover {
+  border-color: var(--primary) !important;
+}
+
+.import-platform-card--sel,
+.import-platform-card--sel:hover {
+  border: 1px solid var(--info) !important;
+  background-color: color-mix(in srgb, var(--info) 8%, transparent) !important;
+}
+
+.import-platform-ico {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #fff;
+}
+
+.import-platform-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1px;
+}
+
+.import-platform-summary {
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+/* 第 2 步：平台导出指引 */
+.import-guide__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.import-guide__ico {
+  flex-shrink: 0;
+}
+
+.import-guide__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.import-guide__meta {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.import-guide__tags {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.import-guide__tag {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--warning);
+}
+
+.import-guide__tag--positive {
+  background-color: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.import-guide__steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-guide__steps li {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.import-guide__paths {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-guide__path {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg);
+}
+
+.import-guide__path-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.import-guide__path-detail {
+  display: block;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.import-guide__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* 第 3 步：导入 */
+.import-panel__dropzone--large {
+  padding: 26px 16px;
+}
+
+.import-wz__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.import-wz__btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.import-wz__btn:hover {
+  border-color: var(--primary);
+}
+
+.import-wz__btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.import-wz__btn--primary {
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+  color: var(--info);
+  font-weight: 600;
+}
+
+.import-wz__btn--primary:hover {
+  border-color: var(--info);
+  background-color: color-mix(in srgb, var(--info) 18%, transparent);
+}
+
+.import-wz__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 导入步骤的说明行（来源解析 + 格式提示） */
+.import-wz__note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.import-wz__note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+.import-wz__note--muted svg {
+  color: var(--text-tertiary);
+}
+
+.import-wz__note--muted {
+  color: var(--text-tertiary);
+}
+
 /* 隐私提示（UI-5：本地解析不上传，info 中性配色） */
 .import-dialog__privacy {
   display: flex;
@@ -398,5 +805,18 @@
     width: calc(100% - 24px);
     max-height: calc(100dvh - 32px);
     padding: 16px;
+  }
+
+  /* 向导：小屏下平台网格降为 2 列、直接导入卡片纵向堆叠 */
+  .import-platform-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .import-direct {
+    grid-template-columns: 1fr;
+  }
+
+  .import-wz__step-label {
+    font-size: 11px;
   }
 }

@@ -1,12 +1,15 @@
 /**
- * 导入入口面板（规格 §6.1/§7/§9/§22）。
+ * 导入入口面板（规格 §6.1/§7/§9/§22）——三步向导版。
  *
- * 入口：目录选择（File System Access API，降级 webkitdirectory）、
- * 文件选择、拖拽区——统一经 scanner 归一化后进入导入 store。
+ * 第 1 步「选择方式」：直接导入（文件夹/单文件卡片 + 拖拽区）或按平台引导；
+ * 第 2 步「导出指引」：按所选平台展示导出步骤（platformGuides.ts，与云端教程同源）；
+ * 第 3 步「导入数据」：拖拽/选择目录/选择文件，数据源按所选平台自动确定，
+ * 并展示格式说明（FIT 原生无损 / GPX 有损需重新推算）。
  *
- * 目录批量导入区分数据源：Strava 目录解析 activities.csv 还原标题/描述/估算功率；
- * 佳明 GDPR 全量包自动展开内层 zip 并解析活动摘要 JSON（按开始时间还原标题）；
- * 其他设备（igpsport/行者等）无元数据，标题按文件名兜底。
+ * 入口统一经 scanner 归一化后进入导入 store：
+ * - Strava 目录解析 activities.csv 还原标题/描述/估算功率；
+ * - 佳明 GDPR 全量包自动展开内层 zip 并解析活动摘要 JSON（按开始时间还原标题）；
+ * - 其他平台/直接导入按文件名兜底标题。
  * zip 展开为通用能力：任意入口选中的 .zip 均先解压再分拣（深度 2 层）。
  * 单文件导入无需数据源（格式通用）：选择单个 FIT/GPX 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
@@ -31,12 +34,25 @@ import {
   titleFromFileName,
   type StravaActivityMeta,
 } from './stravaExport';
-import { IMPORT_SOURCE_OPTIONS, isStravaSource, type ImportSource } from './importSources';
+import { isStravaSource, type ImportSource } from './importSources';
 import type { ImportFile } from './importer';
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog';
+import PlatformGrid from './PlatformGrid';
+import PlatformGuideView from './PlatformGuideView';
+import { DIRECT_FORMAT_NOTE, DIRECT_SOURCE_NOTE, PLATFORM_GUIDES } from './platformGuides';
 import { useImportStore } from '@/stores/importStore';
 import { reloadPage } from '@/utils/navigation';
 import './ImportPanel.css';
+
+/** 向导步骤 */
+type WizardStep = 'choose' | 'guide' | 'import';
+
+/** 步骤条定义（顺序即展示顺序） */
+const WIZARD_STEPS: readonly { key: WizardStep; label: string }[] = [
+  { key: 'choose', label: '选择方式' },
+  { key: 'guide', label: '导出指引' },
+  { key: 'import', label: '导入数据' },
+];
 
 /**
  * 导入入口面板（挂载于侧边栏底部）。
@@ -52,10 +68,12 @@ function ImportPanel() {
 
   /** 入口区是否展开（弹窗） */
   const [open, setOpen] = useState(false);
+  /** 当前向导步骤 */
+  const [step, setStep] = useState<WizardStep>('choose');
+  /** 选中的平台指引（null = 直接导入模式，未指定平台） */
+  const [selected, setSelected] = useState<(typeof PLATFORM_GUIDES)[number] | null>(null);
   /** 拖拽区高亮 */
   const [dragActive, setDragActive] = useState(false);
-  /** 目录批量导入数据源（Strava 目录解析 CSV，其他设备按文件名还原） */
-  const [source, setSource] = useState<ImportSource>('strava');
   /** 待编辑的单文件（非空时弹编辑框） */
   const [pendingFile, setPendingFile] = useState<ScanResult['files'][number] | null>(null);
   /** 非文件级提示（如未找到 FIT 文件） */
@@ -77,6 +95,9 @@ function ImportPanel() {
       importedSinceOpenRef.current = true;
     }
   }, [summary]);
+
+  /** 批量导入数据源：按所选平台自动确定，直接导入模式按文件名兜底 */
+  const source: ImportSource = selected?.source ?? 'other';
 
   /**
    * 将扫描结果送入导入 store（无 FIT 文件时仅提示）。
@@ -114,12 +135,9 @@ function ImportPanel() {
   }
 
   /**
-   * 目录选择（按指定数据源）：优先 File System Access API，失败/不支持时回退传统目录输入。
-   *
-   * @param nextSource 批量导入数据源
+   * 目录选择：优先 File System Access API，失败/不支持时回退传统目录输入。
    */
-  async function pickDirectory(nextSource: ImportSource): Promise<void> {
-    setSource(nextSource);
+  async function pickDirectory(): Promise<void> {
     const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
     if (!picker) {
       // 不支持 File System Access API（非安全上下文等）：回退传统目录选择
@@ -158,6 +176,26 @@ function ImportPanel() {
     }
     setNotice('');
     void runScan(result);
+  }
+
+  /** 第 1 步「导入文件夹」卡片：跳到导入步骤并打开目录选择器 */
+  function handleDirectFolder(): void {
+    setSelected(null);
+    setStep('import');
+    void pickDirectory();
+  }
+
+  /** 第 1 步「导入单个文件」卡片：跳到导入步骤并打开文件选择器 */
+  function handleDirectFile(): void {
+    setSelected(null);
+    setStep('import');
+    fileInputRef.current?.click();
+  }
+
+  /** 第 1 步平台卡片：进入第 2 步查看该平台导出指引 */
+  function handlePlatformSelect(guide: (typeof PLATFORM_GUIDES)[number]): void {
+    setSelected(guide);
+    setStep('guide');
   }
 
   /**
@@ -229,10 +267,24 @@ function ImportPanel() {
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [open, closeDialog]);
 
+  /** 步骤条点击：指引步骤需已选平台；导入进行中禁止切换 */
+  function handleStepClick(target: WizardStep): void {
+    if (importing) {
+      return;
+    }
+    if (target === 'guide' && selected === null) {
+      return;
+    }
+    setStep(target);
+  }
+
   const percent = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+  const activeIndex = WIZARD_STEPS.findIndex((s) => s.key === step);
 
   return (
     <div className="import-panel">
@@ -248,7 +300,7 @@ function ImportPanel() {
       {open && (
         <div className="import-dialog__backdrop" onClick={closeDialog} role="presentation">
           <div
-            className="import-dialog"
+            className="import-dialog import-dialog--wizard"
             role="dialog"
             aria-modal="true"
             aria-label="同步骑行数据"
@@ -266,8 +318,35 @@ function ImportPanel() {
                 ×
               </button>
             </div>
+
+            {/* 步骤条：直接导入模式第 2 步标记为「已跳过」 */}
+            <div className="import-wz__steps">
+              {WIZARD_STEPS.map((s, index) => {
+                const skipped = selected === null && s.key === 'guide';
+                const state =
+                  index === activeIndex ? 'act' : index < activeIndex ? (skipped ? 'skip' : 'done') : '';
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className={`import-wz__step${state ? ` import-wz__step--${state}` : ''}`}
+                    aria-current={index === activeIndex ? 'step' : undefined}
+                    onClick={() => handleStepClick(s.key)}
+                  >
+                    <span className="import-wz__step-num">
+                      {skipped && state === 'skip' ? '—' : index + 1}
+                    </span>
+                    <span className="import-wz__step-label">
+                      {s.label}
+                      {skipped && state !== 'act' ? '（已跳过）' : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="import-dialog__body">
-              {!importing && (
+              {step === 'choose' && !importing && (
                 <>
                   <p className="import-dialog__privacy">
                     <svg
@@ -285,97 +364,130 @@ function ImportPanel() {
                     </svg>
                     文件在本浏览器内解析，不会上传到任何服务器
                   </p>
-                  <div className="import-panel__entries">
-                    {IMPORT_SOURCE_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className="import-panel__entry"
-                        onClick={() => void pickDirectory(option.value)}
-                      >
-                        <svg
-                          className="import-panel__entry-icon"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        </svg>
-                        <span className="import-panel__entry-text">
-                          <span className="import-panel__entry-label">{option.label}</span>
-                          <span className="import-panel__entry-hint">{option.hint}</span>
-                        </span>
-                      </button>
-                    ))}
+                  <PlatformGrid
+                    onDirectFolder={handleDirectFolder}
+                    onDirectFile={handleDirectFile}
+                    onPlatformSelect={handlePlatformSelect}
+                    selectedId={selected?.id ?? null}
+                  />
+                  <div
+                    className={`import-panel__dropzone${dragActive ? ' import-panel__dropzone--active' : ''}`}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragActive(true);
+                    }}
+                    onDragLeave={() => setDragActive(false)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDragActive(false);
+                      void pickFiles(Array.from(event.dataTransfer.files));
+                    }}
+                  >
+                    <span className="import-panel__dropzone-hint">
+                      或者直接把 <strong>文件 / 文件夹 / ZIP 压缩包</strong> 拖到这里
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {step === 'guide' && selected && !importing && (
+                <PlatformGuideView
+                  guide={selected}
+                  onProceed={() => setStep('import')}
+                  onBack={() => setStep('choose')}
+                />
+              )}
+
+              {step === 'import' && !importing && (
+                <>
+                  <div
+                    className={`import-panel__dropzone import-panel__dropzone--large${dragActive ? ' import-panel__dropzone--active' : ''}`}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragActive(true);
+                    }}
+                    onDragLeave={() => setDragActive(false)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDragActive(false);
+                      void pickFiles(Array.from(event.dataTransfer.files));
+                    }}
+                  >
+                    <svg
+                      className="import-panel__dropzone-icon"
+                      width="28"
+                      height="28"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 16V4m0 0l-4 4m4-4l4 4" />
+                      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                    </svg>
+                    <span className="import-panel__dropzone-title">
+                      {selected
+                        ? `拖入${selected.name}导出的文件 / 目录 / ZIP 压缩包`
+                        : '拖入已整理的文件夹 / 文件 / ZIP 压缩包'}
+                    </span>
+                    <span className="import-panel__dropzone-hint">
+                      {selected
+                        ? '目录 / 压缩包自动递归扫描，无需手动解压'
+                        : '支持 .fit / .fit.gz / .gpx / .zip，文件夹自动递归扫描'}
+                    </span>
+                  </div>
+                  <div className="import-wz__actions">
                     <button
                       type="button"
-                      className="import-panel__entry"
-                      onClick={() => fileInputRef.current?.click()}
+                      className="import-wz__btn import-wz__btn--primary"
+                      onClick={() => void pickDirectory()}
                     >
-                      <svg
-                        className="import-panel__entry-icon"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                        <path d="M14 2v6h6" />
-                      </svg>
-                      <span className="import-panel__entry-text">
-                        <span className="import-panel__entry-label">选择文件</span>
-                        <span className="import-panel__entry-hint">
-                          单个 .fit / .gpx 或 zip 压缩包
-                        </span>
-                      </span>
+                      选择目录
                     </button>
-                    <div
-                      className={`import-panel__dropzone${dragActive ? ' import-panel__dropzone--active' : ''}`}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        setDragActive(true);
-                      }}
-                      onDragLeave={() => setDragActive(false)}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        setDragActive(false);
-                        void pickFiles(Array.from(event.dataTransfer.files));
-                      }}
-                    >
-                      <svg
-                        className="import-panel__dropzone-icon"
-                        width="28"
-                        height="28"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 16V4m0 0l-4 4m4-4l4 4" />
-                        <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                      </svg>
-                      <span className="import-panel__dropzone-title">
-                        拖拽 FIT / GPX / ZIP 文件到此处
-                      </span>
-                      <span className="import-panel__dropzone-hint">
-                        可多选，支持 .fit / .fit.gz / .gpx / .zip（佳明导出包自动解压）
-                      </span>
-                    </div>
+                    <button type="button" className="import-wz__btn" onClick={() => fileInputRef.current?.click()}>
+                      选择文件
+                    </button>
                   </div>
+                  <p className="import-wz__note">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                    <span>
+                      {selected
+                        ? `已自动按「${selected.name}」来源解析：${selected.source === 'strava' ? '标题/描述按 activities.csv 还原' : selected.source === 'garmin' ? '标题按活动摘要 JSON 还原' : '标题按文件名还原'}，无需手动设置`
+                        : DIRECT_SOURCE_NOTE}
+                    </span>
+                  </p>
+                  <p className="import-wz__note import-wz__note--muted">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 8v4m0 4h.01" />
+                    </svg>
+                    <span>{selected ? selected.formatNote : DIRECT_FORMAT_NOTE}</span>
+                  </p>
                 </>
               )}
 
