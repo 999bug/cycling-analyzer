@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（[CU] PROGRESS 瘦身归档：§0 已完成条目全部移入归档，本表只保留未完成/搁置项；功能最新进展看 `src/features/changelog/changelogData.ts` 与 git log）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（[CU] 删除过时 E2E 冒烟测试（不进 CI 且被 2.32.0/2.37.0 导入改造废掉），@playwright/test 保留供截图脚本；版本 2.38.1 → 2.38.2）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -68,7 +68,6 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 ```bash
 npm run dev        # 本地开发
 npm run test       # 测试（vitest run）
-npm run test:e2e   # E2E（Playwright，首次需 npx playwright install chromium）
 npm run lint       # ESLint
 npm run build      # tsc + vite build
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例

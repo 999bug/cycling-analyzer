@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.38.2',
+    date: '2026-09-08',
+    features: [
+      '内部维护：删除过时的 E2E 冒烟测试（e2e/ 与 Playwright 配置——2.32.0/2.37.0 两轮导入改造后选择器已失效且不进 CI；单测覆盖不变，@playwright/test 保留供截图脚本使用，无功能变化）',
+    ],
+  },
+  {
     version: '2.38.1',
     date: '2026-09-08',
     features: [

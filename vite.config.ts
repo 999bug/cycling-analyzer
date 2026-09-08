@@ -120,8 +120,8 @@ export default defineConfig(({ command }) => {
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     css: true,
-    // e2e/ 为 Playwright 用例（.spec.ts），不走 Vitest
-    exclude: ['e2e/**', 'node_modules/**'],
+    // exclude 走 vitest 默认值（node_modules/dist 等）；E2E 已删除（@playwright/test
+    // 仍保留供 scripts/capture-screenshots.mjs 截图使用）
   },
   }
 })
