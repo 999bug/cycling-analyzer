@@ -156,9 +156,43 @@ describe('calculateSummary 基础统计', () => {
 
     const summary = calculateSummary(records)
 
-    // 间隔 100s > 30s 上限，移动时间估算为 0 → 回退首末差
+    // 间隔 100s > 60s 暂停上限，移动时间估算为 0 → 回退首末差
     expect(summary.duration).toBe(100)
     expect(summary.avgSpeed).toBe(5)
+  })
+
+  it('30~60s 短缺口全额计入时长（行者静止降频/短停计时不停口径）', () => {
+    // 骑行 10s + 45s 缺口（行者静止降频仅两点：位移 8m ≈ 0.18m/s）+ 骑行 10s
+    const records: ActivityRecord[] = [
+      { timestamp: 1000, distance: 0 },
+      { timestamp: 1010, distance: 50 },
+      // 45s 后恢复记录：短缺口 < 60s 暂停上限，计时未停
+      { timestamp: 1055, distance: 58 },
+      { timestamp: 1065, distance: 108 },
+    ]
+
+    const summary = calculateSummary(records)
+
+    // 移动时间 = 前后骑行各 10s + 45s 短缺口全额；静止 GPS 抖动（8m/45s < 0.5m/s）不剔除
+    expect(summary.duration).toBe(65)
+    expect(summary.elapsedTime).toBe(65)
+  })
+
+  it('超过 60s 的长缺口视为暂停整段剔除', () => {
+    // 骑行 10s + 90s 暂停（休息）+ 骑行 10s
+    const records: ActivityRecord[] = [
+      { timestamp: 1000, distance: 0 },
+      { timestamp: 1010, distance: 50 },
+      // 90s 后恢复记录：长缺口，行者 App 自动暂停计时
+      { timestamp: 1100, distance: 58 },
+      { timestamp: 1110, distance: 108 },
+    ]
+
+    const summary = calculateSummary(records)
+
+    // 移动时间只含前后骑行各 10s，90s 暂停不计
+    expect(summary.duration).toBe(20)
+    expect(summary.elapsedTime).toBe(110)
   })
 })
 

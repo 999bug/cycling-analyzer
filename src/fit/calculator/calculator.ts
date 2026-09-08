@@ -8,7 +8,8 @@
  * avgSpeed / maxSpeed 是设备在活动结束时写入的最终值（佳明 App 显示同源），
  * 比记录点回推更可靠——记录点可能在 session 结束前停止写入、GPS 漂移修正
  * 也不会回写记录点；缺失时才回退到记录计算。GPX 无 session，时长按
- * 「移动时间」估算（剔除静止段），否则红灯暂停会拉低均速（Strava 同口径）。
+ * 「移动时间」估算（剔除长暂停与静止段，短停计时不停），否则红灯暂停会
+ * 拉低均速（行者/Strava 同口径）。
  *
  * 缺失字段一律返回 undefined（规格 §25：null ≠ 0）。
  */
@@ -23,10 +24,17 @@ import type { ActivityRecord } from '@/types/activity'
 const MOVING_SPEED_THRESHOLD_MPS = 0.5
 
 /**
- * 参与移动时间估算的最大采样间隔（秒）：超过视为记录缺失/长时间暂停，
- * 不计入移动时间（防止个别丢点把整段静止时间算进去）。
+ * 正常采样间隔上限（秒）：不超过该值的相邻点按位移速度判定移动/静止。
  */
 const MOVING_GAP_LIMIT_SEC = 30
+
+/**
+ * 暂停判定缺口（秒）：MOVING_GAP_LIMIT_SEC ～ 该值之间的记录缺口视为
+ * 「短停但计时未停」——行者等 App 静止时会降频记录（几十秒一个点）或
+ * 短暂停歇不触发自动暂停，App 侧计时持续走（行者实测口径：短缺口全额
+ * 计入活动时间）；超过该值的缺口视为暂停/记录断档，整段剔除。
+ */
+const PAUSE_GAP_LIMIT_SEC = 60
 
 /**
  * 统计汇总结果（Activity 的部分字段）。
@@ -83,8 +91,9 @@ export function calculateSummary(
 
   // 距离：设备最终值优先（佳明 App 显示同源），记录点可能提前停写或受漂移修正影响
   const distance = session?.totalDistance ?? lastDistance(records) ?? estimateDistance(records)
-  // 时长：FIT 用设备计时（移动口径）；GPX 无 session，按移动时间估算剔除静止段；
-  // 估算为 0（极稀疏轨迹/无距离数据无法判定移动）时回退首末时间差保底
+  // 时长：FIT 用设备计时（移动口径）；GPX 无 session，按移动时间估算
+  // （剔除长暂停与静止段，30~60s 短缺口计时不停）；估算为 0（极稀疏轨迹/
+  // 无距离数据无法判定移动）时回退首末时间差保底
   const duration = session?.totalTimerTime ?? (estimateMovingDuration(records) || recordsDuration(records))
   // 总耗时：含暂停，无会话时为记录首末时间差
   const elapsedTime = session?.totalElapsedTime ?? recordsDuration(records)
@@ -178,12 +187,16 @@ function recordsDuration(records: ActivityRecord[]): number {
 }
 
 /**
- * 估算移动时长（秒）：累计相邻点间「有位移」的时间段。
+ * 估算移动时长（秒）：按相邻点间隔分档累计「有位移/未暂停」的时间段。
  *
  * 用于无 session 的数据源（GPX）：GPX 没有设备计时/暂停信息，若直接用
- * 首末时间差，红绿灯与休息的静止时间会拉低均速（Strava/佳明 App 均按
- * 移动时间显示均速）。判定：相邻点位移速度高于 MOVING_SPEED_THRESHOLD_MPS
- * 才计入；超过 MOVING_GAP_LIMIT_SEC 的间隔视为记录缺失不参与。
+ * 首末时间差，红绿灯与休息的静止时间会拉低均速（行者/Strava/佳明 App 均
+ * 按移动时间显示均速）。三档判定：
+ * - 正常间隔（≤ 30s）：位移速度高于 MOVING_SPEED_THRESHOLD_MPS 才计入，
+ *   防静止 GPS 抖动虚增；
+ * - 短缺口（30s ～ 60s）：行者等 App 静止降频/短歇不写点的痕迹，App 侧
+ *   计时未停，全额计入（与行者 App 显示时间口径一致）；
+ * - 长缺口（> 60s）：视为暂停/记录断档，整段剔除。
  *
  * @param records 标准化逐点记录（依赖累计距离字段）
  */
@@ -193,7 +206,12 @@ function estimateMovingDuration(records: ActivityRecord[]): number {
     const prev = records[i - 1]
     const curr = records[i]
     const dt = curr.timestamp - prev.timestamp
-    if (dt <= 0 || dt > MOVING_GAP_LIMIT_SEC) {
+    if (dt <= 0 || dt > PAUSE_GAP_LIMIT_SEC) {
+      continue
+    }
+    if (dt > MOVING_GAP_LIMIT_SEC) {
+      // 短缺口：静止降频/短停（如 35s 挪动 8m 的等灯段），计时未停全额计入
+      moving += dt
       continue
     }
     const dd = (curr.distance ?? 0) - (prev.distance ?? 0)
