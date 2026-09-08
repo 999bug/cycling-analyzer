@@ -12,7 +12,9 @@ import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import { simplifyRoute } from '@/map/simplify'
-import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
+import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
+import { toWgs84 } from '@/geo/coordinateSystem'
+import { projectPoint } from '@/geo/projection'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
 import { SCAN_CACHE_HEATMAP, loadScanCache, saveScanCache, summariesScanKey } from '@/storage/scanCache'
 import {
@@ -133,7 +135,14 @@ function HeatmapPage() {
           HEATMAP_SIMPLIFY_TOLERANCE_METERS,
         )
         if (points.length >= MIN_TRACK_POINTS) {
-          loaded.push(points.map((point) => [point.latitude, point.longitude] as LatLng))
+          // 先按各活动自身坐标系归一化到 WGS-84 再缓存：不同来源的活动可能用不同
+          // 坐标系（行者 GCJ-02 / Garmin WGS-84），统一口径后叠加才不会互相错位
+          loaded.push(
+            points.map((point) => {
+              const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
+              return [normalized.latitude, normalized.longitude] as LatLng
+            }),
+          )
         }
         if (cancelled) {
           return
@@ -165,15 +174,15 @@ function HeatmapPage() {
     storeSourceIndex(1)
   }, [])
 
-  // 展示轨迹：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）；
-  // 转换仅作用于渲染，模块级缓存中的 WGS-84 元组保持不变
+  // 展示轨迹：缓存中的轨迹已统一为 WGS-84，渲染前投影到底图坐标系；
+  // 转换仅作用于渲染，缓存中的 WGS-84 元组保持不变
   const displayTracks = useMemo(() => {
-    if (!isGcjSource(sourceIndex)) {
+    if (mapSystem(sourceIndex) === 'wgs84') {
       return tracks
     }
     return tracks.map((track) =>
       track.map(([lat, lng]) => {
-        const point = wgs84ToGcj02({ longitude: lng, latitude: lat })
+        const point = projectPoint({ longitude: lng, latitude: lat }, { to: mapSystem(sourceIndex) })
         return [point.latitude, point.longitude] as LatLng
       }),
     )

@@ -11,7 +11,8 @@
  * 距离米、速度 m/s、海拔米、心率 bpm、踏频 rpm、功率 W。
  */
 import Dexie, { type EntityTable } from 'dexie';
-import type { ActivityRecord, DeviceInfo } from '@/types/activity';
+import type { ActivityRecord, DeviceInfo, TrackOffset } from '@/types/activity';
+import type { CoordinateSystem } from '@/geo/coordinateSystem';
 
 /** 数据库名称 */
 export const DB_NAME = 'cycling-data';
@@ -117,6 +118,19 @@ export interface ActivityEntity {
 
   /** 自行车名称（FIT session sport_profile_name，骑行设备所选单车；非索引字段，免升版本） */
   bikeName?: string;
+
+  /**
+   * 轨迹坐标系（纠偏用；非索引字段，免升版本）。
+   * 落库 records 恒为原始坐标，本字段标记其所属坐标系；纠偏只改标记不改写数据。
+   * 缺省视为 WGS-84。
+   */
+  coordinateSystem?: CoordinateSystem;
+
+  /** 数据来源 App 标识（如 'xingzhe'；非索引字段，免升版本） */
+  sourceApp?: string;
+
+  /** 轨迹手动微调量（米；非索引字段，免升版本） */
+  trackOffset?: TrackOffset;
 }
 
 /**

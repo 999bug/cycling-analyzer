@@ -36,14 +36,19 @@ export function summariesScanKey(summaries: readonly ActivitySummary[]): string 
   let latestStartTime = ''
   let totalDistance = 0
   let namesHash = ''
+  let systemHash = ''
   for (const summary of summaries) {
     totalDistance += summary.distance
     if (summary.startTime > latestStartTime) {
       latestStartTime = summary.startTime
     }
     namesHash += summary.name ?? ''
+    // 坐标系纳入指纹：轨迹纠偏只改 coordinateSystem，不影响数量/总距离/开始时间/名称，
+    // 若不纳入则纠偏后热力图、路线图、赛段、统计仍命中旧缓存（旧坐标算出的产物），
+    // 表现为「地图已经对了、热力图还歪着」
+    systemHash += summary.coordinateSystem ?? ''
   }
-  return `${summaries.length}|${totalDistance}|${latestStartTime}|${hashString(namesHash)}`
+  return `${summaries.length}|${totalDistance}|${latestStartTime}|${hashString(namesHash)}|${hashString(systemHash)}`
 }
 
 /**

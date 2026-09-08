@@ -15,6 +15,22 @@
  * - 经纬度：十进制度
  */
 
+import type { CoordinateSystem } from '@/geo/coordinateSystem'
+
+/**
+ * 轨迹手动微调量（米）。
+ *
+ * 在轨迹归一化到 WGS-84 **之后**叠加，因此与坐标系设定互不影响：
+ * 用户切换来源不会丢失微调，微调也不会污染坐标系语义。
+ */
+export interface TrackOffset {
+  /** 北向偏移（米，正 = 向北） */
+  northMeters: number
+
+  /** 东向偏移（米，正 = 向东） */
+  eastMeters: number
+}
+
 /**
  * 骑行活动（一次骑行的完整记录）。
  */
@@ -117,6 +133,27 @@ export interface Activity {
 
   /** 完整逐点数据（不参与列表查询，详情页按需加载） */
   records?: ActivityRecord[]
+
+  /**
+   * 轨迹坐标系（纠偏用；非索引字段，免升 DB_VERSION）。
+   *
+   * 落库的 records 恒为「导入时的原始坐标」，本字段记录这些坐标属于哪个坐标系。
+   * **纠偏只改本标记，绝不改写 records**——因此来回切换完全幂等，
+   * 可无限次还原且零误差累积（同坐标系转换是恒等操作）。
+   * 缺省视为 WGS-84（国际标准默认值）。
+   */
+  coordinateSystem?: CoordinateSystem
+
+  /**
+   * 数据来源 App 标识（如 'xingzhe' / 'strava'，取值见 @/geo/sourceProfiles）。
+   *
+   * 记录「这条数据原本来自哪个软件」，与 coordinateSystem 刻意解耦：
+   * 纠偏只改坐标系、不动此处，用户任何时候都知道该还原成什么。
+   */
+  sourceApp?: string
+
+  /** 轨迹手动微调量（米）；非索引字段，免升 DB_VERSION。来源未知时的兜底手段 */
+  trackOffset?: TrackOffset
 }
 
 /**

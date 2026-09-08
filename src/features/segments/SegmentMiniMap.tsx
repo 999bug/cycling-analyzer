@@ -8,7 +8,8 @@ import { useEffect } from 'react'
 import { MapContainer, Polyline, CircleMarker, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { isGcjSource, wgs84ToGcj02 } from '@/map/tileSources'
+import { mapSystem } from '@/map/tileSources'
+import { projectPoint } from '@/geo/projection'
 
 /** 赛段迷你地图 props */
 export interface SegmentMiniMapProps {
@@ -57,19 +58,16 @@ export function SegmentMiniMap({
   sourceIndex,
   onFallback,
 }: SegmentMiniMapProps) {
-  // 高德底图需 GCJ-02 坐标转换（OSM 源用原始 WGS-84）
-  const convert = (lat: number, lng: number): [number, number] => {
-    if (!isGcjSource(sourceIndex)) {
-      return [lat, lng]
-    }
-    const point = wgs84ToGcj02({ longitude: lng, latitude: lat })
+  // 赛段轨迹统一按 WGS-84 存储（Strava 导入源），展示时投影到底图坐标系
+  const project = (lat: number, lng: number): [number, number] => {
+    const point = projectPoint({ longitude: lng, latitude: lat }, { to: mapSystem(sourceIndex) })
     return [point.latitude, point.longitude]
   }
 
   const hasTrack = trackPoints !== undefined && trackPoints.length >= 2
   const linePoints: [number, number][] = hasTrack
-    ? trackPoints!.map(([lat, lng]) => convert(lat, lng))
-    : [convert(startLatitude, startLongitude), convert(endLatitude, endLongitude)]
+    ? trackPoints!.map(([lat, lng]) => project(lat, lng))
+    : [project(startLatitude, startLongitude), project(endLatitude, endLongitude)]
 
   const center = linePoints[Math.floor(linePoints.length / 2)] as [number, number]
 

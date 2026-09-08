@@ -784,6 +784,8 @@ function ActivityDetailPage() {
           terrainVisible={terrainVisible}
           onTerrainToggle={() => setTerrainVisible(!terrainVisible)}
           distanceUnit={distanceUnit}
+          coordinateSystem={activity.coordinateSystem}
+          trackOffset={activity.trackOffset}
         />
       </section>
 

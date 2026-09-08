@@ -20,6 +20,7 @@
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
 | 🔄 运行中 | **代码审计遗留项（按 docs/代码审计报告-2026-09-01.md 路线图）** | P0/P1 主体批次（RangeError/ErrorBoundary/Worker 超时/Dexie 防死锁/N+1/爬升口径/NP 满窗/重复代码收敛等 13 批）已全部提交，明细见 `docs/archive/PROGRESS-archive-2026-09.md` 对应行。**遗留四项**（推进前先核实，部分可能已被后续版本顺带修复，如 recharts 已于 2.22.0 拆出主包）：①P0 exportData 全量入内存（备份通道 OOM 风险）；②P1 3.6 首屏体积（recharts modulepreload）；③P1 3.2 activityRepository startsWith UTC 真 bug（待专项）；④P1 3.5 buildClimbs memo | 按审计报告逐项专项处理，每项单独 commit |
+| 🔄 运行中 | **轨迹纠偏（GPX 坐标系）** | 已提交（2.43.0）：T1 坐标系内核 `src/geo/coordinateSystem.ts`、T2 来源识别表 `src/geo/sourceProfiles.ts`、T3 数据模型（`coordinateSystem`/`sourceApp`/`trackOffset`，非索引字段免升 DB_VERSION）、T4 GPX 解析写入来源、T5 渲染统一出口 `src/geo/projection.ts`（收敛 ActivityMap/SegmentMiniMap/HeatmapPage 三处重复判断）、T8 缓存指纹纳入坐标系（`summariesScanKey`）。纠偏 UI 尚未提供 | 下一步：T7 详情页纠偏面板（选来源 + 四向微调 + 前后对比预览 + 来源标签）→ T9 列表页勾选批量纠偏 → T10 导出坐标系选项 → T11 文档归档 |
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ⏸️ 已搁置 | **小程序原生重构**（零域名方案；代码保留在 `feature/miniprogram` 分支，main 不含小程序代码） | 2026-08-26 决策搁置：Phase 0~3 已完成但体验与网站差距大（Canvas 手绘图表 vs Recharts、地图组件封闭、wx.chooseMessageFile 批量导入残废、发布需审核），微信限制与产品核心能力根本冲突。移动端入口改走 Web PWA 安装引导（2.27.0）。分支未删除，如重启可从 Phase 4 地图继续 | 无（不再推进） |
 | ⏸️ 已暂缓 | **功能队列剩余项**（用户 2026-08-26 确认价值不高，暂不推进） | 目标设定与进度 / 比赛预测 / 路线规划器（画路线导出 GPX）/ 骑行记录 CSV 批量导出 | 后续有需求再启动 |

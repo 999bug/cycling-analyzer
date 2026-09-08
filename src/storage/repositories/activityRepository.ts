@@ -570,6 +570,9 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     anaerobicTrainingEffect: activity.anaerobicTrainingEffect,
     device: activity.device,
     bikeName: activity.bikeName,
+    coordinateSystem: activity.coordinateSystem,
+    sourceApp: activity.sourceApp,
+    trackOffset: activity.trackOffset,
   };
 }
 

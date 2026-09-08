@@ -10,7 +10,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { divIcon } from 'leaflet'
 import { CircleMarker, MapContainer, Marker, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { RoutePoint } from '@/types/activity'
+import { projectPoint, projectPoints, type ProjectOptions } from '@/geo/projection'
+import type { CoordinateSystem } from '@/geo/coordinateSystem'
+import type { RoutePoint, TrackOffset } from '@/types/activity'
 import { routePointAtLocation } from '@/charts/timeline'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
 import {
@@ -22,7 +24,7 @@ import {
 } from '@/map/routeColoring'
 import { TrackReplay } from '@/map/TrackReplay'
 import { clampMapHeight, loadSavedMapHeight, saveMapHeight } from '@/map/mapResize'
-import { isGcjSource, loadStoredSourceIndex, storeSourceIndex, wgs84ToGcj02 } from '@/map/tileSources'
+import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -85,6 +87,12 @@ export interface ActivityMapProps {
 
   /** 距离单位偏好（回放 HUD 展示用；缺省 km） */
   distanceUnit?: 'km' | 'mi'
+
+  /** 轨迹原始坐标所属坐标系（纠偏用；缺省 wgs84） */
+  coordinateSystem?: CoordinateSystem
+
+  /** 轨迹手动微调量（米，在归一化到 WGS-84 之后叠加） */
+  trackOffset?: TrackOffset
 }
 
 /**
@@ -165,7 +173,7 @@ function AutoInvalidate() {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km' }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -227,19 +235,27 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
     storeSourceIndex(1)
   }, [])
 
-  // 展示坐标：高德底图为 GCJ-02，需将 WGS-84 轨迹坐标转换对齐（OSM 源用原始坐标）
-  const displayPoints = useMemo(
-    () => (isGcjSource(sourceIndex) ? points.map(wgs84ToGcj02) : points),
-    [points, sourceIndex],
+  // 展示投影：原始坐标 → 归一化到 WGS-84 → 叠加手动微调 → 投影到底图坐标系。
+  // 全站统一走 @/geo/projection，records 保持原始值不动，改来源只是改标记。
+  const projection = useMemo<ProjectOptions>(
+    () => ({
+      from: coordinateSystem,
+      to: mapSystem(sourceIndex),
+      northMeters: trackOffset?.northMeters,
+      eastMeters: trackOffset?.eastMeters,
+    }),
+    [coordinateSystem, trackOffset, sourceIndex],
   )
 
-  // 悬停圆点展示坐标：与轨迹同一坐标系转换（高德源对齐底图）
+  const displayPoints = useMemo(() => projectPoints(points, projection), [points, projection])
+
+  // 悬停圆点展示坐标：与轨迹走同一投影，保证联动不偏
   const hoverDisplay = useMemo(() => {
     if (hoverPoint === undefined) {
       return undefined
     }
-    return isGcjSource(sourceIndex) ? wgs84ToGcj02(hoverPoint) : hoverPoint
-  }, [hoverPoint, sourceIndex])
+    return projectPoint(hoverPoint, projection)
+  }, [hoverPoint, projection])
 
   // 经纬度元组列表：Polyline / CircleMarker / Marker 共用
   const latLngs = useMemo(

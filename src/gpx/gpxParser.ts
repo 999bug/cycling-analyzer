@@ -17,6 +17,7 @@
  * 动态 import 在主线程按需加载；单文件体量几 MB，解析毫秒级无阻塞风险。
  */
 import { calculateSummary } from '@/fit/calculator/calculator'
+import { detectSource } from '@/geo/sourceProfiles'
 import type { ParseTaskInput } from '@/fit/worker/parseTask'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
@@ -82,6 +83,7 @@ export function parseGpxActivity(input: ParseTaskInput): Activity {
   const summary = calculateSummary(records)
   const first = records[0]
   const last = records[records.length - 1]
+  const source = detectSource(readCreator(doc), input.fileName)
 
   return {
     id: crypto.randomUUID(),
@@ -109,6 +111,11 @@ export function parseGpxActivity(input: ParseTaskInput): Activity {
     device: readDeviceCreator(doc),
     // GPX 内部名称（如 Strava 导出的骑行标题）：importer 标题链中优先于文件名兜底
     name: readTrackName(doc),
+    // 来源与坐标系（纠偏依据）：creator 属性优先，缺失回退文件名关键词。
+    // records 落库的是「原始坐标」，展示层按 coordinateSystem 标记转换，
+    // 因此后续在纠偏面板改来源不会改写数据，可无限次还原。
+    sourceApp: source.profile.id,
+    coordinateSystem: source.profile.coordinateSystem,
     records,
   }
 }
@@ -261,9 +268,14 @@ function readActivityType(doc: Document): string {
   return type.length > 0 ? type : 'cycling'
 }
 
+/** 读取 GPX creator 属性（缺失返回 undefined） */
+function readCreator(doc: Document): string | undefined {
+  return doc.documentElement.getAttribute('creator')?.trim() || undefined
+}
+
 /** 读取 GPX creator 属性映射设备 productName（缺失返回 undefined） */
 function readDeviceCreator(doc: Document): { productName?: string } | undefined {
-  const creator = doc.documentElement.getAttribute('creator')?.trim()
+  const creator = readCreator(doc)
   return creator ? { productName: creator } : undefined
 }
 
