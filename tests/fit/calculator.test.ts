@@ -49,6 +49,37 @@ describe('calculateSummary 基础统计', () => {
     expect(summary.distance).toBe(20)
   })
 
+  it('有会话时距离与最高速度优先取设备最终值（记录点可能提前停写）', () => {
+    const records = [
+      { timestamp: 1, distance: 0, speed: 3 },
+      { timestamp: 2, distance: 10, speed: 4 },
+      { timestamp: 3, distance: 20, speed: 5 },
+    ]
+
+    const summary = calculateSummary(records, {
+      totalTimerTime: 600,
+      totalDistance: 2400,
+      maxSpeed: 12,
+    })
+
+    // 设备 totalDistance=2400（记录末点仅 20——漂移修正/提前停写场景）
+    expect(summary.distance).toBe(2400)
+    expect(summary.maxSpeed).toBe(12)
+  })
+
+  it('平均速度优先取设备 session 值（佳明 App 显示同源）', () => {
+    const records = recordsWithAltitude([100, 100, 100])
+
+    const summary = calculateSummary(records, {
+      totalTimerTime: 600,
+      totalDistance: 2400,
+      avgSpeed: 4.5,
+    })
+
+    // 设备 avgSpeed=4.5 优先，而非 distance/duration=4
+    expect(summary.avgSpeed).toBe(4.5)
+  })
+
   it('无距离字段时按速度-时间估算', () => {
     const records = [
       { timestamp: 1735689600, speed: 5 },
@@ -62,7 +93,7 @@ describe('calculateSummary 基础统计', () => {
     expect(summary.distance).toBeCloseTo(110, 2)
   })
 
-  it('平均速度 = 距离 / 时长（有会话时用会话计时）', () => {
+  it('平均速度 = 距离 / 计时时长（设备 avgSpeed 缺失时回退计算）', () => {
     const records = recordsWithAltitude([100, 100, 100])
 
     const summary = calculateSummary(records, {
@@ -71,11 +102,33 @@ describe('calculateSummary 基础统计', () => {
     })
 
     expect(summary.duration).toBe(600)
-    expect(summary.distance).toBe(20)
-    expect(summary.avgSpeed).toBeCloseTo(20 / 600, 6)
+    expect(summary.distance).toBe(2400)
+    expect(summary.avgSpeed).toBeCloseTo(4, 6)
   })
 
-  it('无会话时用时记录首末时间差', () => {
+  it('无会话时按移动时间估算：静止段不计入时长（均速不再被红灯拉低）', () => {
+    // 1s 采样骑行 20s + 静止 60s（GPS 抖动 0.2m/s）+ 骑行 20s
+    const records: ActivityRecord[] = []
+    let distance = 0
+    for (let i = 0; i < 100; i++) {
+      if (i >= 20 && i < 80) {
+        // 静止段：距离微增（GPS 抖动，0.2m/s < 0.5 阈值）
+        distance += 0.2
+      } else {
+        distance += 5
+      }
+      records.push({ timestamp: 1000 + i, distance, speed: 5 })
+    }
+
+    const summary = calculateSummary(records)
+
+    expect(summary.elapsedTime).toBe(99)
+    expect(summary.duration).toBe(39)
+    // 均速 = 总距离（末点累计，含静止段 GPS 抖动）/ 移动时间
+    expect(summary.avgSpeed).toBeCloseTo(distance / 39, 2)
+  })
+
+  it('极稀疏轨迹移动时间无法判定时回退首末时间差', () => {
     const records = [
       { timestamp: 1735689600, distance: 0, speed: 5 },
       { timestamp: 1735689700, distance: 500, speed: 5 },
@@ -83,6 +136,7 @@ describe('calculateSummary 基础统计', () => {
 
     const summary = calculateSummary(records)
 
+    // 间隔 100s > 30s 上限，移动时间估算为 0 → 回退首末差
     expect(summary.duration).toBe(100)
     expect(summary.avgSpeed).toBe(5)
   })

@@ -90,19 +90,20 @@ describe('normalizeActivity 统计字段', () => {
 
     expect(activity.duration).toBe(600)
     expect(activity.elapsedTime).toBe(600)
-    expect(activity.distance).toBeCloseTo(2558.5, 1)
+    // 距离/速度优先取 session 设备最终值（2580 vs 记录末点 2558.5——设备结束时会修正累计距离）
+    expect(activity.distance).toBe(2580)
     expect(activity.elevationGain).toBeGreaterThan(30)
-    expect(activity.avgSpeed).toBeCloseTo(4.264, 2)
+    expect(activity.avgSpeed).toBeCloseTo(4.3, 2)
     expect(activity.maxSpeed).toBeGreaterThan(8.9)
     expect(activity.avgHeartRate).toBeGreaterThan(128)
     expect(activity.avgHeartRate).toBeLessThan(136)
-    // Encoder 整型截断：最大心率写入 149
-    expect(activity.maxHeartRate).toBe(149)
+    // session 设备值（150）；记录点因 Encoder 整型截断为 149
+    expect(activity.maxHeartRate).toBe(150)
     // 合成数据功率为正弦波动（周期非整数，均值略偏离 208）
     expect(activity.avgPower).toBeGreaterThan(205)
     expect(activity.avgPower).toBeLessThan(215)
-    // Encoder 整型截断：最大功率写入 253
-    expect(activity.maxPower).toBe(253)
+    // session 设备值（254）vs 记录点截断 253
+    expect(activity.maxPower).toBe(254)
     expect(activity.avgCadence).toBeCloseTo(86, 0)
     expect(activity.calories).toBe(456)
   })

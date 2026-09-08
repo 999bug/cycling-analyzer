@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.32.1',
+    date: '2026-09-08',
+    features: [
+      '均速与距离准确性修复：FIT/GPX 优先采用设备最终值（距离/均速/最高速度/心率/功率与佳明 App、Strava 显示同源），不再由记录点回算',
+      'GPX 活动时长改为移动时间估算：红绿灯与休息的静止时间不再计入，均速不再被拉低（与 Strava 口径一致）',
+    ],
+  },
+  {
     version: '2.32.0',
     date: '2026-09-08',
     features: [
