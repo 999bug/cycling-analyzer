@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.39.0',
+    date: '2026-09-08',
+    features: [
+      '新增图文版《主流骑行软件批量导出教程》页面：9 大平台导出方式速查 + 界面截图，随站点部署',
+      '「同步骑行数据」弹窗接入教程入口：第 1 步底部可打开完整教程，第 2 步各平台指引页可直达对应章节',
+    ],
+  },
+  {
     version: '2.38.2',
     date: '2026-09-08',
     features: [

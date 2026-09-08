@@ -32,6 +32,16 @@ describe('导入向导 第 1 步（选择方式）', () => {
       expect(screen.getByText(guide.name)).toBeInTheDocument()
     }
   })
+
+  it('提供图文教程外链（新标签页打开教程页）', async () => {
+    const user = userEvent.setup()
+    render(<ImportPanel />)
+    await openDialog(user)
+
+    const link = screen.getByRole('link', { name: /图文完整教程/ })
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('href')).toMatch(/tutorial\/export-guide\.html$/)
+  })
 })
 
 describe('导入向导 第 2 步（导出指引）', () => {
@@ -70,6 +80,16 @@ describe('导入向导 第 2 步（导出指引）', () => {
     expect(screen.getByText('行者 导出指引')).toBeInTheDocument()
     expect(screen.getByText('App 直接导出（Android PRO）')).toBeInTheDocument()
     expect(screen.getByText('轨迹转路书（免费）')).toBeInTheDocument()
+  })
+
+  it('指引页教程链接深链到当前平台章节', async () => {
+    const user = userEvent.setup()
+    render(<ImportPanel />)
+    await openDialog(user)
+
+    await user.click(screen.getByText('佳明 Garmin'))
+    const link = screen.getByRole('link', { name: /佳明 Garmin.*图文教程/ })
+    expect(link.getAttribute('href')).toMatch(/tutorial\/export-guide\.html#garmin$/)
   })
 })
 

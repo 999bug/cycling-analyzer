@@ -244,6 +244,13 @@ export const PLATFORM_GUIDES: readonly PlatformGuide[] = [
   },
 ];
 
+/**
+ * 图文完整教程页路径（public/tutorial/export-guide.html，随站点部署）。
+ * BASE_URL 适配 GitHub Pages 子路径部署；页面内各平台章节锚点与
+ * PlatformGuide.id 一致，可按 `TUTORIAL_URL#${guide.id}` 深链定位。
+ */
+export const TUTORIAL_URL = `${import.meta.env.BASE_URL}tutorial/export-guide.html`;
+
 /** 直接导入（未指定平台）的格式说明 */
 export const DIRECT_FORMAT_NOTE =
   'FIT 是设备原生格式，数据完整准确；GPX 是有损格式，汇总值由轨迹点重新推算，只能逼近原平台显示值——有 FIT 优先导 FIT。';

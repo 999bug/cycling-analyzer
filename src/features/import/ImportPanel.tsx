@@ -39,7 +39,7 @@ import type { ImportFile } from './importer';
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog';
 import PlatformGrid from './PlatformGrid';
 import PlatformGuideView from './PlatformGuideView';
-import { DIRECT_FORMAT_NOTE, DIRECT_SOURCE_NOTE, PLATFORM_GUIDES } from './platformGuides';
+import { DIRECT_FORMAT_NOTE, DIRECT_SOURCE_NOTE, PLATFORM_GUIDES, TUTORIAL_URL } from './platformGuides';
 import { useImportStore } from '@/stores/importStore';
 import { reloadPage } from '@/utils/navigation';
 import './ImportPanel.css';
@@ -387,6 +387,28 @@ function ImportPanel() {
                       或者直接把 <strong>文件 / 文件夹 / ZIP 压缩包</strong> 拖到这里
                     </span>
                   </div>
+                  <a
+                    className="import-wz__tutorial"
+                    href={TUTORIAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    图文完整教程：各平台导出方式速查（含界面截图）
+                  </a>
                 </>
               )}
 

@@ -5,7 +5,7 @@
  * 无单一标准流程的平台（行者）用多路径卡片（paths）。
  * 数据来源 platformGuides.ts，与云端教程同源维护。
  */
-import type { PlatformGuide } from './platformGuides';
+import { TUTORIAL_URL, type PlatformGuide } from './platformGuides';
 
 interface PlatformGuideViewProps {
   /** 当前平台指引 */
@@ -61,6 +61,30 @@ function PlatformGuideView({ guide, onProceed, onBack }: PlatformGuideViewProps)
           ))}
         </div>
       )}
+
+      {/* 图文教程外链：锚点与平台 id 一致，新标签页直达对应章节（含界面截图） */}
+      <a
+        className="import-wz__tutorial"
+        href={`${TUTORIAL_URL}#${guide.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+        </svg>
+        查看「{guide.name}」图文教程（含界面截图）
+      </a>
 
       <div className="import-guide__actions">
         <button type="button" className="import-wz__btn" onClick={onBack}>
