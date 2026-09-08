@@ -14,6 +14,20 @@ const ROUTER_BASENAME = import.meta.env.PROD ? '/cycling-analyzer' : '/'
 // PWA：注册 Service Worker（离线可用 + 新版本自动更新）
 registerSW({ immediate: true })
 
+// 发版兜底：部署更新后，旧页面/PWA 快照引用的哈希 chunk 已在服务器删除，
+// 动态 import（GPX/FIT 解析器等懒加载模块）会 404 报
+// "Failed to fetch dynamically imported module"。监听 Vite 预加载错误，
+// 自动刷新一次以加载与线上一致的最新版本（会话标记防循环刷新）。
+window.addEventListener('vite:preloadError', () => {
+  const flag = 'qileme:preloadReloaded'
+  if (!sessionStorage.getItem(flag)) {
+    sessionStorage.setItem(flag, '1')
+    window.location.reload()
+  }
+})
+// 应用正常加载完成后清除标记：本次会话后续发版仍可触发一次自动恢复
+window.setTimeout(() => sessionStorage.removeItem('qileme:preloadReloaded'), 10_000)
+
 // 启动时恢复持久化主题（规格 §36，异步应用，失败回退默认深色）
 void initTheme()
 

@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.36.2',
+    date: '2026-09-08',
+    features: [
+      '修复发版后导入报错：网站更新部署后，旧页面引用的懒加载模块（GPX/FIT 解析器等）在服务器已被替换，动态导入报 "Failed to fetch dynamically imported module"。现会自动检测该错误并刷新一次页面加载最新版本（遇错刷新一次、加载成功后自动复位，不会循环刷新）',
+    ],
+  },
+  {
     version: '2.36.1',
     date: '2026-09-08',
     features: [
