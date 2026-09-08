@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { registerSW } from 'virtual:pwa-register'
 import App from '@/app/App'
 import { initTheme } from '@/features/settings/theme'
 import { initDataSource } from '@/stores/dataSourceStore'
@@ -11,8 +10,8 @@ import '@/index.css'
 // 本地 dev 无前缀。仓库改名时同步更新此常量。
 const ROUTER_BASENAME = import.meta.env.PROD ? '/cycling-analyzer' : '/'
 
-// PWA：注册 Service Worker（离线可用 + 新版本自动更新）
-registerSW({ immediate: true })
+// PWA 注册移至 UpdateBanner 组件内的 useSWUpdate hook（提示式更新：
+// 新版本就绪后由醒目横幅引导用户一键刷新，替代旧 autoUpdate 的多次刷新体验）
 
 // 发版兜底：部署更新后，旧页面/PWA 快照引用的哈希 chunk 已在服务器删除，
 // 动态 import（GPX/FIT 解析器等懒加载模块）会 404 报

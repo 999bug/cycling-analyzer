@@ -4,6 +4,7 @@ import ImportPanel from '@/features/import/ImportPanel'
 import DataSourceSwitcher from '@/components/DataSourceSwitcher'
 import AuthorBanner from '@/components/AuthorBanner'
 import InstallBanner from '@/components/InstallBanner'
+import UpdateBanner from '@/components/UpdateBanner'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -149,6 +150,8 @@ function AppLayout() {
       </main>
       {/* PWA 安装引导横幅（可安装且非冷却期时展示；fixed 定位不受内容区影响） */}
       <InstallBanner />
+      {/* 新版本更新提示条（新 SW 预缓存就绪时展示；z-index 60 高于抽屉） */}
+      <UpdateBanner />
     </div>
   )
 }

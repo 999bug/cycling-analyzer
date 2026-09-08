@@ -23,8 +23,10 @@ export default defineConfig(({ command }) => {
     plugins: [
       react(),
       VitePWA({
-      // 自动更新：新版本发布后 SW 立即接管并提示刷新
-      registerType: 'autoUpdate',
+      // 提示式更新：新版本预缓存就绪后由 UpdateBanner 弹提示条，
+      // 用户点「立即更新」再接管（避免 autoUpdate 下"刷新五六次才生效"），
+      // 检测节奏（加载时 + 每小时 + 切回标签页）见 src/features/pwa/useSWUpdate.ts
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'qileme.png'],
       // Web 应用清单（PWA 离线可用：图标/独立窗口/主题色）
       manifest: {

@@ -10,6 +10,18 @@ vi.mock('@/map/CachingTileLayer', () => ({
   CachingTileLayerComponent: () => null,
 }));
 
+// PWA 注册虚拟模块：jsdom 渲染整棵 App（AppLayout → UpdateBanner）时 vitest
+// 无法真实解析该虚拟模块（报 file URL TypeError），统一 mock 成无害默认
+// （needRefresh=false 不展示提示条）。需要控制更新状态的测试（updateBanner.test）
+// 自带 vitest.mock 覆盖本默认。
+vi.mock('virtual:pwa-register/react', () => ({
+  useRegisterSW: () => ({
+    offlineReady: [false, vi.fn()],
+    needRefresh: [false, vi.fn()],
+    updateServiceWorker: vi.fn(),
+  }),
+}));
+
 /**
  * jsdom 缺少 ResizeObserver（Recharts 的 ResponsiveContainer 依赖它做布局测量），
  * 提供空实现 stub 避免组件挂载时报错。图表尺寸由 initialDimension 兜底。

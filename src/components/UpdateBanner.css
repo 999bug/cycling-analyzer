@@ -1,0 +1,156 @@
+/* 新版本更新提示条：页面顶部居中品牌色横幅，醒目是第一设计目标。
+   z-index 60 高于抽屉(50)/遮罩(40)，任何界面状态下都可见 */
+
+.update-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60; /* 高于抽屉遮罩(40)/抽屉(50)：更新提醒必须盖过一切界面 */
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 520px;
+  padding: var(--space-md) var(--space-lg);
+  border: 2px solid var(--on-primary);
+  border-radius: var(--radius-lg);
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: var(--shadow-md);
+  animation:
+    update-banner-in 0.3s ease,
+    update-banner-glow 2s ease-in-out 0.3s infinite;
+}
+
+/* 尊重减弱动态偏好：不做滑入与光晕呼吸动画 */
+@media (prefers-reduced-motion: reduce) {
+  .update-banner {
+    animation: none;
+  }
+}
+
+.update-banner__icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.update-banner__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.update-banner__title {
+  margin: 0 0 2px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.update-banner__desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.update-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.update-banner__apply {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--on-primary);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.update-banner__apply:hover {
+  filter: brightness(1.08);
+}
+
+.update-banner__apply:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-banner__dismiss {
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.update-banner__dismiss:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.update-banner__dismiss:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 顶部居中横幅滑入 + 呼吸光晕（品牌色投影涨落，远处也注意得到） */
+@keyframes update-banner-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes update-banner-glow {
+  0%,
+  100% {
+    box-shadow: var(--shadow-md);
+  }
+  50% {
+    box-shadow:
+      var(--shadow-md),
+      0 0 28px color-mix(in srgb, var(--primary) 55%, transparent);
+  }
+}
+
+/* 移动端：顶部通栏（留出安全区），图标与按钮缩小 */
+@media (max-width: 768px) {
+  .update-banner {
+    top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
+    right: var(--space-md);
+    left: var(--space-md);
+    max-width: none;
+    padding: var(--space-md);
+  }
+
+  .update-banner__icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* 窄屏按钮组换行到文案下方 */
+  .update-banner {
+    flex-wrap: wrap;
+  }
+
+  .update-banner__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .update-banner__apply {
+    padding: 10px 16px;
+  }
+}

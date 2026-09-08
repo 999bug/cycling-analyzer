@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（[IM] GPX 爬升估算对齐设备口径——平滑+滞回+坡度门限，Strava 样本 2818m→1839m（真值 1825m）；版本 2.36.2 → 2.36.3）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-08（[NF] 新版本更新提示条：registerType autoUpdate→prompt，顶部品牌色横幅一键更新替代「刷新五六次才生效」；版本 2.37.0 → 2.38.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -18,6 +18,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| ✅ 已提交 | **[NF] 新版本更新提示条（PWA 提示式更新）**（用户反馈：每次发版后要点刷新 5~6 次才更新——根因 autoUpdate 下刷新只触发检查，新 SW 预缓存 install 未完成前反复刷新无效，且激活后无 controllerchange 自动 reload） | ①vite.config registerType 'autoUpdate' → 'prompt'（新 SW 预缓存就绪后 waiting，由用户决定接管时机）；②新建 `src/features/pwa/useSWUpdate.ts`：useRegisterSW 包装（needRefresh/applyUpdate），onRegisteredSW 布置每小时 `registration.update()` + visibilitychange/focus 检查；③新建 `src/components/UpdateBanner.tsx/.css`：顶部居中品牌色横幅（role=alert、呼吸光晕、z-index 60 高于抽屉、移动端顶部通栏留安全区、prefers-reduced-motion 降级），「立即更新」→ updateServiceWorker(true) 接管后自动刷新 + 更新中禁用防重复，「稍后」本次会话隐藏；④main.tsx 移除 registerSW（移交 hook），AppLayout 挂载 UpdateBanner；⑤tests/setup.ts 全局 mock virtual:pwa-register/react（jsdom 渲染整棵 App 无法真实解析该虚拟模块，updateBanner.test 自带 mock 覆盖默认）；⑥测试：新 updateBanner.test.tsx 5 用例 | 全量 1057/1057 + lint/build 绿；版本 2.37.0 → 2.38.0，changelog 已追加 |
 | ✅ 已提交 | **[NF] 导入弹窗重构为三步向导（UI-9）**（用户需求：用户点「同步骑行数据」后不知道怎么同步、怎么找自己 App 导出的数据再导入；经三轮原型确认——①三步向导 ②加直接导入入口 ③指引随平台切换） | ①新建 `platformGuides.ts`：9 平台导出指引数据（Strava/佳明/行者/iGPSPORT/XOSS/黑鸟/迈金/高驰/Keep——卡片摘要/meta/标签/steps 或 paths/source 映射/formatNote 格式说明，内容与云端教程同源）；②新建 `PlatformGrid.tsx`（第 1 步：直接导入双卡片置顶 + 平台 3 列网格 + 常驻拖拽条）、`PlatformGuideView.tsx`（第 2 步：按平台渲染 steps 列表或行者多路径卡片，tags 标签，返回/进入导入按钮）；③`ImportPanel.tsx` 重写为向导壳：步骤条（选择方式/导出指引/导入数据，直接导入路径第 2 步标记「已跳过」，aria-current），数据源由所选平台自动确定（删除手选 IMPORT_SOURCE_OPTIONS，source = selected?.source ?? 'other'），第 3 步拖拽区/目录/文件入口 + 来源解析提示 + 格式说明（FIT 原生无损 / GPX 有损需重新推算）；导入逻辑（scanner/expandArchives/stravaCsv/garminTitles/单文件编辑框/关闭刷新）全保留；④`ImportPanel.css`：弹窗加宽 480px，向导步骤条/直接卡片/平台网格/指引/第 3 步样式（语义 token + color-mix），768px 断点网格降 2 列、卡片纵排；⑤`importSources.ts` 清理：删 IMPORT_SOURCE_OPTIONS/ImportSourceOption（无引用），保留 ImportSource/isStravaSource；⑥测试：新 `importWizard.test.tsx` 9 用例（双入口/9 平台渲染/佳明与 Strava 指引切换/行者多路径/第 3 步自适应提示/直接导入跳过指引/步骤条返回/Esc 关闭/导入中禁切换），importPanelReload 6 用例零改动通过 | 全量 1052/1052 + lint 绿；版本 2.36.3 → 2.37.0，changelog 已追加 |
 | ✅ 已提交 | **[IM] GPX 爬升/下降估算对齐设备口径**（用户反馈：Strava 导出 GPX 导入后爬升 +2818m vs Strava 显示 1825m，虚高 54%。定位：Strava GPX 导出带的是设备气压计原始海拔（整数取整），设备显示值 1825m 是内部算法结果；裸累加在量化噪声下大幅虚高，且干净气压数据裸累加同样 2818m） | ①calculator.ts 重写 calculateElevationProfile：滑动平均平滑（窗口≈30s 按采样间隔自适应 3~51 点）+ 3m 滞回状态机 + 5% 坡度门限（水平距离优先累计距离差、速度×时间兜底、均缺失按可通过、点间距≤0.5m 按 0 防漂移延伸）；session.totalAscent/totalDescent 仍优先（FIT 不受影响）；②标定：行者码表 210km 样本上本组合输出 1826m（偏差 <1%），端到端 Strava GPX 输出 1838.7m（+0.75%）；③测试：爬升 describe 重写为 6 用例（滞回结算/噪声归零/漂移归零/缺失跳过/无距离兜底/无海拔 undefined），全量绿 | 版本 2.36.2 → 2.36.3，changelog 已追加 |
 | ✅ 已提交 | **[BF] 发版后懒加载 chunk 404 自动恢复**（用户反馈：线上导入 GPX 报 "Failed to fetch dynamically imported module: gpxParser-dyED_lJh.js"——发版后浏览器/PWA 旧快照引用的哈希 chunk 已被服务器删除；线上部署本身正常，新 chunk 200） | ①main.tsx 监听 `vite:preloadError`，自动刷新一次加载最新版本（sessionStorage 标记防循环，加载成功 10s 后复位标记）；②gpxParser/parseWorker 走运行时缓存不进预缓存（vite.config 既有设计），发版窗口最易踩中，此兜底覆盖所有懒加载模块 | 版本 2.36.1 → 2.36.2，changelog 已追加 |
