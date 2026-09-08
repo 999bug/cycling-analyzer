@@ -1,0 +1,187 @@
+/**
+ * 批量删除确认弹窗样式。
+ * 颜色取自全局 CSS 变量，与批量重命名弹窗、列表页一致。
+ */
+
+/* 遮罩层 */
+.delete-activities__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* 弹窗主体 */
+.delete-activities {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(520px, 92vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+}
+
+.delete-activities__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-activities__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.delete-activities__close {
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.delete-activities__close:hover {
+  color: var(--text);
+}
+
+.delete-activities__summary {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* 脏数据阈值输入行 */
+.delete-activities__threshold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-elevated, var(--bg-surface));
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.delete-activities__threshold input {
+  width: 64px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.delete-activities__threshold input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* 疑似脏数据警告块 */
+.delete-activities__warn {
+  padding: 10px 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.delete-activities__warn-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+/* 待删除条目列表 */
+.delete-activities__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.delete-activities__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.delete-activities__item:last-child {
+  border-bottom: none;
+}
+
+.delete-activities__item--dirty {
+  color: var(--text);
+}
+
+.delete-activities__reason {
+  color: var(--warning);
+  text-align: right;
+}
+
+.delete-activities__result {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.delete-activities__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+/* 底部操作按钮 */
+.delete-activities__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.delete-activities__button {
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.delete-activities__button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.delete-activities__button--danger {
+  border-color: var(--danger);
+  background-color: var(--danger);
+  color: var(--on-danger);
+}
+
+.delete-activities__button--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--on-danger);
+  filter: brightness(1.1);
+}
+
+.delete-activities__button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

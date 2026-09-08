@@ -1,8 +1,14 @@
 /**
- * 骑行记录筛选栏：搜索框 + 月份下拉 + 类型下拉 + 距离/爬升/功率数值筛选（规格 §14、§30）。
+ * 骑行记录筛选栏：搜索框 + 月份下拉 + 类型下拉 + 自定义条件 chips
+ * + 距离/爬升/功率数值筛选（规格 §14、§30）。
  * 月份/类型选项由父组件从全量数据生成，空值表示"全部"。
  * 数值筛选输入为空 = 不限制；校验（非负数字）由父组件完成，本组件只做输入收集。
+ *
+ * 扩展（2026-09）：已生效的自定义筛选条件以 chips 形式展示在「类型」下拉右侧
+ * （chips 节点由父组件传入，含移除交互），与既有筛选并列。
  */
+import type { ReactNode } from 'react'
+
 interface ActivityFiltersProps {
   /** 可用月份列表（'2026-08'） */
   months: string[]
@@ -35,6 +41,9 @@ interface ActivityFiltersProps {
   onMinElevationGainChange: (m: string) => void
   onMinAvgPowerChange: (w: string) => void
 
+  /** 自定义筛选条件 chips（展示在类型下拉右侧；缺省不渲染） */
+  chips?: ReactNode
+
   /** 重置全部筛选条件（仅手动点击触发） */
   onReset: () => void
 
@@ -66,6 +75,7 @@ function ActivityFilters({
   onMinDistanceChange,
   onMinElevationGainChange,
   onMinAvgPowerChange,
+  chips,
   onReset,
   onOpenBatchRename,
   batchRenameDisabled = false,
@@ -116,6 +126,8 @@ function ActivityFilters({
           ))}
         </select>
       </label>
+      {/* 自定义筛选条件 chips：紧跟类型下拉右侧，可换行延伸 */}
+      {chips !== undefined && <div className="activity-filters__chips">{chips}</div>}
       <label className="activity-filters__item" htmlFor="activity-filter-min-distance">
         距离(km)
         <input

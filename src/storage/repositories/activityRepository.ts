@@ -31,8 +31,19 @@ export interface RecordQueryOptions {
  * 活动列表查询选项。
  */
 export interface ActivityListOptions {
-  /** 排序字段（默认 startTime） */
-  sortBy?: 'startTime' | 'distance' | 'duration';
+  /**
+   * 排序字段（默认 startTime）。
+   * 覆盖列表页全部 8 列：名称/时间/距离/时长/爬升/平均速度/平均心率/平均功率。
+   */
+  sortBy?:
+    | 'name'
+    | 'startTime'
+    | 'distance'
+    | 'duration'
+    | 'elevationGain'
+    | 'avgSpeed'
+    | 'avgHeartRate'
+    | 'avgPower';
 
   /** 排序方向（默认 desc） */
   sortOrder?: 'asc' | 'desc';
@@ -64,11 +75,35 @@ export interface ActivityListOptions {
   /** 最大累计爬升（米，undefined = 不限制） */
   maxElevationGain?: number;
 
+  /** 最小骑行时长（秒，undefined = 不限制） */
+  minDuration?: number;
+
+  /** 最大骑行时长（秒，undefined = 不限制） */
+  maxDuration?: number;
+
+  /** 最小平均速度（m/s，undefined = 不限制） */
+  minAvgSpeed?: number;
+
+  /** 最大平均速度（m/s，undefined = 不限制） */
+  maxAvgSpeed?: number;
+
+  /** 最小平均心率（bpm，undefined = 不限制；心率缺失的活动不满足条件） */
+  minAvgHeartRate?: number;
+
+  /** 最大平均心率（bpm，undefined = 不限制；心率缺失的活动不满足条件） */
+  maxAvgHeartRate?: number;
+
   /** 最小平均功率（W，undefined = 不限制；功率缺失的活动不满足条件） */
   minAvgPower?: number;
 
   /** 最大平均功率（W，undefined = 不限制；功率缺失的活动不满足条件） */
   maxAvgPower?: number;
+
+  /** 起始日期下界（YYYY-MM-DD，按活动 UTC 日期前缀比较，含边界） */
+  startTimeFrom?: string;
+
+  /** 结束日期上界（YYYY-MM-DD，按活动 UTC 日期前缀比较，含边界） */
+  startTimeTo?: string;
 }
 
 /**
@@ -252,8 +287,16 @@ export function queryActivityList(
     maxDistance,
     minElevationGain,
     maxElevationGain,
+    minDuration,
+    maxDuration,
+    minAvgSpeed,
+    maxAvgSpeed,
+    minAvgHeartRate,
+    maxAvgHeartRate,
     minAvgPower,
     maxAvgPower,
+    startTimeFrom,
+    startTimeTo,
   } = options;
 
   let items = [...all];
@@ -274,20 +317,46 @@ export function queryActivityList(
     }
   }
 
-  // 数值范围筛选（单位与领域模型一致：距离米、爬升米、功率 W；含边界，组合为 AND）。
-  // 可选字段（avgPower/elevationGain）缺失的活动不满足任何对应条件（显式排除 undefined，
-  // 与 avgPower 同口径：无海拔数据源的 GPX 无法参与爬升筛选）
+  // 日期区间筛选（按活动 UTC 日期前缀 YYYY-MM-DD 比较，含边界；自定义筛选日期条件）
+  if (startTimeFrom !== undefined) {
+    items = items.filter((a) => a.startTime.slice(0, 10) >= startTimeFrom);
+  }
+  if (startTimeTo !== undefined) {
+    items = items.filter((a) => a.startTime.slice(0, 10) <= startTimeTo);
+  }
+
+  // 数值范围筛选（单位与领域模型一致：距离米、时长秒、爬升米、速度 m/s、心率 bpm、功率 W；
+  // 含边界，组合为 AND）。可选字段（elevationGain/avgHeartRate/avgPower）缺失的活动
+  // 不满足任何对应条件（显式排除 undefined，与既有口径一致：无数据的字段无法参与比较）
   if (minDistance !== undefined) {
     items = items.filter((a) => a.distance >= minDistance);
   }
   if (maxDistance !== undefined) {
     items = items.filter((a) => a.distance <= maxDistance);
   }
+  if (minDuration !== undefined) {
+    items = items.filter((a) => a.duration >= minDuration);
+  }
+  if (maxDuration !== undefined) {
+    items = items.filter((a) => a.duration <= maxDuration);
+  }
   if (minElevationGain !== undefined) {
     items = items.filter((a) => a.elevationGain !== undefined && a.elevationGain >= minElevationGain);
   }
   if (maxElevationGain !== undefined) {
     items = items.filter((a) => a.elevationGain !== undefined && a.elevationGain <= maxElevationGain);
+  }
+  if (minAvgSpeed !== undefined) {
+    items = items.filter((a) => a.avgSpeed !== undefined && a.avgSpeed >= minAvgSpeed);
+  }
+  if (maxAvgSpeed !== undefined) {
+    items = items.filter((a) => a.avgSpeed !== undefined && a.avgSpeed <= maxAvgSpeed);
+  }
+  if (minAvgHeartRate !== undefined) {
+    items = items.filter((a) => a.avgHeartRate !== undefined && a.avgHeartRate >= minAvgHeartRate);
+  }
+  if (maxAvgHeartRate !== undefined) {
+    items = items.filter((a) => a.avgHeartRate !== undefined && a.avgHeartRate <= maxAvgHeartRate);
   }
   if (minAvgPower !== undefined) {
     items = items.filter((a) => a.avgPower !== undefined && a.avgPower >= minAvgPower);
@@ -296,9 +365,20 @@ export function queryActivityList(
     items = items.filter((a) => a.avgPower !== undefined && a.avgPower <= maxAvgPower);
   }
 
-  // 排序（startTime 为 ISO 字符串，字典序即时间序；数字字段按值序）
+  // 排序（数字字段按值序，缺失按 0 参与即沉底；字符串字段 startTime/name 按字典序）
   const direction = sortOrder === 'asc' ? 1 : -1;
   items.sort((a, b) => {
+    if (sortBy === 'name' || sortBy === 'startTime') {
+      const left = sortBy === 'name' ? (a.name ?? '') : a.startTime;
+      const right = sortBy === 'name' ? (b.name ?? '') : b.startTime;
+      if (left < right) {
+        return -direction;
+      }
+      if (left > right) {
+        return direction;
+      }
+      return 0;
+    }
     const left = a[sortBy] ?? 0;
     const right = b[sortBy] ?? 0;
     if (left < right) {

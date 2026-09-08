@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="BNLIrhzmBiOoDr9aYXbIHF">
+<head data-page-node-id="m8WzTuiSYHFk0J508AVx0n">
+<meta charset="UTF-8" data-page-node-id="92HyMZG0FUPpI9skcKoZ4D">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="WAql6l8HILDDV1sRBJOP52">
+<title>骑行记录列表改进原型 v2 · 排序持久化 + 自定义筛选（可保存预设）+ 批量删除</title>
+<style>
+  /* ===== 对齐项目 Design Token（src/index.css）===== */
+  :root {
+    --bg: #121417;
+    --bg-surface: #1b1e23;
+    --bg-elevated: #232830;
+    --text: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --text-tertiary: #6b7178;
+    --primary: #b8e62e;
+    --on-primary: #0d3b4c;
+    --border: #2a2e35;
+    --danger: #ff453a;
+    --on-danger: #ffffff;
+    --warning: #ff9f0a;
+    --info: #4f8cff;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    padding: 24px;
+  }
+  .page { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .page-sub { color: var(--text-secondary); font-size: 12px; margin-bottom: 20px; }
+  .page-sub b { color: var(--primary); }
+
+  .req-tags { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .req-tag {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .req-tag b { color: var(--primary); }
+
+  /* ===== 主筛选栏（chips 放在类型右侧）===== */
+  .filters {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 10px 16px; margin-bottom: 10px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > span { font-size: 12px; color: var(--text-secondary); }
+  .field input, .field select {
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius-md); padding: 6px 10px;
+    font-size: 13px; min-width: 90px; outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--primary); }
+  .field input[type="number"] { width: 88px; }
+
+  /* 已生效条件 chips：紧跟类型下拉右侧，可换行延伸 */
+  .active-chips {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    flex: 1; min-width: 200px; padding: 0 4px;
+  }
+  .active-chips .none { color: var(--text-tertiary); font-size: 12px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg-elevated); border: 1px solid var(--primary); color: var(--text);
+    font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip .x { cursor: pointer; color: var(--text-secondary); font-weight: 700; }
+  .chip .x:hover { color: var(--danger); }
+
+  /* ===== 自定义筛选构建行 ===== */
+  .custom-filter {
+    display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;
+    padding: 10px 16px; margin-bottom: 10px;
+    background: var(--bg-surface); border: 1px dashed var(--border); border-radius: var(--radius-lg);
+  }
+  .custom-filter .label {
+    font-size: 12px; color: var(--primary); font-weight: 600; padding-bottom: 8px; white-space: nowrap;
+  }
+  .btn {
+    border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text);
+    border-radius: var(--radius-md); padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--primary); }
+  .btn--primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+  .btn--danger { background: var(--danger); color: var(--on-danger); border-color: var(--danger); font-weight: 600; }
+  .btn--ghost { background: transparent; color: var(--text-secondary); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .hint { font-size: 12px; color: var(--text-tertiary); padding-bottom: 8px; }
+
+  /* 预设区 */
+  .presets {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 8px 16px; margin-bottom: 10px;
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  }
+  .presets .p-label { font-size: 12px; color: var(--info); font-weight: 600; white-space: nowrap; }
+  .presets select { flex: 0 1 260px; }
+  .presets .p-name { font-size: 12px; color: var(--text-secondary); }
+
+  /* ===== 工具行 ===== */
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+  .result-info { color: var(--text-secondary); font-size: 12px; }
+  .result-info b { color: var(--text); }
+  .sort-state { color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .sort-state .active { color: var(--primary); }
+  .toolbar-actions { display: flex; gap: 8px; align-items: center; }
+  .selection-info { font-size: 12px; color: var(--warning); }
+
+  /* ===== 表格 ===== */
+  .table-wrap { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 10px 12px; text-align: left; white-space: nowrap; }
+  th {
+    font-size: 12px; color: var(--text-secondary); font-weight: 500;
+    border-bottom: 1px solid var(--border); background: var(--bg-surface); position: sticky; top: 0;
+  }
+  td { border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--bg-elevated); }
+  th.num, td.num { text-align: right; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th .arrow { color: var(--primary); margin-left: 4px; font-weight: 700; }
+  th.sortable--active { color: var(--primary); }
+  .title-link { color: var(--text); text-decoration: none; }
+  .title-link:hover { color: var(--primary); text-decoration: underline; }
+  .col-check { width: 36px; text-align: center; }
+  input[type="checkbox"] { accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer; }
+  tr.selected { background: rgba(184, 230, 46, 0.08); }
+  tr.selected:hover { background: rgba(184, 230, 46, 0.12); }
+
+  /* ===== 弹窗 ===== */
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .mask.open { display: flex; }
+  .dialog {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    width: 500px; max-width: calc(100vw - 48px); max-height: 84vh; overflow: auto;
+    box-shadow: var(--shadow-md); padding: 20px;
+  }
+  .dialog h3 { font-size: 15px; margin-bottom: 10px; }
+  .dialog p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px; }
+  .threshold-box {
+    border: 1px solid var(--border); background: var(--bg-surface);
+    border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 12px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--text-secondary);
+  }
+  .threshold-box input {
+    width: 64px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-md); padding: 4px 8px; font-size: 13px; outline: none;
+  }
+  .threshold-box input:focus { border-color: var(--primary); }
+  .warn-box { border: 1px solid var(--warning); background: rgba(255, 159, 10, 0.08); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 12px; }
+  .warn-box .warn-title { color: var(--warning); font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .dialog ul { list-style: none; }
+  .dialog li {
+    font-size: 12px; color: var(--text-secondary); padding: 5px 0;
+    border-bottom: 1px dashed var(--border); display: flex; justify-content: space-between; gap: 10px;
+  }
+  .dialog li:last-child { border-bottom: none; }
+  .dialog li .reason { color: var(--warning); }
+  .dialog .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+  /* ===== 设计说明 ===== */
+  .notes { margin-top: 24px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; }
+  .notes h2 { font-size: 14px; margin-bottom: 10px; color: var(--primary); }
+  .notes li { font-size: 12.5px; color: var(--text-secondary); line-height: 1.9; margin-left: 18px; }
+  .notes li b { color: var(--text); }
+</style>
+</head>
+<body data-page-node-id="qNNF0qIAZBsEavcQBHFbrx">
+<div class="page" data-page-node-id="6smQmzsa6EPw9V1L7Y5cJ6">
+  <h1 data-page-node-id="tztdNSeTM2Ime7u0MYAvVT">骑行记录 · 列表改进原型 v2</h1>
+  <div class="page-sub" data-page-node-id="ufErzU18GWMaRaoNAjRsXW">根据反馈修订：去行内脏标记（阈值删除时自设）· 加「介于」区间 · 条件 chips 放类型右侧 · 筛选条件可命名保存、刷新后仍可用（localStorage 真实生效，可刷新验证）</div>
+
+  <div class="req-tags" data-page-node-id="oFghqsuTFwq13pCwPjSGkO">
+    <span class="req-tag" data-page-node-id="vcKjZmAOGp7bKnBMJtMSXY"><b data-page-node-id="rQGJopdbRcBJWHLWk3Y82k">需求 1</b> 8 列全可排序 · localStorage 持久化 · 手动重置</span>
+    <span class="req-tag" data-page-node-id="XFBSJspecIHGMOUMoVCAGN"><b data-page-node-id="X3y2Fp99r5FR3hkbEU5LJj">需求 2</b> 自定义筛选：大于/等于/小于/介于 + 条件可保存为预设</span>
+    <span class="req-tag" data-page-node-id="BcIxKfd2jB7aYb1kgROS6F"><b data-page-node-id="0h49i3DbdXzTnthpjEJJMq">需求 3</b> 勾选批量删除 · 脏数据阈值用户自设 · 无行内标记</span>
+  </div>
+
+  <!-- 主筛选栏：chips 位于类型右侧 -->
+  <div class="filters" data-page-node-id="Oh7TWYS8lYptX0ky1TVkIW">
+    <label class="field" data-page-node-id="XF6gxwApt967gFNwZBozks"><span data-page-node-id="GQIWCTS4FmEFNQWvNPHIuO">搜索</span><input type="search" placeholder="标题或文件名" style="width:150px" data-page-node-id="caF5fEqsIxHTgp2v3L9eDG"></label>
+    <label class="field" data-page-node-id="e4iSGdppV8pYHpK0gNiSIc"><span data-page-node-id="xjBAdT3nbOpPsJvNlgcFqf">月份</span><select data-page-node-id="keTxtXAnsagdovfDvhnxuA"><option data-page-node-id="scO7SnfKzRXuSJjgRDQGB6">全部月份</option><option data-page-node-id="3aIoxuxTJouIOUeU1YAOT9">2026-08</option><option data-page-node-id="zI8ewKRAKScrlvjHkGqeYO">2026-07</option></select></label>
+    <label class="field" data-page-node-id="Fz6KwzThoRZelKmks3UoJO"><span data-page-node-id="Y54cVqULESpS0cwOFXSn7Z">类型</span><select data-page-node-id="QIs65BvVLTEOgD0yHdaomb"><option data-page-node-id="qfZEAUearIxQTsk85ie7I1">全部类型</option><option data-page-node-id="JodfqqutlSmwCGkrWmwCbG">骑行</option></select></label>
+    <div class="active-chips" id="activeChips" data-page-node-id="9zjGH2AQdzp1439CIuKhHz"></div>
+    <button class="btn btn--ghost" onclick="clearAllFilters()" data-page-node-id="E8OFuxQXaJVPYtbtTQuHTA">重置筛选</button>
+  </div>
+
+  <!-- 自定义筛选构建行 -->
+  <div class="custom-filter" data-page-node-id="RrG25IaBpFtZfh7nKcGTyi">
+    <span class="label" data-page-node-id="6hcA5RIeg8CjDsyEP0mx4g">＋ 自定义筛选</span>
+    <label class="field" data-page-node-id="KOX61ENNEs6rh3iXW9gJlN"><span data-page-node-id="6EbOXRriSezO5ZvoLFkTMj">字段</span>
+      <select id="cfField" onchange="onFieldChange()" data-page-node-id="eoSLlqgHUD6BiWQWNvjias">
+        <option value="distance" data-page-node-id="psHAf0FAX8aLH677yvhfuQ">距离 (km)</option>
+        <option value="elevation" data-page-node-id="z3ixDbg52B46Q9EgMFWQnv">爬升 (m)</option>
+        <option value="duration" data-page-node-id="QUW2VHcqijFk168EayeeJG">时长 (分钟)</option>
+        <option value="avgSpeed" data-page-node-id="Bh9YY4i7Tw5wcYDp6gUSPf">平均速度 (km/h)</option>
+        <option value="avgHeartRate" data-page-node-id="1GKAgtcaqWwq3r5Ieiu2OF">平均心率 (bpm)</option>
+        <option value="avgPower" data-page-node-id="fUU6Az9sBDPCzQCbYR9Jtd">平均功率 (W)</option>
+        <option value="startTime" data-page-node-id="SV5xdyDrJ4Fv1Shog3OQtU">日期</option>
+      </select>
+    </label>
+    <label class="field" data-page-node-id="HJpXcvlRntyyfMqHWtex1M"><span data-page-node-id="ZUBtDkcruuDYgV7nsaEuof">条件</span>
+      <select id="cfOp" data-page-node-id="3T29HzYBSLE9tDUeuAzwCl">
+        <option value="gt" data-page-node-id="MUQ5xqbxkYUROEBxgct5zP">大于</option>
+        <option value="eq" data-page-node-id="JsDWwKR4J1WLctxJcTVGNa">等于</option>
+        <option value="lt" data-page-node-id="8toAuEADPqVhIm9AOb95kQ">小于</option>
+        <option value="between" data-page-node-id="3caYVcwpbpwfQSNL5P0KqX">介于</option>
+      </select>
+    </label>
+    <label class="field" data-page-node-id="65BHQASC5Fnv3p29VffN6m"><span id="cfValueLabel" data-page-node-id="lNsViQxYWPHilb8yIBoEcO">数值</span>
+      <input id="cfValue" type="number" placeholder="如 25" data-page-node-id="HXoDCUVYTLJwULBVHIvHo5">
+    </label>
+    <label class="field" id="cfValue2Wrap" style="display:none" data-page-node-id="bke7JLtQk06SrJHBJw0K8l"><span data-page-node-id="vfPzqOYPt3N46RGUPzUGEs">至</span>
+      <input id="cfValue2" type="number" placeholder="如 40" data-page-node-id="b2Lqb4I3CtZgMHDcdlVYsk">
+    </label>
+    <button class="btn btn--primary" onclick="addCustomFilter()" data-page-node-id="Urmdyh4bYH7lGXXGrWhEQg">添加条件</button>
+    <button class="btn" onclick="savePreset()" data-page-node-id="xwhi9y3ei8nGuXMI8pSRbk">保存为预设</button>
+    <span class="hint" data-page-node-id="oUywoO9QxlXEBPbTrYHE91">多个条件同时生效（且关系）；选「介于」后出现第二个输入框</span>
+  </div>
+
+  <!-- 已保存预设 -->
+  <div class="presets" data-page-node-id="O8NUhlILToPDfZs31S3lY3">
+    <span class="p-label" data-page-node-id="bSfvsncBgRd6ulWvk6sBwA">已保存的筛选预设</span>
+    <select id="presetSelect" onchange="applyPreset(this.value)" data-page-node-id="Nr2cFHvlpxzCLk5UxzFI0b"><option value="" data-page-node-id="ReyVj2xuN4fYhOQhcDXrLm">— 选择预设快速套用 —</option></select>
+    <button class="btn btn--ghost" onclick="deletePreset()" data-page-node-id="wezGTYljEirxlsI3U16GgF">删除选中预设</button>
+    <span class="p-name" id="presetHint" data-page-node-id="XaDPNqjLMIqkrLPKiLsbTs">保存在本地 localStorage，刷新页面后仍可用；套用后即可编辑并保存修改</span>
+  </div>
+
+  <!-- 工具行 -->
+  <div class="toolbar" data-page-node-id="Qr9uCudaUzfyujEHD3rlpV">
+    <div class="result-info" data-page-node-id="QGJSUYmMbXCJ8PwGgUXBkT">共 <b id="countAll" data-page-node-id="EDMOpsQCshBS9zgAZX7uxS">12</b> 条记录，筛选后 <b id="countShown" data-page-node-id="pDuOGeEnhFBC8IqnVyCfYs">12</b> 条</div>
+    <div class="sort-state" id="sortState" data-page-node-id="UIbyPKyEqPezrVjnsbAhVb"></div>
+    <div class="toolbar-actions" id="selectionActions" style="display:none" data-page-node-id="NjTucVqyDEWAaxqrYSiW4s">
+      <span class="selection-info" id="selectionInfo" data-page-node-id="3ZtL353GOAM2LjcXoa0Gqu"></span>
+      <button class="btn" onclick="clearSelection()" data-page-node-id="lkYyg6FEz8nfpfR9TyGEjq">取消勾选</button>
+      <button class="btn btn--danger" onclick="openDeleteDialog()" data-page-node-id="qLwHtsQwBS9se53OFiRCNG">删除选中</button>
+    </div>
+  </div>
+
+  <!-- 表格（无行内脏标记） -->
+  <div class="table-wrap" data-page-node-id="lYW4MjPn9Ha9oVvJU5OWEC">
+    <table data-page-node-id="avEkEIaJ6axxN79iPWV1uy">
+      <thead data-page-node-id="jLfPOfVx81O4woHPc8tnrd">
+        <tr data-page-node-id="F2S0F5YUjfBsNSeApG2jOo">
+          <th class="col-check" data-page-node-id="SgGBZF3uUsX5K8wfgCy2m2"><input type="checkbox" id="checkAll" onchange="toggleAll(this.checked)" title="全选/取消全选" data-page-node-id="MIRqaQEj55102RIDhDDRte"></th>
+          <th class="sortable" data-key="title" onclick="sortBy('title')" data-page-node-id="priDW91gl49tpP2EyDMLYt">标题<span class="arrow" data-page-node-id="cZFxKP39GHhUqcUITSfQDg"></span></th>
+          <th class="sortable" data-key="startTime" onclick="sortBy('startTime')" data-page-node-id="zZG6G2O5MB9JYTMBHS0XvQ">日期<span class="arrow" data-page-node-id="8elb8b59sqWOUUr4yiegsR"></span></th>
+          <th class="sortable num" data-key="distance" onclick="sortBy('distance')" data-page-node-id="vS4XnD88rVhD8E1p1xtsFh">距离<span class="arrow" data-page-node-id="DTtpksWQOfprlsPnSRMei1"></span></th>
+          <th class="sortable num" data-key="duration" onclick="sortBy('duration')" data-page-node-id="f4iwozDty4YGuzgYmyotMk">时长<span class="arrow" data-page-node-id="71OFx7GWVOldjXqftfOuPO"></span></th>
+          <th class="sortable num" data-key="elevation" onclick="sortBy('elevation')" data-page-node-id="UuTZK3uAb6cBF0iCpq5SF8">爬升<span class="arrow" data-page-node-id="e04l3EGy2gUYE56YPDkDBK"></span></th>
+          <th class="sortable num" data-key="avgSpeed" onclick="sortBy('avgSpeed')" data-page-node-id="qUQcmAJWR1NkC3HR2WPqOA">平均速度<span class="arrow" data-page-node-id="axUHi5Wtju6RC8ufIDN2KC"></span></th>
+          <th class="sortable num" data-key="avgHeartRate" onclick="sortBy('avgHeartRate')" data-page-node-id="OC1xdB5ojJ8G7X418FWxOh">平均心率<span class="arrow" data-page-node-id="oAZs1W7rWicTQtaKL444PJ"></span></th>
+          <th class="sortable num" data-key="avgPower" onclick="sortBy('avgPower')" data-page-node-id="xyl7vwO8LgAEBCde5IcHs0">平均功率<span class="arrow" data-page-node-id="R8r7O37yI8svQBswidGybn"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody" data-page-node-id="EqxZZ1foevPV98vwbBR6V7"></tbody>
+    </table>
+  </div>
+
+  <div class="notes" data-page-node-id="kKK9J1BtROBojmV19pHEod">
+    <h2 data-page-node-id="A81JO4kYXiNvwE2Y1uO0ZK">设计说明（v2 修订点）</h2>
+    <ul data-page-node-id="u91BOTVjwDmTkhWBCvZMrL">
+      <li data-page-node-id="f8tPbO7JdKRXlvbCEbWaAL"><b data-page-node-id="56qGfmAynHeFiDavfNBqSC">去掉行内标记</b>：表格不再显示「脏？」徽标，列表保持干净；脏数据只在删除确认时按阈值识别。</li>
+      <li data-page-node-id="H1PRr37THMkN5JrUt2kBeF"><b data-page-node-id="6PcDDBVTWDq13uha3TlJu3">阈值用户自设</b>：删除确认弹窗顶部提供阈值输入（距离 &lt; N km 或时长 &lt; N 分钟，默认 5km/10min），修改后下方疑似脏数据列表实时更新；阈值仅本次删除弹窗内生效。</li>
+      <li data-page-node-id="XRNJuWN2fiGuou9ZTvwr4g"><b data-page-node-id="bD4SgTi8PtZNRaK9uGK6Yp">「介于」区间</b>：条件新增「介于」，选择后出现「数值 至 数值」两个输入框，闭区间匹配（含边界）；日期字段同理为「起始日期 至 结束日期」。</li>
+      <li data-page-node-id="qEtlC9EGd9g8iRVaxM8niF"><b data-page-node-id="FLCpeEG3WDFDHwok2g3cRD">条件 chips 前移</b>：已生效的自定义筛选条件以 chip 形式展示在「类型」下拉右侧（主筛选栏内），点 × 移除单个条件，与搜索/月份/类型并列。</li>
+      <li data-page-node-id="mkElHV3uBXcCCSnpU20vVt"><b data-page-node-id="WDYim8t6yUibmW1WTN9HMp">预设持久化</b>：「保存为预设」命名后存入 localStorage；「已保存的筛选预设」下拉可随时套用、删除；刷新页面后预设与当前生效条件都会恢复（本原型 localStorage 真实生效，可刷新验证）。排序状态同样持久化。</li>
+      <li data-page-node-id="3wQklk2dr4UkKFudrzE8bF">实现上条件数据结构为 <code data-page-node-id="6m1XOu0Nbmt3Kyy4CgfCo1">{ field, op, value, value2? }</code>，预设为 <code data-page-node-id="KRgNoNndeAK8ETbTGytNE3">{ name, conditions[] }</code>；与现有搜索/月份/类型筛选叠加生效。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- 删除确认弹窗（阈值自设） -->
+<div class="mask" id="mask" data-page-node-id="XSMXCzoZcuOkMhc5fnmj2i">
+  <div class="dialog" data-page-node-id="mBkuWuyaFBR0n3nVk6noyt">
+    <h3 data-page-node-id="TpIb4WR4erHGWeKdtyJGFg">确认删除</h3>
+    <p id="delSummary" data-page-node-id="4oaX5Zh8vBzBwVGYxHBlSW"></p>
+    <div class="threshold-box" data-page-node-id="miSgoJ6B69GiE1n8C9RGU0">
+      <span data-page-node-id="lPRszIwv5339ezRyTXtfKY">脏数据判定阈值：距离小于</span>
+      <input id="thDistance" type="number" min="0" step="0.5" value="5" oninput="renderThresholdLists()" data-page-node-id="b1bVKjEIzuCSUtE1BHpbDw"> <span data-page-node-id="VbZCue8rj2hAJRbeNQixlq">km</span>
+      <span data-page-node-id="B3y6Ary66NFM9h6j2YLVdb">或时长小于</span>
+      <input id="thDuration" type="number" min="0" step="1" value="10" oninput="renderThresholdLists()" data-page-node-id="X6lVe9jyTvFYq18pTToN2C"> <span data-page-node-id="EIEBZElOFhoYHurMTsnm36">分钟</span>
+    </div>
+    <div class="warn-box" id="dirtyBox" style="display:none" data-page-node-id="Wk5npKnGrbkEGCCQLb2HJc">
+      <div class="warn-title" data-page-node-id="SpqTfJ7vzr14t2moUAghhB">⚠ 以下记录低于阈值，疑似脏数据，请确认是否确实要删除：</div>
+      <ul id="dirtyList" data-page-node-id="3uUI5zPyQWwuHbce86qqBI"></ul>
+    </div>
+    <ul id="normalList" style="margin-bottom:4px" data-page-node-id="d3WVpeKDdTIy4w2Lkspvxi"></ul>
+    <p style="font-size:12px;color:var(--text-tertiary)" data-page-node-id="6CvPhbDCsfR9tc9iF4zOQ3">删除后不可恢复（本地 IndexedDB 数据）。</p>
+    <div class="actions" data-page-node-id="DxcL8tKjgPqYLLLsPMt6AN">
+      <button class="btn" onclick="closeDialog()" data-page-node-id="xovXwVO3awBlOF5ejqt7oJ">取消</button>
+      <button class="btn btn--danger" onclick="confirmDelete()" data-page-node-id="nn77XEz1xfTiOdU4QBdx1D">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== mock 数据 ===== */
+let activities = [
+  { id:'a1', title:'晨骑 · 环湖区',        startTime:'2026-08-30', distance:42.5, duration:96,  elevation:320, avgSpeed:26.6, avgHeartRate:142, avgPower:188 },
+  { id:'a2', title:'通勤',                 startTime:'2026-08-28', distance:2.1,  duration:6,   elevation:12,  avgSpeed:21.0, avgHeartRate:118, avgPower:140 },
+  { id:'a3', title:'周末长距离 · 山地拉练', startTime:'2026-08-24', distance:118.3,duration:272, elevation:1480,avgSpeed:26.1, avgHeartRate:151, avgPower:212 },
+  { id:'a4', title:'夜间骑行',             startTime:'2026-08-22', distance:28.0, duration:64,  elevation:150, avgSpeed:26.3, avgHeartRate:135, avgPower:175 },
+  { id:'a5', title:'测试记录',             startTime:'2026-08-20', distance:1.8,  duration:4,   elevation:5,   avgSpeed:27.0, avgHeartRate:null,avgPower:null },
+  { id:'a6', title:'间歇训练',             startTime:'2026-08-17', distance:35.6, duration:78,  elevation:280, avgSpeed:27.4, avgHeartRate:158, avgPower:245 },
+  { id:'a7', title:'雨后休闲骑',           startTime:'2026-08-15', distance:18.2, duration:48,  elevation:90,  avgSpeed:22.8, avgHeartRate:126, avgPower:150 },
+  { id:'a8', title:'爬坡 · 东山',          startTime:'2026-08-10', distance:56.4, duration:132, elevation:920, avgSpeed:25.6, avgHeartRate:149, avgPower:205 },
+  { id:'a9', title:'通勤',                 startTime:'2026-08-08', distance:2.3,  duration:7,   elevation:15,  avgSpeed:19.7, avgHeartRate:115, avgPower:135 },
+  { id:'a10',title:'恢复骑',               startTime:'2026-08-05', distance:22.0, duration:58,  elevation:110, avgSpeed:22.8, avgHeartRate:128, avgPower:148 },
+  { id:'a11',title:'计时赛',               startTime:'2026-08-02', distance:40.0, duration:60,  elevation:210, avgSpeed:40.0, avgHeartRate:165, avgPower:280 },
+  { id:'a12',title:'长途 · 环湖一圈',       startTime:'2026-07-28', distance:95.8, duration:224, elevation:640, avgSpeed:25.7, avgHeartRate:147, avgPower:198 },
+];
+
+/* ===== 状态（localStorage 持久化）===== */
+const LS_ACTIVE = 'proto:active-filters';
+const LS_PRESETS = 'proto:filter-presets';
+const LS_SORT = 'proto:sort';
+
+const DEFAULT_SORT = { key:'startTime', dir:'desc' };
+let sortKey, sortDir;
+try { var s = JSON.parse(localStorage.getItem(LS_SORT)); if (s) { sortKey = s.key; sortDir = s.dir; } } catch (e) {}
+if (!sortKey) { sortKey = DEFAULT_SORT.key; sortDir = DEFAULT_SORT.dir; }
+
+let customFilters = [];
+try { var af = JSON.parse(localStorage.getItem(LS_ACTIVE)); if (Array.isArray(af)) customFilters = af; } catch (e) {}
+
+let presets = {};
+try { var ps = JSON.parse(localStorage.getItem(LS_PRESETS)); if (ps && typeof ps === 'object') presets = ps; } catch (e) {}
+
+let selected = new Set();
+let pendingDelete = [];
+
+function persist() {
+  localStorage.setItem(LS_ACTIVE, JSON.stringify(customFilters));
+  localStorage.setItem(LS_PRESETS, JSON.stringify(presets));
+  localStorage.setItem(LS_SORT, JSON.stringify({ key: sortKey, dir: sortDir }));
+}
+
+const FIELDS = {
+  distance:     { label:'距离',     unit:'km',  get:a=>a.distance },
+  elevation:    { label:'爬升',     unit:'m',   get:a=>a.elevation },
+  duration:     { label:'时长',     unit:'分钟',get:a=>a.duration },
+  avgSpeed:     { label:'平均速度', unit:'km/h',get:a=>a.avgSpeed },
+  avgHeartRate: { label:'平均心率', unit:'bpm', get:a=>a.avgHeartRate },
+  avgPower:     { label:'平均功率', unit:'W',   get:a=>a.avgPower },
+  startTime:    { label:'日期',     unit:'',    get:a=>a.startTime },
+};
+const OPS = { gt:'大于', eq:'等于', lt:'小于', between:'介于' };
+
+function fmtDuration(min){
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return h>0 ? h+'时'+(m>0?m+'分':'') : m+'分';
+}
+
+/* ===== 条件文案与匹配 ===== */
+function condText(c){
+  const f = FIELDS[c.field];
+  if (c.op === 'between') return `${f.label} ${c.value} ~ ${c.value2}${f.unit?' '+f.unit:''}`;
+  return `${f.label} ${OPS[c.op]} ${c.value}${f.unit?' '+f.unit:''}`;
+}
+function condMatch(a, c){
+  const v = FIELDS[c.field].get(a);
+  if (v == null) return false;
+  if (c.op === 'gt') return v >  c.value;
+  if (c.op === 'lt') return v <  c.value;
+  if (c.op === 'between') return v >= c.value && v <= c.value2;
+  return v === c.value;
+}
+function applyFilters(list){
+  return list.filter(a => customFilters.every(c => condMatch(a, c)));
+}
+
+/* ===== 自定义筛选构建行 ===== */
+function onFieldChange(){
+  const isDate = document.getElementById('cfField').value === 'startTime';
+  const vl = document.getElementById('cfValueLabel');
+  const v = document.getElementById('cfValue');
+  if (isDate) { vl.textContent = '起始日期'; v.type = 'date'; v.placeholder=''; }
+  else { vl.textContent = '数值'; v.type = 'number'; v.placeholder='如 25'; }
+  updateBetweenVisibility();
+}
+function updateBetweenVisibility(){
+  const between = document.getElementById('cfOp').value === 'between';
+  const wrap = document.getElementById('cfValue2Wrap');
+  wrap.style.display = between ? 'flex' : 'none';
+  if (between) {
+    const isDate = document.getElementById('cfField').value === 'startTime';
+    const v2 = document.getElementById('cfValue2');
+    const label2 = document.querySelector('#cfValue2Wrap span');
+    if (isDate) { v2.type='date'; v2.placeholder=''; label2.textContent='结束日期'; }
+    else { v2.type='number'; v2.placeholder='如 40'; label2.textContent='至'; }
+  }
+}
+document.getElementById('cfOp').addEventListener('change', updateBetweenVisibility);
+
+function addCustomFilter(){
+  const f = document.getElementById('cfField').value;
+  const op = document.getElementById('cfOp').value;
+  const isDate = f === 'startTime';
+  const raw1 = document.getElementById('cfValue').value;
+  if (raw1 === '') { alert(isDate ? '请选择起始日期' : '请输入筛选数值'); return; }
+  const cond = { field:f, op, value: isDate ? raw1 : Number(raw1) };
+  if (op === 'between') {
+    const raw2 = document.getElementById('cfValue2').value;
+    if (raw2 === '') { alert(isDate ? '请选择结束日期' : '请输入区间上限'); return; }
+    cond.value2 = isDate ? raw2 : Number(raw2);
+    if (cond.value > cond.value2) { alert(isDate ? '起始日期不能晚于结束日期' : '区间下限不能大于上限'); return; }
+  } else if (!isDate && !Number.isFinite(cond.value)) {
+    alert('请输入有效数值'); return;
+  }
+  customFilters.push(cond);
+  document.getElementById('cfValue').value = '';
+  document.getElementById('cfValue2').value = '';
+  persist(); render();
+}
+
+/* ===== 预设（可编辑）===== */
+let editingPreset = null; // 正在编辑的预设名（null = 新建模式）
+
+function renderPresetSelect(){
+  const sel = document.getElementById('presetSelect');
+  const names = Object.keys(presets);
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— 选择预设快速套用 —</option>' +
+    names.map(n=>`<option value="${n}">${n}（${presets[n].length} 个条件）</option>`).join('');
+  if (names.includes(current)) sel.value = current;
+}
+/* 编辑状态切换按钮：编辑模式显示「保存修改 + 另存为 + 退出」，否则只显示「保存为预设」 */
+function renderPresetControls(){
+  const saveBtn = document.getElementById('savePresetBtn');
+  const saveAsBtn = document.getElementById('saveAsBtn');
+  const exitBtn = document.getElementById('exitEditBtn');
+  const hint = document.getElementById('buildHint');
+  if (editingPreset) {
+    saveBtn.textContent = `保存修改「${editingPreset}」`;
+    saveAsBtn.style.display = '';
+    exitBtn.style.display = '';
+    hint.textContent = `正在编辑预设「${editingPreset}」：可增删条件后保存修改，或另存为新预设`;
+  } else {
+    saveBtn.textContent = '保存为预设';
+    saveAsBtn.style.display = 'none';
+    exitBtn.style.display = 'none';
+    hint.textContent = '多个条件同时生效（且关系）；选「介于」后出现第二个输入框';
+  }
+}
+/* 默认预设名：由条件自动生成，用户可手动修改 */
+function defaultPresetName(){
+  if (!customFilters.length) return '我的筛选';
+  const text = customFilters.map(condText).join(' 且 ');
+  return text.length > 24 ? text.slice(0, 24) + '…' : text;
+}
+function writePreset(name, overwriteIfNew){
+  if (!overwriteIfNew && presets[name] && !confirm(`预设「${name}」已存在，覆盖它？`)) return false;
+  presets[name] = customFilters.map(c=>({ ...c }));
+  editingPreset = name;
+  persist(); render();
+  document.getElementById('presetHint').textContent = `已保存「${name}」，刷新页面后仍可用`;
+  return true;
+}
+function savePreset(){
+  if (!customFilters.length) { alert('当前没有生效的筛选条件'); return; }
+  const isEdit = !!editingPreset;
+  const name = prompt(
+    isEdit ? `保存对预设「${editingPreset}」的修改（也可直接改名）：` : '给这组筛选条件起个名字（默认名可手动修改）：',
+    isEdit ? editingPreset : defaultPresetName()
+  );
+  if (!name) return;
+  if (isEdit && name !== editingPreset) delete presets[editingPreset]; // 改名 = 移除旧名
+  writePreset(name, isEdit);
+}
+function savePresetAs(){
+  if (!customFilters.length) { alert('当前没有生效的筛选条件'); return; }
+  const name = prompt('另存为新预设，起个名字（默认名可手动修改）：', editingPreset ? editingPreset + ' 副本' : defaultPresetName());
+  if (!name) return;
+  writePreset(name, false);
+}
+/* 套用预设 = 同时进入该预设的编辑状态（可改条件后保存修改） */
+function applyPreset(name){
+  if (!name || !presets[name]) return;
+  customFilters = presets[name].map(c=>({ ...c }));
+  editingPreset = name;
+  persist(); render();
+}
+/* 从下拉选中预设进入编辑（不改变当前条件，仅载入） */
+function editPreset(){
+  const name = document.getElementById('presetSelect').value;
+  if (!name) { alert('请先在下拉中选择要编辑的预设'); return; }
+  applyPreset(name);
+}
+function exitEdit(){ editingPreset = null; render(); }
+function deletePreset(){
+  const name = document.getElementById('presetSelect').value;
+  if (!name) { alert('请先在下拉中选择要删除的预设'); return; }
+  if (!confirm(`删除预设「${name}」？（不影响当前生效的筛选条件）`)) return;
+  delete presets[name];
+  if (editingPreset === name) editingPreset = null;
+  persist(); render();
+}
+function clearAllFilters(){
+  if (!customFilters.length) { alert('原型演示：重置搜索/月份/类型及全部自定义筛选'); return; }
+  customFilters = []; persist(); render();
+}
+
+/* ===== 排序 ===== */
+function sortBy(key){
+  if (sortKey === key) sortDir = sortDir==='desc' ? 'asc' : 'desc';
+  else { sortKey = key; sortDir = 'desc'; }
+  persist(); render();
+}
+function resetSort(){ sortKey = DEFAULT_SORT.key; sortDir = DEFAULT_SORT.dir; persist(); render(); }
+function renderSortState(){
+  const f = FIELDS[sortKey] || { label:'标题' };
+  document.getElementById('sortState').innerHTML =
+    `排序：<span class="active">${sortKey==='title'?'标题':f.label} ${sortDir==='desc'?'降序':'升序'}</span>` +
+    `<button class="btn btn--ghost" style="padding:3px 10px;font-size:12px" onclick="resetSort()">重置排序</button>`;
+}
+function sortList(list){
+  const get = sortKey==='title' ? (a=>a.title) : FIELDS[sortKey].get;
+  return [...list].sort((a,b)=>{
+    const va = get(a), vb = get(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (va < vb) return sortDir==='asc' ? -1 : 1;
+    if (va > vb) return sortDir==='asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+/* ===== 渲染 ===== */
+function render(){
+  renderSortState(); renderPresetSelect(); renderPresetControls();
+
+  // 主筛选栏 chips（类型右侧）
+  const chipsBox = document.getElementById('activeChips');
+  chipsBox.innerHTML = customFilters.length
+    ? customFilters.map((c,i)=>`<span class="chip">${condText(c)}<span class="x" onclick="removeFilter(${i})">×</span></span>`).join('')
+    : '<span class="none">（暂无自定义筛选条件）</span>';
+
+  const rows = sortList(applyFilters(activities));
+  document.getElementById('countShown').textContent = rows.length;
+  document.getElementById('countAll').textContent = activities.length;
+
+  document.querySelectorAll('th.sortable').forEach(th=>{
+    const active = th.dataset.key === sortKey;
+    th.classList.toggle('sortable--active', active);
+    th.querySelector('.arrow').textContent = active ? (sortDir==='desc'?'↓':'↑') : '';
+  });
+
+  const tbody = document.getElementById('tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:32px">没有符合筛选条件的记录</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(a=>`<tr class="${selected.has(a.id)?'selected':''}">
+        <td class="col-check"><input type="checkbox" ${selected.has(a.id)?'checked':''} onchange="toggleOne('${a.id}',this.checked)"></td>
+        <td><a class="title-link" href="javascript:void(0)" onclick="alert('原型演示：跳转详情页 /activities/${a.id}')">${a.title}</a></td>
+        <td>${a.startTime}</td>
+        <td class="num">${a.distance.toFixed(1)} km</td>
+        <td class="num">${fmtDuration(a.duration)}</td>
+        <td class="num">${Math.round(a.elevation)} m</td>
+        <td class="num">${a.avgSpeed.toFixed(1)} km/h</td>
+        <td class="num">${a.avgHeartRate==null?'—':Math.round(a.avgHeartRate)+' bpm'}</td>
+        <td class="num">${a.avgPower==null?'—':Math.round(a.avgPower)+' W'}</td>
+      </tr>`).join('');
+  }
+  renderSelectionBar();
+}
+function removeFilter(i){ customFilters.splice(i,1); persist(); render(); }
+
+/* ===== 勾选与删除 ===== */
+function toggleOne(id, checked){ checked ? selected.add(id) : selected.delete(id); render(); }
+function toggleAll(checked){
+  applyFilters(activities).forEach(a => checked ? selected.add(a.id) : selected.delete(a.id));
+  render();
+}
+function clearSelection(){ selected.clear(); render(); }
+function renderSelectionBar(){
+  const bar = document.getElementById('selectionActions');
+  if (!selected.size) { bar.style.display='none'; return; }
+  bar.style.display='flex';
+  const shown = applyFilters(activities);
+  document.getElementById('checkAll').checked = shown.length>0 && selected.size===shown.length;
+  document.getElementById('selectionInfo').textContent = `已勾选 ${selected.size} 条`;
+}
+function openDeleteDialog(){
+  pendingDelete = activities.filter(a=>selected.has(a.id));
+  document.getElementById('delSummary').textContent = `即将删除 ${pendingDelete.length} 条骑行记录：`;
+  document.getElementById('thDistance').value = 5;
+  document.getElementById('thDuration').value = 10;
+  renderThresholdLists();
+  document.getElementById('mask').classList.add('open');
+}
+function renderThresholdLists(){
+  const thD = Number(document.getElementById('thDistance').value) || 0;
+  const thM = Number(document.getElementById('thDuration').value) || 0;
+  const isDirty = a => a.distance < thD || a.duration < thM;
+  const dirty = pendingDelete.filter(isDirty);
+  const normal = pendingDelete.filter(a=>!isDirty);
+  document.getElementById('dirtyBox').style.display = dirty.length ? 'block' : 'none';
+  document.getElementById('dirtyList').innerHTML = dirty.map(a=>
+    `<li><span>${a.title}（${a.startTime}）</span><span class="reason">${a.distance.toFixed(1)} km / ${fmtDuration(a.duration)}</span></li>`).join('');
+  document.getElementById('normalList').innerHTML = normal.map(a=>
+    `<li><span>${a.title}（${a.startTime}）</span><span>${a.distance.toFixed(1)} km / ${fmtDuration(a.duration)}</span></li>`).join('');
+}
+function closeDialog(){ document.getElementById('mask').classList.remove('open'); }
+function confirmDelete(){
+  activities = activities.filter(a => !selected.has(a.id));
+  selected.clear(); closeDialog(); render();
+}
+
+render();
+</script>
+</body>
+</html>

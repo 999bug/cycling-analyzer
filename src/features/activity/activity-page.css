@@ -239,3 +239,262 @@
   color: var(--primary);
   text-decoration: underline;
 }
+
+/* ===== 勾选列（批量删除，仅本地数据源渲染）===== */
+.activity-table__check {
+  width: 36px;
+  text-align: center;
+}
+
+.activity-table__check input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.activity-table__row--selected {
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.activity-table__row--selected:hover {
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* ===== 自定义条件 chips（主筛选栏内，类型下拉右侧）===== */
+.activity-filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.activity-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activity-filter-chip__remove {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.activity-filter-chip__remove:hover {
+  color: var(--danger);
+}
+
+/* ===== 排序状态条（排序持久化，仅手动重置还原；兼勾选操作区）===== */
+.activity-sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.activity-sort-bar__current {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.activity-sort-bar__reset {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.activity-sort-bar__reset:hover {
+  border-color: var(--text-secondary);
+  color: var(--text);
+}
+
+/* 勾选操作区（排序条右侧）：已勾选计数 + 取消勾选 + 删除选中 */
+.activity-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.activity-selection-bar__info {
+  color: var(--warning);
+}
+
+.activity-selection-bar__button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.activity-selection-bar__button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.activity-selection-bar__button--danger {
+  border-color: var(--danger);
+  background-color: var(--danger);
+  color: var(--on-danger);
+}
+
+.activity-selection-bar__button--danger:hover {
+  border-color: var(--danger);
+  color: var(--on-danger);
+  filter: brightness(1.1);
+}
+
+/* ===== 自定义筛选面板（构建行 + 预设行）===== */
+.custom-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+}
+
+.custom-filter__builder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.custom-filter__label {
+  padding-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.custom-filter__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.custom-filter__select,
+.custom-filter__input {
+  min-width: 96px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.custom-filter__select--op {
+  min-width: 76px;
+}
+
+.custom-filter__input--name {
+  min-width: 260px;
+}
+
+.custom-filter__select:focus,
+.custom-filter__input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.custom-filter__input[type='number'] {
+  width: 96px;
+}
+
+.custom-filter__button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.custom-filter__button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.custom-filter__button--primary {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.custom-filter__button--primary:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: #fff;
+  filter: brightness(1.1);
+}
+
+.custom-filter__button--ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+
+.custom-filter__hint {
+  padding-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.custom-filter__error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* 预设行 */
+.custom-filter__presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-filter__presets-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--info);
+  white-space: nowrap;
+}
+
+/* 编辑态提示行 */
+.custom-filter__editing {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

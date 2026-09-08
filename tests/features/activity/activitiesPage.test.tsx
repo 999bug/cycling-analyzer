@@ -9,7 +9,7 @@ import 'fake-indexeddb/auto'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ActivitiesPage from '@/pages/ActivitiesPage'
 import { CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
@@ -73,8 +73,10 @@ describe('骑行记录列表页', () => {
   beforeEach(() => {
     db = new CyclingDatabase()
     repo = new DexieActivityRepository(db)
-    // 筛选条件为持久化 store（模块级单例），测试间重置避免串扰
+    // 筛选/排序为持久化 store（模块级单例），测试间重置避免串扰
     useActivityFilterStore.getState().resetFilters()
+    useActivityFilterStore.getState().resetSort()
+    localStorage.clear()
   })
 
   afterEach(async () => {
@@ -430,5 +432,314 @@ describe('骑行记录列表页', () => {
     const templateInput = screen.getByLabelText('命名模板')
     await user.clear(templateInput)
     expect(screen.getByRole('button', { name: '应用到全部' })).toBeDisabled()
+  })
+
+  it('全部 8 列可排序：爬升/平均速度/平均心率/平均功率降序', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await expectFirstRowText(`${formatDate('2026-08-29T10:00:00.000Z')} 骑行`)
+
+    // 爬升降序 → act-25 爬升最大（350m）
+    await user.click(screen.getByRole('button', { name: /^爬升/ }))
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+
+    // 平均速度降序 → act-25 最大（6.25 m/s）
+    await user.click(screen.getByRole('button', { name: /^平均速度/ }))
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+
+    // 平均心率降序 → act-25 最大（165 bpm，非 3 的倍数不缺失）
+    await user.click(screen.getByRole('button', { name: /^平均心率/ }))
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+
+    // 平均功率降序 → act-25 功率缺失（5 的倍数），act-24 最大（224W）
+    await user.click(screen.getByRole('button', { name: /^平均功率/ }))
+    await expectFirstRowText(`${formatDate('2026-06-06T10:00:00.000Z')} 骑行`)
+  })
+
+  it('标题列可按名称排序', async () => {
+    // name 仅经 addActivity(activity, name) 落库（addActivities 不带 name），逐条插入
+    // act-01 → 骑行 25 ... act-25 → 骑行 01（与 startTime 降序一致的反向命名）
+    const named = makeSeed()
+    for (let index = 0; index < named.length; index += 1) {
+      await repo.addActivity(named[index], `骑行 ${String(25 - index).padStart(2, '0')}`)
+    }
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 标题首次点击为降序 → 「骑行 25」（act-01）在第一行
+    await user.click(screen.getByRole('button', { name: /^标题/ }))
+    await expectFirstRowText('骑行 25')
+
+    // 再点切升序 → 「骑行 01」（act-25）在第一行
+    await user.click(screen.getByRole('button', { name: /^标题/ }))
+    await expectFirstRowText('骑行 01')
+  })
+
+  it('排序持久化不自动重置：切筛选/重渲染后保持，仅手动重置排序还原', async () => {
+    await repo.addActivities(makeSeed())
+    const { unmount } = renderPage()
+
+    await expectFirstRowText(`${formatDate('2026-08-29T10:00:00.000Z')} 骑行`)
+
+    // 距离降序
+    await user.click(screen.getByRole('button', { name: /^距离/ }))
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+
+    // 修改筛选（月份）：排序保持距离降序，不重置
+    await waitFor(() => expect(screen.getByRole('option', { name: '2026-07' })).toBeInTheDocument())
+    await user.selectOptions(screen.getByLabelText('月份'), '2026-07')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(7))
+    // 7 月距离最大为 act-22（32km，7 月 8 日）
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-07-08T10:00:00.000Z')} 骑行`,
+    )
+
+    // 卸载重渲染：排序来自持久化 store，仍为距离降序
+    await user.selectOptions(screen.getByLabelText('月份'), '')
+    unmount()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(screen.getAllByRole('row')[1]).toHaveTextContent(
+      `${formatDate('2026-06-05T10:00:00.000Z')} 骑行`,
+    )
+
+    // 手动重置排序 → 回到默认开始时间降序（act-01 最新）
+    await user.click(screen.getByRole('button', { name: '重置排序' }))
+    await expectFirstRowText(`${formatDate('2026-08-29T10:00:00.000Z')} 骑行`)
+  })
+
+  it('自定义筛选：大于条件生成 chips 且实时过滤，可单独移除', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 字段=距离(km)，条件=大于（含边界口径，与既有 min/max 一致），数值=20 → 距离 ≥ 20km：act-10..25 共 16 条
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.selectOptions(screen.getByLabelText('条件'), 'gt')
+    await user.type(screen.getByLabelText('数值'), '20')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+
+    // chip 展示在主筛选栏（类型右侧），点击 × 移除后恢复全量
+    expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '移除条件 距离 大于 20 km' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+  })
+
+  it('自定义筛选：介于为闭区间，且与既有筛选叠加（AND）', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 距离 介于 15 ~ 20 km → 10+n ∈ [15, 20] → act-05..10 共 6 条
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.selectOptions(screen.getByLabelText('条件'), 'between')
+    await user.type(screen.getByLabelText('数值'), '15')
+    await user.type(screen.getByLabelText('至'), '20')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(7))
+    expect(screen.getByText('距离 15 ~ 20 km')).toBeInTheDocument()
+
+    // 叠加月份 2026-08 → act-05..10 全部在 8 月，仍 6 条（与月份 AND）
+    await waitFor(() => expect(screen.getByRole('option', { name: '2026-07' })).toBeInTheDocument())
+    await user.selectOptions(screen.getByLabelText('月份'), '2026-08')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(7))
+
+    // 叠加类型 running（act-05..10 均为 cycling）→ 空结果
+    await user.selectOptions(screen.getByLabelText('类型'), 'running')
+    expect(await screen.findByText('没有符合筛选条件的记录')).toBeInTheDocument()
+  })
+
+  it('自定义筛选：输入非法数值时提示且不添加条件', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.type(screen.getByLabelText('数值'), 'abc')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    // number input 非法输入 value 为空 → 提示必填
+    expect(screen.getByText('请输入筛选数值或选择日期')).toBeInTheDocument()
+    // 未生成 chip，列表未过滤
+    expect(screen.queryByText('距离 大于')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('row')).toHaveLength(21)
+  })
+
+  it('筛选预设：按条件默认名保存，重渲染后仍可套用并进入编辑', async () => {
+    await repo.addActivities(makeSeed())
+    const { unmount } = renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 添加条件并保存为预设（默认名 = 条件文案）
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.type(screen.getByLabelText('数值'), '20')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+    await user.click(screen.getByRole('button', { name: '保存为预设' }))
+    // 名字输入默认按条件自动生成
+    const nameInput = screen.getByLabelText('预设名称') as HTMLInputElement
+    expect(nameInput.value).toBe('距离 大于 20 km')
+    fireEvent.change(nameInput, { target: { value: '中长途' } })
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    // 重渲染（模拟刷新）：预设与当前条件均从持久化 store 恢复
+    unmount()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+    const presetSelect = screen.getByLabelText('选择筛选预设')
+    expect(presetSelect).toHaveValue('') // 下拉默认占位，不自动选中
+
+    // 套用预设：条件恢复（chips 出现）并进入编辑态
+    await user.selectOptions(presetSelect, '中长途')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+    expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+    expect(screen.getByText(/正在编辑预设「中长途」/)).toBeInTheDocument()
+  })
+
+  it('筛选预设：编辑改条件后保存修改，改名生效', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 保存预设「甲」：距离 ≥ 20km
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.type(screen.getByLabelText('数值'), '20')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await user.click(screen.getByRole('button', { name: '保存为预设' }))
+    const nameInput = screen.getByLabelText('预设名称') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: '甲' } })
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(screen.getByText(/正在编辑预设「甲」/)).toBeInTheDocument()
+
+    // 增加第二条条件（时长 > 60 分钟）并改名保存
+    await user.selectOptions(screen.getByLabelText('字段'), 'duration')
+    await user.type(screen.getByLabelText('数值'), '60')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await user.click(screen.getByRole('button', { name: '保存修改「甲」' }))
+    const renameInput = screen.getByLabelText('预设名称') as HTMLInputElement
+    fireEvent.change(renameInput, { target: { value: '乙' } })
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    // 改名生效：旧名消失，新名进入编辑态且含两个条件
+    expect(screen.getByText(/正在编辑预设「乙」/)).toBeInTheDocument()
+    const presetSelect = screen.getByLabelText('选择筛选预设') as HTMLSelectElement
+    const options = [...presetSelect.options].map((option) => option.value)
+    expect(options).toContain('乙')
+    expect(options).not.toContain('甲')
+    expect(screen.getByText('时长 大于 60 分钟')).toBeInTheDocument()
+  })
+
+  it('筛选预设：删除需先选中，确认后从下拉移除', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    await user.selectOptions(screen.getByLabelText('字段'), 'distance')
+    await user.type(screen.getByLabelText('数值'), '20')
+    await user.click(screen.getByRole('button', { name: '添加条件' }))
+    await user.click(screen.getByRole('button', { name: '保存为预设' }))
+    const nameInput = screen.getByLabelText('预设名称') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: '待删预设' } })
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    // 未选中直接删除 → 提示先选中
+    await user.click(screen.getByRole('button', { name: '删除选中预设' }))
+    expect(screen.getByText('请先在下拉中选择要删除的预设')).toBeInTheDocument()
+
+    // 选中后删除 → confirm 确认 → 预设消失，当前条件不受影响
+    await user.selectOptions(screen.getByLabelText('选择筛选预设'), '待删预设')
+    await user.click(screen.getByRole('button', { name: '删除选中预设' }))
+    await waitFor(() => {
+      const presetSelect = screen.getByLabelText('选择筛选预设') as HTMLSelectElement
+      const options = [...presetSelect.options].map((option) => option.value)
+      expect(options).not.toContain('待删预设')
+    })
+    // 当前生效条件仍在（chips 未消失）
+    expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+    confirmSpy.mockRestore()
+  })
+
+  it('勾选批量删除：默认阈值无警告，调低阈值后疑似脏数据黄色警告', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 勾选前两行（act-01/act-02，距离均 > 5km）
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-02.fit' }))
+    expect(screen.getByText('已勾选 2 条')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '删除选中' }))
+    expect(await screen.findByRole('dialog', { name: '确认删除' })).toBeInTheDocument()
+    expect(screen.getByText('即将删除 2 条骑行记录：')).toBeInTheDocument()
+
+    // 默认阈值 5km/10min：两条均不疑似脏数据（11km/12km，40min/41min）
+    expect(screen.queryByText(/疑似脏数据/)).not.toBeInTheDocument()
+
+    // 距离阈值调到 12 → act-01（11km）触发警告，act-02（12km）不触发（含边界不比较相等）
+    await user.clear(screen.getByLabelText('脏数据距离阈值'))
+    await user.type(screen.getByLabelText('脏数据距离阈值'), '12')
+    expect(screen.getByText(/以下 1 条记录低于阈值，疑似脏数据/)).toBeInTheDocument()
+    expect(screen.getByText(/距离 11\.0 km < 12 km/)).toBeInTheDocument()
+
+    // 取消关闭
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    expect(screen.queryByRole('dialog', { name: '确认删除' })).not.toBeInTheDocument()
+    // 勾选保留
+    expect(screen.getByText('已勾选 2 条')).toBeInTheDocument()
+  })
+
+  it('勾选批量删除：确认后从本地库删除并清空勾选刷新列表', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-02.fit' }))
+    await user.click(screen.getByRole('button', { name: '删除选中' }))
+    expect(await screen.findByRole('dialog', { name: '确认删除' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '确认删除' }))
+
+    // 弹窗关闭、勾选清空、列表刷新为 23 条（25 - 2，第 1 页 20 行）
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '确认删除' })).not.toBeInTheDocument(),
+    )
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(screen.queryByText('已勾选 2 条')).not.toBeInTheDocument()
+    expect(await repo.getById('act-01')).toBeUndefined()
+    expect(await repo.getById('act-02')).toBeUndefined()
+    expect(await repo.getById('act-03')).not.toBeUndefined()
+  })
+
+  it('勾选批量删除：勾选框点击不触发行跳转，全选覆盖当前页', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 全选本页 20 条 → 已勾选 20 条
+    await user.click(screen.getByRole('checkbox', { name: '全选本页' }))
+    expect(screen.getByText('已勾选 20 条')).toBeInTheDocument()
+
+    // 再次点击取消全选
+    await user.click(screen.getByRole('checkbox', { name: '全选本页' }))
+    expect(screen.queryByText('已勾选 20 条')).not.toBeInTheDocument()
+
+    // 勾选单个不触发导航（仍停留在列表页）
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    expect(screen.getByText('骑行记录')).toBeInTheDocument()
+    expect(screen.queryByText('详情页 act-01')).not.toBeInTheDocument()
   })
 })
