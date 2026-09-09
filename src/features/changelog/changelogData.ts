@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.46.1',
+    date: '2026-09-09',
+    features: [
+      '项目内部开发笔记开始纳入版本管理（`.workbuddy/memory/`），便于跨设备继续推进；笔记已统一脱敏，本机路径、私人数据文件名与云端文档标识均以占位符代替（真实值只留在本机）',
+    ],
+  },
+  {
     version: '2.46.0',
     date: '2026-09-09',
     features: [

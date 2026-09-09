@@ -38,7 +38,11 @@ playwright-report/
 .codegraph/daemon.pid
 
 # WorkBuddy ���ع������ݣ��Ự����/���񣬲���⣩
-.workbuddy/
+.workbuddy/*
+# Keep cross-session notes trackable (sanitized) while ignoring scratch/exports/binaries.
+# Sensitive identifiers live in LOCAL-ONLY.md, which stays local.
+!.workbuddy/memory/
+.workbuddy/memory/LOCAL-ONLY.md
 
 # ΢��С���򣺱���˽�����ã�AppID / ��ͼ Key ����⣩
 # ��¡���� miniprogram/project.config.example.json ���������Լ�������
