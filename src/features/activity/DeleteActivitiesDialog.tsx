@@ -28,7 +28,7 @@ interface DeleteActivitiesDialogProps {
   items: ActivitySummary[]
 
   /** 本地库仓库（测试注入；缺省模块级单例） */
-  writeRepository?: Pick<DexieActivityRepository, 'deleteActivities'>
+  writeRepository?: Pick<DexieActivityRepository, 'deleteActivity' | 'deleteActivities'>
 
   /** 关闭弹窗回调 */
   onClose: () => void
@@ -60,6 +60,8 @@ function DeleteActivitiesDialog({
   const [distanceThreshold, setDistanceThreshold] = useState(String(DEFAULT_DIRTY_DISTANCE_KM))
   const [durationThreshold, setDurationThreshold] = useState(String(DEFAULT_DIRTY_DURATION_MINUTES))
   const [deleting, setDeleting] = useState(false)
+  /** 删除进度（已处理条数 / 总条数），删除中展示 */
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [result, setResult] = useState<string | null>(null)
 
   const thresholdKm = Number(distanceThreshold)
@@ -98,25 +100,34 @@ function DeleteActivitiesDialog({
   const normalItems = itemViews.filter((item) => !item.isDirty)
 
   /**
-   * 单事务批量删除（性能关键）。
-   *
-   * 旧实现逐条 await deleteActivity：每条独立事务 + 二级索引 delete() 走
-   * Dexie modify 回退逐条反序列化记录体，勾选数十条时 UI 卡死。
-   * 改为一次 deleteActivities(ids)：单事务 + primaryKeys/bulkDelete。
+   * 逐条删除并实时上报进度（v5 blob 模型下每条 = 主键删 2 行，毫秒级；
+   * 迁移兜底窗口期旧数据仍可能逐行删，进度条保证可感知不冻结）。
    */
   async function handleConfirm() {
     setDeleting(true)
+    setProgress({ done: 0, total: itemViews.length })
     setResult(null)
-    try {
-      await writeRepository.deleteActivities(itemViews.map((item) => item.id))
-      setDeleting(false)
-      onDeleted(itemViews.length)
-    } catch (err: unknown) {
-      // 单事务原子性：任一条失败全部回滚，无部分删除状态
-      setDeleting(false)
-      console.error('Failed to batch delete activities', err)
-      setResult(`删除失败：${items.length} 条均未删除（详情见控制台日志）`)
+    let succeeded = 0
+    let failed = 0
+    for (const item of itemViews) {
+      try {
+        await writeRepository.deleteActivity(item.id)
+        succeeded += 1
+      } catch (err: unknown) {
+        failed += 1
+        console.error('Failed to delete activity', item.id, err)
+      }
+      setProgress({ done: succeeded + failed, total: itemViews.length })
+      // 让出主线程：进度条渲染与用户输入不被删除循环阻塞
+      await new Promise((resolve) => setTimeout(resolve, 0))
     }
+    setDeleting(false)
+    setProgress(null)
+    if (failed === 0) {
+      onDeleted(succeeded)
+      return
+    }
+    setResult(`删除完成：成功 ${succeeded} 条，失败 ${failed} 条（详情见控制台日志）`)
   }
 
   return (
@@ -197,6 +208,26 @@ function DeleteActivitiesDialog({
             </li>
           ))}
         </ul>
+
+        {progress !== null && (
+          <div className="delete-activities__progress" role="status">
+            <div
+              className="delete-activities__progress-bar"
+              role="progressbar"
+              aria-valuenow={progress.done}
+              aria-valuemin={0}
+              aria-valuemax={progress.total}
+            >
+              <div
+                className="delete-activities__progress-fill"
+                style={{ width: `${progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%` }}
+              />
+            </div>
+            <span className="delete-activities__progress-text">
+              删除中 {progress.done} / {progress.total}
+            </span>
+          </div>
+        )}
 
         {result !== null && <p className="delete-activities__result">{result}</p>}
         <p className="delete-activities__hint">删除后不可恢复（本地 IndexedDB 数据）。</p>

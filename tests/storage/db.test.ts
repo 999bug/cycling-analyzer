@@ -12,12 +12,13 @@ describe('CyclingDatabase', () => {
     expect(db.verno).toBe(DB_VERSION);
   });
 
-  it('打开后七张表齐全', async () => {
+  it('打开后八张表齐全', async () => {
     const db = new CyclingDatabase();
     await db.open();
     const tableNames = db.tables.map((table) => table.name).sort();
     expect(tableNames).toEqual([
       'activities',
+      'activity_blobs',
       'activity_records',
       'files',
       'scan_cache',

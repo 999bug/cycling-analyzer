@@ -8,7 +8,7 @@
  * 正确性，避免多索引组合的复杂度；数据量增长后可切换到索引路径）。
  */
 import type { Activity, ActivityRecord } from '@/types/activity';
-import type { ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
+import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
 
 /**
  * 活动摘要（不含 records/route）。
@@ -440,26 +440,32 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async addActivity(activity: Activity, name?: string): Promise<void> {
     const entity = toActivityEntity(activity, name);
-    const records = toRecordEntities(activity);
-    await this.db.transaction('rw', [this.db.activities, this.db.activity_records], async () => {
-      await this.db.activities.add(entity);
-      if (records.length > 0) {
-        await this.db.activity_records.bulkAdd(records);
-      }
-    });
+    const blob = toBlobEntity(activity);
+    await this.db.transaction(
+      'rw',
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      async () => {
+        await this.db.activities.add(entity);
+        // 逐点数据整活动一行（v5）：写 1 行大 value，替代旧逐点 bulkAdd
+        await this.db.activity_blobs.put(blob);
+      },
+    );
   }
 
   async addActivities(activities: Activity[]): Promise<void> {
     const entities = activities.map((activity) => toActivityEntity(activity));
-    const records = activities.flatMap(toRecordEntities);
-    await this.db.transaction('rw', [this.db.activities, this.db.activity_records], async () => {
-      if (entities.length > 0) {
-        await this.db.activities.bulkAdd(entities);
-      }
-      if (records.length > 0) {
-        await this.db.activity_records.bulkAdd(records);
-      }
-    });
+    const blobs = activities.map(toBlobEntity);
+    await this.db.transaction(
+      'rw',
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      async () => {
+        if (entities.length > 0) {
+          await this.db.activities.bulkAdd(entities);
+        }
+        // 每活动一行 put：导入写库从 N 行变 N 条大 value（实测快约 400 倍）
+        await this.db.activity_blobs.bulkPut(blobs);
+      },
+    );
   }
 
   async getById(id: string): Promise<ActivitySummary | undefined> {
@@ -468,14 +474,21 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]> {
     const { offset = 0, limit = 0 } = options ?? {};
-    let collection = this.db.activity_records.where('activityId').equals(activityId);
-    if (offset > 0) {
-      collection = collection.offset(offset);
+    // v5 主路径：整活动一行，主键 get 即取全部点
+    const blob = await this.db.activity_blobs.get(activityId);
+    if (blob !== undefined) {
+      return blob.records.slice(offset, limit > 0 ? offset + limit : undefined);
     }
-    if (limit > 0) {
-      collection = collection.limit(limit);
+    // 迁移兜底：旧逐点行表仍有数据（后台迁移未完成），按旧路径读并回填新表，
+    // 让迁移任务与读取路径双向收敛。旧表无数据时不回填（防已删除活动留孤儿空行，
+    // 无 records 的活动由迁移任务补空行）
+    const legacy = await this.db.activity_records.where('activityId').equals(activityId).toArray();
+    if (legacy.length === 0) {
+      return [];
     }
-    return collection.toArray();
+    const records: ActivityRecord[] = legacy.map(stripEntityToRecord);
+    await this.db.activity_blobs.put({ activityId, records });
+    return records.slice(offset, limit > 0 ? offset + limit : undefined);
   }
 
   async getRecordsByActivityIds(
@@ -485,16 +498,45 @@ export class DexieActivityRepository implements ActivityRepository {
     if (activityIds.length === 0) {
       return grouped;
     }
-    // 单次 anyOf 索引查询替代 N 次串行 equals 查询（一次事务，热力图等全量扫描用）
-    const records = await this.db.activity_records.where('activityId').anyOf([...activityIds]).toArray();
     for (const id of activityIds) {
       grouped.set(id, []);
     }
-    for (const record of records) {
+    // v5 主路径：主键批量取整活动行（一次事务）
+    const blobs = await this.db.activity_blobs.bulkGet([...activityIds]);
+    const missing: string[] = [];
+    blobs.forEach((blob, index) => {
+      const id = activityIds[index];
+      if (blob !== undefined) {
+        grouped.set(id, blob.records);
+      } else {
+        missing.push(id);
+      }
+    });
+    if (missing.length === 0) {
+      return grouped;
+    }
+    // 迁移兜底：未迁移的活动从旧逐点行表聚合（单次 anyOf 索引查询）并回填新表
+    const legacy = await this.db.activity_records
+      .where('activityId')
+      .anyOf(missing)
+      .toArray();
+    for (const id of missing) {
+      grouped.set(id, []);
+    }
+    for (const record of legacy) {
       const bucket = grouped.get(record.activityId);
       if (bucket !== undefined) {
-        bucket.push(record);
+        bucket.push(stripEntityToRecord(record));
       }
+    }
+    const backfill = missing
+      .map((id) => ({
+        activityId: id,
+        records: grouped.get(id) ?? [],
+      }))
+      .filter((blob) => blob.records.length > 0);
+    if (backfill.length > 0) {
+      await this.db.activity_blobs.bulkPut(backfill);
     }
     return grouped;
   }
@@ -536,23 +578,36 @@ export class DexieActivityRepository implements ActivityRepository {
     if (ids.length === 0) {
       return;
     }
-    await this.db.transaction('rw', [this.db.activities, this.db.activity_records], async () => {
-      await this.db.activities.bulkDelete([...ids]);
-      // 先取主键再 bulkDelete：跳过 Dexie 二级索引 delete() 的 modify 回退
-      // （回退路径会逐条反序列化整条记录体，数千~数万点/活动时是主要瓶颈）
-      const recordKeys = await this.db.activity_records
-        .where('activityId')
-        .anyOf([...ids])
-        .primaryKeys();
-      await this.db.activity_records.bulkDelete(recordKeys);
-    });
+    await this.db.transaction(
+      'rw',
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      async () => {
+        // v5 主路径：两个主键表 bulkDelete，每活动各删 1 行，毫秒级
+        await this.db.activities.bulkDelete([...ids]);
+        await this.db.activity_blobs.bulkDelete([...ids]);
+        // 迁移兜底：旧逐点行表残留数据一并清理（迁移完成后此表为空，空操作）。
+        // 先取主键再 bulkDelete，跳过 Dexie 二级索引 delete() 的 modify 回退
+        const legacyKeys = await this.db.activity_records
+          .where('activityId')
+          .anyOf([...ids])
+          .primaryKeys();
+        if (legacyKeys.length > 0) {
+          await this.db.activity_records.bulkDelete(legacyKeys);
+        }
+      },
+    );
   }
 
   async deleteAll(): Promise<void> {
-    await this.db.transaction('rw', [this.db.activities, this.db.activity_records], async () => {
-      await this.db.activities.clear();
-      await this.db.activity_records.clear();
-    });
+    await this.db.transaction(
+      'rw',
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      async () => {
+        await this.db.activities.clear();
+        await this.db.activity_blobs.clear();
+        await this.db.activity_records.clear();
+      },
+    );
   }
 
   async summarizeByRange(startTime: string, endTime: string): Promise<ActivityRangeSummary> {
@@ -628,14 +683,13 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
 }
 
 /**
- * 将领域 Activity 的逐点记录转换为 activity_records 表实体。
- * 仅保留规格 §18 字段清单的字段（含 activityId），grade 暂不落库。
+ * 将领域 Activity 的逐点记录转换为整活动一行实体（v5 activity_blobs）。
+ * 仅保留规格 §18 字段清单的字段，grade 暂不落库。
  *
  * @param activity 领域活动
  */
-function toRecordEntities(activity: Activity): ActivityRecordEntity[] {
-  return (activity.records ?? []).map((record) => ({
-    activityId: activity.id,
+function toBlobEntity(activity: Activity): ActivityBlobEntity {
+  const records: ActivityRecord[] = (activity.records ?? []).map((record) => ({
     timestamp: record.timestamp,
     latitude: record.latitude,
     longitude: record.longitude,
@@ -647,4 +701,25 @@ function toRecordEntities(activity: Activity): ActivityRecordEntity[] {
     power: record.power,
     temperature: record.temperature,
   }));
+  return { activityId: activity.id, records };
+}
+
+/**
+ * 旧逐点行实体剥壳为领域记录（迁移兜底读旧表时使用）。
+ *
+ * @param entity 旧 activity_records 行
+ */
+function stripEntityToRecord(entity: ActivityRecordEntity): ActivityRecord {
+  return {
+    timestamp: entity.timestamp,
+    latitude: entity.latitude,
+    longitude: entity.longitude,
+    altitude: entity.altitude,
+    distance: entity.distance,
+    speed: entity.speed,
+    heartRate: entity.heartRate,
+    cadence: entity.cadence,
+    power: entity.power,
+    temperature: entity.temperature,
+  };
 }

@@ -34,7 +34,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 
 - **Stream 校验顺序**：`isFitFile`/`checkFitIntegrity` 必须在 `read()` 前调用，read 消费 stream 后会误报 false
 - **Dexie 非索引字段免升版本**（如 `FileEntity.data`、`ActivityEntity.description`）；改索引列才需要 `db.ts` 升 `DB_VERSION`
-- `activities` 表只存摘要，逐点数据在 `activity_records`（`getRecords` 按需加载）；导入时摘要需含 `normalizedPower`（训练状态聚合依赖）
+- `activities` 表只存摘要，逐点数据在 `activity_blobs`（每活动一行，v5；旧 `activity_records` 逐点行表由后台迁移完成后清空、v6 删除；`getRecords` 按需加载，迁移完成前新表优先旧表兜底）；导入时摘要需含 `normalizedPower`（训练状态聚合依赖）
 - 活动 ID = 文件内容指纹（快照确定性深链）；`.fit` 与 `.fit.gz` 同一活动判重一致
 - Strava 标题还原：CSV「文件名」列匹配（批量导出数字 ID），未命中时文件名兜底（手动下载文件名=标题，纯数字跳过）；描述/估算功率仅 CSV 有对应行时生效
 - 测试：Vitest + jsdom；`tests/setup.ts` 全局注册 fake-indexeddb，DB 测试用真 Dexie 实例注入；FIT 样例在 `tests/fixtures/`；**`private-fixtures/` 用户真实数据 gitignored，严禁提交**

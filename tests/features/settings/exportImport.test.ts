@@ -216,7 +216,8 @@ describe('数据导入', () => {
 
     expect(second).toEqual({ newImported: 0, skipped: 2 })
     expect(await targetActivityRepo.countActivities()).toBe(2)
-    expect(await targetDb.activity_records.count()).toBe(2)
+    // v5 起逐点数据整活动一行落 activity_blobs
+    expect(await targetDb.activity_blobs.count()).toBe(2)
   })
 
   it('部分重复导入：仅新增未导入的活动', async () => {

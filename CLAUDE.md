@@ -28,7 +28,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - `src/fit/decoder`：封装 @garmin/fitsdk。**Stream 的 isFIT/checkIntegrity 必须在 read() 前调用**（read 消费 stream 后误报 false）
 - `src/fit/normalizer`：SDK 结构 → 领域模型（半周→十进制度、Date→Unix 秒）
 - `src/fit/calculator`：统计计算（爬升=相邻正增量、平均速度=距离/时长）
-- `src/storage`：Dexie 库 `cycling-data`（activities 摘要 / activity_records 逐点分表、files 台账、settings）
+- `src/storage`：Dexie 库 `cycling-data`（activities 摘要 / activity_blobs 逐点整活动行（v5）+ activity_records 旧逐点行表（迁移兜底，v6 删）、files 台账、settings）
 - `src/features/*`：业务功能域（import/activity/dashboard/statistics/calendar/settings）
 - `src/pages`、`src/charts`、`src/map`：页面与展示组件
 
@@ -37,7 +37,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 ### 关键设计决策
 
 - **领域模型是唯一跨层契约**（`src/types/activity.ts`）：单位固定（米/m/s/bpm/rpm/W、Unix 秒、十进制度）；**缺失字段 = undefined ≠ 0**（规格 §25），UI 显示 `—`
-- **摘要与逐点分表**：activities 表不存 records；`getById` 返回摘要，`getRecords` 按需加载
+- **摘要与逐点分表**：activities 表不存 records；`getById` 返回摘要，`getRecords` 按需加载。v5 起逐点数据**每活动一行**（`activity_blobs`，主键 activityId）：IndexedDB 无批量/范围删除 API，逐点一行时删除/导入是 N×万行级操作（实测 0.22ms/行），整活动一行后均毫秒级。旧表数据由后台分批迁移（`recordsMigration.ts`，幂等续传 + 心跳锁），迁移完成前读取新表优先、旧表兜底
 - **去重指纹基于解压后内容**（`.fit` 与 `.fit.gz` 同一活动判重一致）
 - **Strava 标题还原**：CSV 文件名匹配（`src/features/import/stravaExport.ts`），跨行引号感知
 - **佳明 GDPR 导出包适配**：FIT 封装在包内层 `UploadedFiles_*.zip`，扫描器 `expandArchives` 递归展开 zip（fflate，深度 2）；标题还原按摘要 JSON `startTimeGmt` 与 FIT 开始时间 ±2s 匹配（`src/features/import/garminExport.ts`，与文件名无键关联）

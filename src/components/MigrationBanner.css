@@ -1,0 +1,78 @@
+/* 本地数据迁移进度条：顶部居中横幅，info 中性配色（升级是后台事务，
+   不像更新横幅那样需要强提醒；但迁移中要可见，避免用户疑惑数据状态）。
+   z-index 60 与更新横幅同级：两者不应同时出现（更新会刷新页面重置迁移） */
+
+.migration-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 520px;
+  padding: var(--space-md) var(--space-lg);
+  border: 1.5px solid var(--info);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  animation: migration-banner-in 0.3s ease;
+}
+
+/* 尊重减弱动态偏好：不做滑入动画 */
+@media (prefers-reduced-motion: reduce) {
+  .migration-banner {
+    animation: none;
+  }
+}
+
+.migration-banner__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.migration-banner__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.migration-banner__desc {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.migration-banner__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary, color-mix(in srgb, var(--text) 10%, transparent));
+  overflow: hidden;
+}
+
+.migration-banner__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--info);
+  transition: width 0.2s ease;
+}
+
+/* 尊重减弱动态偏好：宽度跳变即可 */
+@media (prefers-reduced-motion: reduce) {
+  .migration-banner__bar-fill {
+    transition: none;
+  }
+}
+
+/* 移动端：顶部通栏（留出安全区） */
+@media (max-width: 768px) {
+  .migration-banner {
+    top: calc(var(--space-sm) + env(safe-area-inset-top, 0px));
+    right: var(--space-md);
+    left: var(--space-md);
+    max-width: none;
+  }
+}

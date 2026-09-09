@@ -7,7 +7,7 @@
  *   "version": 1,
  *   "exportedAt": "2026-08-17T12:00:00.000Z",
  *   "activities": [ActivityEntity]   // 活动摘要（含 name），不含 records
- *   "records": [ActivityRecordEntity] // 逐点记录（含 activityId，无自增主键 id）
+ *   "records": [ExportedRecord]      // 逐点记录（领域记录 + activityId）
  *   "files": [FileEntity]            // 导入文件台账
  *   "settings": [SettingsEntry]      // 设置键值对，导入时按 key 合并
  *   "segments": [SegmentEntity]      // 赛段（可选，v1 旧文件可缺省；无自增主键 id）
@@ -23,11 +23,14 @@
  * 故本模块直接使用数据库表完成这两类合并，其余读写走仓库。
  */
 import type { Activity, ActivityRecord } from '@/types/activity'
-import type { ActivityEntity, ActivityRecordEntity, CyclingDatabase, FileEntity, SegmentEntity, SettingsEntry } from '@/storage/db'
+import type { ActivityEntity, CyclingDatabase, FileEntity, SegmentEntity, SettingsEntry } from '@/storage/db'
 import { db } from '@/storage/db'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository, type SettingsRepository } from '@/storage/repositories/settingsRepository'
+
+/** 导出 JSON 中的逐点记录形状（领域记录 + 归属活动 ID，与 v1 格式一致） */
+export type ExportedRecord = ActivityRecord & { activityId: string }
 
 /** 导出格式应用标识 */
 export const EXPORT_APP = 'cycling-analyzer'
@@ -61,8 +64,8 @@ export interface ExportBundle {
   /** 活动摘要（不含逐点记录） */
   activities: ActivityEntity[]
 
-  /** 逐点记录（含 activityId，无自增主键） */
-  records: ActivityRecordEntity[]
+  /** 逐点记录（领域记录 + activityId） */
+  records: ExportedRecord[]
 
   /** 导入文件台账 */
   files: FileEntity[]
@@ -140,7 +143,7 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
   ])
 
   // 逐活动分批读取逐点记录，并补上 activityId（getRecords 返回的领域记录不含归属）
-  const records: ActivityRecordEntity[] = []
+  const records: ExportedRecord[] = []
   for (const summary of summaries) {
     const batches = await listRecordsInBatches(activityRepository, summary.id, recordBatchSize)
     for (const record of batches) {
@@ -153,7 +156,7 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
     version: EXPORT_VERSION,
     exportedAt: now.toISOString(),
     activities: summaries,
-    records: records.map(stripRecordId),
+    records,
     // 剥离原始 FIT 字节（规格 §19）：ArrayBuffer 不可 JSON 序列化且体积大
     files: files.map(stripFileData),
     settings,
@@ -224,7 +227,7 @@ export async function importBundle(bundle: ExportBundle, options: ImportOptions 
   const existing = new Set((await activityRepository.listAllSummaries()).map((a) => a.fingerprint))
 
   // 逐点记录按活动 ID 归组（同一活动的记录连续写入）
-  const recordsByActivity = new Map<string, ActivityRecordEntity[]>()
+  const recordsByActivity = new Map<string, ExportedRecord[]>()
   for (const record of bundle.records) {
     const group = recordsByActivity.get(record.activityId)
     if (group === undefined) {
@@ -355,16 +358,4 @@ async function listRecordsInBatches(
     offset += batch.length
   }
   return all
-}
-
-/**
- * 剥离逐点记录的自增主键（导入时由 Dexie 重新生成）。
- *
- * @param record 数据库实体（含自增 id）
- * @returns 不含 id 的记录
- */
-function stripRecordId(record: ActivityRecordEntity): Omit<ActivityRecordEntity, 'id'> {
-  const rest = { ...record }
-  delete rest.id
-  return rest
 }

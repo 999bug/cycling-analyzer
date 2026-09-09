@@ -406,6 +406,55 @@ describe('DexieActivityRepository', () => {
       expect(await repo.getById(activity.id)).toBeUndefined();
       expect(await repo.getRecords(activity.id)).toHaveLength(0);
       expect(await repo.countActivities()).toBe(0);
+      // v5：逐点数据整活动一行落 activity_blobs
+      expect(await db.activity_blobs.get(activity.id)).toBeUndefined();
+    });
+
+    it('addActivity 以整活动一行写入 activity_blobs', async () => {
+      const activity = makeActivity({ records: [makeRecord(1), makeRecord(2), makeRecord(3)] });
+      await repo.addActivity(activity);
+
+      const blob = await db.activity_blobs.get(activity.id);
+      expect(blob?.records).toHaveLength(3);
+      expect(blob?.records[0]).toEqual(makeRecord(1));
+      // 旧逐点行表不再写入
+      expect(await db.activity_records.count()).toBe(0);
+    });
+
+    it('getRecords 迁移兜底：旧逐点行数据聚合返回并回填新表', async () => {
+      const activity = makeActivity();
+      await repo.addActivity(activity);
+      // 模拟迁移未完成：清掉新表行，往旧表插逐点行
+      await db.activity_blobs.delete(activity.id);
+      await db.activity_records.bulkAdd([
+        { ...makeRecord(1), activityId: activity.id },
+        { ...makeRecord(2), activityId: activity.id },
+      ]);
+
+      const records = await repo.getRecords(activity.id);
+
+      expect(records).toEqual([makeRecord(1), makeRecord(2)]);
+      // 回填：新表已有整活动行
+      expect((await db.activity_blobs.get(activity.id))?.records).toEqual(records);
+      // 后续读取走新表主键 get，返回一致
+      expect(await repo.getRecords(activity.id)).toEqual(records);
+    });
+
+    it('getRecordsByActivityIds 兜底聚合旧表并回填', async () => {
+      const migrated = makeActivity({ records: [makeRecord(1)] });
+      const legacy = makeActivity();
+      await repo.addActivities([migrated, legacy]);
+      await db.activity_blobs.delete(legacy.id);
+      await db.activity_records.bulkAdd([
+        { ...makeRecord(1), activityId: legacy.id },
+        { ...makeRecord(2), activityId: legacy.id },
+      ]);
+
+      const grouped = await repo.getRecordsByActivityIds([migrated.id, legacy.id]);
+
+      expect(grouped.get(migrated.id)).toEqual([makeRecord(1)]);
+      expect(grouped.get(legacy.id)).toEqual([makeRecord(1), makeRecord(2)]);
+      expect((await db.activity_blobs.get(legacy.id))?.records).toHaveLength(2);
     });
 
     it('deleteActivities 批量级联删除，未列入 ID 的活动不受影响', async () => {

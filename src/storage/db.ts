@@ -17,8 +17,12 @@ import type { CoordinateSystem } from '@/geo/coordinateSystem';
 /** 数据库名称 */
 export const DB_NAME = 'cycling-data';
 
-/** 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表） */
-export const DB_VERSION = 4;
+/**
+ * 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表；
+ * v4：新增 scan_cache 扫描缓存表；v5：新增 activity_blobs 逐点整活动存储表，
+ * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空，v6 物理删除）。
+ */
+export const DB_VERSION = 5;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -134,7 +138,26 @@ export interface ActivityEntity {
 }
 
 /**
- * 逐点记录实体（activity_records 表）。
+ * 逐点整活动存储实体（activity_blobs 表，v5 新增）。
+ *
+ * 设计动机：旧 activity_records 逐点一行，删除一条活动需逐行删除
+ * （IndexedDB 无批量/范围删除 API，实测约 0.22ms/行，单活动数千~数万点
+ * 时删除/导入均秒级~分钟级卡顿）。改为每活动一行后删除=删 1 行主键、
+ * 导入=写 1 行大 value（结构化克隆原生支持），均毫秒级。
+ *
+ * 与规格 §18 的偏差：表名与行粒度变更，字段清单不变（grade 仍不落库）。
+ */
+export interface ActivityBlobEntity {
+  /** 所属活动 ID（主键） */
+  activityId: string;
+
+  /** 该活动全部逐点记录（数组序 = 原存储序 = 时间序） */
+  records: ActivityRecord[];
+}
+
+/**
+ * 旧逐点记录实体（activity_records 表，v4 及之前；v5 起仅迁移兜底读写，
+ * 后台迁移完成后清空，v6 计划物理删除）。
  * 仅存规格 §18 列出的字段；grade 字段暂不落库（规格字段清单未含）。
  */
 export interface ActivityRecordEntity extends ActivityRecord {
@@ -271,7 +294,7 @@ export interface ScanCacheEntity {
  * - activities.fingerprint 唯一索引（& 前缀），重复导入检测走主键级查重
  * - activities.startTime 索引：按时间排序与范围聚合（summarizeByRange）
  * - activities.activityType 索引：类型筛选
- * - activity_records.activityId 索引：按活动加载逐点数据
+ * - activity_blobs.activityId 主键：按活动加载/删除逐点数据（整活动一行）
  */
 export class CyclingDatabase extends Dexie {
   // 表属性用 declare 声明：Dexie 在 version().stores() 注册时动态定义 getter，
@@ -281,8 +304,11 @@ export class CyclingDatabase extends Dexie {
   /** 活动摘要表（不含 records/route） */
   declare activities: EntityTable<ActivityEntity, 'id'>;
 
-  /** 逐点记录表（自增主键） */
+  /** 逐点记录表（自增主键；v4 及之前的主存储，v5 起仅迁移兜底） */
   declare activity_records: EntityTable<ActivityRecordEntity, 'id'>;
+
+  /** 逐点整活动存储表（v5 新增：每活动一行，records 数组为主值） */
+  declare activity_blobs: EntityTable<ActivityBlobEntity, 'activityId'>;
 
   /** 导入文件台账表 */
   declare files: EntityTable<FileEntity, 'fingerprint'>;
@@ -324,6 +350,13 @@ export class CyclingDatabase extends Dexie {
     // 内容指纹存 payload 内层，非索引字段免索引声明
     this.version(4).stores({
       scan_cache: 'name',
+    });
+    // v5：新增逐点整活动存储表（activityId 主键，每活动一行）。
+    // 旧数据不在此处迁移（阻塞升级事务 10~30s 体验差），由应用启动后的
+    // 后台分批迁移完成（见 src/storage/recordsMigration.ts）；
+    // 旧 activity_records 表保留，迁移完成后由应用层清空，v6 物理删除。
+    this.version(5).stores({
+      activity_blobs: 'activityId',
     });
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，

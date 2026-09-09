@@ -141,6 +141,42 @@
   color: var(--text-secondary);
 }
 
+/* 删除进度条：info 中性色，删除中实时反映已处理条数 */
+
+.delete-activities__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.delete-activities__progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-tertiary, color-mix(in srgb, var(--text) 10%, transparent));
+  overflow: hidden;
+}
+
+.delete-activities__progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--info);
+  transition: width 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delete-activities__progress-fill {
+    transition: none;
+  }
+}
+
+.delete-activities__progress-text {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .delete-activities__hint {
   margin: 0;
   font-size: 12px;
