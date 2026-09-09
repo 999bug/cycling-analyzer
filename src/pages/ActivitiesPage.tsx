@@ -85,7 +85,7 @@ interface ActivitiesPageProps {
   repository?: ActivityReadRepository
 
   /** 本地写仓库（批量重命名/批量删除/批量纠偏测试注入；缺省弹窗内部直连 Dexie） */
-  writeRepository?: Pick<ActivityRepository, 'updateName' | 'deleteActivity' | 'updateTrackSystem'>
+  writeRepository?: Pick<ActivityRepository, 'updateName' | 'deleteActivity' | 'deleteActivities' | 'updateTrackSystem'>
 }
 
 /**

@@ -389,6 +389,29 @@ describe('DexieActivityRepository', () => {
       expect(await repo.countActivities()).toBe(0);
     });
 
+    it('deleteActivities 批量级联删除，未列入 ID 的活动不受影响', async () => {
+      const keep = makeActivity({ records: [makeRecord(1)] });
+      const gone1 = makeActivity({ records: [makeRecord(1), makeRecord(2), makeRecord(3)] });
+      const gone2 = makeActivity();
+      await repo.addActivities([keep, gone1, gone2]);
+
+      await repo.deleteActivities([gone1.id, gone2.id]);
+
+      expect(await repo.countActivities()).toBe(1);
+      expect(await repo.getById(gone1.id)).toBeUndefined();
+      expect(await repo.getById(gone2.id)).toBeUndefined();
+      expect(await repo.getRecords(gone1.id)).toHaveLength(0);
+      expect((await repo.getRecords(keep.id)).length).toBe(1);
+    });
+
+    it('deleteActivities 空列表直接返回，空库删除不报错', async () => {
+      await repo.deleteActivities([]);
+      await repo.deleteActivities(['nonexistent-id']);
+
+      expect(await repo.countActivities()).toBe(0);
+      expect(await db.activity_records.count()).toBe(0);
+    });
+
     it('deleteAll 清空活动与逐点记录', async () => {
       await repo.addActivities([makeActivity({ records: [makeRecord(1)] }), makeActivity()]);
 

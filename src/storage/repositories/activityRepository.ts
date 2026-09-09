@@ -259,6 +259,18 @@ export interface ActivityRepository extends ActivityReadRepository {
   deleteActivity(id: string): Promise<void>;
 
   /**
+   * 批量删除活动（单事务级联删除逐点记录）。
+   *
+   * 性能关键：逐点数据按 activityId 二级索引定位时必须先 primaryKeys()
+   * 再 bulkDelete——直接在二级索引 Collection 上调 delete() 会走 Dexie 的
+   * modify 回退，逐条游标读取并反序列化全部记录体（单活动数千~数万点），
+   * 批量删除时是 N × M 次反序列化，UI 明显卡死。
+   *
+   * @param ids 活动 ID 列表（空列表直接返回）
+   */
+  deleteActivities(ids: readonly string[]): Promise<void>;
+
+  /**
    * 清空全部活动与逐点记录（不涉及 files/settings）。
    */
   deleteAll(): Promise<void>;
@@ -510,9 +522,22 @@ export class DexieActivityRepository implements ActivityRepository {
   }
 
   async deleteActivity(id: string): Promise<void> {
+    await this.deleteActivities([id]);
+  }
+
+  async deleteActivities(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
     await this.db.transaction('rw', [this.db.activities, this.db.activity_records], async () => {
-      await this.db.activities.delete(id);
-      await this.db.activity_records.where('activityId').equals(id).delete();
+      await this.db.activities.bulkDelete([...ids]);
+      // 先取主键再 bulkDelete：跳过 Dexie 二级索引 delete() 的 modify 回退
+      // （回退路径会逐条反序列化整条记录体，数千~数万点/活动时是主要瓶颈）
+      const recordKeys = await this.db.activity_records
+        .where('activityId')
+        .anyOf([...ids])
+        .primaryKeys();
+      await this.db.activity_records.bulkDelete(recordKeys);
     });
   }
 

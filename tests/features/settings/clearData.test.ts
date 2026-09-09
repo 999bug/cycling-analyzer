@@ -40,12 +40,20 @@ describe('clearAllData', () => {
     await activityRepo.addActivity(makeActivity('act-2', 'fp-2'))
     await fileRepo.recordImported('fp-1', 'ride-1.fit', 1024)
     await saveSettings({ profile: { nickname: '晨骑爱好者' }, units: { distance: 'mi' } }, settingsRepo)
+    // 派生缓存：瓦片缓存 + 全量扫描缓存
+    await db.tile_cache.bulkPut([
+      { url: 'https://tile/1/0/0.png', blob: new Blob(), size: 1024, lastAccess: Date.now() },
+    ])
+    await db.scan_cache.put({ name: 'heatmap-tracks', fingerprint: '1|0|', payload: [] })
 
     await clearAllData({ db, activityRepository: activityRepo, fileRepository: fileRepo })
 
     expect(await activityRepo.countActivities()).toBe(0)
     expect(await db.activity_records.count()).toBe(0)
     expect(await db.files.count()).toBe(0)
+    // 派生缓存一并清空：活动已不存在，旧产物无保留价值
+    expect(await db.tile_cache.count()).toBe(0)
+    expect(await db.scan_cache.count()).toBe(0)
     // settings 一并清空：读回默认值（规格 §27 默认公制）
     const settings = await getSettings(settingsRepo)
     expect(settings.profile).toEqual({})

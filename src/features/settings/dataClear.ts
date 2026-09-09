@@ -1,7 +1,8 @@
 /**
  * 清空全部本地数据（规格 §32）。
  *
- * 清空范围：activities（含逐点 records）、files 台账、settings 设置、segments 赛段。
+ * 清空范围：activities（含逐点 records）、files 台账、settings 设置、segments 赛段、
+ * tile_cache 瓦片缓存、scan_cache 全量扫描缓存（热力图/路线图产物）。
  * 页面层负责二次确认，本模块只执行清空。
  */
 import type { CyclingDatabase } from '@/storage/db'
@@ -44,4 +45,7 @@ export async function clearAllData(options: ClearAllOptions = {}): Promise<void>
   // settings/segments 表：仓库接口未提供清空方法，直接清表
   await dbInstance.settings.clear()
   await dbInstance.segments.clear()
+  // 派生缓存一并清空：活动已不存在，旧瓦片/扫描产物无保留价值
+  await dbInstance.tile_cache.clear()
+  await dbInstance.scan_cache.clear()
 }

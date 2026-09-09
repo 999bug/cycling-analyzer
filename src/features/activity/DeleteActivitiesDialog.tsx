@@ -28,7 +28,7 @@ interface DeleteActivitiesDialogProps {
   items: ActivitySummary[]
 
   /** 本地库仓库（测试注入；缺省模块级单例） */
-  writeRepository?: Pick<DexieActivityRepository, 'deleteActivity'>
+  writeRepository?: Pick<DexieActivityRepository, 'deleteActivities'>
 
   /** 关闭弹窗回调 */
   onClose: () => void
@@ -97,27 +97,26 @@ function DeleteActivitiesDialog({
   const dirtyItems = itemViews.filter((item) => item.isDirty)
   const normalItems = itemViews.filter((item) => !item.isDirty)
 
-  /** 逐条删除，汇总成功/失败数量（与批量重命名弹窗同口径） */
+  /**
+   * 单事务批量删除（性能关键）。
+   *
+   * 旧实现逐条 await deleteActivity：每条独立事务 + 二级索引 delete() 走
+   * Dexie modify 回退逐条反序列化记录体，勾选数十条时 UI 卡死。
+   * 改为一次 deleteActivities(ids)：单事务 + primaryKeys/bulkDelete。
+   */
   async function handleConfirm() {
     setDeleting(true)
     setResult(null)
-    let succeeded = 0
-    let failed = 0
-    for (const item of itemViews) {
-      try {
-        await writeRepository.deleteActivity(item.id)
-        succeeded += 1
-      } catch (err: unknown) {
-        failed += 1
-        console.error('Failed to delete activity', item.id, err)
-      }
+    try {
+      await writeRepository.deleteActivities(itemViews.map((item) => item.id))
+      setDeleting(false)
+      onDeleted(itemViews.length)
+    } catch (err: unknown) {
+      // 单事务原子性：任一条失败全部回滚，无部分删除状态
+      setDeleting(false)
+      console.error('Failed to batch delete activities', err)
+      setResult(`删除失败：${items.length} 条均未删除（详情见控制台日志）`)
     }
-    setDeleting(false)
-    if (failed === 0) {
-      onDeleted(succeeded)
-      return
-    }
-    setResult(`删除完成：成功 ${succeeded} 条，失败 ${failed} 条（详情见控制台日志）`)
   }
 
   return (
