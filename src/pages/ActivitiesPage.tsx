@@ -16,6 +16,7 @@ import ActivityPagination from '@/features/activity/ActivityPagination'
 import BatchRenameDialog from '@/features/activity/BatchRenameDialog'
 import CustomFilterPanel from '@/features/activity/CustomFilterPanel'
 import DeleteActivitiesDialog from '@/features/activity/DeleteActivitiesDialog'
+import BatchFixDialog from '@/features/activity/BatchFixDialog'
 import { conditionsToBounds, describeCondition, type CustomFilterCondition } from '@/features/activity/customFilter'
 import '@/features/activity/activity-page.css'
 import { useUnits } from '@/hooks/useUnits'
@@ -83,8 +84,8 @@ interface ActivitiesPageProps {
   /** 活动仓库（测试注入用；缺省经门面按当前数据源分发） */
   repository?: ActivityReadRepository
 
-  /** 本地写仓库（批量重命名/批量删除测试注入；缺省弹窗内部直连 Dexie） */
-  writeRepository?: Pick<ActivityRepository, 'updateName' | 'deleteActivity'>
+  /** 本地写仓库（批量重命名/批量删除/批量纠偏测试注入；缺省弹窗内部直连 Dexie） */
+  writeRepository?: Pick<ActivityRepository, 'updateName' | 'deleteActivity' | 'updateTrackSystem'>
 }
 
 /**
@@ -116,6 +117,8 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
   // 勾选批量删除：ID → 摘要（跨翻页保留，删除弹窗需要展示摘要）
   const [selectedItems, setSelectedItems] = useState<Map<string, ActivitySummary>>(new Map())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  // 勾选批量纠偏：与批量删除同一勾选集（作者快照只读，入口同样隐藏）
+  const [fixDialogOpen, setFixDialogOpen] = useState(false)
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -363,6 +366,14 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     console.info(`Deleted ${count} activities`)
   }
 
+  /** 批量纠偏完成：清空勾选并刷新列表（坐标系纳入 scanKey 指纹，热力图等自动重算） */
+  function handleFixed(count: number) {
+    setFixDialogOpen(false)
+    setSelectedItems(new Map())
+    setReloadKey((k) => k + 1)
+    console.info(`Fixed coordinate system for ${count} activities`)
+  }
+
   function handlePrevPage() {
     setQuery((prev) => ({ ...prev, offset: Math.max(0, prev.offset - PAGE_SIZE) }))
   }
@@ -469,6 +480,14 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
             >
               删除选中
             </button>
+            <button
+              type="button"
+              className="activity-selection-bar__button"
+              onClick={() => setFixDialogOpen(true)}
+              title="批量设置轨迹坐标系（行者 / Keep 等国内 App 导入的记录位置不对时使用）"
+            >
+              轨迹纠偏
+            </button>
           </div>
         )}
       </div>
@@ -529,6 +548,14 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
           writeRepository={writeRepository}
           onClose={() => setDeleteDialogOpen(false)}
           onDeleted={handleDeleted}
+        />
+      )}
+      {fixDialogOpen && selectedCount > 0 && (
+        <BatchFixDialog
+          items={[...selectedItems.values()]}
+          writeRepository={writeRepository}
+          onClose={() => setFixDialogOpen(false)}
+          onFixed={handleFixed}
         />
       )}
     </div>

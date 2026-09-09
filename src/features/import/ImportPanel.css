@@ -934,3 +934,28 @@
     font-size: 11px;
   }
 }
+
+/* 批次来源选择（第 3 步）：手动指定本批文件来自哪个 App，缺省自动识别 */
+.import-panel__batch-source {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.import-panel__batch-source-label {
+  font-size: 13px;
+  color: var(--text-secondary, #999);
+  white-space: nowrap;
+}
+
+.import-panel__batch-source select {
+  flex: 1;
+  max-width: 320px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #333);
+  background: transparent;
+  color: var(--text, #eee);
+  font-size: 13px;
+}

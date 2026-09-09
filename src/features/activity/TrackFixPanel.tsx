@@ -16,10 +16,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { CoordinateSystem } from '@/geo/coordinateSystem'
 import type { TrackOffset } from '@/types/activity'
 import {
-  COORDINATE_SYSTEM_LABELS,
-  groupSourcesBySystem,
   sourceProfileById,
 } from '@/geo/sourceProfiles'
+import SourceSelect from '@/features/activity/SourceSelect'
 
 /** 单次微调步长（米） */
 const OFFSET_STEP_M = 10
@@ -125,7 +124,6 @@ export default function TrackFixPanel({
     }
   }
 
-  const groups = groupSourcesBySystem()
   const offsetDirty = offset.northMeters !== 0 || offset.eastMeters !== 0
   const systemChanged = selectedProfile.id === 'unknown'
     ? coordinateSystem !== 'wgs84'
@@ -142,18 +140,11 @@ export default function TrackFixPanel({
 
       <label className="track-fix-panel__field">
         <span>数据来自哪个 App？</span>
-        <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-          <option value="unknown">未知来源（按 GPS 真值处理）</option>
-          {groups.map((group) => (
-            <optgroup key={group.system} label={COORDINATE_SYSTEM_LABELS[group.system]}>
-              {group.profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label} · 默认 {profile.coordinateSystem.toUpperCase()}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        <SourceSelect
+          label="数据来自哪个 App？"
+          value={selectedId}
+          onChange={setSelectedId}
+        />
       </label>
       <p className="track-fix-panel__hint">
         {systemChanged ? '选择后地图立即预览，确认轨迹压在路面上再保存' : '与当前设置一致，无需纠偏'}

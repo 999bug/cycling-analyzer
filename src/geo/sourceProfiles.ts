@@ -59,14 +59,22 @@ export const SOURCE_PROFILES: readonly SourceProfile[] = [
   { id: 'strava', label: 'Strava', coordinateSystem: 'wgs84', keywords: ['stravagpx', 'strava'] },
   { id: 'garmin', label: 'Garmin Connect', coordinateSystem: 'wgs84', keywords: ['garmin connect', 'garmin'] },
   { id: 'wahoo', label: 'Wahoo', coordinateSystem: 'wgs84', keywords: ['wahoo', 'elemnt'] },
-  { id: 'xingzhe', label: '行者', coordinateSystem: 'gcj02', keywords: ['行者', 'xingzhe', 'imxingzhe'] },
-  { id: 'xoss', label: 'XOSS', coordinateSystem: 'gcj02', keywords: ['xoss'] },
-  { id: 'heiniao', label: '黑鸟', coordinateSystem: 'gcj02', keywords: ['黑鸟', 'heiniao', 'blackbird'] },
+  // 行者 / XOSS（同属 imxingzhe）：GPX 按 WGS-84 导出（官方称可在 Google Earth 中浏览，
+  // 且用户实测行者导出 GPX 按 WGS-84 处理后与高德底图对齐）——早期误标 GCJ-02 已修正
+  { id: 'xingzhe', label: '行者', coordinateSystem: 'wgs84', keywords: ['行者', 'xingzhe', 'imxingzhe'] },
+  { id: 'xoss', label: 'XOSS', coordinateSystem: 'wgs84', keywords: ['xoss'] },
+  // 咕咚：2014-03-24 起由 GCJ-02 升级为 WGS-84（running_page 项目记载），现代导出按 WGS-84
+  { id: 'gudong', label: '咕咚', coordinateSystem: 'wgs84', keywords: ['咕咚', 'codoon', 'gudong'] },
+  // 悦跑圈：导出数据无需 GCJ 纠偏（running_page joyrun 同步脚本无偏移修正项），按 WGS-84
+  { id: 'yuepaoquan', label: '悦跑圈', coordinateSystem: 'wgs84', keywords: ['悦跑圈', 'joyrun', 'yuepaoquan'] },
+  // Keep：目前采用 GCJ-02（running_page 项目明确记载其数据在 WGS-84 平台整体偏移）
   { id: 'keep', label: 'Keep', coordinateSystem: 'gcj02', keywords: ['keep'] },
-  { id: 'gudong', label: '咕咚', coordinateSystem: 'gcj02', keywords: ['咕咚', 'codoon', 'gudong'] },
-  { id: 'yuepaoquan', label: '悦跑圈', coordinateSystem: 'gcj02', keywords: ['悦跑圈', 'yuepaoquan'] },
+  // 黑鸟：API 返回 GCJ-02（社区同步脚本均需 gcj02→wgs84 转换）
+  { id: 'heiniao', label: '黑鸟', coordinateSystem: 'gcj02', keywords: ['黑鸟', 'heiniao', 'blackbird'] },
+  // 高德 / 腾讯：地图服务导出的轨迹即为 GCJ-02
   { id: 'amap', label: '高德', coordinateSystem: 'gcj02', keywords: ['amap', 'autonavi', '高德'] },
   { id: 'tencent', label: '腾讯地图', coordinateSystem: 'gcj02', keywords: ['tencent', '腾讯'] },
+  // 华为运动健康 / 小米运动（Zepp Life）：导出轨迹为 GCJ-02
   { id: 'huawei', label: '华为运动健康', coordinateSystem: 'gcj02', keywords: ['huawei', '华为', 'hmscore'] },
   { id: 'xiaomi', label: '小米运动', coordinateSystem: 'gcj02', keywords: ['xiaomi', '小米', 'mifit', 'zepp'] },
   { id: 'baidu', label: '百度', coordinateSystem: 'bd09', keywords: ['baidu', '百度'] },

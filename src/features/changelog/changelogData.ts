@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.45.0',
+    date: '2026-09-08',
+    features: [
+      '修正来源坐标系分档：行者 / XOSS / 咕咚 / 悦跑圈的 GPX 导出实为 WGS-84（此前误标为火星坐标导致被二次纠偏、轨迹偏移数百米），Keep / 黑鸟 / 高德 / 华为 / 小米保持火星坐标档',
+      '骑行记录列表支持批量轨迹纠偏：勾选记录后一次指定来源 App，批量设置坐标系（救历史数据）',
+      '导入向导新增「数据来自哪个 App」选择：默认自动识别（含行者网页版导出的 metadata 识别），猜错可手动指定并覆盖整批',
+      '导出 GPX 可选坐标系：默认 WGS-84（Strava / Garmin），可选 GCJ-02（高德等国内平台直接导入不偏移）',
+    ],
+  },
+  {
     version: '2.44.0',
     date: '2026-09-08',
     features: [

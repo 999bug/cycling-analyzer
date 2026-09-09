@@ -23,6 +23,7 @@ import {
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository';
 import { db } from '@/storage/db';
 import { computeFingerprint } from '@/utils/fingerprint';
+import { sourceProfileById } from '@/geo/sourceProfiles';
 import type { ParseFileFn, ParseTaskInput } from '@/fit/worker/parseTask';
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower';
 import { gunzipBytes, shouldGunzip } from './gzip';
@@ -79,6 +80,13 @@ export interface ImportOptions {
 
   /** 佳明 GDPR 活动摘要映射（开始时间 Unix 秒 → 活动名，标题还原用；见 garminExport） */
   garminTitles?: Map<number, string>;
+
+  /**
+   * 批次级来源覆盖（导入面板「数据来自哪个 App」手动指定；缺省自动识别）。
+   * 指定后覆盖本批全部活动的 sourceApp 与 coordinateSystem——
+   * 自动识别（GPX creator / metadata 关键词）猜错时的兜底手段。
+   */
+  sourceApp?: string;
 
   /** 进度回调（每处理完一个文件调用一次，current 从 1 开始） */
   onProgress?: (current: number, total: number) => void;
@@ -196,6 +204,12 @@ export async function importFiles(
         }
         // Strava 元数据补充：描述 + 无功率计时用估算功率填充
         applyStravaMeta(activity, meta);
+        // 批次级来源覆盖：手动指定的来源优先于自动识别（坐标系随来源画像联动）
+        if (options.sourceApp !== undefined) {
+          const profile = sourceProfileById(options.sourceApp);
+          activity.sourceApp = profile.id === 'unknown' ? undefined : profile.id;
+          activity.coordinateSystem = profile.coordinateSystem;
+        }
         // 佳明 GDPR 摘要标题还原：FIT 与摘要 JSON 无文件名关联，按开始时间匹配
         const garminName = options.garminTitles
           ? matchGarminTitle(options.garminTitles, activity.startTime)

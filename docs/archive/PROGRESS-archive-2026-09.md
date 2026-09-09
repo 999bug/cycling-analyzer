@@ -201,3 +201,4 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 
 
 
+| GEO-1 | **轨迹纠偏（GPX 坐标系）** | 中 | ✅ 已实现 | 2.43.0/2.44.0/2.45.0 三批：①坐标系内核 `src/geo/coordinateSystem.ts`（WGS-84/GCJ-02/BD-09 互转，迭代反解，同系严格短路幂等）+ 来源识别表 `src/geo/sourceProfiles.ts`（16 来源，行者/XOSS/咕咚/悦跑圈=WGS-84，Keep/黑鸟/高德/腾讯/华为/小米=GCJ-02，百度=BD-09）+ 投影统一出口 `src/geo/projection.ts`（收敛 ActivityMap/SegmentMiniMap/HeatmapPage 三处重复判断）；②数据模型 `coordinateSystem`/`sourceApp`/`trackOffset` 非索引字段免升 DB_VERSION，落库恒原始坐标、纠偏只改标记（来回切换零误差累积）；③GPX 解析识别来源（creator + metadata，行者网页版 gpxpy creator 靠 metadata 命中）；④详情页纠偏面板 `TrackFixPanel.tsx`（选来源即预览 + 灰虚线对比 + 四向 ±10m 微调）+ 来源标签；⑤列表页批量纠偏 `BatchFixDialog.tsx`；⑥导入批次来源覆盖（ImportOptions.sourceApp）；⑦导出坐标系选项（gpxExport 默认 WGS-84 可选 GCJ-02）；⑧scanCache 指纹纳入坐标系与微调；⑨RoutesMapPage 补归一化与底图投影。全量 1130/1130 + lint/build 绿 | 3 commits |

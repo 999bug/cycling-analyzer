@@ -36,6 +36,7 @@ import {
 } from './stravaExport';
 import { isStravaSource, type ImportSource } from './importSources';
 import type { ImportFile } from './importer';
+import SourceSelect from '@/features/activity/SourceSelect';
 import ImportEditDialog, { type ImportDraft } from './ImportEditDialog';
 import PlatformGrid from './PlatformGrid';
 import PlatformGuideView from './PlatformGuideView';
@@ -78,6 +79,8 @@ function ImportPanel() {
   const [pendingFile, setPendingFile] = useState<ScanResult['files'][number] | null>(null);
   /** 非文件级提示（如未找到 FIT 文件） */
   const [notice, setNotice] = useState('');
+  /** 批次级来源覆盖：'auto' = 按文件内容自动识别（默认），否则强制指定来源 App */
+  const [batchSourceApp, setBatchSourceApp] = useState('auto');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
   /**
@@ -131,7 +134,11 @@ function ImportPanel() {
       garminTitles = parseGarminSummaries(await result.garminJson.text());
     }
     setNotice(warningText);
-    await startImport(files, { stravaCsv, garminTitles });
+    await startImport(files, {
+      stravaCsv,
+      garminTitles,
+      sourceApp: batchSourceApp === 'auto' ? undefined : batchSourceApp,
+    });
   }
 
   /**
@@ -523,6 +530,17 @@ function ImportPanel() {
                     </svg>
                     <span>{selected ? selected.formatNote : DIRECT_FORMAT_NOTE}</span>
                   </p>
+                  <div className="import-panel__batch-source">
+                    <label className="import-panel__batch-source-label" htmlFor="import-batch-source">
+                      数据来自哪个 App？
+                    </label>
+                    <SourceSelect
+                      label="本批文件来源 App"
+                      value={batchSourceApp}
+                      onChange={setBatchSourceApp}
+                      autoOption="自动识别（按文件内容判断）"
+                    />
+                  </div>
                 </>
               )}
 

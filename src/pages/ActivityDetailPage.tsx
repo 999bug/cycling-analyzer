@@ -258,6 +258,8 @@ function ActivityDetailPage() {
   // 轨迹纠偏：面板开关 + 预览参数（undefined = 无未保存的预览改动，地图按已保存标记渲染）
   const [fixPanelOpen, setFixPanelOpen] = useState(false)
   const [fixPreview, setFixPreview] = useState<TrackFixPreview>()
+  // GPX 导出目标坐标系（默认 WGS-84 国际标准）
+  const [exportSystem, setExportSystem] = useState<CoordinateSystem>('wgs84')
   // 用户设置（单位/时间格式等本地显示偏好；undefined = 尚未加载完成）
   const [settings, setSettings] = useState<SettingsData>()
   // 训练配置（随数据源：作者模式用快照 profile，本地模式用访客设置）
@@ -473,14 +475,20 @@ function ActivityDetailPage() {
   )
 
   /**
-   * 导出 GPX：完整逐点轨迹 → GPX 1.1 文件下载（后续工作项：导出 GPX）。
+   * 导出 GPX：完整逐点轨迹 → GPX 1.1 文件下载。
+   * 坐标按所选目标坐标系换算：WGS-84 国际标准（默认），GCJ-02 供国内平台；
+   * 源为活动落库标记的坐标系，微调量一并生效（与地图显示一致）。
    */
   function handleExportGpx() {
     if (activity === undefined) {
       return
     }
     const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
-    const gpx = buildGpx(trackName, cleanedRecords.cleaned)
+    const gpx = buildGpx(trackName, cleanedRecords.cleaned, {
+      from: activity.coordinateSystem ?? 'wgs84',
+      to: exportSystem,
+      trackOffset: activity.trackOffset,
+    })
     if (gpx === undefined) {
       return
     }
@@ -692,6 +700,15 @@ function ActivityDetailPage() {
           {activity.note && <p className="activity-detail__note">{activity.note}</p>}
         </div>
         <div className="activity-detail__actions">
+          <select
+            className="activity-detail__export-system"
+            aria-label="导出坐标系"
+            value={exportSystem}
+            onChange={(event) => setExportSystem(event.target.value as CoordinateSystem)}
+          >
+            <option value="wgs84">WGS-84（Strava / Garmin）</option>
+            <option value="gcj02">GCJ-02（高德 / 国内平台）</option>
+          </select>
           <button
             type="button"
             className="activity-detail__export"

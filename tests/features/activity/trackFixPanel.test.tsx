@@ -19,7 +19,7 @@ describe('轨迹纠偏面板', () => {
     render(
       <TrackFixPanel
         sourceApp="xingzhe"
-        coordinateSystem="gcj02"
+        coordinateSystem="wgs84"
         onPreviewChange={onPreviewChange}
         onSave={noop}
         onClose={noop}
@@ -28,20 +28,20 @@ describe('轨迹纠偏面板', () => {
 
     const select = screen.getByLabelText(/数据来自哪个 App/) as HTMLSelectElement
     expect(select.value).toBe('xingzhe')
-    // 挂载即上报一次当前状态（行者 → gcj02，无微调）
+    // 挂载即上报一次当前状态（行者 → wgs84，无微调）
     expect(onPreviewChange).toHaveBeenCalledWith({
-      coordinateSystem: 'gcj02',
+      coordinateSystem: 'wgs84',
       sourceApp: 'xingzhe',
       trackOffset: undefined,
     })
   })
 
-  it('切换来源即时上报新坐标系（行者 → Strava 映射 gcj02 → wgs84）', () => {
+  it('切换来源即时上报新坐标系（行者 → Keep 映射 wgs84 → gcj02）', () => {
     const onPreviewChange = vi.fn()
     render(
       <TrackFixPanel
         sourceApp="xingzhe"
-        coordinateSystem="gcj02"
+        coordinateSystem="wgs84"
         onPreviewChange={onPreviewChange}
         onSave={noop}
         onClose={noop}
@@ -49,10 +49,10 @@ describe('轨迹纠偏面板', () => {
     )
 
     const select = screen.getByLabelText(/数据来自哪个 App/) as HTMLSelectElement
-    fireEvent.change(select, { target: { value: 'strava' } })
+    fireEvent.change(select, { target: { value: 'keep' } })
     expect(onPreviewChange).toHaveBeenLastCalledWith({
-      coordinateSystem: 'wgs84',
-      sourceApp: 'strava',
+      coordinateSystem: 'gcj02',
+      sourceApp: 'keep',
       trackOffset: undefined,
     })
   })

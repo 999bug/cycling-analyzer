@@ -168,6 +168,17 @@
     border-color 0.15s ease;
 }
 
+/* 导出坐标系选择：与导出按钮同排等高 */
+.activity-detail__export-system {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .activity-detail__export:hover {
   background-color: var(--bg-surface);
   border-color: var(--text-secondary);

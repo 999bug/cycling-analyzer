@@ -83,7 +83,7 @@ export function parseGpxActivity(input: ParseTaskInput): Activity {
   const summary = calculateSummary(records)
   const first = records[0]
   const last = records[records.length - 1]
-  const source = detectSource(readCreator(doc), input.fileName)
+  const source = detectSource(readSourceText(doc), input.fileName)
 
   return {
     id: crypto.randomUUID(),
@@ -266,6 +266,20 @@ function readActivityType(doc: Document): string {
   const type =
     doc.getElementsByTagName('type')[0]?.textContent?.trim().toLowerCase() ?? ''
   return type.length > 0 ? type : 'cycling'
+}
+
+/** 读取来源识别文本：creator 属性 + metadata 的 name / author name。
+ *
+ * 部分导出工具的 creator 是生成库而非来源 App（如行者网页版导出
+ * creator 为 "gpx.py"，行者标识只在 <metadata> 的 name / author 里），
+ * 仅看 creator 会漏识别，故三处拼接后交给关键词匹配。
+ */
+function readSourceText(doc: Document): string | undefined {
+  const creator = doc.documentElement.getAttribute('creator')?.trim()
+  const metaName = doc.querySelector('metadata > name')?.textContent?.trim()
+  const authorName = doc.querySelector('metadata > author > name')?.textContent?.trim()
+  const parts = [creator, metaName, authorName].filter((part): part is string => part !== undefined && part !== '')
+  return parts.length > 0 ? parts.join(' ') : undefined
 }
 
 /** 读取 GPX creator 属性（缺失返回 undefined） */

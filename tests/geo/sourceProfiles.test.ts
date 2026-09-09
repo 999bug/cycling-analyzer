@@ -19,14 +19,22 @@ describe('detectSource', () => {
     expect(detectSource('StravaGPX').profile.coordinateSystem).toBe('wgs84')
   })
 
-  it('识别 GCJ-02 系来源：行者 / Keep / 咕咚 / 高德 / 华为', () => {
-    expect(detectSource('行者').profile.id).toBe('xingzhe')
-    expect(detectSource('Xingzhe Cycling').profile.id).toBe('xingzhe')
+  it('行者 / XOSS / 咕咚 / 悦跑圈按 WGS-84 处理（回归：行者 GPX 实测非 GCJ-02）', () => {
+    // 用户实测：行者导出 GPX 按 WGS-84 处理后与底图对齐，按 GCJ-02 反而偏移
+    expect(detectSource('[imxingzhe.com, XingzheExport]').profile.id).toBe('xingzhe')
+    expect(detectSource('行者').profile.coordinateSystem).toBe('wgs84')
+    expect(detectSource('XOSS').profile.coordinateSystem).toBe('wgs84')
+    // 咕咚 2014-03-24 起升级 WGS-84，现代导出按 WGS-84
+    expect(detectSource('Codoon').profile.coordinateSystem).toBe('wgs84')
+    expect(detectSource('JoyRun').profile.coordinateSystem).toBe('wgs84')
+  })
+
+  it('识别 GCJ-02 系来源：Keep / 黑鸟 / 高德 / 华为', () => {
     expect(detectSource('Keep').profile.id).toBe('keep')
-    expect(detectSource('Codoon').profile.id).toBe('gudong')
+    expect(detectSource('Keep').profile.coordinateSystem).toBe('gcj02')
+    expect(detectSource('黑鸟').profile.coordinateSystem).toBe('gcj02')
     expect(detectSource('Amap').profile.id).toBe('amap')
     expect(detectSource('Huawei Health').profile.id).toBe('huawei')
-    expect(detectSource('行者').profile.coordinateSystem).toBe('gcj02')
   })
 
   it('识别 BD-09 系来源：百度', () => {
@@ -91,8 +99,12 @@ describe('groupSourcesBySystem', () => {
     expect(total).toBe(SOURCE_PROFILES.length)
   })
 
-  it('行者归入 GCJ-02 组', () => {
+  it('行者归入 WGS-84 组（其 GPX 导出遵循 WGS-84 标准）', () => {
+    const wgsGroup = groupSourcesBySystem().find((group) => group.system === 'wgs84')
+    expect(wgsGroup?.profiles.map((profile) => profile.id)).toContain('xingzhe')
+    // Keep / 黑鸟仍为 GCJ-02（有明确证据）
     const gcjGroup = groupSourcesBySystem().find((group) => group.system === 'gcj02')
-    expect(gcjGroup?.profiles.map((profile) => profile.id)).toContain('xingzhe')
+    expect(gcjGroup?.profiles.map((profile) => profile.id)).toContain('keep')
+    expect(gcjGroup?.profiles.map((profile) => profile.id)).toContain('heiniao')
   })
 })

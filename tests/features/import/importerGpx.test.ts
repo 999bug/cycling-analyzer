@@ -170,4 +170,37 @@ describe('importFiles GPX 导入', () => {
     // FIT 走文件名兜底，GPX 取内部名
     expect(names).toEqual(['from-device', '手机记录']);
   });
+
+  it('来源识别读 metadata：行者网页版导出 creator 为 gpxpy，靠 metadata 命中行者（WGS-84）', async () => {
+    // 真实行者网页版导出：creator 是生成库 gpxpy，行者标识只在 metadata 的 name/author
+    const xingzheWebExport = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="gpx.py -- https://github.com/tkrajina/gpxpy">
+  <metadata>
+    <name>行者骑行软件</name>
+    <author><name>行者骑行软件</name></author>
+  </metadata>
+  <trk><trkseg>
+    <trkpt lat="39.9400" lon="116.1000"><time>2024-05-01T01:00:00Z</time></trkpt>
+    <trkpt lat="39.9500" lon="116.1100"><time>2024-05-01T01:30:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>`;
+    await importFiles([makeTextFile('219969128.gpx', xingzheWebExport)], {
+      activityRepository,
+      fileRepository,
+    });
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.sourceApp).toBe('xingzhe');
+    expect(activity.coordinateSystem).toBe('wgs84');
+  });
+
+  it('批次级 sourceApp 覆盖：手动指定来源优先于自动识别（坐标系联动）', async () => {
+    await importFiles([makeTextFile('a.gpx', gpxWithTrackName('晨骑'))], {
+      activityRepository,
+      fileRepository,
+      sourceApp: 'keep',
+    });
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.sourceApp).toBe('keep');
+    expect(activity.coordinateSystem).toBe('gcj02');
+  });
 });
