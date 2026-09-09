@@ -54,6 +54,9 @@ export interface ActivityListOptions {
   /** 分页条数（默认 20，0 = 不分页） */
   limit?: number;
 
+  /** 年份筛选（ISO 年份前缀，如 2026） */
+  year?: string;
+
   /** 月份筛选（ISO 月份前缀，如 2026-08） */
   month?: string;
 
@@ -304,6 +307,7 @@ export function queryActivityList(
     offset = 0,
     limit = DEFAULT_PAGE_SIZE,
     month,
+    year,
     activityType,
     search,
     minDistance,
@@ -323,6 +327,9 @@ export function queryActivityList(
   } = options;
 
   let items = [...all];
+  if (year) {
+    items = items.filter((a) => a.startTime.startsWith(String(year)));
+  }
   if (month) {
     items = items.filter((a) => a.startTime.startsWith(month));
   }

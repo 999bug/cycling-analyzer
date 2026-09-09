@@ -223,6 +223,25 @@ describe('DexieActivityRepository', () => {
       expect(empty.total).toBe(0);
     });
 
+    it('按年份前缀筛选（可与月份叠加）', async () => {
+      await seed([
+        { startTime: '2025-07-05T08:00:00.000Z' },
+        { startTime: '2026-08-15T08:00:00.000Z' },
+        { startTime: '2026-09-01T08:00:00.000Z' },
+      ]);
+      const result = await repo.listActivities({ year: '2026' });
+      expect(result.items).toHaveLength(2);
+      expect(result.total).toBe(2);
+
+      // 年份 + 月份叠加（AND）
+      const both = await repo.listActivities({ year: '2026', month: '2026-08' });
+      expect(both.items).toHaveLength(1);
+      expect(both.items[0].startTime).toBe('2026-08-15T08:00:00.000Z');
+
+      const empty = await repo.listActivities({ year: '2024' });
+      expect(empty.total).toBe(0);
+    });
+
     it('按运动类型筛选', async () => {
       const cycling = makeActivity({ activityType: 'cycling' });
       const running = makeActivity({ activityType: 'running' });

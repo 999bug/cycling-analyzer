@@ -43,11 +43,12 @@
   border-color: var(--primary);
 }
 
-/* 筛选行操作按钮组：底对齐输入框，重置在前、批量重命名在后 */
+/* 筛选行操作按钮组：右侧对齐（自定义筛选 / 重置 / 轨迹纠偏 / 批量重命名） */
 .activity-filters__actions {
   display: flex;
   gap: 8px;
   align-self: flex-end;
+  margin-left: auto;
 }
 
 /* 重置按钮：弱化样式，与筛选输入区分 */
@@ -64,6 +65,43 @@
 .activity-filters__reset:hover {
   border-color: var(--text-secondary);
   color: var(--text);
+}
+
+/* 自定义筛选按钮：描边样式（弹窗入口，弱于主题色主操作） */
+.activity-filters__custom {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__custom:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* 轨迹纠偏按钮：描边样式，与重置同级（作用于筛选命中的全部记录） */
+.activity-filters__fix {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__fix:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.activity-filters__fix:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* 批量重命名按钮：主题色底，视觉上区别于筛选输入 */
@@ -167,11 +205,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .activity-pagination__button {
-  padding: 6px 16px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background-color: var(--bg-surface);
@@ -193,9 +232,59 @@
   cursor: not-allowed;
 }
 
+/* 页码按钮（当前页主题色高亮） */
+.activity-pagination__page {
+  min-width: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.activity-pagination__page:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.activity-pagination__page--active {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: #fff;
+}
+
+.activity-pagination__page:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.activity-pagination__ellipsis {
+  padding: 0 2px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* 每页条数下拉 */
+.activity-pagination__size {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .activity-pagination__info {
   color: var(--text-secondary);
   font-size: 14px;
+  white-space: nowrap;
 }
 
 /* 空/加载/错误状态 */
@@ -497,4 +586,236 @@
   margin: 0;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* ===== 自定义筛选弹窗（过滤条件：预设列表 + 新建/修改表单）===== */
+.filter-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(760px, 92vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+}
+
+/* 预设表格 */
+.filter-dialog__table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 48vh;
+}
+
+.filter-dialog__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.filter-dialog__table th {
+  position: sticky;
+  top: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filter-dialog__table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.filter-dialog__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.filter-dialog__check {
+  width: 36px;
+  text-align: center;
+}
+
+.filter-dialog__check input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.filter-dialog__desc {
+  color: var(--text-secondary);
+}
+
+.filter-dialog__ops {
+  white-space: nowrap;
+}
+
+.filter-dialog__empty {
+  padding: 32px 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* 行内链接按钮（修改 / 删除 / 添加） */
+.filter-dialog__link {
+  padding: 0;
+  margin-right: 10px;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-dialog__link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.filter-dialog__link--danger {
+  color: var(--danger);
+}
+
+.filter-dialog__link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 底部操作区：左侧新建/删除/刷新，右侧应用/关闭 */
+.filter-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.filter-dialog__footer-left,
+.filter-dialog__footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-dialog__apply {
+  padding: 8px 18px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background-color: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-dialog__apply:hover {
+  filter: brightness(1.1);
+}
+
+/* 新建/修改表单 */
+.filter-dialog__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-dialog__name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.filter-dialog__required {
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+.filter-dialog__name-row .activity-filters__input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 条件行列表 */
+.filter-dialog__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.filter-dialog__rows-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.filter-dialog__rows-header span:nth-child(1) {
+  width: 160px;
+}
+
+.filter-dialog__rows-header span:nth-child(2) {
+  width: 100px;
+}
+
+.filter-dialog__rows-header span:nth-child(3) {
+  flex: 1;
+}
+
+.filter-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-dialog__row .custom-filter__select {
+  width: 160px;
+  min-width: 0;
+}
+
+.filter-dialog__row .custom-filter__select--op {
+  width: 100px;
+}
+
+.filter-dialog__row .custom-filter__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-dialog__row .filter-dialog__link {
+  margin-right: 0;
+  white-space: nowrap;
+}
+
+/* AND 提示行 */
+.filter-dialog__and-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.filter-dialog__and-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--primary);
+}
+
+.filter-dialog__footer--edit {
+  justify-content: flex-end;
 }

@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-09（[IM] 删除操作性能修复：批量删除改单事务 + 逐点主键批量删，避开 Dexie 二级索引 delete() 的 modify 回退；版本 2.45.0 → 2.45.1）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-09（[NF] 骑行记录页筛选栏改版：年/月/搜索 + 自定义筛选弹窗 + 分页可选每页条数，版本 2.45.1 → 2.46.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -111,6 +111,7 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 | UI-5 | **隐私可信度（P1）** | 中 | ✅ 已实现 | 导入弹窗首屏加「文件在本浏览器内解析，不会上传到任何服务器」提示（info 中性配色 + 盾牌图标）；仪表盘空态（首次访客）加隐私文案；设置页数据管理区补「数据存哪/清空浏览器数据会怎样」说明与备份建议；清空全部数据确认文案补影响范围（删除活动/赛段/训练配置，不含作者数据）。作者模式提示条配色已在 UI-3 改中性 info 色。测试同步更新，全量 833/833 + lint/build 绿 | 1 commit，纯文案+样式 |
 | UI-6 | **杂项修复** | 中 | ✅ 已实现 | §6.3 遗留问题清理：①统计卡「最高功率 0 W」→ `—`（`StatisticsMetrics.maxPower` 改 `number \| undefined`，聚合仅活动有功率时比较，规格 §25 违例修复）；②仪表盘新增「最近骑行」区块（`buildDashboardData.recentActivities` 最近 5 条 + `RecentRidesSection` 卡片列表，填下半屏留白，§6.3 问题 4）；③日历可点击格子 hover 主题色描边 + 轻微放大 + tooltip 追加「（点击查看当日骑行）」（§6.3 问题 5）；④§6.3 问题 7 侧边栏 logo 已有通栏横幅 + 边框阴影 + hover 微动效，无需再改。测试 4 新增（statistics 2 + DashboardPage 1 + 纯函数 1），全量 838/838 + lint/build 绿 | 1 commit |
 | UI-7 | 高级指标 tooltip | 中 | ✅ 已实现 | 新增可复用组件 `src/components/MetricHelp.tsx`（原生 `<details>` 折叠 + `MetricHelpItem[]` 条目，深浅主题 token 化样式）：①仪表盘训练状态区块图例下补 6 条（CTL=42 天 EWMA/ATL=7 天 EWMA/TSB=CTL−ATL 正负解读/TSS 公式/NP 30 秒滑动四次方/IF=NP÷FTP）；②表现趋势页图表下补 4 条（EF=Σ(NP×时长)÷Σ(心率×时长)/TSS/NP/4 周移动平均）；③设置页 FTP/VO2Max 估算与详情页区间说明已有 inline 文案，无需重复。测试：TrainingStatusSection 同名文本断言改 getAllByText/findAllByText + 新增说明断言，PerformancePage 新增 EF 说明断言 | 小，1 commit |
+| UI-9 | 骑行记录页筛选栏改版 | 高 | ✅ 已实现 | 文件清单：`ActivityFilters.tsx`（重排）、`CustomFilterDialog.tsx`（新增，替代删除的 `CustomFilterPanel.tsx`）、`ActivityPagination.tsx`（每页条数）、`activityFilterStore.ts`（+year/+pageSize，清理 activityType/minDistanceKm/minElevationGain/minAvgPower）、`activityRepository.ts`（+year 查询选项）、`activity-page.css`。要点：①第一行左起年份→月份→搜索（月份选项按年份过滤，下拉恒降序「最新在前」），右侧操作组从右到左为批量重命名/轨迹纠偏/重置，自定义筛选在重置左侧；②移除类型筛选与距离/爬升/功率三个数值输入；③自定义筛选弹窗 = 预设列表（勾选/名称/自动生成说明/修改/删除）+ 新建/修改条件行（字段/比较/值/至），多选套用为条件 AND 叠加，已生效条件以 chips 展示在工具栏；④轨迹纠偏口径改为「当前筛选命中的全部记录」（原需逐条勾选），作者快照源仍禁用；⑤分页 = 总条数 + 每页条数下拉（10/20/50/100/200/500）+ 页码省略号，pageSize 持久化。测试：activitiesPage 改版（27 例含年份筛选/弹窗预设增删/每页条数）+ activityRepository 年份筛选新增，全量 1132/1132 + lint/build 绿 | 1 commit |
 | UI-8 | 统计页叙事化（P1 页面结构建议） | 低（收益大但改动大） | ✅ 已实现 | 统计页按三个用户问题分章重排：①「我进步了吗？」= 范围指标卡 + 个人纪录；②「我骑什么路线？」= 路线分析；③「我用什么设备？」= 设备统计 + 自行车统计。每章一句导语（`statistics-chapter` 样式，语义 token）；五个子组件标题 h2 → h3（类名样式不变），章节标题升为 h2；区块顺序从「指标/纪录/设备/自行车/路线」调整为「进步/路线/设备」。子区块 aria-label 不变，既有测试零破坏；新增分章顺序断言用例，全量 839/839 + lint/build 绿 | 1 commit |
 
 ### 6.3 截图实测发现的问题（2026-08-21，评审外补充）
