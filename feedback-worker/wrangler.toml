@@ -1,0 +1,14 @@
+name = "cycling-feedback"
+main = "index.js"
+compatibility_date = "2025-05-01"
+
+# 允许的跨域来源（即你的站点域名 + 本地调试域名）。
+# 如需自定义，取消下面 [vars] 注释并改成你的实际域名（逗号分隔）。
+# [vars]
+# ALLOWED_ORIGINS = "https://999bug.github.io,http://localhost:5173"
+#
+# 目标仓库（默认 999bug/cycling-analyzer）。
+# REPO = "owner/repo"
+#
+# GH_TOKEN 为密钥，必须用以下命令设置（不要写进本文件）：
+#   wrangler secret put GH_TOKEN

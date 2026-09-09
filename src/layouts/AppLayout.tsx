@@ -7,6 +7,7 @@ import AuthorHiddenNotice from '@/components/AuthorHiddenNotice'
 import InstallBanner from '@/components/InstallBanner'
 import UpdateBanner from '@/components/UpdateBanner'
 import MigrationBanner from '@/components/MigrationBanner'
+import FeedbackButton from '@/components/FeedbackButton'
 import '@/layouts/AppLayout.css'
 
 /**
@@ -157,6 +158,8 @@ function AppLayout() {
       <MigrationBanner />
       {/* 新版本更新提示条（新 SW 预缓存就绪时展示；z-index 60 高于抽屉） */}
       <UpdateBanner />
+      {/* 全站反馈入口：右下角常驻悬浮按钮，点击弹出反馈窗口 */}
+      <FeedbackButton />
     </div>
   )
 }

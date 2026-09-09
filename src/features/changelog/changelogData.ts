@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.50.0',
+    date: '2026-09-09',
+    features: [
+      '新增全站反馈入口：右下角常驻悬浮按钮一键打开反馈窗口，提交后自动创建 GitHub Issue',
+      '反馈经 Cloudflare Worker 代理提交，GitHub Token 仅存于服务端，前端与打包产物均不含密钥',
+      '反馈按类型（Bug 报告 / 功能建议 / 其他）自动打 label，失败时可一键跳转到 GitHub 手动提交',
+    ],
+  },
+  {
     version: '2.49.0',
     date: '2026-09-09',
     features: [
