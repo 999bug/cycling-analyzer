@@ -1,8 +1,9 @@
 /**
  * 作者模式横幅组件测试。
  *
- * 仅作者模式显示（说明正在查看作者发布的只读数据）；
- * 关闭后 localStorage 记忆，不再显示；本地模式不渲染。
+ * 仅作者模式显示（定位为「示例模式」说明条：作者公开数据用于演示，
+ * 导入自己的数据后自动替换）；关闭后 localStorage 记忆，不再显示；
+ * 本地模式不渲染。
  */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -23,7 +24,7 @@ describe('AuthorBanner', () => {
     render(<AuthorBanner />)
     const banner = screen.getByRole('status')
     expect(banner).toHaveTextContent('Saul')
-    expect(banner).toHaveTextContent('只读')
+    expect(banner).toHaveTextContent('演示')
   })
 
   it('本地模式不渲染', () => {

@@ -494,9 +494,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   min-height: 240px;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+/* 深链兜底「仅本次查看」按钮（作者数据隐藏场景） */
+.activity-detail__peek-button {
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--primary) 50%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.activity-detail__peek-button:hover {
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 @media (max-width: 760px) {

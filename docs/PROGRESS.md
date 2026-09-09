@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-09（[IM] 迁移横幅刷新改走 navigation 统一出口 + 补齐 already-done/busy/done/running 四分支组件回归测试，锁死自动刷新循环不再复发，版本 2.47.2 → 2.47.3）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-09（[NF] 作者数据可见性策略：作者数据定位为空状态示例，导入后默认隐藏 + 设置页三档开关 + 一次性提示 + 深链「仅本次查看」兜底，版本 2.47.3 → 2.48.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -48,6 +48,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - UI 只依赖 `src/types/activity.ts` 领域模型与 storage repository 接口
 - 新增功能先定位到对应层，跨层直接调用视为违规
 - **双数据源**：组件不直接 new 仓库，统一经 `useActivityRepository()` 按当前数据源（`dataSourceStore`）取本地 Dexie 仓库或作者快照仓库；作者源只读，写操作 UI 必须按源隐藏（规格外设计文档 §6.3）
+- **作者数据可见性（v2.48.0）**：作者数据定位为「空状态示例」。`dataSourceStore.authorVisibility: 'auto'|'show'|'hide'`（persist），auto = 本地有活动即隐藏（运行时 `hasLocalData` 判定，清空本地后自动回来）；`selectEffectiveSource` 在作者源被隐藏时无缝回退 local；切换器在作者档不可用时整体不渲染（`DataSourceSwitcher`）。配套：`AuthorHiddenNotice` 一次性提示（`authorHiddenNoticePending` persist，「去设置」跳 `/settings#author-data` 高亮）；深链兜底 `peekAuthorData`（运行时，仅详情页会话有效，显式切源即清除，设置值不动）；`initDataSource` 启动探测本地活动数（countActivities），导入成功/清空后同步 `setHasLocalData`
 
 ### 测试约定
 

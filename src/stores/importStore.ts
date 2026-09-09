@@ -94,9 +94,12 @@ export const useImportStore = create<ImportStoreState>()((set, get) => ({
           summary.failedItems.some((item: FailedItem) => item.fileName === entry.name),
         ),
       })
-      // 导入进本地库后自动切到「我的数据」：访客导入即见其数据
+      // 导入进本地库后自动切到「我的数据」：访客导入即见其数据；
+      // 同步标记本地已有数据（auto 策略下作者数据随之隐藏并置一次性提示）
       if (summary.newImported > 0) {
-        useDataSourceStore.getState().setSource('local')
+        const dataSource = useDataSourceStore.getState()
+        dataSource.setSource('local')
+        dataSource.setHasLocalData(true)
       }
       return summary
     } catch (error) {

@@ -1,0 +1,52 @@
+/**
+ * 「作者数据已隐藏」提示条样式：与作者横幅同布局的 info 语义提示，
+ * 增加主行动按钮（去设置直达可见性开关）。
+ */
+.author-hidden-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  background-color: color-mix(in srgb, var(--info) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  border-radius: 10px;
+}
+
+.author-hidden-notice__text {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.author-hidden-notice__action {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--info) 40%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--info);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.author-hidden-notice__action:hover {
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.author-hidden-notice__close {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.author-hidden-notice__close:hover {
+  color: var(--text);
+  background-color: color-mix(in srgb, var(--text) 8%, transparent);
+}

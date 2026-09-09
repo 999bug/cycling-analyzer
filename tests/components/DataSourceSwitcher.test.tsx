@@ -2,7 +2,8 @@
  * 数据源切换器组件测试（规格见 docs/superpowers/specs/2026-08-18-author-data-snapshot-design.md §6）。
  *
  * 两档分段控件：作者数据（只读快照）/ 我的数据（本地 IndexedDB）。
- * 作者名来自 store authorName（回退「作者」）；快照不可用时作者档禁用。
+ * 作者名来自 store authorName（回退「作者」）。
+ * 作者档不可用时（快照未发布，或可见性策略判定作者数据隐藏）整个切换器不渲染。
  */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -44,10 +45,28 @@ describe('DataSourceSwitcher', () => {
     expect(useDataSourceStore.getState().source).toBe('author')
   })
 
-  it('快照不可用时作者档禁用', () => {
+  it('快照不可用时整个切换器不渲染', () => {
     useDataSourceStore.setState({ authorAvailable: false })
+    const { container } = render(<DataSourceSwitcher />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('auto 策略且本地有数据：整个切换器不渲染', () => {
+    useDataSourceStore.setState({ hasLocalData: true })
+    const { container } = render(<DataSourceSwitcher />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('show 策略且本地有数据：切换器仍渲染两档', () => {
+    useDataSourceStore.setState({ hasLocalData: true, authorVisibility: 'show' })
     render(<DataSourceSwitcher />)
-    expect(screen.getByRole('button', { name: /作者的数据|Saul 的数据/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '我的数据' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Saul 的数据/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '我的数据' })).toBeInTheDocument()
+  })
+
+  it('hide 策略且本地无数据：切换器不渲染', () => {
+    useDataSourceStore.setState({ authorVisibility: 'hide' })
+    const { container } = render(<DataSourceSwitcher />)
+    expect(container).toBeEmptyDOMElement()
   })
 })

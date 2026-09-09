@@ -5,6 +5,7 @@
  * 近 90 天含功率活动 → 显示估算值与「采用」按钮；无功率数据/超窗活动 →
  * 引导文案（不伪造）；点击「采用」保存 FTP 并回填输入框。
  */
+import { MemoryRouter } from 'react-router-dom'
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -70,7 +71,11 @@ describe('设置页 FTP/VO2Max 估算', () => {
   const user = userEvent.setup()
 
   it('无活动时显示无功率数据引导文案', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText(NO_POWER_GUIDE)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '采用' })).not.toBeInTheDocument()
@@ -79,7 +84,11 @@ describe('设置页 FTP/VO2Max 估算', () => {
   it('近 90 天含功率活动显示估算 FTP；未保存体重时显示 VO2Max 引导', async () => {
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivity(makePoweredActivity('act-1', new Date().toISOString(), 200))
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     // 200 W × 0.95 = 190 W
     expect(await screen.findByText(/估算 FTP：190 W/)).toBeInTheDocument()
@@ -91,7 +100,11 @@ describe('设置页 FTP/VO2Max 估算', () => {
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivity(makePoweredActivity('act-1', new Date().toISOString(), 200))
     await saveSettings({ profile: { weightKg: 70 } })
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     // 10.8 × 200 / 70 + 7 ≈ 37.9
     expect(await screen.findByText(/估算 VO2Max：37\.9 ml\/kg\/min/)).toBeInTheDocument()
@@ -100,7 +113,11 @@ describe('设置页 FTP/VO2Max 估算', () => {
   it('点击「采用」保存估算 FTP 并回填输入框', async () => {
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivity(makePoweredActivity('act-1', new Date().toISOString(), 200))
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     await user.click(await screen.findByRole('button', { name: '采用' }))
 
@@ -114,7 +131,11 @@ describe('设置页 FTP/VO2Max 估算', () => {
     const repo = new DexieActivityRepository(testDb)
     const old = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString()
     await repo.addActivity(makePoweredActivity('act-old', old, 200))
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText(NO_POWER_GUIDE)).toBeInTheDocument()
     // 引导文案含「估算 FTP」字样，断言带数值的估算结果不存在

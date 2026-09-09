@@ -15,6 +15,7 @@
 - **`codegraph sync` 已由 pre-commit 钩子自动执行**（2026-09-09 验证：commit 后输出 "Syncing CodeGraph ... Done"，无需手动再跑）。提交顺序：先更新 `docs/PROGRESS.md` → 提交 → push。
 - **push 直连优先**（2026-09-08/09 两次实测）：仓库 7890 代理常未启动，127.0.0.1:7890/58551 都不通，直连 `git push origin main` 反而秒成功；只有直连失败再试 `git -c https.proxy=http://127.0.0.1:7890 push`（注意 `-c` 必须在 `push` 之前，写成 `git push -c ...` 会被当成 push 参数而报用法错误）。
 - **UI 改动先出原型再动手**（用户 2026-09-09 明确要求）：涉及布局/交互调整时，先用 show_widget 画原型给用户审批，批准后才改代码并提交；不要「方案一写完就提交」。
+- **「完成后自动 reload」的链路必须防再入**（2026-09-09 无限刷新事故教训）：凡基于持久化状态决定是否刷新的组件，必须区分「本次刚完成」与「早就完成」（后者静默跳过）；实现前先列 状态×终态 表自查，且每个起点状态都要有测试。自动刷新一律走 `@/utils/navigation reloadPage`（jsdom 可注入），禁止直接 `window.location.reload()`。参考：main.tsx 的 sessionStorage 一次性标记模式。
 
 ## 测试强制规则（vitest Windows 小写盘符 bug，2026-09-08 实锤）
 

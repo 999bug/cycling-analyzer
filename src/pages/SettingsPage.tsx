@@ -9,6 +9,7 @@
  * 依赖可注入（测试传独立仓库/数据库实例），缺省使用全局数据库单例。
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useLocation } from 'react-router-dom'
 import { db, type CyclingDatabase } from '@/storage/db'
 import { reloadPage } from '@/utils/navigation'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
@@ -25,7 +26,10 @@ import {
 } from '@/features/settings/settings'
 import { switchTheme, applyTheme } from '@/features/settings/theme'
 import InstallSection from '@/features/pwa/InstallSection'
-import { useDataSourceStore } from '@/stores/dataSourceStore'
+import {
+  useDataSourceStore,
+  type AuthorDataVisibility,
+} from '@/stores/dataSourceStore'
 import {
   defaultExportFilename,
   downloadJson,
@@ -47,6 +51,17 @@ import '@/features/settings/settings-page.css'
 /** 清空确认文案（规格 §32 二次确认；含影响范围提示） */
 const CLEAR_ALL_CONFIRM_TEXT =
   '确定清空全部本地数据？将删除你导入的全部骑行活动、赛段与训练配置（共本机数据，不含作者发布数据），此操作不可恢复'
+
+/** 作者数据可见性选项（值 + 标题 + 说明） */
+const AUTHOR_VISIBILITY_OPTIONS: Array<{
+  value: AuthorDataVisibility
+  label: string
+  hint: string
+}> = [
+  { value: 'auto', label: '自动', hint: '有本地数据时隐藏（推荐）' },
+  { value: 'show', label: '始终显示', hint: '侧边栏保留两档切换' },
+  { value: 'hide', label: '始终隐藏', hint: '没有本地数据时也只显示空态' },
+]
 
 /** 一天的毫秒数（估算窗口换算） */
 const MS_PER_DAY = 24 * 60 * 60 * 1000
@@ -79,6 +94,11 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 作者显示名（「关于」区块；未探测到时回退「作者」）
   const authorName = useDataSourceStore((s) => s.authorName)
+  // 作者数据可见性策略（「作者数据」区块；读写 dataSourceStore，立即生效）
+  const authorVisibility = useDataSourceStore((s) => s.authorVisibility)
+  const setAuthorVisibility = useDataSourceStore((s) => s.setAuthorVisibility)
+  // 「作者数据」区块锚点（提示条「去设置」跳转 /settings#author-data）
+  const location = useLocation()
 
   // 页面依赖上下文：优先注入值，缺省使用全局数据库单例
   const context = useMemo(
@@ -349,6 +369,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setClearing(true)
     try {
       await clearAllData(context)
+      // 本地数据已清空：auto 策略下作者数据恢复可见（示例模式兜底）。
+      // 下方整页刷新后 initDataSource 重新探测也会得到同样结果，此处先行
+      // 同步是 reload 失败（极端环境）时的兜底
+      useDataSourceStore.getState().setHasLocalData(false)
       // 清空后整页刷新：与导入关闭刷新同思路，数据已删但各页面为挂载时
       // 快照，刷新立即回到空态初始视图。reload 失败时（极端环境）下方
       // 成功提示仍可见，作为兜底反馈
@@ -394,6 +418,42 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       console.error('Failed to switch theme', error)
       setMessage({ type: 'error', text: '主题保存失败，请重试' })
     }
+  }
+
+  // 提示条「去设置」跳入：滚动到「作者数据」区块并高亮一次
+  useEffect(() => {
+    if (location.hash !== '#author-data') {
+      return
+    }
+    const section = document.getElementById('author-data')
+    if (section === null) {
+      return
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    section.classList.add('settings-section--highlight')
+    const timer = window.setTimeout(() => section.classList.remove('settings-section--highlight'), 2000)
+    return () => {
+      window.clearTimeout(timer)
+      section.classList.remove('settings-section--highlight')
+    }
+  }, [location.hash])
+
+  /**
+   * 切换作者数据可见性策略：写入 dataSourceStore（localStorage）立即生效。
+   *
+   * @param next 目标策略
+   */
+  function handleAuthorVisibilityChange(next: AuthorDataVisibility) {
+    setAuthorVisibility(next)
+    setMessage({
+      type: 'success',
+      text:
+        next === 'auto'
+          ? '已设为自动：有本地数据时隐藏作者数据'
+          : next === 'show'
+            ? '已设为始终显示作者数据'
+            : '已设为始终隐藏作者数据',
+    })
   }
 
   /**
@@ -672,6 +732,35 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       </section>
 
       <InstallSection />
+
+      <section id="author-data" className="settings-section" aria-label="作者数据">
+        <h2 className="settings-section__title">作者数据</h2>
+        <p className="settings-section__hint">
+          作者发布的公开数据仅作为空状态示例，让你在导入前先看到站点的样子。
+          导入你自己的数据后默认隐藏，可在此重新打开。
+        </p>
+        <div className="settings-fields">
+          <div className="settings-field">
+            <span className="settings-field__label">显示策略</span>
+            <div className="settings-visibility-options">
+              {AUTHOR_VISIBILITY_OPTIONS.map((option) => (
+                <label key={option.value} className="settings-visibility-option">
+                  <input
+                    type="radio"
+                    name="settings-author-visibility"
+                    checked={authorVisibility === option.value}
+                    onChange={() => handleAuthorVisibilityChange(option.value)}
+                  />
+                  <span>
+                    {option.label}
+                    <span className="settings-visibility-option__hint"> · {option.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="settings-section" aria-label="离线地图">
         <h2 className="settings-section__title">离线地图</h2>

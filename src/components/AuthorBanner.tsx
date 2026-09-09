@@ -1,8 +1,8 @@
 /**
- * 作者模式横幅（规格 §6）。
+ * 作者模式横幅（规格 §6；可见性改造后定位为「示例模式」说明条）。
  *
- * 仅有效源为作者时显示：说明正在查看作者发布的只读数据，
- * 引导访客切到「我的数据」导入自己的 FIT 文件。
+ * 仅有效源为作者时显示：说明当前是作者的公开数据示例，
+ * 导入自己的 FIT 文件后站点会自动换成用户的数据。
  * 可关闭，localStorage 记忆（key：author-banner-dismissed）。
  */
 import { useState } from 'react'
@@ -28,8 +28,10 @@ function AuthorBanner() {
   return (
     <div className="author-banner" role="status">
       <p className="author-banner__text">
-        正在查看作者{authorName === null ? '' : ` ${authorName} `}
-        发布的骑行数据（只读）。切换到「我的数据」可导入你自己的 FIT 文件。
+        你现在看到的是作者{authorName === null ? '' : ` ${authorName} `}
+        的公开骑行数据，用来演示这个站点能做什么。
+        导入你自己的 FIT 文件后，这里会自动换成你的数据——
+        你的数据只保存在这台设备的浏览器里，不会上传。
       </p>
       <button
         type="button"

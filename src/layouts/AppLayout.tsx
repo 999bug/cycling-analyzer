@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import ImportPanel from '@/features/import/ImportPanel'
 import DataSourceSwitcher from '@/components/DataSourceSwitcher'
 import AuthorBanner from '@/components/AuthorBanner'
+import AuthorHiddenNotice from '@/components/AuthorHiddenNotice'
 import InstallBanner from '@/components/InstallBanner'
 import UpdateBanner from '@/components/UpdateBanner'
 import MigrationBanner from '@/components/MigrationBanner'
@@ -147,6 +148,7 @@ function AppLayout() {
       </aside>
       <main id="main-content" className="app-layout__content" tabIndex={-1}>
         <AuthorBanner />
+        <AuthorHiddenNotice />
         <Outlet />
       </main>
       {/* PWA 安装引导横幅（可安装且非冷却期时展示；fixed 定位不受内容区影响） */}

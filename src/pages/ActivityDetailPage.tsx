@@ -18,7 +18,14 @@ import type { CoordinateSystem } from '@/geo/coordinateSystem'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { db } from '@/storage/db'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import {
+  getActivityRepository,
+} from '@/storage/sourceActivityRepository'
+import {
+  selectAuthorVisible,
+  selectEffectiveSource,
+  useDataSourceStore,
+} from '@/stores/dataSourceStore'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { DeferredMount } from '@/components/DeferredMount'
 import {
@@ -270,6 +277,8 @@ function ActivityDetailPage() {
   const [coloring, setColoring] = useState<'none' | ColoringMode>('none')
   // 共享时间轴悬停时间戳（Unix 秒；undefined = 未悬停，地图/图表/剖面统一联动）
   const [hoverTimestamp, setHoverTimestamp] = useState<number>()
+  // 深链兜底：当前源找不到该活动，但作者快照中存在（作者数据被隐藏的场景）
+  const [authorPeekable, setAuthorPeekable] = useState(false)
   // 当前数据源（切换后重新加载；只读模式控制见渲染分支）
   const source = useDataSourceStore(selectEffectiveSource)
   // 当前数据源的活动仓库（随源联动的单例实例）
@@ -295,9 +304,33 @@ function ActivityDetailPage() {
           setActivity(undefined)
           setRecords([])
           setLoadedKey(key)
+          // 深链兜底：作者数据被隐藏时，探测该 ID 是否属于作者快照，
+          // 命中则给出「仅本次查看」入口而非 404
+          const dataSourceState = useDataSourceStore.getState()
+          if (
+            source === 'local' &&
+            dataSourceState.authorAvailable &&
+            !selectAuthorVisible(dataSourceState)
+          ) {
+            getActivityRepository('author')
+              .getById(id)
+              .then((authorSummary) => {
+                if (!cancelled) {
+                  setAuthorPeekable(authorSummary !== undefined)
+                }
+              })
+              .catch(() => {
+                if (!cancelled) {
+                  setAuthorPeekable(false)
+                }
+              })
+          } else {
+            setAuthorPeekable(false)
+          }
           return
         }
         setActivity(summary)
+        setAuthorPeekable(false)
         return repository.getRecords(id).then((list) => {
           if (!cancelled) {
             setRecords(list)
@@ -314,6 +347,13 @@ function ActivityDetailPage() {
       cancelled = true
     }
   }, [id, source, repository])
+
+  // 离开详情页时清除临时查看状态：peek 仅限本次深链会话，不影响可见性设置
+  useEffect(() => {
+    return () => {
+      useDataSourceStore.getState().setPeekAuthorData(false)
+    }
+  }, [])
 
   // 加载用户设置（单位/时间格式等本地显示偏好；组件挂载时读取一次）
   useEffect(() => {
@@ -614,6 +654,9 @@ function ActivityDetailPage() {
     return <DetailNotice state="loading" />
   }
   if (activity === undefined) {
+    if (authorPeekable) {
+      return <AuthorHiddenDeepLink onPeek={() => useDataSourceStore.getState().setPeekAuthorData(true)} />
+    }
     return <DetailNotice state="notFound" />
   }
 
@@ -1103,6 +1146,24 @@ function DetailNotice({ state }: { state: LoadState }) {
         ? '活动不存在或已删除'
         : '加载失败，请刷新重试'
   return <div className="activity-detail__notice">{message}</div>
+}
+
+/**
+ * 作者活动深链兜底视图：作者数据被隐藏时打开作者活动链接，
+ * 提示该记录属于作者示例数据，可仅本次临时查看（不改可见性设置，
+ * 离开详情页自动恢复）。
+ *
+ * @param onPeek 进入临时查看回调
+ */
+function AuthorHiddenDeepLink({ onPeek }: { onPeek: () => void }) {
+  return (
+    <div className="activity-detail__notice">
+      这条记录属于作者示例数据，当前已隐藏。
+      <button type="button" className="activity-detail__peek-button" onClick={onPeek}>
+        仅本次查看
+      </button>
+    </div>
+  )
 }
 
 export default ActivityDetailPage

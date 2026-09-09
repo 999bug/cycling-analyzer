@@ -658,3 +658,73 @@ describe('作者模式只读（规格 §6.3）', () => {
     expect(screen.getByRole('button', { name: '设为赛段' })).toBeInTheDocument()
   })
 })
+
+describe('作者活动深链兜底（作者数据被隐藏）', () => {
+  const user = userEvent.setup()
+
+  it('作者数据隐藏时打开作者活动链接：显示兜底提示而非 404', async () => {
+    const summary: Record<string, unknown> = { ...makeActivity('act-1', [100, 200, 300], [120, 140, 160]) }
+    delete summary.records
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('author-data/activities.json')) {
+          return new Response(JSON.stringify([summary]), { status: 200 })
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    // 本地有数据 + auto → 作者数据隐藏；快照可用（authorAvailable）
+    useDataSourceStore.setState({
+      source: 'local',
+      authorAvailable: true,
+      authorName: 'Saul',
+      authorVisibility: 'auto',
+      hasLocalData: true,
+      authorHiddenNoticePending: false,
+      peekAuthorData: false,
+    })
+    renderPage()
+
+    expect(await screen.findByText(/这条记录属于作者示例数据/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '仅本次查看' })).toBeInTheDocument()
+  })
+
+  it('点击「仅本次查看」：临时切到作者源加载活动，不改动可见性设置', async () => {
+    const activity = makeActivity('act-1', [100, 200, 300], [120, 140, 160])
+    const summary: Record<string, unknown> = { ...activity }
+    delete summary.records
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('author-data/activities.json')) {
+          return new Response(JSON.stringify([summary]), { status: 200 })
+        }
+        if (url.includes('author-data/records/act-1.json')) {
+          return new Response(JSON.stringify({ activityId: 'act-1', records: activity.records }), { status: 200 })
+        }
+        return new Response('not found', { status: 404 })
+      }),
+    )
+    useDataSourceStore.setState({
+      source: 'local',
+      authorAvailable: true,
+      authorName: 'Saul',
+      authorVisibility: 'auto',
+      hasLocalData: true,
+      authorHiddenNoticePending: false,
+      peekAuthorData: false,
+    })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: '仅本次查看' }))
+    expect(await screen.findByRole('region', { name: '核心指标' })).toBeInTheDocument()
+    const state = useDataSourceStore.getState()
+    expect(state.peekAuthorData).toBe(true)
+    // 临时查看不改设置值：可见性策略保持 auto
+    expect(state.authorVisibility).toBe('auto')
+    expect(state.source).toBe('local')
+  })
+})

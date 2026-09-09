@@ -213,3 +213,36 @@
   line-height: 1.8;
   color: var(--text-secondary);
 }
+
+/* 作者数据可见性选项（radio 列表 + hash 高亮） */
+.settings-visibility-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-visibility-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-visibility-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  background-color: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.settings-visibility-option__hint {
+  color: var(--text-secondary);
+}
+
+/* 「去设置」提示条跳入时的目标区块高亮（2s 后由组件移除） */
+.settings-section--highlight {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+}

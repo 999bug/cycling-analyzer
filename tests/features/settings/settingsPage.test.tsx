@@ -5,6 +5,7 @@
  */
 import 'fake-indexeddb/auto'
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
@@ -45,9 +46,17 @@ beforeEach(async () => {
   await testDb.activity_records.clear()
   await testDb.files.clear()
   await testDb.settings.clear()
-  // 数据源复位（「关于」区块作者名依赖 store）
+  // 数据源复位（「关于」区块作者名依赖 store；可见性字段一并复位防用例间残留）
   localStorage.clear()
-  useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
+  useDataSourceStore.setState({
+    source: 'author',
+    authorAvailable: false,
+    authorName: null,
+    authorVisibility: 'auto',
+    hasLocalData: false,
+    authorHiddenNoticePending: false,
+    peekAuthorData: false,
+  })
 })
 
 afterEach(() => {
@@ -76,7 +85,11 @@ describe('设置页', () => {
   })
 
   it('空库渲染默认公制表单（距离公里、时间 24 小时制）', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByLabelText('昵称')).toHaveValue('')
     expect(screen.getByLabelText('体重')).toHaveValue(null)
@@ -90,7 +103,11 @@ describe('设置页', () => {
 
   it('「关于」区块说明作者数据与本地隐私（含作者名）', async () => {
     useDataSourceStore.setState({ authorName: 'Saul' })
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     const about = screen.getByRole('region', { name: '关于' })
     expect(about).toHaveTextContent('Saul')
@@ -111,7 +128,11 @@ describe('设置页', () => {
       settingsRepo,
     )
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     // 回填为异步加载，等待表单值就绪
     await waitFor(() => {
@@ -127,7 +148,11 @@ describe('设置页', () => {
     const settingsRepo = new DexieSettingsRepository(testDb)
     await saveSettings({ profile: { nickname: '旧昵称' } }, settingsRepo)
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     // 等待回填完成后再编辑，避免异步回填覆盖输入
     const nickname = await screen.findByLabelText('昵称')
     await waitFor(() => {
@@ -150,7 +175,11 @@ describe('设置页', () => {
     const activityRepo = new DexieActivityRepository(testDb)
     await activityRepo.addActivity(makeActivity('act-1', 'fp-1'))
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     await user.click(await screen.findByRole('button', { name: '导出数据' }))
 
     expect(await screen.findByText(/^数据已导出：/)).toBeInTheDocument()
@@ -174,7 +203,11 @@ describe('设置页', () => {
     }
     const file = new File([JSON.stringify(bundle)], 'backup.json', { type: 'application/json' })
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     await user.upload(input, file)
 
@@ -189,7 +222,11 @@ describe('设置页', () => {
   it('导入无效文件：提示导入失败', async () => {
     const file = new File(['not-json'], 'backup.json', { type: 'application/json' })
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     await user.upload(input, file)
 
@@ -203,7 +240,11 @@ describe('设置页', () => {
     await saveSettings({ profile: { nickname: '晨骑爱好者' }, units: { distance: 'mi' } }, settingsRepo)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     await user.click(await screen.findByRole('button', { name: '清空全部本地数据' }))
 
     expect(window.confirm).toHaveBeenCalledWith(
@@ -227,7 +268,11 @@ describe('设置页', () => {
     await activityRepo.addActivity(makeActivity('act-1', 'fp-1'))
     vi.spyOn(window, 'confirm').mockReturnValue(false)
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     await user.click(await screen.findByRole('button', { name: '清空全部本地数据' }))
 
     await waitFor(() => {
@@ -265,13 +310,21 @@ describe('设置页主题切换（规格 §36）', () => {
   const user = userEvent.setup()
 
   it('默认渲染深色主题选项', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByLabelText('主题')).toHaveValue('dark')
   })
 
   it('切换浅色主题：立即应用并持久化', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     const select = await screen.findByLabelText('主题')
 
     await user.selectOptions(select, 'light')
@@ -287,7 +340,11 @@ describe('设置页主题切换（规格 §36）', () => {
 
   it('预置浅色主题后渲染回填', async () => {
     await saveSettings({ appearance: { theme: 'light' } })
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     // 设置异步加载后回填，等待值更新（避免与初始 dark 竞态）
     const select = await screen.findByLabelText('主题')
@@ -299,7 +356,11 @@ describe('设置页原始 FIT 文件开关（规格 §19）', () => {
   const user = userEvent.setup()
 
   it('默认未勾选，开启后立即持久化', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     const checkbox = await screen.findByRole('checkbox', { name: '保存原始 FIT 文件' })
     expect(checkbox).not.toBeChecked()
@@ -316,7 +377,11 @@ describe('设置页离线地图（瓦片缓存）', () => {
   const user = userEvent.setup()
 
   it('默认开启瓦片缓存，可关闭并立即持久化', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     const checkbox = await screen.findByRole('checkbox', { name: '缓存地图瓦片（离线可用）' })
     expect(checkbox).toBeChecked()
@@ -329,7 +394,11 @@ describe('设置页离线地图（瓦片缓存）', () => {
   })
 
   it('开启瓦片缓存时展示清空按钮，点击后统计归零', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     const clearButton = await screen.findByRole('button', { name: /清空瓦片缓存/ })
     expect(clearButton).toBeInTheDocument()
@@ -356,7 +425,11 @@ describe('设置页安装应用区块（PWA）', () => {
   })
 
   it('默认环境（jsdom 不支持安装）展示替代浏览器说明', async () => {
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
 
     const section = await screen.findByRole('region', { name: '安装应用' })
     expect(section).toBeInTheDocument()
@@ -369,7 +442,11 @@ describe('设置页安装应用区块（PWA）', () => {
     event.prompt = vi.fn().mockResolvedValue(undefined)
     event.userChoice = Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
 
-    render(<SettingsPage />)
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
     act(() => {
       window.dispatchEvent(event)
     })
@@ -377,5 +454,59 @@ describe('设置页安装应用区块（PWA）', () => {
     const installButton = await screen.findByRole('button', { name: '安装到桌面' })
     await user.click(installButton)
     expect(event.prompt).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('设置页「作者数据」可见性区块', () => {
+  const user = userEvent.setup()
+
+  beforeEach(() => {
+    localStorage.clear()
+    useDataSourceStore.setState({
+      source: 'author',
+      authorAvailable: true,
+      authorName: null,
+      authorVisibility: 'auto',
+      hasLocalData: false,
+      authorHiddenNoticePending: false,
+      peekAuthorData: false,
+    })
+  })
+
+  it('渲染三选一策略，默认选中「自动」', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    const section = await screen.findByRole('region', { name: '作者数据' })
+    expect(section).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /自动/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /始终显示/ })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: /始终隐藏/ })).not.toBeChecked()
+  })
+
+  it('选择「始终显示」：立即写入数据源 store 并提示成功', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('radio', { name: /始终显示/ }))
+    expect(useDataSourceStore.getState().authorVisibility).toBe('show')
+    expect(await screen.findByRole('status')).toHaveTextContent('始终显示')
+  })
+
+  it('选择「始终隐藏」：立即写入数据源 store', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('radio', { name: /始终隐藏/ }))
+    expect(useDataSourceStore.getState().authorVisibility).toBe('hide')
   })
 })
