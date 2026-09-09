@@ -31,7 +31,7 @@ export default defineConfig(({ command }) => {
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      includeAssets: ['favicon.svg', 'qileme.png'],
+      includeAssets: ['favicon.svg', 'qileme.png', 'feedback-form-qr.png'],
       // Web 应用清单（PWA 离线可用：图标/独立窗口/主题色）
       manifest: {
         name: '骑了么 · 看懂你的每一次骑行',

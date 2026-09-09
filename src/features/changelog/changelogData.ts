@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.51.1',
+    date: '2026-09-09',
+    features: [
+      '修复反馈弹窗二维码在 GitHub Pages 上 404：路径改用 import.meta.env.BASE_URL 拼接，适配 /cycling-analyzer/ 子路径部署',
+      '二维码图片加入 PWA 预缓存清单，离线状态下也能正常显示',
+    ],
+  },
+  {
     version: '2.51.0',
     date: '2026-09-09',
     features: [
