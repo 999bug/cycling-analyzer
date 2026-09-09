@@ -57,7 +57,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgb(0 0 0 / 40%);
-  width: 420px;
+  width: 360px;
   max-width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -99,55 +99,48 @@
   background: rgb(13 59 76 / 6%);
 }
 
-/* 表单 */
-.feedback-field {
-  display: block;
-  margin-bottom: 14px;
+/* 飞书表单视图 */
+.feedback-form-view {
+  text-align: center;
 }
 
-.feedback-label {
+.feedback-form-view__desc {
   color: var(--text-secondary);
-  display: block;
   font-size: 13px;
-  margin-bottom: 6px;
+  line-height: 1.6;
+  margin: 0 0 16px;
 }
 
-.feedback-input {
+.feedback-qr {
   background: var(--bg);
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 12px;
+}
+
+.feedback-qr__img {
   border-radius: var(--radius-md);
-  box-sizing: border-box;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 13px;
-  padding: 9px 10px;
-  width: 100%;
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 180px;
 }
 
-.feedback-input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.feedback-textarea {
-  min-height: 84px;
-  resize: vertical;
-}
-
-.feedback-hint {
+.feedback-qr__hint {
   color: var(--text-tertiary);
   font-size: 12px;
-  margin: 4px 0 16px;
 }
 
 /* 操作按钮 */
 .feedback-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  justify-content: flex-end;
-}
-
-.feedback-actions--center {
   justify-content: center;
 }
 
@@ -188,30 +181,4 @@
 .feedback-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-/* 结果态（成功 / 失败） */
-.feedback-result {
-  padding: 8px 0;
-  text-align: center;
-}
-
-.feedback-result__icon {
-  display: block;
-  height: 44px;
-  margin: 0 auto 12px;
-  width: 44px;
-}
-
-.feedback-result__title {
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 500;
-  margin: 0 0 6px;
-}
-
-.feedback-result__desc {
-  color: var(--text-secondary);
-  font-size: 13px;
-  margin: 0 0 18px;
 }

@@ -20,12 +20,12 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
-    version: '2.50.0',
+    version: '2.51.0',
     date: '2026-09-09',
     features: [
-      '新增全站反馈入口：右下角常驻悬浮按钮一键打开反馈窗口，提交即跳转到 GitHub 新建 issue 页',
-      '零后端方案：提交时拼好预填内容的 GitHub issue 链接并打开，登录后点一次即创建 Issue，国内可直连、无需自建服务',
-      '反馈按类型（Bug 报告 / 功能建议 / 其他）自动设置对应 label，正文附带版本号与联系方式（选填）',
+      '反馈窗口定型为纯飞书表单方案：弹窗展示飞书「客户需求收集表」二维码与打开链接，扫码或点击即可填写',
+      '彻底移除 GitHub issue 模式与所有表单字段，无 GitHub 账户的用户也能直接反馈，国内直连可达',
+      '右下角常驻悬浮按钮 + 弹窗遵循既有 modal 约定（Esc / 遮罩关闭），深浅主题自适应',
     ],
   },
   {
