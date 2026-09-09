@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.47.2',
+    date: '2026-09-09',
+    features: [
+      '修复严重 Bug：本地数据升级完成后每次打开页面都自动刷新的无限循环',
+    ],
+  },
+  {
     version: '2.47.1',
     date: '2026-09-09',
     features: [

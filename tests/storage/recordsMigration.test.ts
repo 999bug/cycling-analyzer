@@ -62,6 +62,22 @@ describe('runRecordsMigration', () => {
     expect(await db.activity_blobs.count()).toBe(0);
   });
 
+  it('状态已是 done 时返回 already-done（防完成横幅无限刷新循环回归）', async () => {
+    // 模拟上个会话已完成迁移：本次启动不得再返回 done 触发「完成→刷新」
+    await db.settings.put({
+      key: MIGRATION_SETTINGS_KEY,
+      value: { status: 'done', heartbeatAt: Date.now() },
+    });
+    await seedLegacyActivity(db, 'act-1', [makeRecord(1)]);
+
+    const outcome = await runRecordsMigration(db);
+
+    expect(outcome).toBe('already-done');
+    // 数据不被触碰（保持幂等静默）
+    expect(await db.activity_blobs.count()).toBe(0);
+    expect(await db.activity_records.count()).toBe(1);
+  });
+
   it('另一标签持新鲜心跳锁时让路（busy），数据不动', async () => {
     await seedLegacyActivity(db, 'act-1', [makeRecord(1)]);
     await db.settings.put({

@@ -35,7 +35,13 @@ const HEARTBEAT_TTL_MS = 15_000;
 const BATCH_SIZE = 10;
 
 /** 迁移结果 */
-export type MigrationOutcome = 'done' | 'busy';
+export type MigrationOutcome =
+  /** 本次调用完成了全部迁移（含收尾清表），调用方据此提示完成并刷新 */
+  | 'done'
+  /** 迁移早已完成（此前会话已标记 done），调用方应静默跳过、不得触发刷新 */
+  | 'already-done'
+  /** 另一标签页正在迁移（本调用未做任何事） */
+  | 'busy';
 
 /**
  * 迁移进度回调载荷。
@@ -99,7 +105,7 @@ function stripEntityToRecord(entity: ActivityRecordEntity): ActivityRecord {
  *
  * @param db 数据库实例
  * @param onProgress 进度回调（每批触发一次）
- * @returns 'done' 本次调用完成全部迁移；'busy' 另一标签页正在迁移（本调用未做任何事）
+ * @returns 'done' 本次调用完成全部迁移；'already-done' 此前会话已完成（调用方应静默跳过）；'busy' 另一标签页正在迁移（本调用未做任何事）
  */
 export async function runRecordsMigration(
   db: CyclingDatabase,
@@ -107,7 +113,9 @@ export async function runRecordsMigration(
 ): Promise<MigrationOutcome> {
   const state = await readState(db);
   if (state.status === 'done') {
-    return 'done';
+    // 早已完成：返回 already-done 而非 done——否则每次启动都被误判为
+    // 「本次刚完成」，横幅触发刷新造成无限刷新循环（2.47.0 线上事故）
+    return 'already-done';
   }
   if (state.status === 'running' && Date.now() - state.heartbeatAt < HEARTBEAT_TTL_MS) {
     // 另一标签页持有心跳锁：让路，避免双写竞争

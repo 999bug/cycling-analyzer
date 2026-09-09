@@ -35,7 +35,7 @@ interface MigrationBannerProps {
   /** 迁移执行器（默认真实现；测试注入受控桩） */
   runMigration?: (
     onProgress: (progress: MigrationProgress) => void,
-  ) => Promise<'done' | 'busy'>;
+  ) => Promise<'done' | 'already-done' | 'busy'>;
 
   /** 完成后是否自动刷新（默认 true；测试关闭避免 jsdom 导航） */
   autoReload?: boolean;
@@ -89,6 +89,11 @@ function MigrationBanner({ runMigration, autoReload = true }: MigrationBannerPro
           }
           if (outcome === 'busy') {
             void pollBusy()
+            return
+          }
+          // 早已完成（上个会话已标记 done）：静默跳过，绝不刷新——
+          // 否则每次启动都走「完成→刷新」分支，造成无限刷新循环
+          if (outcome === 'already-done') {
             return
           }
           setPhase({ kind: 'finishing' })
