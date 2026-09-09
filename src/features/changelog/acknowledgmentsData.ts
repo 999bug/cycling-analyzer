@@ -29,6 +29,6 @@ export const ACKNOWLEDGMENTS: readonly Acknowledgment[] = [
   },
   {
     name: 'Wesley',
-    role: '反馈了 GPX 导入与行者记录不准的问题',
+    role: '反馈了 GPX 导入与行者记录不准的问题，为网站的建设提出了很多好的想法',
   }
 ];
