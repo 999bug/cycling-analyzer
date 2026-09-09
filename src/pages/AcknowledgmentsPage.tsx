@@ -18,14 +18,16 @@ import '@/pages/AcknowledgmentsPage.css'
 function AcknowledgmentsPage() {
   return (
     <div className="acknowledgments-page">
-      <h1>致谢</h1>
+      <h1>鸣谢</h1>
       <p className="acknowledgments-page__intro">
-        感谢每一位参与测试与使用的骑友——你们的反馈、点子与规划让「骑了么」越来越好。
+        感谢每一位参与「骑了么」测试的骑友，<br />
+        感谢你们提供的每一次反馈、建议和 Bug。<br />
+        因为你们，「骑了么」才能变得越来越好。
       </p>
       {ACKNOWLEDGMENTS.length === 0 ? (
         <p className="acknowledgments-page__empty">名单筹备中，敬请期待。</p>
       ) : (
-        <ul className="acknowledgments-page__list" aria-label="致谢名单">
+        <ul className="acknowledgments-page__list" aria-label="鸣谢名单">
           {ACKNOWLEDGMENTS.map((person) => (
             <AcknowledgmentCard key={person.name} person={person} />
           ))}

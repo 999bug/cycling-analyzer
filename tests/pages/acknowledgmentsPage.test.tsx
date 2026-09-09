@@ -20,8 +20,12 @@ describe('致谢页面', () => {
   it('渲染标题与引导文案', () => {
     renderPage()
 
-    expect(screen.getByRole('heading', { level: 1, name: '致谢' })).toBeInTheDocument()
-    expect(screen.getByText(/感谢每一位参与测试与使用的骑友/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: '鸣谢' })).toBeInTheDocument()
+    expect(
+      screen.getByText(/感谢每一位参与「骑了么」测试的骑友/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/感谢你们提供的每一次反馈、建议和 Bug/)).toBeInTheDocument()
+    expect(screen.getByText(/因为你们，「骑了么」才能变得越来越好/)).toBeInTheDocument()
   })
 
   it('名单成员与数据文件一致（含贡献说明与外链）', () => {
