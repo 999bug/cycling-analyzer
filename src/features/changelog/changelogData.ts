@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.47.3',
+    date: '2026-09-09',
+    features: [
+      '内部强化：迁移横幅刷新改走统一出口并补齐再入态组件回归测试，防止自动刷新循环复发；无功能变更',
+    ],
+  },
+  {
     version: '2.47.2',
     date: '2026-09-09',
     features: [

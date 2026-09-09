@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { db } from '@/storage/db'
+import { reloadPage } from '@/utils/navigation'
 import { MIGRATION_SETTINGS_KEY, runRecordsMigration, type MigrationProgress } from '@/storage/recordsMigration'
 import './MigrationBanner.css'
 
@@ -66,7 +67,7 @@ function MigrationBanner({ runMigration, autoReload = true }: MigrationBannerPro
           }
           setPhase({ kind: 'finishing' })
           if (autoReload) {
-            window.setTimeout(() => window.location.reload(), RELOAD_DELAY_MS)
+            window.setTimeout(reloadPage, RELOAD_DELAY_MS)
           }
           return
         }
@@ -98,7 +99,7 @@ function MigrationBanner({ runMigration, autoReload = true }: MigrationBannerPro
           }
           setPhase({ kind: 'finishing' })
           if (autoReload) {
-            window.setTimeout(() => window.location.reload(), RELOAD_DELAY_MS)
+            window.setTimeout(reloadPage, RELOAD_DELAY_MS)
           }
         })
         .catch(() => {
