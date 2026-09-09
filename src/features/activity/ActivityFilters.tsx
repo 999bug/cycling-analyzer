@@ -2,8 +2,16 @@
  * 骑行记录筛选工具栏（第一行，2026-09 改版）。
  *
  * 布局（左 → 右）：年份下拉（第一列）、月份下拉（第二列）、搜索框，
- * 右侧操作组：自定义筛选（弹窗）、重置、轨迹纠偏、批量重命名
+ * 自定义筛选组（预设下拉 + 弹窗入口按钮 + 已生效条件 chips，与搜索框同一行），
+ * 右侧操作组：重置、轨迹纠偏、批量重命名
  * （从右到左依次为批量重命名 / 轨迹纠偏 / 重置，用户指定）。
+ *
+ * 2026-09 二次优化（用户评审原型后实施）：
+ * - 预设下拉：自定义筛选按钮左侧新增，选中预设即套用其条件（需求 4）
+ * - 自定义筛选组与搜索输入框保持同一行（需求 5）
+ * - 按钮语义色：自定义筛选/预设下拉 = info 蓝，轨迹纠偏 = warning 橙，
+ *   重置 = 中性灰，批量重命名 = 品牌绿实底（需求 6）
+ *
  * 类型筛选已移除（当前仅支持骑行）；距离/爬升/功率数值筛选移除，
  * 数值条件统一走「自定义筛选」弹窗（chips 展示已生效条件，由父组件传入）。
  */
@@ -29,7 +37,13 @@ interface ActivityFiltersProps {
   onMonthChange: (month: string) => void
   onSearchChange: (search: string) => void
 
-  /** 自定义筛选条件 chips（展示在搜索框右侧；缺省不渲染） */
+  /** 已保存筛选预设名列表（预设下拉选项） */
+  presetNames: string[]
+
+  /** 预设下拉选中：套用该预设条件到当前筛选 */
+  onApplyPreset: (name: string) => void
+
+  /** 自定义筛选条件 chips（展示在自定义筛选组内；缺省不渲染） */
   chips?: ReactNode
 
   /** 打开自定义筛选弹窗 */
@@ -69,6 +83,8 @@ function ActivityFilters({
   onYearChange,
   onMonthChange,
   onSearchChange,
+  presetNames,
+  onApplyPreset,
   chips,
   onOpenCustomFilter,
   onReset,
@@ -124,13 +140,37 @@ function ActivityFilters({
           onChange={(event) => onSearchChange(event.target.value)}
         />
       </label>
-      {/* 自定义筛选条件 chips：紧跟搜索框右侧，可换行延伸 */}
-      {chips !== undefined && <div className="activity-filters__chips">{chips}</div>}
-      {/* 右侧操作组（从右到左：批量重命名 / 轨迹纠偏 / 重置，左侧为自定义筛选） */}
+      {/* 自定义筛选组：预设下拉 + 弹窗入口 + 条件 chips，与搜索输入框同一行 */}
+      <div className="activity-filters__custom-group">
+        <span className="activity-filters__custom-label">自定义筛选</span>
+        <div className="activity-filters__custom-row">
+          <select
+            aria-label="选择预设"
+            className="activity-filters__preset"
+            value=""
+            disabled={presetNames.length === 0}
+            onChange={(event) => {
+              const name = event.target.value
+              if (name !== '') {
+                onApplyPreset(name)
+              }
+            }}
+          >
+            <option value="">{presetNames.length === 0 ? '暂无预设' : '选择预设…'}</option>
+            {presetNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="activity-filters__custom" onClick={onOpenCustomFilter}>
+            自定义筛选
+          </button>
+          {chips !== undefined && <div className="activity-filters__chips">{chips}</div>}
+        </div>
+      </div>
+      {/* 右侧操作组（从右到左：批量重命名 / 轨迹纠偏 / 重置） */}
       <div className="activity-filters__actions">
-        <button type="button" className="activity-filters__custom" onClick={onOpenCustomFilter}>
-          自定义筛选
-        </button>
         <button type="button" className="activity-filters__reset" onClick={onReset}>
           重置
         </button>

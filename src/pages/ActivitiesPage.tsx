@@ -24,8 +24,9 @@ import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import {
   DEFAULT_PAGE_SIZE,
+  DEFAULT_SORT_FIELD,
+  DEFAULT_SORT_ORDER,
   useActivityFilterStore,
-  type ActivitySortField,
 } from '@/stores/activityFilterStore'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import {
@@ -34,18 +35,6 @@ import {
   type ActivitySummary,
   type ActivityListOptions,
 } from '@/storage/repositories/activityRepository'
-
-/** 排序字段显示名（排序状态条用） */
-const SORT_FIELD_LABELS: Record<ActivitySortField, string> = {
-  name: '标题',
-  startTime: '日期',
-  distance: '距离',
-  duration: '时长',
-  elevationGain: '爬升',
-  avgSpeed: '平均速度',
-  avgHeartRate: '平均心率',
-  avgPower: '平均功率',
-}
 
 /**
  * 列表分页参数（筛选/排序条件在 activityFilterStore，每页条数走 store 持久化）。
@@ -261,6 +250,12 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     }
   }
 
+  // 工具栏预设下拉：选中即套用该预设条件（条件并集口径与弹窗多选一致）
+  function handleApplyPreset(name: string) {
+    const conditions = (filters.presets[name] ?? []).map((condition) => ({ ...condition }))
+    applyFilterAndResetPage(() => filters.setCustomFilters(conditions))
+  }
+
   // 自定义筛选弹窗：多选套用（勾选预设条件并集写入当前筛选）
   function handleApplyPresets(names: string[]) {
     const conditions = names.flatMap((name) => filters.presets[name] ?? []).map((condition) => ({ ...condition }))
@@ -357,6 +352,9 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     filters.year !== '' ||
     filters.month !== '' ||
     filters.customFilters.length > 0
+  // 排序偏离默认（日期降序）时才显示「重置排序」按钮（2026-09 用户指定：去掉状态文案仅留按钮）
+  const sortNotDefault =
+    filters.sortField !== DEFAULT_SORT_FIELD || filters.sortOrder !== DEFAULT_SORT_ORDER
 
   // 批量重命名/轨迹纠偏仅本地数据源可用（作者快照只读）；勾选删除同样仅本地源
   const selectable = effectiveSource === 'local'
@@ -396,6 +394,8 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
         onYearChange={handleYearChange}
         onMonthChange={handleMonthChange}
         onSearchChange={handleSearchChange}
+        presetNames={Object.keys(filters.presets)}
+        onApplyPreset={handleApplyPreset}
         chips={customFilterChips}
         onOpenCustomFilter={() => setCustomFilterOpen(true)}
         onReset={handleResetFilters}
@@ -406,17 +406,13 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
         batchRenameDisabled={batchDisabled}
         batchRenameDisabledReason={batchDisabledReason}
       />
-      {/* 排序状态条：排序持久化不自动重置，仅手动重置还原 */}
+      {/* 排序操作条：状态文案已移除（用户指定），仅排序偏离默认时显示重置按钮；兼勾选操作区 */}
       <div className="activity-sort-bar">
-        <span>
-          排序：
-          <strong className="activity-sort-bar__current">
-            {SORT_FIELD_LABELS[filters.sortField]} {filters.sortOrder === 'desc' ? '降序' : '升序'}
-          </strong>
-        </span>
-        <button type="button" className="activity-sort-bar__reset" onClick={handleResetSort}>
-          重置排序
-        </button>
+        {sortNotDefault && (
+          <button type="button" className="activity-sort-bar__reset" onClick={handleResetSort}>
+            重置排序
+          </button>
+        )}
         {selectable && selectedCount > 0 && (
           <div className="activity-selection-bar">
             <span className="activity-selection-bar__info">已勾选 {selectedCount} 条</span>

@@ -5,8 +5,10 @@
  * - 列表视图：已保存筛选预设表格（勾选多选 / 名称 / 说明 / 操作：修改、删除），
  *   底部操作：新建、删除、刷新；右侧「应用」将勾选预设的条件并集写入当前筛选
  *   （多条件 AND 语义，与既有自定义条件口径一致）。
- * - 编辑视图（新建 / 修改）：名称输入 + 条件行列表（字段 / 比较 / 值 / 介于上限），
- *   可逐行删除、追加；保存时逐行校验（复用 customFilter 纯函数解析）。
+ * - 编辑视图（新建 / 修改）：名称输入（留空保存时自动按条件生成默认名）+
+ *   条件行列表（字段 / 比较 / 值 / 介于上限），每行操作列提供等大的「添加 / 删除」
+ *   按钮；新建时预填初始条件（距离 > 20 km、平均速度 > 20 km/h，可删改）；
+ *   保存时逐行校验（复用 customFilter 纯函数解析）。
  *
  * 说明列自动按条件生成文案（describeCondition），不单独存储。
  */
@@ -33,6 +35,17 @@ interface DraftRow {
 /** 新建空条件行（默认字段=距离、条件=大于） */
 function emptyRow(): DraftRow {
   return { field: 'distance', op: 'gt', value: '', value2: '' }
+}
+
+/**
+ * 新建预设的初始条件行（2026-09 用户指定）：
+ * 距离 > 20 km、平均速度 > 20 km/h，均可删改。
+ */
+function defaultRows(): DraftRow[] {
+  return [
+    { field: 'distance', op: 'gt', value: '20', value2: '' },
+    { field: 'avgSpeed', op: 'gt', value: '20', value2: '' },
+  ]
 }
 
 /** 条件 → 编辑态行（修改预设时回显） */
@@ -88,8 +101,8 @@ function CustomFilterDialog({
   const [editingName, setEditingName] = useState<string | null>(null)
   /** 预设名输入 */
   const [nameInput, setNameInput] = useState('')
-  /** 条件行草稿 */
-  const [rows, setRows] = useState<DraftRow[]>([emptyRow()])
+  /** 条件行草稿（初始为默认初始条件，弹窗仅打开时生效） */
+  const [rows, setRows] = useState<DraftRow[]>(defaultRows)
   /** 错误提示（列表视图删除/应用校验 + 编辑视图行解析） */
   const [error, setError] = useState<string | null>(null)
 
@@ -108,11 +121,11 @@ function CustomFilterDialog({
     })
   }
 
-  /** 打开新建视图 */
+  /** 打开新建视图（预填初始条件） */
   function openCreate() {
     setEditingName(null)
     setNameInput('')
-    setRows([emptyRow()])
+    setRows(defaultRows())
     setError(null)
     setMode('edit')
   }
@@ -125,7 +138,7 @@ function CustomFilterDialog({
     }
     setEditingName(name)
     setNameInput(name)
-    setRows(conditions.length > 0 ? conditions.map(toDraftRow) : [emptyRow()])
+    setRows(conditions.length > 0 ? conditions.map(toDraftRow) : defaultRows())
     setError(null)
     setMode('edit')
   }
@@ -135,13 +148,8 @@ function CustomFilterDialog({
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
-  /** 保存：逐行解析校验 → 上抛 → 回列表视图 */
+  /** 保存：逐行解析校验 → 名称留空自动生成默认名 → 上抛 → 回列表视图 */
   function handleSave() {
-    const name = nameInput.trim()
-    if (name === '') {
-      setError('请输入名称')
-      return
-    }
     const conditions: CustomFilterCondition[] = []
     for (const row of rows) {
       const result = parseCustomFilterCondition(row.field, row.op, row.value, row.value2)
@@ -151,6 +159,8 @@ function CustomFilterDialog({
       }
       conditions.push(result.condition)
     }
+    // 名称留空：按条件文案自动生成默认名（2026-09 用户指定：不输入也可以）
+    const name = nameInput.trim() === '' ? defaultPresetName(conditions) : nameInput.trim()
     // 同名覆盖确认：新建撞名，或修改时改名撞了其他预设名
     if (presets[name] !== undefined && name !== editingName && !window.confirm(`预设「${name}」已存在，覆盖它？`)) {
       return
@@ -315,7 +325,7 @@ function CustomFilterDialog({
           <>
             <div className="filter-dialog__edit">
               <label className="filter-dialog__name-row" htmlFor="filter-dialog-name">
-                <span className="filter-dialog__required">*名称</span>
+                <span>名称</span>
                 <input
                   id="filter-dialog-name"
                   className="activity-filters__input"
@@ -330,16 +340,7 @@ function CustomFilterDialog({
                   <span>条件列</span>
                   <span>比较</span>
                   <span>值</span>
-                  <span>
-                    操作
-                    <button
-                      type="button"
-                      className="filter-dialog__link"
-                      onClick={() => setRows((prev) => [...prev, emptyRow()])}
-                    >
-                      添加
-                    </button>
-                  </span>
+                  <span>操作</span>
                 </div>
                 {rows.map((row, index) => (
                   <div key={index} className="filter-dialog__row">
@@ -391,14 +392,23 @@ function CustomFilterDialog({
                         onChange={(event) => updateRow(index, { value2: event.target.value })}
                       />
                     )}
-                    <button
-                      type="button"
-                      className="filter-dialog__link filter-dialog__link--danger"
-                      disabled={rows.length <= 1}
-                      onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
-                    >
-                      删除
-                    </button>
+                    <div className="filter-dialog__row-ops">
+                      <button
+                        type="button"
+                        className="filter-dialog__row-btn filter-dialog__row-btn--info"
+                        onClick={() => setRows((prev) => [...prev, emptyRow()])}
+                      >
+                        添加
+                      </button>
+                      <button
+                        type="button"
+                        className="filter-dialog__row-btn filter-dialog__row-btn--danger"
+                        disabled={rows.length <= 1}
+                        onClick={() => setRows((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        删除
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

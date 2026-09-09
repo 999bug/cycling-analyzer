@@ -1,8 +1,8 @@
 /**
  * 骑行记录列表页集成测试（规格 §14；2026-09 工具栏改版）。
  * 使用 fake-indexeddb + 真仓库：造 25 条跨月/跨年数据，
- * 验证排序切换、搜索、年份/月份筛选、自定义筛选弹窗（预设多选/新建/修改/删除）、
- * 分页（每页大小可选）与行点击跳转。
+ * 验证排序切换、搜索、年份/月份筛选、自定义筛选弹窗（预设多选/新建默认名与初始条件/
+ * 修改/删除/工具栏预设下拉套用）、分页（每页大小可选）与行点击跳转。
  * 日期断言固定 UTC 时区（beforeAll 设置、afterAll 恢复，避免污染共享进程影响其他测试文件）。
  */
 import 'fake-indexeddb/auto'
@@ -135,9 +135,13 @@ describe('骑行记录列表页', () => {
     expect(row3).toHaveTextContent('203 W')
   })
 
-  it('点击表头切换距离排序：降序 → 升序', async () => {
+  it('点击表头切换距离排序：降序 → 升序；默认排序时无重置排序按钮', async () => {
     await repo.addActivities(makeSeed())
     renderPage()
+
+    // 默认排序（日期降序）：状态文案已移除，重置排序按钮不显示
+    expect(screen.queryByRole('button', { name: '重置排序' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/排序：/)).not.toBeInTheDocument()
 
     // 初始按时间降序，第一行为 act-01（最新）
     await expectFirstRowText(`${formatDate('2026-08-29T10:00:00.000Z')} 骑行`)
@@ -145,6 +149,9 @@ describe('骑行记录列表页', () => {
     // 点击"距离"→ 距离降序，第一行为距离最大的 act-25
     await user.click(screen.getByRole('button', { name: /^距离/ }))
     await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+
+    // 偏离默认排序后，重置排序按钮出现
+    expect(screen.getByRole('button', { name: '重置排序' })).toBeInTheDocument()
 
     // 再次点击 → 距离升序，第一行为距离最小的 act-01
     await user.click(screen.getByRole('button', { name: /^距离/ }))
@@ -307,7 +314,7 @@ describe('骑行记录列表页', () => {
     expect(await screen.findByText('详情页 act-01')).toBeInTheDocument()
   })
 
-  it('自定义筛选弹窗：新建预设并应用，条件以 chips 生效', async () => {
+  it('自定义筛选弹窗：新建预填初始条件（距离>20km 且 平均速度>20km/h），应用后 chips 生效', async () => {
     await repo.addActivities(makeSeed())
     renderPage()
 
@@ -318,18 +325,19 @@ describe('骑行记录列表页', () => {
     expect(await screen.findByRole('dialog', { name: '过滤条件' })).toBeInTheDocument()
     expect(screen.getByText('还没有筛选预设，点击「新建」创建')).toBeInTheDocument()
 
-    // 新建：名称 + 条件行（距离 大于 20）
+    // 新建：条件行预填「距离 大于 20」「平均速度 大于 20」，仅需输入名称
     await user.click(screen.getByRole('button', { name: '新建' }))
+    expect(screen.getByLabelText('值 1')).toHaveValue(20)
+    expect(screen.getByLabelText('值 2')).toHaveValue(20)
     await user.type(screen.getByLabelText(/名称/), '中长途')
-    await user.selectOptions(screen.getByLabelText('条件列 1'), 'distance')
-    await user.type(screen.getByLabelText('值 1'), '20')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
-    // 回列表视图：预设行出现，说明列展示条件文案
-    expect(screen.getByText('中长途')).toBeInTheDocument()
-    expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+    // 回列表视图：预设行出现，说明列展示两行初始条件文案
+    expect(screen.getByText('中长途', { selector: 'td' })).toBeInTheDocument()
+    expect(screen.getByText('距离 大于 20 km 且 平均速度 大于 20 km/h')).toBeInTheDocument()
 
-    // 勾选并应用 → 弹窗关闭，列表过滤（距离 ≥ 20km → act-10..25 共 16 条）且 chip 出现
+    // 勾选并应用 → 弹窗关闭，列表过滤（距离 ≥ 20km → act-10..25 共 16 条，
+    // 平均速度 > 20km/h 全部满足）且两个 chips 出现
     await user.click(screen.getByRole('checkbox', { name: '选择 中长途' }))
     await user.click(screen.getByRole('button', { name: /^应用/ }))
     await waitFor(() =>
@@ -337,10 +345,52 @@ describe('骑行记录列表页', () => {
     )
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
     expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+    expect(screen.getByText('平均速度 大于 20 km/h')).toBeInTheDocument()
 
-    // 点击 chip × 移除条件，恢复全量
+    // 点击 chips × 逐条移除条件，恢复全量
     await user.click(screen.getByRole('button', { name: '移除条件 距离 大于 20 km' }))
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    await user.click(screen.getByRole('button', { name: '移除条件 平均速度 大于 20 km/h' }))
+    await waitFor(() =>
+      expect(screen.queryByText('平均速度 大于 20 km/h')).not.toBeInTheDocument(),
+    )
+  })
+
+  it('自定义筛选弹窗：名称留空保存自动生成默认名；条件行可删除至一行', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    await user.click(screen.getByRole('button', { name: '自定义筛选' }))
+    expect(await screen.findByRole('dialog', { name: '过滤条件' })).toBeInTheDocument()
+
+    // 新建：名称留空，删除第二行（平均速度），仅保留距离 > 20
+    await user.click(screen.getByRole('button', { name: '新建' }))
+    await user.click(screen.getAllByRole('button', { name: '删除' })[1])
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    // 默认名 = 条件文案（名称列与说明列均出现该文案）；无「请输入名称」报错
+    expect(screen.getAllByText('距离 大于 20 km').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('请输入名称')).not.toBeInTheDocument()
+  })
+
+  it('工具栏预设下拉：选中预设即套用其条件', async () => {
+    await repo.addActivities(makeSeed())
+    useActivityFilterStore.getState().savePreset('中长途', [
+      { field: 'distance', op: 'gt', value: '20' },
+    ])
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 无勾选、不打开弹窗：预设下拉直接套用条件 → 距离 ≥ 20km 共 16 条
+    await user.selectOptions(screen.getByLabelText('选择预设'), '中长途')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+    expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
+
+    // 套用后下拉回到占位选项
+    expect(screen.getByLabelText('选择预设')).toHaveValue('')
   })
 
   it('自定义筛选弹窗：多选预设应用为条件并集（AND），介于条件闭区间生效', async () => {
@@ -393,10 +443,10 @@ describe('骑行记录列表页', () => {
     await user.type(screen.getByLabelText(/名称/), '长途')
     await user.click(screen.getByRole('button', { name: '保存' }))
 
-    // 列表视图：旧名消失，新名 + 新条件文案
-    expect(screen.getByText('长途')).toBeInTheDocument()
+    // 列表视图：旧名消失，新名 + 新条件文案（预设名同时存在于下拉 option，限定 td 断言）
+    expect(screen.getByText('长途', { selector: 'td' })).toBeInTheDocument()
     expect(screen.getByText('距离 大于 30 km')).toBeInTheDocument()
-    expect(screen.queryByText('中长途')).not.toBeInTheDocument()
+    expect(screen.queryByText('中长途', { selector: 'td' })).not.toBeInTheDocument()
   })
 
   it('自定义筛选弹窗：行内删除与勾选批量删除预设', async () => {
@@ -411,10 +461,11 @@ describe('骑行记录列表页', () => {
     await user.click(screen.getByRole('button', { name: '自定义筛选' }))
     expect(await screen.findByRole('dialog', { name: '过滤条件' })).toBeInTheDocument()
 
-    // 行内删除「甲」（表格行内删除按钮在前，底部批量删除按钮在后）
+    // 行内删除「甲」（表格行内删除按钮在前，底部批量删除按钮在后；
+    // 预设名同时存在于工具栏预设下拉 option，限定 td 断言）
     await user.click(screen.getAllByRole('button', { name: '删除' })[0])
-    await waitFor(() => expect(screen.queryByText('甲')).not.toBeInTheDocument())
-    expect(screen.getByText('乙')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('甲', { selector: 'td' })).not.toBeInTheDocument())
+    expect(screen.getByText('乙', { selector: 'td' })).toBeInTheDocument()
 
     // 勾选「乙」→ 底部删除（文档序最后一个「删除」按钮）→ confirm 确认后删除
     await user.click(screen.getByRole('checkbox', { name: '选择 乙' }))

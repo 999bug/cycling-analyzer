@@ -10,12 +10,12 @@
   gap: 16px;
 }
 
-/* 筛选栏 */
+/* 筛选栏（align-items: flex-end 让各列输入控件对齐同一行） */
 .activity-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .activity-filters__item {
@@ -43,11 +43,10 @@
   border-color: var(--primary);
 }
 
-/* 筛选行操作按钮组：右侧对齐（自定义筛选 / 重置 / 轨迹纠偏 / 批量重命名） */
+/* 筛选行操作按钮组：右侧对齐（重置 / 轨迹纠偏 / 批量重命名） */
 .activity-filters__actions {
   display: flex;
   gap: 8px;
-  align-self: flex-end;
   margin-left: auto;
 }
 
@@ -67,36 +66,73 @@
   color: var(--text);
 }
 
-/* 自定义筛选按钮：描边样式（弹窗入口，弱于主题色主操作） */
+/* 自定义筛选按钮：info 蓝描边（弹窗入口，区别于品牌绿主操作） */
 .activity-filters__custom {
   padding: 8px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--info);
   border-radius: 6px;
-  background-color: var(--bg-surface);
-  color: var(--text);
+  background-color: transparent;
+  color: var(--info);
   font-size: 14px;
   cursor: pointer;
 }
 
 .activity-filters__custom:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
 }
 
-/* 轨迹纠偏按钮：描边样式，与重置同级（作用于筛选命中的全部记录） */
-.activity-filters__fix {
-  padding: 8px 14px;
-  border: 1px solid var(--border);
+/* 预设下拉（自定义筛选按钮左侧）：info 蓝描边，与入口按钮成组 */
+.activity-filters__preset {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--info);
   border-radius: 6px;
   background-color: var(--bg-surface);
-  color: var(--text);
+  color: var(--info);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__preset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 自定义筛选组（预设下拉 + 入口按钮 + chips）：与搜索输入框同一行 */
+.activity-filters__custom-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.activity-filters__custom-label {
+  white-space: nowrap;
+}
+
+.activity-filters__custom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 轨迹纠偏按钮：warning 橙描边（批量修改数据，需视觉警示） */
+.activity-filters__fix {
+  padding: 8px 14px;
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--warning);
   font-size: 14px;
   cursor: pointer;
 }
 
 .activity-filters__fix:hover:not(:disabled) {
-  border-color: var(--primary);
-  color: var(--primary);
+  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
 }
 
 .activity-filters__fix:disabled {
@@ -351,14 +387,13 @@
   background-color: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-/* ===== 自定义条件 chips（主筛选栏内，类型下拉右侧）===== */
+/* ===== 自定义条件 chips（自定义筛选组内，入口按钮右侧）===== */
 .activity-filters__chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .activity-filter-chip {
@@ -366,7 +401,7 @@
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border: 1px solid var(--primary);
+  border: 1px solid var(--info);
   border-radius: 999px;
   background-color: var(--bg-surface);
   color: var(--text);
@@ -389,7 +424,7 @@
   color: var(--danger);
 }
 
-/* ===== 排序状态条（排序持久化，仅手动重置还原；兼勾选操作区）===== */
+/* ===== 排序操作条（状态文案已移除，仅重置按钮；兼勾选操作区）===== */
 .activity-sort-bar {
   display: flex;
   flex-wrap: wrap;
@@ -397,11 +432,6 @@
   gap: 12px;
   font-size: 12px;
   color: var(--text-secondary);
-}
-
-.activity-sort-bar__current {
-  color: var(--primary);
-  font-weight: 600;
 }
 
 .activity-sort-bar__reset {
@@ -734,11 +764,6 @@
   color: var(--text-secondary);
 }
 
-.filter-dialog__required {
-  color: var(--danger);
-  white-space: nowrap;
-}
-
 .filter-dialog__name-row .activity-filters__input {
   flex: 1;
   min-width: 0;
@@ -763,11 +788,11 @@
 }
 
 .filter-dialog__rows-header span:nth-child(1) {
-  width: 160px;
+  width: 150px;
 }
 
 .filter-dialog__rows-header span:nth-child(2) {
-  width: 100px;
+  width: 90px;
 }
 
 .filter-dialog__rows-header span:nth-child(3) {
@@ -781,12 +806,12 @@
 }
 
 .filter-dialog__row .custom-filter__select {
-  width: 160px;
+  width: 150px;
   min-width: 0;
 }
 
 .filter-dialog__row .custom-filter__select--op {
-  width: 100px;
+  width: 90px;
 }
 
 .filter-dialog__row .custom-filter__input {
@@ -794,9 +819,44 @@
   min-width: 0;
 }
 
-.filter-dialog__row .filter-dialog__link {
-  margin-right: 0;
+/* 行内操作列：添加 / 删除等大等高、固定同一行（2026-09 用户指定） */
+.filter-dialog__row-ops {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.filter-dialog__row-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  font-size: 12px;
+  cursor: pointer;
   white-space: nowrap;
+}
+
+.filter-dialog__row-btn--info {
+  border-color: var(--info);
+  color: var(--info);
+}
+
+.filter-dialog__row-btn--info:hover {
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.filter-dialog__row-btn--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.filter-dialog__row-btn--danger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.filter-dialog__row-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* AND 提示行 */
