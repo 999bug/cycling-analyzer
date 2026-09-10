@@ -3,6 +3,7 @@
  * 供 BatchRenameDialog 预览与测试复用；与组件分离以满足 react-refresh 单导出约束。
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
+import { formatDate } from '@/utils/format'
 
 /** 默认命名模板 */
 export const DEFAULT_RENAME_TEMPLATE = '{日期} {类型} {距离}km'
@@ -28,7 +29,7 @@ export function renderRenameTemplate(
   item: ActivitySummary,
   index: number,
 ): string {
-  const date = item.startTime.slice(0, 10)
+  const date = formatDate(item.startTime)
   const distanceKm = String(Math.round(item.distance / 1000))
   // 缺失字段 = undefined ≠ 0：爬升缺失显示占位符
   const elevation = item.elevationGain === undefined ? '—' : String(Math.round(item.elevationGain))

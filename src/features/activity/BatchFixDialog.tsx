@@ -18,6 +18,7 @@ import {
   sourceProfileById,
 } from '@/geo/sourceProfiles'
 import type { CoordinateSystem } from '@/geo/coordinateSystem'
+import { formatDate } from '@/utils/format'
 import SourceSelect from '@/features/activity/SourceSelect'
 import './delete-activities.css'
 
@@ -130,7 +131,7 @@ function BatchFixDialog({ items, writeRepository = localRepository, onClose, onF
             return (
               <li key={item.id} className="delete-activities__item">
                 <span>
-                  {item.name ?? item.fileName}（{item.startTime.slice(0, 10)}）
+                  {item.name ?? item.fileName}（{formatDate(item.startTime)}）
                 </span>
                 <span className={willChange ? 'delete-activities__reason' : undefined}>
                   {systemShort(current)} → {systemShort(selectedProfile.coordinateSystem)}

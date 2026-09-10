@@ -12,7 +12,7 @@ import {
   DexieActivityRepository,
   type ActivitySummary,
 } from '@/storage/repositories/activityRepository'
-import { formatDuration } from '@/utils/format'
+import { formatDate, formatDuration } from '@/utils/format'
 import './delete-activities.css'
 
 /** 本地库仓库（删除等写操作永远只进本地库） */
@@ -87,7 +87,7 @@ function DeleteActivitiesDialog({
       return {
         id: item.id,
         title: item.name ?? item.fileName,
-        startTime: item.startTime.slice(0, 10),
+        startTime: formatDate(item.startTime),
         distanceKm: distanceKm.toFixed(1),
         durationText: formatDuration(item.duration),
         isDirty: reasons.length > 0,
