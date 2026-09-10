@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
 
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // 应用版本号（取自 package.json，define 注入供页面显示）
@@ -23,96 +23,102 @@ export default defineConfig(({ command }) => {
     plugins: [
       react(),
       VitePWA({
-      // 静默自动更新：导航请求网络优先（见 src/sw.ts）——刷新一次必得最新
-      // index.html，新 SW 后台 install+激活，全程无提示条、无多次刷新
-      registerType: 'autoUpdate',
-      // 自定义 SW 模式：插件按 srcDir + filename 定位 SW 源码（src/sw.ts），
-      // 编译产物 dist/sw.js 后由 workbox-build 注入预缓存清单
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.ts',
-      includeAssets: ['favicon.svg', 'qileme.png', 'feedback-form-qr.png'],
-      // Web 应用清单（PWA 离线可用：图标/独立窗口/主题色）
-      manifest: {
-        name: '骑了么 · 看懂你的每一次骑行',
-        short_name: '骑了么',
-        description: '个人骑行数据分析网站：FIT 解析、统计图表、路线地图与训练洞察',
-        lang: 'zh-CN',
-        theme_color: '#0a4268',
-        background_color: '#0f172a',
-        display: 'standalone',
-        start_url: `${base}`,
-        scope: `${base}`,
-        icons: [
-          { src: `${base}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
-          { src: `${base}icons/icon-512.png`, sizes: '512x512', type: 'image/png' },
-          {
-            src: `${base}icons/icon-maskable-512.png`,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      injectManifest: {
-        // 预缓存应用壳资源；注意排除体积庞大的作者数据快照（运行时按需网络请求）
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        globIgnores: [
-          '**/author-data/**',
-          // 大体积懒加载 chunk 不预缓存（首访后台流量 ↓）：FIT 解析 worker（~384KB）
-          // 与 GPX 解析器只在导入动作时动态加载，改走 sw.ts 内的 SWR 运行时缓存
-          // （首次在线使用后离线可用）
-          '**/parseWorker-*.js',
-          '**/parseTask*.js',
-          '**/gpxParser-*.js',
-        ],
-      },
-    }),
-  ],
-  // 版本号注入（侧边栏显示；bundle 内直接内联字符串，无运行时 JSON 加载）
-  define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        // 钉住 recharts 到独立 chunk：rolldown 默认会把多异步页共享的
-        // 依赖提升进入口 chunk，导致 recharts（~350KB）拖慢首屏；
-        // 显式分组后入口更小，图表 chunk 由各页面按需并行加载
-        advancedChunks: {
-          groups: [
+        // 静默自动更新：导航请求网络优先（见 src/sw.ts）——刷新一次必得最新
+        // index.html，新 SW 后台 install+激活，全程无提示条、无多次刷新
+        registerType: 'autoUpdate',
+        // 自定义 SW 模式：插件按 srcDir + filename 定位 SW 源码（src/sw.ts），
+        // 编译产物 dist/sw.js 后由 workbox-build 注入预缓存清单
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
+        includeAssets: ['favicon.svg', 'qileme.png', 'feedback-form-qr.png'],
+        // Web 应用清单（PWA 离线可用：图标/独立窗口/主题色）
+        manifest: {
+          name: '骑了么 · 看懂你的每一次骑行',
+          short_name: '骑了么',
+          description: '个人骑行数据分析网站：FIT 解析、统计图表、路线地图与训练洞察',
+          lang: 'zh-CN',
+          theme_color: '#0a4268',
+          background_color: '#0f172a',
+          display: 'standalone',
+          start_url: `${base}`,
+          scope: `${base}`,
+          icons: [
+            { src: `${base}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
+            { src: `${base}icons/icon-512.png`, sizes: '512x512', type: 'image/png' },
             {
-              name: 'recharts',
-              test: /[\\/]node_modules[\\/]recharts[\\/]/,
+              src: `${base}icons/icon-maskable-512.png`,
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
         },
+        injectManifest: {
+          // 预缓存应用壳资源；注意排除体积庞大的作者数据快照（运行时按需网络请求）
+          globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+          globIgnores: [
+            '**/author-data/**',
+            // 大体积懒加载 chunk 不预缓存（首访后台流量 ↓）：FIT 解析 worker（~384KB）
+            // 与 GPX 解析器只在导入动作时动态加载，改走 sw.ts 内的 SWR 运行时缓存
+            // （首次在线使用后离线可用）
+            '**/parseWorker-*.js',
+            '**/parseTask*.js',
+            '**/gpxParser-*.js',
+          ],
+        },
+      }),
+    ],
+    // 版本号注入（侧边栏显示；bundle 内直接内联字符串，无运行时 JSON 加载）
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+    },
+    build: {
+      modulePreload: {
+        // recharts 已通过路由懒加载；不在 HTML 首屏预加载，进入图表页时再按需获取。
+        // 动态页面自身的依赖预加载保持默认，避免影响图表页进入后的加载顺序。
+        resolveDependencies: (_url, deps, { hostType }) =>
+          hostType === 'html' ? deps.filter((dep) => !dep.includes('/recharts-')) : deps,
+      },
+      rolldownOptions: {
+        output: {
+          // 钉住 recharts 到独立 chunk：rolldown 默认会把多异步页共享的
+          // 依赖提升进入口 chunk，导致 recharts（~350KB）拖慢首屏；
+          // 显式分组后入口更小，图表 chunk 由各页面按需并行加载。
+          codeSplitting: {
+            groups: [
+              {
+                name: 'recharts',
+                test: /[\\/]node_modules[\\/]recharts[\\/]/,
+              },
+            ],
+          },
+        },
       },
     },
-  },
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      // 仅生产构建：主线程降级动态 import 指向轻量桩，避免与 worker chunk
-      // 重复打包一份完整 @garmin/fitsdk（~384KB）；worker 入口用相对路径
-      // './parseTask' 引用真实实现，不受此 alias 影响。
-      // vitest（command=serve）不替换，测试仍用真实解析。
-      ...(command === 'build'
-        ? {
-            '@/fit/worker/parseTask': fileURLToPath(
-              new URL('./src/fit/worker/parseTaskStub.ts', import.meta.url),
-            ),
-          }
-        : {}),
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+        // 仅生产构建：主线程降级动态 import 指向轻量桩，避免与 worker chunk
+        // 重复打包一份完整 @garmin/fitsdk（~384KB）；worker 入口用相对路径
+        // './parseTask' 引用真实实现，不受此 alias 影响。
+        // vitest（command=serve）不替换，测试仍用真实解析。
+        ...(command === 'build'
+          ? {
+              '@/fit/worker/parseTask': fileURLToPath(
+                new URL('./src/fit/worker/parseTaskStub.ts', import.meta.url),
+              ),
+            }
+          : {}),
+      },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./tests/setup.ts'],
-    css: true,
-    // exclude 走 vitest 默认值（node_modules/dist 等）；E2E 已删除（@playwright/test
-    // 仍保留供 scripts/capture-screenshots.mjs 截图使用）
-  },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./tests/setup.ts'],
+      css: true,
+      // Playwright 测试由 npm run test:e2e 单独执行，不能被 Vitest 当作 jsdom 测试加载。
+      exclude: [...configDefaults.exclude, 'e2e/**'],
+    },
   }
 })
