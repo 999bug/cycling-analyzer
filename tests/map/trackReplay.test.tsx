@@ -595,4 +595,42 @@ describe('TrackReplay 控制条', () => {
     )
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('录制会话：按给定倍速自动开播、冻结镜头，播到终态回报 onEnded', async () => {
+    // 6 个点 = 运动时长 5 秒；200× 下两三帧就播完，避免测试空等
+    const short = makePoints(6)
+    const mapRef = createRef<LeafletMap>()
+    const onEnded = vi.fn()
+    render(
+      <MapContainer
+        ref={mapRef}
+        center={[31.2, 121.5]}
+        zoom={14}
+        style={{ width: 800, height: 600 }}
+      >
+        <TrackReplay
+          points={short}
+          distanceUnit="km"
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
+          exportSession={{ speed: 200, onEnded }}
+        />
+      </MapContainer>,
+    )
+
+    // 自动开播：播放按钮进入暂停态（无需人工点按钮）
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '⏸' })).toBeInTheDocument()
+    })
+    // 冻结镜头：不跟随 → 缩放级别停在初始 14（跟随会把地图推到街道级 16，成片看不出轨迹全貌）
+    expect(mapRef.current?.getZoom()).toBe(14)
+    // 播到终态回报父级，录制据此收尾
+    await waitFor(
+      () => {
+        expect(onEnded).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 5000 },
+    )
+  })
 })

@@ -395,9 +395,11 @@ export function buildVideoFileName(fileName: string, extension: string): string 
 /**
  * 按浏览器支持度选择 MediaRecorder 容器格式：优先 mp4（h264/aac），降级 webm。
  *
+ * 自绘导出与「真实页面录制」共用（两者都要求尽量直出 MP4，平台才收）。
+ *
  * @returns 支持的 MIME；两者都不支持时返回 undefined
  */
-function pickMimeType(): string | undefined {
+export function pickVideoMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') {
     return undefined
   }
@@ -1075,6 +1077,26 @@ function drawCaptions(
 }
 
 /**
+ * 把字幕（开头钩子 + 底部数据行）绘制到任意 2D 上下文。
+ *
+ * 「真实页面录制」（pageCaptureExport.ts）的合成画布复用这套规则：真实页面自带 UI 与轨迹，
+ * 只需叠一层字幕；字号/位置/描边与自绘版完全同源，保证两种来源的成片观感统一。
+ *
+ * @param ctx 2D 上下文
+ * @param layout 画布布局（决定字号与安全边距）
+ * @param captions 字幕文本
+ * @param elapsedSeconds 当前录制时刻（秒）：决定钩子是否仍在展示窗口内
+ */
+export function drawVideoCaptions(
+  ctx: CanvasRenderingContext2D,
+  layout: CanvasLayout,
+  captions: VideoCaptionTexts,
+  elapsedSeconds: number,
+): void {
+  drawCaptions(ctx, layout, fontSizesOf(layout), captions, elapsedSeconds <= HOOK_DURATION_SECONDS)
+}
+
+/**
  * 一帧的全部绘制上下文（避免 drawFrame 参数列表过长）。
  */
 interface FrameRenderer {
@@ -1199,7 +1221,7 @@ export async function exportTrackReplayVideo(
   activityName: string,
   options?: TrackVideoExportOptions,
 ): Promise<TrackVideoExportResult | undefined> {
-  const mimeType = pickMimeType()
+  const mimeType = pickVideoMimeType()
   if (mimeType === undefined || typeof document === 'undefined') {
     return undefined
   }

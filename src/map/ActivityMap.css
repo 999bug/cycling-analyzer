@@ -35,6 +35,45 @@
   height: 100% !important;
 }
 
+/*
+ * 导出录制舞台（pageCaptureExport）：铺满窗口的黑底 + 居中竖屏画框。
+ *
+ * 为什么是画框而不是直接铺满：录到的是整个标签页，而浏览器窗口未必竖屏
+ * （桌面端通常 16:9）。铺满整窗的话，成片只能从中心裁出 9:16，轨迹会被裁没；
+ * 改成画框后合成画布只裁画框区域，两侧留黑自然不进成片。
+ *
+ * 画框比例固定 9:16（录制导出的默认比例）；`!important` 用于压掉地图高度拖拽
+ * 留下的内联 height 样式。
+ */
+.map-export-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: block;
+  height: 100vh !important;
+  background: #000;
+}
+
+/* 画框：绝对居中 + 由高度反推宽度（窗口比画框更扁时两侧留黑，比画框更窄时 max-width 兜底） */
+.map-export-stage .map-export-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: 100% !important;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  transform: translate(-50%, -50%);
+  border: none;
+  border-radius: 0;
+}
+
+/* 录制期间不需要交互控件：拖拽把手与全屏按钮都会进画面 */
+.map-export-stage .map-resize-handle,
+.map-export-stage .map-fullscreen-button {
+  display: none;
+}
+
 /* 高度拖拽把手：地图顶缘中央的握把胶囊，上下拖动调整地图高度 */
 .map-resize-handle {
   position: absolute;

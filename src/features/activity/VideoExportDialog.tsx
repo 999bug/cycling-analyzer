@@ -194,6 +194,11 @@ function VideoExportDialog({ exporting, progressLabel, onClose, onConfirm }: Vid
               </label>
             </div>
           </fieldset>
+
+          <p className="video-export__hint">
+            点「生成」后浏览器会弹出共享提示，请选择<strong>当前标签页</strong>——录制的是真实地图画面
+            （含真实控件与回放控制栏），观感与录屏一致；未授权或浏览器不支持时会自动改用内置绘制方式。
+          </p>
         </div>
 
         <div className="video-export__footer">

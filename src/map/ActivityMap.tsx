@@ -22,7 +22,7 @@ import {
   type ColoringMode,
   type ColoredLine,
 } from '@/map/routeColoring'
-import { TrackReplay } from '@/map/TrackReplay'
+import { TrackReplay, type ReplayExportSession } from '@/map/TrackReplay'
 import { clampMapHeight, loadSavedMapHeight, saveMapHeight } from '@/map/mapResize'
 import { isGcjSource, loadStoredSourceIndex, mapSystem, storeSourceIndex, type MapMode } from '@/map/tileSources'
 import {
@@ -80,6 +80,18 @@ export interface ActivityMapProps {
   replayEnabled?: boolean
 
   /**
+   * 回放录制会话（导出视频用）：传入后回放自动按指定倍速开播、禁用跟随镜头，
+   * 播放结束回调父级。undefined = 正常交互模式。
+   */
+  replayExportSession?: ReplayExportSession
+
+  /**
+   * 导出录制态：地图变成铺满窗口的黑色舞台 + 居中竖屏画框（`map-export-frame`），
+   * 供 pageCaptureExport 裁出成片区域。窗口未必竖屏，故不能直接铺满整窗。
+   */
+  exportStage?: boolean
+
+  /**
    * 回放判定暂停用的密集采样源（未抽稀的逐点记录）。
    *
    * `points` 是抽稀结果，采样间隔可达分钟级；回放若直接用它判定暂停，
@@ -125,9 +137,13 @@ export interface ActivityMapProps {
  * 尊重用户操作：用户手动拖拽/缩放后不再自动适配，避免尺寸抖动（窗口缩放、旋转屏幕）
  * 把正在看细节的用户强行拉回全景；切换轨迹（换活动）时重置该标记。
  *
+ * `forceRefit`（导出录制态）例外：录制必须从整条轨迹的全景开始，故忽略用户操作标记，
+ * 每次尺寸变化都重新适配——否则用户此前拖过地图会让成片取景错位。
+ *
  * @param points 轨迹点
+ * @param forceRefit 是否无条件重新适配（导出录制态）
  */
-function FitBounds({ points }: { points: RoutePoint[] }) {
+function FitBounds({ points, forceRefit = false }: { points: RoutePoint[]; forceRefit?: boolean }) {
   const map = useMap()
   // 用户是否手动调整过视野（dragstart / 轮播缩放、按钮缩放触发的 zoomstart）
   const userMovedRef = useRef(false)
@@ -171,7 +187,7 @@ function FitBounds({ points }: { points: RoutePoint[] }) {
     }
     fit()
     const handleResize = () => {
-      if (!userMovedRef.current) {
+      if (forceRefit || !userMovedRef.current) {
         fit()
       }
     }
@@ -179,7 +195,7 @@ function FitBounds({ points }: { points: RoutePoint[] }) {
     return () => {
       map.off('resize', handleResize)
     }
-  }, [map, points])
+  }, [map, points, forceRefit])
   return null
 }
 
@@ -239,11 +255,31 @@ function AutoInvalidate() {
 }
 
 /**
+ * 导出录制画框同步：给 Leaflet 容器挂/摘 `map-export-frame` 类。
+ *
+ * 为什么不能直接写在 `<MapContainer className>` 上：MapContainer 只在首次挂载时
+ * 把 className 落到 DOM，后续 prop 变化不会更新容器类名（实测 rerender 后类名不变），
+ * 而录制舞台是运行时切换的。类名变化会让容器尺寸变化，ResizeObserver → invalidateSize
+ * → fitBounds，取景自动重算（见 FitBounds 的 forceRefit）。
+ *
+ * @param props.enabled 是否处于导出录制态
+ */
+function ExportFrameSync({ enabled }: { enabled: boolean }) {
+  const map = useMap()
+  useEffect(() => {
+    const container = map.getContainer()
+    container.classList.toggle('map-export-frame', enabled)
+    return () => container.classList.remove('map-export-frame')
+  }, [map, enabled])
+  return null
+}
+
+/**
  * 活动轨迹地图。
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, replayExportSession, exportStage = false, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -382,7 +418,11 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
 
   return (
     <div
-      className="map-fullscreen-wrapper activity-map-wrapper"
+      className={
+        exportStage
+          ? 'map-fullscreen-wrapper activity-map-wrapper map-export-stage'
+          : 'map-fullscreen-wrapper activity-map-wrapper'
+      }
       ref={wrapperRef}
       style={mapHeight !== null ? { height: mapHeight } : undefined}
     >
@@ -435,7 +475,7 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
             }}
           />
         )}
-        <FitBounds points={displayPoints} />
+        <FitBounds points={displayPoints} forceRefit={exportStage} />
         <MapHoverReporter displayPoints={displayPoints} onHover={onHover} />
         {replayEnabled && (
           <TrackReplay
@@ -445,9 +485,11 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
             mapMode={mapMode}
             onMapModeChange={onMapModeChange ?? (() => {})}
             mapModeEnabled={isGcjSource(sourceIndex)}
+            exportSession={replayExportSession}
           />
         )}
         <FullscreenSync />
+        <ExportFrameSync enabled={exportStage} />
         <AutoInvalidate />
         <ZoomControlBottomRight />
       </MapContainer>

@@ -29,6 +29,18 @@
 - 收起态给内层加 `inert`（React 19 原生支持），让键盘焦点跳过不可见内容
 - 异步读取的偏好加 hydrated 标记 + 首帧 `transition: none`，避免启动「先展开再收起」的闪动
 
+## 浏览器内「录制真实页面」的两个硬约束（2026-09-10，v2.58.0 实测）
+
+1. **一个用户手势只能消耗一次**：`getDisplayMedia()` 与 `requestFullscreen()` 都必须在用户手势中调用，
+   同一手势里连续调两个，第二个必失败。所以录制舞台**不能用 Fullscreen API**，改用 CSS 固定定位
+   （`.map-export-stage` 全屏黑底 + `aspect-ratio` 居中画框），合成时按 `getBoundingClientRect` 裁画框区域。
+2. **`getDisplayMedia` 在 headless 里恒为 undefined**（无头模式禁用录屏 API），
+   单测里 `canCaptureTab()` 返回 false 是预期，别当成 bug；校验这条链路要有头模式或人工验证。
+   同理 `MediaRecorder` + `canvas.captureStream()` 在 jsdom 里也没有，测试要 `Object.defineProperty` 打桩。
+
+配套：录屏成片必须在瓦片加载稳定后开播（轮询 `.leaflet-tile-loaded` 计数连续不变再开），
+否则片头是空白底图；`MapContainer` 的 `className` 只在首挂生效，动态挂类要用子组件 `classList.toggle`。
+
 ## 地图悬浮控件约定（2026-09-10）
 
 - **地图模式三处共用一份记忆**：`cycling-map-mode`（`src/map/useMapMode.ts`）——详情页回放、热力图页、

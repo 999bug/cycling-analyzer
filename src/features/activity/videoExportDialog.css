@@ -157,6 +157,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 录制流程说明：真实页面录制需要用户授权共享标签页，事先说清避免以为卡住 */
+.video-export__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.video-export__hint strong {
+  color: var(--text);
+}
+
 .video-export__btn {
   padding: 8px 18px;
   border: 1px solid transparent;

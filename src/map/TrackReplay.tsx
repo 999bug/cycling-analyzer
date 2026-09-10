@@ -48,7 +48,7 @@ import {
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
-const SPEED_OPTIONS = [1, 8, 32, 64, 128] as const
+const SPEED_OPTIONS = [1, 8, 32, 600] as const
 
 /** 已走高亮折线的最大点数（均匀抽稀上限，封顶 SVG path 重绘成本） */
 const REPLAY_LINE_MAX_POINTS = 2000
@@ -126,6 +126,22 @@ function formatClock(seconds: number): string {
 }
 
 /**
+ * 回放录制会话（导出视频用）。
+ *
+ * 录制态与人工操作态的差异只有三点，都用这个会话表达：
+ * - 倍速可超出控制条档位（长途 200km+ 要 1024× 才能在 30 秒内播完）；
+ * - **禁用跟随镜头**——跟随会把地图缩到街道级并高速平移，成片看不出轨迹全貌；
+ * - 播放走到终态要回报父级，录制据此收尾。
+ */
+export interface ReplayExportSession {
+  /** 录制倍速（由「目标成片时长」反推：运动时长 ÷ 目标秒数） */
+  speed: number
+
+  /** 播放走到终态（progress = 1）回调 */
+  onEnded: () => void
+}
+
+/**
  * 回放控制条 props。
  */
 export interface TrackReplayProps {
@@ -155,6 +171,9 @@ export interface TrackReplayProps {
    * 那时没有多模式底图可选，按钮置灰避免出现「点了没反应」。
    */
   mapModeEnabled: boolean
+
+  /** 导出录制会话：传入后按该倍速自动开播、禁用跟随镜头，播完回调 onEnded */
+  exportSession?: ReplayExportSession
 }
 
 /**
@@ -171,12 +190,14 @@ export interface TrackReplayProps {
  * @param props.points 全量轨迹点（运动时间轴）
  * @param props.skeleton 已走轨迹抽稀骨架（skeleton[i] ↔ points[i*stride]）
  * @param props.stride 抽稀步长
+ * @param props.freezeCamera 是否冻结镜头（录制态：跟随会缩到街道级并高速平移，成片看不出轨迹全貌）
  */
-function ReplayOverlay({ engine, points, skeleton, stride }: {
+function ReplayOverlay({ engine, points, skeleton, stride, freezeCamera }: {
   engine: ReplayEngine
   points: RoutePoint[]
   skeleton: RoutePoint[]
   stride: number
+  freezeCamera: boolean
 }) {
   const map = useMap()
   const haloRef = useRef<LeafletCircleMarker | null>(null)
@@ -357,12 +378,15 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
       haloRef.current?.setLatLng(latLng)
       coreRef.current?.setLatLng(latLng)
       syncTraveledTo(frame.index, latLng)
-      followCursor(latLng)
+      // 录制态冻结镜头：跟随会把地图缩到街道级并高速平移，成片看不出轨迹全貌
+      if (!freezeCamera) {
+        // followCursor(latLng) // [replay-video-record] 录制期禁用跟随镜头
+      }
       updateTip(frame, latLng)
     })
     return unsubscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps -- syncTraveledTo/followCursor/updateTip 仅依赖稳定 props 与 map 实例
-  }, [engine, map])
+  }, [engine, map, freezeCamera])
 
   return (
     <>
@@ -400,6 +424,7 @@ export function TrackReplay({
   mapMode,
   onMapModeChange,
   mapModeEnabled,
+  exportSession,
 }: TrackReplayProps) {
   // 运动时间轴：把红灯/休息等暂停时段折叠为 0 长度（只重映射时间戳，几何点不丢，
   // 已走高亮线与底图轨迹始终重合）。判定用密集采样源（motionSource）：展示点经过
@@ -410,6 +435,40 @@ export function TrackReplay({
   // 引擎与轨迹点生命周期绑定：points 变更（切换活动）即重建引擎
   const engine = useMemo(() => new ReplayEngine(timeline), [timeline])
   useEffect(() => () => engine.dispose(), [engine])
+
+  // 录制会话镜像：帧回调与快照订阅都在闭包外读取，避免 prop 变化重建订阅；
+  // 该 effect 必须排在下面的「开播 effect」之前，保证开播时标记已就位（跟随镜头随即被冻结）
+  const exportSessionRef = useRef<ReplayExportSession | undefined>(undefined)
+  // 终态回报只发一次：终态后再改倍速/拖动进度会再次触发快照，不能重复回报
+  const exportEndedRef = useRef(false)
+
+  useEffect(() => {
+    exportSessionRef.current = exportSession
+    if (exportSession === undefined) {
+      return
+    }
+    exportEndedRef.current = false
+    // 从起点按目标倍速开播（倍速可超出控制条档位，如长途 1024×）
+    engine.seek(0)
+    engine.setSpeed(exportSession.speed)
+    engine.play()
+  }, [engine, exportSession])
+
+  useEffect(
+    () =>
+      engine.subscribe(() => {
+        const session = exportSessionRef.current
+        if (session === undefined || exportEndedRef.current) {
+          return
+        }
+        // 引擎播到终态会自动暂停并停在 progress = 1，据此回报父级收尾
+        if (!engine.playing && engine.progress >= 1) {
+          exportEndedRef.current = true
+          session.onEnded()
+        }
+      }),
+    [engine],
+  )
 
   // 10Hz 快照订阅：滑块/时钟/HUD 的唯一渲染驱动（播放中每秒仅 ~10 次 reconcile）
   const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot)
@@ -483,7 +542,13 @@ export function TrackReplay({
   return (
     <>
       {timeline.length > 0 && (
-        <ReplayOverlay engine={engine} points={timeline} skeleton={skeleton} stride={stride} />
+        <ReplayOverlay
+          engine={engine}
+          points={timeline}
+          skeleton={skeleton}
+          stride={stride}
+          freezeCamera={exportSession !== undefined}
+        />
       )}
       <div
         className={snapshot.playing ? 'track-replay track-replay--playing' : 'track-replay'}

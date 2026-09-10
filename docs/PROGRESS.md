@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 地图模式切换开放到热力图与路线图：共享 `MapModeSwitcher` + `useMapMode`，三处地图共用同一份记忆（控件贴地图右下角，`:has()` 抬升 Leaflet 缩放与署名），底图降级时整组禁用，热力图卫星模式线色自动提亮加浓；顺带修复浅色主题下全屏按钮深字压深底；版本 2.57.0。此前 2.56.0 为导出视频改造与两处地图修复，2.55.0 为运动类型识别与骑行统计口径隔离，2.55.1 为工作区清理与待实现文档补录）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 导出视频改为「录制真实页面」：点「生成」后录真实标签页画面（真实 Leaflet 渲染 + 真实控件 + 回放控制栏），未授权或不支持时回退原 canvas 自绘；录制期间地图切成居中竖屏画框（两侧留黑不进成片）、按目标时长反推倍速自动播放，字幕两条路线同源；顺带修复录制取景不重算 fitBounds 的问题；版本 2.58.0。此前 2.57.0 为地图模式切换下沉到热力图与路线图，2.57.1 为记忆目录拆分，2.56.0 为导出视频选项面板与两处地图修复）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -64,6 +64,10 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 
 - **地图视野适配（v2.56.0 起）**：`ActivityMap` 的 `FitBounds` 除「轨迹点变化」外还监听 Leaflet 的 `resize` 事件重新 `fitBounds`——`invalidateSize()` 只保持 center + zoom、**不重算缩放级别**，全屏进出 / 窗口缩放 / 拖动地图高度后必须重算，否则轨迹缩成画面中间一小团（实测横向仅占 44%，按 fitBounds 本应约 96%）。尊重用户操作：`dragstart`（纯用户行为）与自动适配之外的 `zoomstart` 会置用户操作标记，此后尺寸变化不再自动适配；换活动（points 变化）时重置。改这里注意别把「自动 fitBounds 自身触发的 zoomstart」误判成用户操作
 - **导出回放视频（v2.56.0 起）**：`features/activity/trackVideoExport.ts` 的画布比例/时长/字幕全部参数化（`VIDEO_ASPECT_SIZES` 短边统一 1080；`canvasLayoutOf` 按短边算安全边距与各号字号）。底图恒用高德栅格瓦片（`mapModeOf()` 的图层栈，含「卫星+路网」双层叠加），**因此轨迹必须先经 `@/geo/projection` 的 `projectPoint` 投影到 GCJ-02**，否则整条轨迹整体偏移。时长档位 15/30/60 秒或「跟随里程」（每 5 km 1 秒，夹在 15~60 秒）；字幕取活动真实数据，缺失项整行省略。选项面板 `VideoExportDialog` + `videoExportSettings.ts`（选项模型 + localStorage 记忆）只负责收集参数，录制由详情页 `handleExportVideo` 执行并展示整秒进度
+- **导出视频双路线：优先录真实页面，失败回退内置绘制（v2.58.0 起，硬约束）**：详情页「生成竖屏视频」有两条链路，**都不要删**：
+  1. **录制真实页面**（`features/activity/pageCaptureExport.ts`）——`requestTabCaptureStream()` 在**用户手势内**调 `getDisplayMedia`（`preferCurrentTab` + `selfBrowserSurface: 'include'`）拿标签页视频流，随后地图切成 **CSS 录制舞台**（`.map-export-stage` 全屏黑底 + `.map-export-frame` 居中竖屏画框，`ActivityMap` 用 `ExportFrameSync` 子组件 `classList.toggle` 挂摘，因为 `MapContainer` 的 className 只在首挂生效），按目标时长反推倍速（`speed = max(1, round(movingSeconds / durationSeconds))`）经 `ReplayExportSession` 自动开播；rAF 合成循环用 `cropSourceOf()` 只裁画框区域 → 成片里不带两侧黑边。**必须避开 Fullscreen API**：`requestFullscreen` 与 `getDisplayMedia` 都消耗用户手势，同一手势连续调用后者必失败；瓦片要等 `waitForTilesSettled` 稳定再开播，否则片头是空白底图。
+  2. **内置 canvas 自绘**（`trackVideoExport.ts`，v2.56.0 那条）作为兜底——浏览器不支持、用户拒绝授权、或非安全上下文时自动回退（`handleExportVideo` 用 `??` 串起来），功能与观感同 2.56.0。
+  **两条路线字幕同源**：`trackVideoExport.ts` 导出的 `drawVideoCaptions()` 与 `pickVideoMimeType()` 供录制链路复用，改字幕内容只需改一处。**画框两边只靠比例对齐，不锁像素**：CSS 侧 `.map-export-frame` 用 `aspect-ratio: 9/16` + `height: 100%` 随窗口高度自适应，合成侧 `canvasLayoutOf('9:16')` 固定 1080×1920，`cropSourceOf()` 按 `videoWidth / documentElement.clientWidth` 缩放换算裁剪矩形——**改任一侧比例时必须同步改另一侧**（当前同为 9:16）。
 - **本地预缓存瓦片只服务「正常」模式（v2.56.0 起，硬约束）**：`public/author-data/tiles/` 清单 key 只有 `"z/x/y"`、不含底图模式，故 `CachingTileLayer` 的 `allowLocalTile` 必须由 `FallbackTileLayer` 按 `mapMode === 'normal'` 传入；否则卫星与注记请求会命中本地矢量瓦片，作者快照覆盖区域出现「矢量/卫星混杂」。备选方案（清单 key 加模式前缀）需预缓存两套瓦片、体积翻倍，不采用
 - **⚠️ 测试环境约定**：`tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`（避免全量渲染时真实发包）；需要真实实现的测试文件必须用 `vi.mock(..., importOriginal)` 覆盖回原样（见 `tests/map/cachingTileLayer.test.tsx`）
 - **地图模式切换开放到热力图与路线图（v2.57.0 起）**：共享实现为 `src/map/MapModeSwitcher.tsx`（悬浮分段控件）+ `src/map/useMapMode.ts`（`[模式, 切换回调]`，切换即写 `cycling-map-mode`）。三处共用同一份记忆：详情页回放控制条内嵌版、热力图、路线图——任一处切换，其余地图与视频导出「跟随当前」立即沿用。底图降级到 OSM 时整组禁用（`enabled={isGcjSource(sourceIndex)}`）。`MapModeSwitcher` **只提供地图角标形态**；控制条里的紧凑版仍由 `TrackReplay` 自行渲染，别把角标样式套到控制条上。角标贴地图右下角，`mapModeSwitcher.css` 用 `:has()` 把 Leaflet 右下角控件（缩放 + 署名）整组上抬 48px 让位——**改控件高度时必须同步改这个值**（与回放控制栏用 `--replay-bar-height` 抬升是同一思路的静态版）。热力图在卫星模式下热力线换亮紫 `#c084fc` 且不透明度 0.45 → 0.7（`isSatellite` 派生自 `mapMode !== 'normal'`），矢量底图维持深紫 `#9333ea`

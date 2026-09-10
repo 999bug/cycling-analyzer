@@ -134,4 +134,38 @@ describe('尺寸变化时重新适配视野', () => {
 
     expect(fitBounds.mock.calls.length).toBe(baseline + 1)
   })
+
+  it('导出录制态：包裹层挂舞台类、地图容器挂录制画框类', () => {
+    const { container, rerender } = render(<ActivityMap points={TWO_POINTS} />)
+    expect(container.querySelector('.map-export-stage')).toBeNull()
+    expect(container.querySelector('.map-export-frame')).toBeNull()
+
+    rerender(<ActivityMap points={TWO_POINTS} exportStage />)
+    expect(container.querySelector('.map-export-stage')).not.toBeNull()
+    expect(container.querySelector('.map-export-frame')).not.toBeNull()
+  })
+
+  it('导出录制态忽略用户操作标记：拖过地图后尺寸变化仍重新适配', () => {
+    const fitBounds = vi.spyOn(LeafletMap.prototype, 'fitBounds')
+    const { rerender } = render(<ActivityMap points={TWO_POINTS} />)
+    const map = fitBounds.mock.contexts[0] as LeafletMap
+
+    // 用户先拖过地图（正常态下此后不再自动适配）
+    act(() => {
+      map.fire('dragstart')
+    })
+    act(() => {
+      map.fire('resize', { oldSize: undefined, newSize: undefined })
+    })
+    expect(fitBounds.mock.calls.length).toBe(1)
+
+    // 进入录制态：必须无条件重新适配，否则成片取景会停在用户拖拽的位置
+    rerender(<ActivityMap points={TWO_POINTS} exportStage />)
+    const baseline = fitBounds.mock.calls.length
+    act(() => {
+      map.fire('resize', { oldSize: undefined, newSize: undefined })
+    })
+
+    expect(fitBounds.mock.calls.length).toBe(baseline + 1)
+  })
 })

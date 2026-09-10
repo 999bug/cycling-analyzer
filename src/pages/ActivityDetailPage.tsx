@@ -11,7 +11,7 @@
  * 训练分析在渲染层调用纯函数（records ≤ 万级，性能可接受），
  * 依赖用户配置的 FTP/最大心率（规格 §26：无配置不伪造计算）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { ActivityRecord, TrackOffset } from '@/types/activity'
 import type { CoordinateSystem } from '@/geo/coordinateSystem'
@@ -47,11 +47,15 @@ import { calculateNormalizedPower } from '@/features/analysis/normalizedPower'
 import { calculateIntensityFactor, calculateTss } from '@/features/analysis/intensity'
 import { buildGpx, buildGpxFileName, downloadGpx } from '@/features/activity/gpxExport'
 import {
+  buildVideoCaptionTexts,
   buildVideoFileName,
   downloadVideo,
   exportTrackReplayVideo,
   resolveVideoDuration,
+  type TrackVideoExportResult,
 } from '@/features/activity/trackVideoExport'
+import { requestTabCaptureStream, startPageCapture } from '@/features/activity/pageCaptureExport'
+import type { ReplayExportSession } from '@/map/TrackReplay'
 import VideoExportDialog from '@/features/activity/VideoExportDialog'
 import type { VideoExportSettings } from '@/features/activity/videoExportSettings'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
@@ -263,6 +267,10 @@ function ActivityDetailPage() {
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   /** 录制进度文案（「录制中 x/y 秒」，录制中在面板底部展示） */
   const [videoProgressLabel, setVideoProgressLabel] = useState<string>()
+  /** 导出录制态：地图切成「黑底 + 居中竖屏画框」，供真实页面录制裁出成片 */
+  const [videoExportStage, setVideoExportStage] = useState(false)
+  /** 导出录制会话：交给回放组件自动按倍速开播，播完回报（见 TrackReplay） */
+  const [replayExportSession, setReplayExportSession] = useState<ReplayExportSession>()
   // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网，记忆到 localStorage）
   const [replayMode, setReplayMode] = useState(false)
   const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
@@ -546,10 +554,100 @@ function ActivityDetailPage() {
   }
 
   /**
-   * 导出轨迹回放视频（方案 B）：按面板选项生成 MP4/WebM 回放并下载。
-   * 底图恒为高德（GCJ-02），轨迹按活动落库坐标系 + 微调量投影后绘制，与页面地图一致；
-   * 字幕取活动真实数据，缺失字段整行省略（规格 §25 不伪造）。
-   * 浏览器不支持 MediaRecorder 或无轨迹时按钮已禁用，此处兜底静默返回。
+   * 回放结束解析器：录制开播前登记，回放走到终态时由回放组件回调触发。
+   * 用 ref 而非 state——它只是跨调用栈的握手，不参与渲染。
+   */
+  const replayEndedRef = useRef<(() => void) | null>(null)
+
+  /**
+   * 「真实页面录制」路线：取标签页流 → 进录制舞台 → 回放自动开播 → 收尾取片。
+   *
+   * 录的是真实标签页（真实 Leaflet 渲染 + 真实控件 + 回放控制栏），观感与录屏工具一致。
+   * 代价是需要用户授权共享当前标签页，故放在自绘路线之前、失败即回退。
+   *
+   * @param settings 面板选项（底图/比例/字幕开关）
+   * @param durationSeconds 目标成片时长（秒，用于反推回放倍速）
+   * @param captionData 字幕数据（里程/爬升/运动时长，取活动真实值）
+   * @returns 成片；环境不支持、用户未授权或录制失败时 undefined（调用方回退自绘路线）
+   */
+  async function recordRealPage(
+    settings: VideoExportSettings,
+    durationSeconds: number,
+    captionData: {
+      distanceMeters?: number
+      elevationGainMeters?: number
+      movingSeconds?: number
+    },
+  ): Promise<TrackVideoExportResult | undefined> {
+    // getDisplayMedia 必须由用户手势直接触发：这一行之前不能插入其他 await
+    const stream = await requestTabCaptureStream()
+    if (stream === undefined) {
+      return undefined
+    }
+    // 底图选项：非「跟随当前」时先切过去，让瓦片尽早开始加载（录制前会等瓦片稳定）
+    if (settings.mapMode !== 'follow' && settings.mapMode !== mapMode) {
+      handleMapModeChange(settings.mapMode)
+    }
+    const wasReplayMode = replayMode
+    setVideoExportStage(true)
+    setVideoProgressLabel('正在准备录制…')
+    // 倍速由目标时长反推（与录屏技能同一算法：运动时长 ÷ 目标秒数）
+    const movingSeconds = activity?.duration ?? 0
+    const speed = Math.max(1, Math.round(movingSeconds / Math.max(durationSeconds, 1)))
+    const session = await startPageCapture(stream, {
+      captions: buildVideoCaptionTexts({
+        ...captionData,
+        videoSeconds: durationSeconds,
+        showHook: settings.hook,
+        showDataLine: settings.dataLine,
+      }),
+      aspectRatio: settings.aspectRatio,
+      maxSeconds: durationSeconds,
+    })
+    if (session === undefined) {
+      setVideoExportStage(false)
+      setVideoProgressLabel(undefined)
+      return undefined
+    }
+
+    let result: TrackVideoExportResult | undefined
+    let guardId: ReturnType<typeof setTimeout> | undefined
+    try {
+      // 片头静止画面录完后开播：此时画面已是整条轨迹的全景
+      await session.ready
+      const ended = new Promise<void>((resolve) => {
+        replayEndedRef.current = resolve
+      })
+      // 兜底：回放未走到终态（异常/被中断）也不能一直挂着（录制会话自身另有硬超时）
+      guardId = setTimeout(
+        () => replayEndedRef.current?.(),
+        (durationSeconds + 5) * 1000,
+      )
+      setReplayMode(true)
+      setReplayExportSession({ speed, onEnded: () => replayEndedRef.current?.() })
+      await ended
+      setVideoProgressLabel('正在生成视频…')
+      result = await session.finish()
+    } finally {
+      if (guardId !== undefined) {
+        clearTimeout(guardId)
+      }
+      replayEndedRef.current = null
+      setReplayExportSession(undefined)
+      setReplayMode(wasReplayMode)
+      setVideoExportStage(false)
+      session.dispose()
+    }
+    return result
+  }
+
+  /**
+   * 导出轨迹回放视频：优先录**真实页面**，不可用时回退 canvas 自绘。
+   *
+   * 两条路线的取舍：真实页面录制的观感与录屏工具一致（真实地图控件、回放控制栏），
+   * 但需要用户授权共享当前标签页；自绘路线零依赖零授权、人人可用，
+   * 代价是画不出真实控件与操作栏（这是此前的默认行为）。
+   * 字幕两条路线同源（{@link buildVideoCaptionTexts}），取活动真实数据、缺失字段整行省略。
    *
    * @param settings 面板选项（比例/时长/底图/字幕）
    */
@@ -561,22 +659,25 @@ function ActivityDetailPage() {
     try {
       const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
       const durationSeconds = resolveVideoDuration(settings.duration, activity.distance)
-      setVideoProgressLabel(`录制中 0/${durationSeconds} 秒`)
-      const result = await exportTrackReplayVideo(cleanedRecords.cleaned, trackName, {
-        durationSeconds,
-        aspectRatio: settings.aspectRatio,
-        mapMode: settings.mapMode,
-        coordinateSystem: activity.coordinateSystem,
-        trackOffset: activity.trackOffset,
-        captions: {
-          hook: settings.hook,
-          dataLine: settings.dataLine,
-          distanceMeters: activity.distance,
-          elevationGainMeters: activity.elevationGain,
-          movingSeconds: activity.duration,
-        },
-        onProgress: (elapsed, total) => setVideoProgressLabel(`录制中 ${elapsed}/${total} 秒`),
-      })
+      const captionData = {
+        distanceMeters: activity.distance,
+        elevationGainMeters: activity.elevationGain,
+        movingSeconds: activity.duration,
+      }
+
+      const recorded = await recordRealPage(settings, durationSeconds, captionData)
+      const result =
+        recorded ??
+        (await exportTrackReplayVideo(cleanedRecords.cleaned, trackName, {
+          durationSeconds,
+          aspectRatio: settings.aspectRatio,
+          mapMode: settings.mapMode,
+          coordinateSystem: activity.coordinateSystem,
+          trackOffset: activity.trackOffset,
+          captions: { ...captionData, hook: settings.hook, dataLine: settings.dataLine },
+          onProgress: (elapsed, total) => setVideoProgressLabel(`录制中 ${elapsed}/${total} 秒`),
+        }))
+
       if (result !== undefined) {
         downloadVideo(buildVideoFileName(activity.fileName, result.extension), result.blob)
         setVideoDialogOpen(false)
@@ -804,7 +905,7 @@ function ActivityDetailPage() {
             className="activity-detail__export"
             onClick={() => setVideoDialogOpen(true)}
             disabled={!hasTrack}
-            title={hasTrack ? '生成竖屏回放视频：真实地图底图，光标实时显示速度/心率/功率，可带中文字幕' : '该活动无轨迹坐标，无法导出'}
+            title={hasTrack ? '生成竖屏回放视频：录制真实地图画面（需授权共享当前标签页，不支持时自动改用内置绘制），可带中文字幕' : '该活动无轨迹坐标，无法导出'}
           >
             生成竖屏视频
           </button>
@@ -938,6 +1039,8 @@ function ActivityDetailPage() {
           onHover={setHoverTimestamp}
           replayEnabled={replayMode}
           replayMotionSource={cleanedRecords.cleaned}
+          replayExportSession={replayExportSession}
+          exportStage={videoExportStage}
           mapMode={mapMode}
           onMapModeChange={handleMapModeChange}
           distanceUnit={distanceUnit}
