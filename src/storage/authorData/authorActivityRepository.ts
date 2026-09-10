@@ -15,7 +15,9 @@ import {
   type ActivityReadRepository,
   type ActivitySummary,
   type RecordQueryOptions,
+  type RouteEndpoints,
 } from '@/storage/repositories/activityRepository'
+import { readRouteEndpoints } from '@/storage/repositories/activityRepository'
 import type { SnapshotClient } from '@/storage/authorData/snapshotClient'
 
 /** 作者快照只读活动仓库。 */
@@ -45,6 +47,12 @@ export class AuthorActivityRepository implements ActivityReadRepository {
     // 接口完整性起见返回空映射（调用方不应在作者源下依赖此方法）
     void activityIds
     return new Map()
+  }
+
+  async getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined> {
+    // 只读源：端点由 CI 预计算写进摘要，缺失时不回退读取轨迹（快照逐点按活动文件加载，代价高）
+    const summary = await this.getById(activityId)
+    return summary === undefined ? undefined : readRouteEndpoints(summary)
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {

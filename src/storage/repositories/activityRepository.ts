@@ -9,6 +9,7 @@
  */
 import type { Activity, ActivityRecord } from '@/types/activity';
 import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
+import { localDateKeyFromIso } from '@/utils/format';
 
 /**
  * 活动摘要（不含 records/route）。
@@ -25,6 +26,18 @@ export interface RecordQueryOptions {
 
   /** 分页条数（0 或省略 = 全部） */
   limit?: number;
+}
+
+/**
+ * 轨迹首尾有效坐标（路线分组用）。
+ * 两端均取「首个/最后一个带坐标的记录」，缺坐标的活动视为无端点。
+ */
+export interface RouteEndpoints {
+  /** 起点坐标 */
+  start: { latitude: number; longitude: number };
+
+  /** 终点坐标 */
+  end: { latitude: number; longitude: number };
 }
 
 /**
@@ -54,10 +67,10 @@ export interface ActivityListOptions {
   /** 分页条数（默认 20，0 = 不分页） */
   limit?: number;
 
-  /** 年份筛选（ISO 年份前缀，如 2026） */
+  /** 年份筛选（本地日期年份，如 2026） */
   year?: string;
 
-  /** 月份筛选（ISO 月份前缀，如 2026-08） */
+  /** 月份筛选（本地日期月份，如 2026-08） */
   month?: string;
 
   /** 运动类型筛选 */
@@ -102,10 +115,10 @@ export interface ActivityListOptions {
   /** 最大平均功率（W，undefined = 不限制；功率缺失的活动不满足条件） */
   maxAvgPower?: number;
 
-  /** 起始日期下界（YYYY-MM-DD，按活动 UTC 日期前缀比较，含边界） */
+  /** 起始日期下界（YYYY-MM-DD，按活动本地日期比较，含边界） */
   startTimeFrom?: string;
 
-  /** 结束日期上界（YYYY-MM-DD，按活动 UTC 日期前缀比较，含边界） */
+  /** 结束日期上界（YYYY-MM-DD，按活动本地日期比较，含边界） */
   startTimeTo?: string;
 }
 
@@ -170,6 +183,18 @@ export interface ActivityReadRepository {
    * @returns 活动ID → 逐点记录 分组映射
    */
   getRecordsByActivityIds(activityIds: readonly string[]): Promise<Map<string, ActivityRecord[]>>;
+
+  /**
+   * 读取活动的路线首尾有效坐标（路线分组 / 相似骑行用）。
+   *
+   * 优先取摘要上冗余的 route{Start,End}{Latitude,Longitude}；缺失时（旧活动）
+   * 回退读取逐点轨迹并写回摘要，使该活动下次起不再加载完整轨迹——
+   * 即「首次自愈、后续零轨迹读取」。作者快照实现只读摘要，不做写回。
+   *
+   * @param activityId 活动 ID
+   * @returns 首尾坐标；活动不存在或无有效坐标时 undefined
+   */
+  getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined>;
 
   /**
    * 列表查询：排序 + 分页 + 月份/类型筛选 + 文本搜索 + 距离/爬升/功率数值筛选。
@@ -328,10 +353,10 @@ export function queryActivityList(
 
   let items = [...all];
   if (year) {
-    items = items.filter((a) => a.startTime.startsWith(String(year)));
+    items = items.filter((a) => localDateKeyFromIso(a.startTime)?.startsWith(String(year)) === true);
   }
   if (month) {
-    items = items.filter((a) => a.startTime.startsWith(month));
+    items = items.filter((a) => localDateKeyFromIso(a.startTime)?.startsWith(month) === true);
   }
   if (activityType) {
     items = items.filter((a) => a.activityType === activityType);
@@ -347,12 +372,18 @@ export function queryActivityList(
     }
   }
 
-  // 日期区间筛选（按活动 UTC 日期前缀 YYYY-MM-DD 比较，含边界；自定义筛选日期条件）
+  // 日期区间筛选（按活动本地日期 YYYY-MM-DD 比较，含边界；自定义筛选日期条件）
   if (startTimeFrom !== undefined) {
-    items = items.filter((a) => a.startTime.slice(0, 10) >= startTimeFrom);
+    items = items.filter((a) => {
+      const dateKey = localDateKeyFromIso(a.startTime);
+      return dateKey !== undefined && dateKey >= startTimeFrom;
+    });
   }
   if (startTimeTo !== undefined) {
-    items = items.filter((a) => a.startTime.slice(0, 10) <= startTimeTo);
+    items = items.filter((a) => {
+      const dateKey = localDateKeyFromIso(a.startTime);
+      return dateKey !== undefined && dateKey <= startTimeTo;
+    });
   }
 
   // 数值范围筛选（单位与领域模型一致：距离米、时长秒、爬升米、速度 m/s、心率 bpm、功率 W；
@@ -470,6 +501,24 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async getById(id: string): Promise<ActivitySummary | undefined> {
     return this.db.activities.get(id);
+  }
+
+  async getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined> {
+    const summary = await this.db.activities.get(activityId);
+    if (summary === undefined) {
+      return undefined;
+    }
+    const stored = readRouteEndpoints(summary);
+    if (stored !== undefined) {
+      return stored;
+    }
+    // 旧活动：摘要缺冗余端点，读一次轨迹后写回，后续加载不再触碰逐点数据
+    const records = await this.getRecords(activityId);
+    const extracted = extractRouteEndpoints(records);
+    if (extracted !== undefined) {
+      await this.db.activities.update(activityId, toRouteEndpointFields(records));
+    }
+    return extracted;
   }
 
   async getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]> {
@@ -679,6 +728,68 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     coordinateSystem: activity.coordinateSystem,
     sourceApp: activity.sourceApp,
     trackOffset: activity.trackOffset,
+    ...toRouteEndpointFields(activity.records),
+  };
+}
+
+/** 提取并持久化首尾有效坐标，避免路线分组为读取端点加载完整轨迹。 */
+function toRouteEndpointFields(records: ActivityRecord[] | undefined): Pick<
+  ActivityEntity,
+  'routeStartLatitude' | 'routeStartLongitude' | 'routeEndLatitude' | 'routeEndLongitude'
+> {
+  const endpoints = extractRouteEndpoints(records ?? []);
+  return {
+    routeStartLatitude: endpoints?.start.latitude,
+    routeStartLongitude: endpoints?.start.longitude,
+    routeEndLatitude: endpoints?.end.latitude,
+    routeEndLongitude: endpoints?.end.longitude,
+  };
+}
+
+/**
+ * 从逐点数据提取首尾有效坐标（跳过无坐标的记录点）。
+ *
+ * @param records 逐点记录（按时间升序）
+ * @returns 首尾坐标；无任何坐标点返回 undefined
+ */
+function extractRouteEndpoints(records: readonly ActivityRecord[]): RouteEndpoints | undefined {
+  let start: RouteEndpoints['start'] | undefined;
+  let end: RouteEndpoints['end'] | undefined;
+  for (const record of records) {
+    if (record.latitude === undefined || record.longitude === undefined) {
+      continue;
+    }
+    const point = { latitude: record.latitude, longitude: record.longitude };
+    if (start === undefined) {
+      start = point;
+    }
+    end = point;
+  }
+  if (start === undefined || end === undefined) {
+    return undefined;
+  }
+  return { start, end };
+}
+
+/**
+ * 从活动摘要读取冗余的首尾坐标（四个字段齐全才算有效）。
+ *
+ * @param summary 活动摘要
+ * @returns 首尾坐标；字段缺失返回 undefined
+ */
+export function readRouteEndpoints(summary: ActivityEntity): RouteEndpoints | undefined {
+  const { routeStartLatitude, routeStartLongitude, routeEndLatitude, routeEndLongitude } = summary;
+  if (
+    routeStartLatitude === undefined ||
+    routeStartLongitude === undefined ||
+    routeEndLatitude === undefined ||
+    routeEndLongitude === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    start: { latitude: routeStartLatitude, longitude: routeStartLongitude },
+    end: { latitude: routeEndLatitude, longitude: routeEndLongitude },
   };
 }
 

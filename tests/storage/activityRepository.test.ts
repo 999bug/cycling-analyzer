@@ -2,7 +2,7 @@
  * 活动仓库测试（规格 §18）：CRUD、fingerprint 唯一性、列表查询、范围聚合。
  */
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Activity, ActivityRecord } from '@/types/activity';
 import { CyclingDatabase } from '@/storage/db';
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository';
@@ -79,6 +79,12 @@ describe('DexieActivityRepository', () => {
       });
       expect(summary).not.toHaveProperty('records');
       expect(summary).not.toHaveProperty('route');
+      expect(summary).toMatchObject({
+        routeStartLatitude: 39.9,
+        routeStartLongitude: 116.4,
+        routeEndLatitude: 39.9,
+        routeEndLongitude: 116.4,
+      });
 
       const records = await repo.getRecords(activity.id);
       expect(records).toHaveLength(2);
@@ -142,6 +148,57 @@ describe('DexieActivityRepository', () => {
 
       expect(await repo.countActivities()).toBe(2);
       expect((await repo.getById(second.id))?.fingerprint).toBe(second.fingerprint);
+    });
+  });
+
+  describe('getRouteEndpoints', () => {
+    it('摘要已有端点时直接返回，不读取逐点轨迹', async () => {
+      const activity = makeActivity({ records: [makeRecord(1), makeRecord(2)] });
+      await repo.addActivity(activity);
+      const spy = vi.spyOn(repo, 'getRecords');
+
+      await expect(repo.getRouteEndpoints(activity.id)).resolves.toEqual({
+        start: { latitude: 39.9, longitude: 116.4 },
+        end: { latitude: 39.9, longitude: 116.4 },
+      });
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('旧活动缺端点时读取一次轨迹并写回摘要，再次读取不再触碰轨迹', async () => {
+      const activity = makeActivity({ records: [makeRecord(1), makeRecord(2)] });
+      await repo.addActivity(activity);
+      // 模拟旧活动：摘要上没有冗余端点（历史数据导入时未写入）
+      await db.activities.update(activity.id, {
+        routeStartLatitude: undefined,
+        routeStartLongitude: undefined,
+        routeEndLatitude: undefined,
+        routeEndLongitude: undefined,
+      });
+      const spy = vi.spyOn(repo, 'getRecords');
+
+      await expect(repo.getRouteEndpoints(activity.id)).resolves.toEqual({
+        start: { latitude: 39.9, longitude: 116.4 },
+        end: { latitude: 39.9, longitude: 116.4 },
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+      await expect(repo.getById(activity.id)).resolves.toMatchObject({
+        routeStartLatitude: 39.9,
+        routeStartLongitude: 116.4,
+        routeEndLatitude: 39.9,
+        routeEndLongitude: 116.4,
+      });
+
+      // 回填生效：第二次查询走摘要，不再反序列化逐点数据
+      await repo.getRouteEndpoints(activity.id);
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it('无坐标点 / 不存在的活动返回 undefined', async () => {
+      const activity = makeActivity({ records: [{ timestamp: 1, speed: 8.3 }] });
+      await repo.addActivity(activity);
+
+      await expect(repo.getRouteEndpoints(activity.id)).resolves.toBeUndefined();
+      await expect(repo.getRouteEndpoints('not-exist')).resolves.toBeUndefined();
     });
   });
 
@@ -240,6 +297,35 @@ describe('DexieActivityRepository', () => {
 
       const empty = await repo.listActivities({ year: '2024' });
       expect(empty.total).toBe(0);
+    });
+
+    it('日期筛选按本地日期而非 ISO 字符串前缀归类', async () => {
+      const originalTimezone = process.env.TZ;
+      process.env.TZ = 'Asia/Shanghai';
+      try {
+        // UTC 8 月 31 日晚间在东八区已是 9 月 1 日，旧 ISO 前缀实现会错误归入 8 月。
+        const localSeptember = '2026-09-01';
+        const boundary = '2026-08-31T23:30:00.000Z';
+        const previous = '2026-08-31T08:00:00.000Z';
+        await seed([{ startTime: boundary }, { startTime: previous }]);
+
+        const byMonth = await repo.listActivities({ month: '2026-09' });
+        const byRange = await repo.listActivities({
+          startTimeFrom: localSeptember,
+          startTimeTo: localSeptember,
+        });
+
+        expect(byMonth.items.some((item) => item.startTime === boundary)).toBe(true);
+        expect(byMonth.items.some((item) => item.startTime === previous)).toBe(false);
+        expect(byRange.items.some((item) => item.startTime === boundary)).toBe(true);
+        expect(byRange.items.some((item) => item.startTime === previous)).toBe(false);
+      } finally {
+        if (originalTimezone === undefined) {
+          delete process.env.TZ;
+        } else {
+          process.env.TZ = originalTimezone;
+        }
+      }
     });
 
     it('按运动类型筛选', async () => {

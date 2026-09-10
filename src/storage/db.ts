@@ -135,6 +135,14 @@ export interface ActivityEntity {
 
   /** 轨迹手动微调量（米；非索引字段，免升版本） */
   trackOffset?: TrackOffset;
+
+  /** 轨迹首个有效坐标（非索引字段；SimilarRides 分组无需加载完整轨迹） */
+  routeStartLatitude?: number;
+  routeStartLongitude?: number;
+
+  /** 轨迹最后一个有效坐标（非索引字段；SimilarRides 分组无需加载完整轨迹） */
+  routeEndLatitude?: number;
+  routeEndLongitude?: number;
 }
 
 /**

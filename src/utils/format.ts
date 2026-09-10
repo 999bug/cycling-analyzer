@@ -97,6 +97,23 @@ export function formatDate(iso: string | null | undefined): string {
 }
 
 /**
+ * 将 ISO 时间转换为本地时区日期键。
+ *
+ * @param iso ISO 8601 时间字符串
+ * @returns 本地日期键；输入无效时返回 undefined
+ */
+export function localDateKeyFromIso(iso: string | null | undefined): string | undefined {
+  if (iso == null) {
+    return undefined
+  }
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return undefined
+  }
+  return localDateKey(date)
+}
+
+/**
  * 本地时区日期键（YYYY-MM-DD，两位补零）。
  *
  * @param date 日期
