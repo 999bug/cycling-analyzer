@@ -70,44 +70,38 @@
   transition: none;
 }
 
-/* ---- 自动收回：贴边抓条与图钉按钮 ---- */
+/* ---- 自动收回：展开按钮与图钉按钮 ---- */
 
-/* 贴边抓条（仅收起态渲染）：透明热区比可见细条宽，便于命中 */
-.app-layout__sidebar-handle {
+/* 展开按钮（仅收起态渲染）：与侧栏顶部 logo 同高，点击滑出侧栏；
+   悬停只高亮不展开，避免鼠标从左侧划过时误触发 */
+.app-layout__sidebar-expand {
   position: absolute;
-  top: 50%;
-  left: 0;
+  top: 24px;
+  left: 8px;
   z-index: 30;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 64px;
-  transform: translateY(-50%);
-  border: none;
-  background: transparent;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  color: var(--text-secondary);
   cursor: pointer;
-}
-
-.app-layout__sidebar-handle::before {
-  content: '';
-  display: block;
-  width: 4px;
-  height: 40px;
-  border-radius: 0 4px 4px 0;
-  background-color: color-mix(in srgb, var(--text) 32%, transparent);
   transition:
     background-color 0.15s ease,
-    height 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.app-layout__sidebar-handle:hover::before,
-.app-layout__sidebar-handle:focus-visible::before {
-  height: 56px;
-  background-color: var(--primary);
+.app-layout__sidebar-expand:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background-color: var(--bg-elevated);
+  color: var(--text);
 }
 
-.app-layout__sidebar-handle:focus-visible {
+.app-layout__sidebar-expand:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -118,9 +112,9 @@
  * 避免浅色/深色主题下与图片底色撞色导致看不清。
  */
 .app-layout__pin {
-  --pin-surface: rgba(255, 255, 255, 0.88);
+  --pin-surface: rgba(255, 255, 255, 0.92);
   --pin-surface-hover: #ffffff;
-  --pin-border: rgba(13, 59, 76, 0.16);
+  --pin-border: rgba(13, 59, 76, 0.3);
   --pin-ink: #0d3b4c;
 
   position: absolute;
@@ -131,31 +125,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  width: 34px;
+  height: 30px;
   border: 1px solid var(--pin-border);
-  border-radius: 7px;
+  border-radius: 8px;
   background-color: var(--pin-surface);
   color: var(--pin-ink);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease,
-    opacity 0.15s ease;
+    border-color 0.15s ease;
 }
 
-/* 非固定态（自动收回）：图标淡化并带斜杠，与高亮态形成对比 */
-.app-layout__pin:not(.app-layout__pin--pinned) svg {
-  opacity: 0.55;
-}
-
+/* 固定 / 自动收回两态只靠斜杠区分，图标保持实色（淡化后在白底 logo 上偏糊） */
 .app-layout__pin:hover {
   background-color: var(--pin-surface-hover);
-  border-color: color-mix(in srgb, var(--pin-ink) 40%, transparent);
-}
-
-.app-layout__pin:hover svg {
-  opacity: 1;
+  border-color: color-mix(in srgb, var(--pin-ink) 55%, transparent);
 }
 
 .app-layout__pin:focus-visible {
@@ -428,8 +413,8 @@
     border-right-width: 1px;
   }
 
-  /* 贴边抓条与图钉按钮仅桌面端使用 */
-  .app-layout__sidebar-handle,
+  /* 展开按钮与图钉按钮仅桌面端使用 */
+  .app-layout__sidebar-expand,
   .app-layout__pin {
     display: none;
   }

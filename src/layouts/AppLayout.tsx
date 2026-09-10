@@ -52,8 +52,8 @@ const SIDEBAR_COLLAPSE_DELAY_MS = 300
  *
  * 桌面端侧边栏行为可配置（设置页「外观」或侧边栏顶部图钉按钮切换）：
  * - 固定（默认）：常驻 220px
- * - 自动收回：鼠标移入滑出展开，移出 300ms 后收起；收起态左侧只留贴边抓条，
- *   品牌 logo 随侧栏一起隐藏。键盘焦点进入侧栏时保持展开，
+ * - 自动收回：鼠标移入滑出展开，移出 300ms 后收起；收起态左上角（原 logo 位）
+ *   显示展开按钮，点击即可滑出，品牌 logo 随侧栏一起隐藏。键盘焦点进入侧栏时保持展开，
  *   Escape 立即收起；收起时内层容器加 inert，避免焦点落进不可见区域。
  */
 function AppLayout() {
@@ -180,18 +180,26 @@ function AppLayout() {
         />
       )}
 
-      {/* 自动收回模式的贴边抓条（仅收起态渲染；移动端由样式隐藏） */}
+      {/* 自动收回模式的展开按钮（仅收起态渲染）：点击展开；
+          悬停只高亮不展开，避免鼠标从左侧划过时误触发 */}
       {sidebarCollapsed && (
         <button
           type="button"
-          className="app-layout__sidebar-handle"
+          className="app-layout__sidebar-expand"
           aria-label="展开侧边栏"
           aria-controls="app-nav"
           aria-expanded={false}
           onClick={revealSidebar}
-          onMouseEnter={revealSidebar}
-          onFocus={revealSidebar}
-        />
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path
+              d="M3 5h12M3 9h12M3 13h12"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       )}
 
       {/* 悬停/焦点事件始终绑定：固定模式下不影响渲染（收起判定只看模式与展开态），

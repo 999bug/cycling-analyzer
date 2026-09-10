@@ -2,7 +2,7 @@
  * 桌面端侧边栏「固定 / 自动收回」行为测试。
  *
  * jsdom 不做真实布局（媒体查询与宽度过渡都不生效），因此断言基于 DOM 状态
- * （收起类名、抓条按钮、inert）与交互时序（延迟收起与取消），不依赖像素。
+ * （收起类名、展开按钮、inert）与交互时序（延迟收起与取消），不依赖像素。
  */
 import 'fake-indexeddb/auto'
 import { act, fireEvent, render, screen } from '@testing-library/react'
@@ -59,7 +59,7 @@ describe('桌面端侧边栏行为', () => {
     expect(screen.getByRole('button', { name: /固定常驻/ })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('自动收回：初始收起并出现抓条，内层 inert 挡住键盘焦点', () => {
+  it('自动收回：初始收起并显示展开按钮，内层 inert 挡住键盘焦点', () => {
     useUiStore.setState({ sidebarMode: 'auto' })
     renderLayout()
 
@@ -108,7 +108,7 @@ describe('桌面端侧边栏行为', () => {
     }
   })
 
-  it('抓条点击展开，Escape 立即收起', () => {
+  it('展开按钮点击展开，Escape 立即收起', () => {
     useUiStore.setState({ sidebarMode: 'auto' })
     renderLayout()
 
@@ -121,6 +121,28 @@ describe('桌面端侧边栏行为', () => {
       fireEvent.keyDown(window, { key: 'Escape' })
     })
     expect(isCollapsed()).toBe(true)
+  })
+
+  it('展开按钮悬停或聚焦只高亮，不直接展开', () => {
+    useUiStore.setState({ sidebarMode: 'auto' })
+    renderLayout()
+
+    const expandButton = screen.getByRole('button', { name: '展开侧边栏' })
+
+    act(() => {
+      fireEvent.mouseEnter(expandButton)
+    })
+    expect(isCollapsed()).toBe(true)
+
+    act(() => {
+      fireEvent.focus(expandButton)
+    })
+    expect(isCollapsed()).toBe(true)
+
+    act(() => {
+      fireEvent.click(expandButton)
+    })
+    expect(isCollapsed()).toBe(false)
   })
 
   it('键盘焦点进入侧栏保持展开，焦点移出后延迟收起', () => {
