@@ -32,8 +32,8 @@ import {
 } from '@/stores/dataSourceStore'
 import {
   defaultExportFilename,
-  downloadJson,
-  exportData,
+  downloadJsonStream,
+  exportDataAsStream,
   importBundle,
   parseExportBundle,
 } from '@/features/settings/exportImport'
@@ -322,9 +322,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     }
     setExporting(true)
     try {
-      const bundle = await exportData(context)
-      downloadJson(bundle)
-      setMessage({ type: 'success', text: `数据已导出：${defaultExportFilename(bundle.exportedAt)}` })
+      const result = await exportDataAsStream(context)
+      await downloadJsonStream(result.stream, defaultExportFilename(result.exportedAt))
+      setMessage({ type: 'success', text: `数据已导出：${defaultExportFilename(result.exportedAt)}` })
     } catch (error) {
       console.error('Failed to export data', error)
       setMessage({ type: 'error', text: '导出失败，请重试' })

@@ -98,6 +98,12 @@ export interface ExportOptions {
   now?: Date
 }
 
+/** 流式导出结果：元数据可用于生成文件名，记录内容通过 ReadableStream 逐批产生。 */
+export interface ExportStreamResult {
+  exportedAt: string
+  stream: ReadableStream<Uint8Array>
+}
+
 /** 导入汇总（页面提示文案用） */
 export interface ImportBundleSummary {
   /** 新增活动数 */
@@ -122,11 +128,98 @@ export interface ImportOptions {
 /**
  * 导出全部本地数据为 JSON 数据包（规格 §33）。
  * 逐点记录按活动分批读取，避免数据量大时一次性加载进内存。
+ * 该函数保留给兼容调用方和测试；设置页实际使用 exportDataAsStream。
  *
  * @param options 导出选项
  * @returns 导出数据包（可直接 JSON 序列化）
  */
 export async function exportData(options: ExportOptions = {}): Promise<ExportBundle> {
+  const { activityRepository, recordBatchSize, exportedAt, activities, files, settings, segments } =
+    await loadExportMetadata(options)
+
+  // 逐活动分批读取逐点记录，并补上 activityId（getRecords 返回的领域记录不含归属）
+  const records: ExportedRecord[] = []
+  for (const activity of activities) {
+    for await (const batch of iterateRecordBatches(activityRepository, activity.id, recordBatchSize)) {
+      records.push(...batch)
+    }
+  }
+
+  return {
+    app: EXPORT_APP,
+    version: EXPORT_VERSION,
+    exportedAt,
+    activities,
+    records,
+    files,
+    settings,
+    segments,
+  }
+}
+
+/**
+ * 流式导出全部本地数据。
+ *
+ * 只将活动摘要、台账、设置和赛段元数据保留在内存中；逐点记录按批次编码并写入
+ * ReadableStream，避免设置页同时持有完整 records 数组和 JSON 字符串。浏览器下载
+ * 仍需由 Response.blob() 生成一个最终 Blob，因此这是降低重复内存副本，而非磁盘级流式写入。
+ * 输出 JSON 结构与 exportData 完全一致，保持 v1 备份兼容性。
+ */
+export async function exportDataAsStream(options: ExportOptions = {}): Promise<ExportStreamResult> {
+  const { activityRepository, recordBatchSize, exportedAt, activities, files, settings, segments } =
+    await loadExportMetadata(options)
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      void (async () => {
+        try {
+          controller.enqueue(
+            encoder.encode(
+              `{"app": ${JSON.stringify(EXPORT_APP)},\n  "version": ${EXPORT_VERSION},\n  "exportedAt": ${JSON.stringify(exportedAt)},\n  "activities": ${formatIndentedJson(activities, 2)},\n  "records": [`,
+            ),
+          )
+
+          let firstRecord = true
+          for (const activity of activities) {
+            for await (const batch of iterateRecordBatches(activityRepository, activity.id, recordBatchSize)) {
+              for (const record of batch) {
+              // formatIndentedJson 不给第一行加缩进（静态字段紧跟键名），
+              // records 元素需自行补齐 4 空格，否则起始 `{` 会顶格
+              const separator = firstRecord ? '\n    ' : ',\n    '
+                controller.enqueue(encoder.encode(`${separator}${formatIndentedJson(record, 4)}`))
+                firstRecord = false
+              }
+            }
+          }
+
+          controller.enqueue(
+            encoder.encode(
+              `\n  ],\n  "files": ${formatIndentedJson(files, 2)},\n  "settings": ${formatIndentedJson(settings, 2)},\n  "segments": ${formatIndentedJson(segments, 2)}\n}\n`,
+            ),
+          )
+          controller.close()
+        } catch (error) {
+          controller.error(error)
+        }
+      })()
+    },
+  })
+
+  return { exportedAt, stream }
+}
+
+/** 将 JSON 值按指定的顶层缩进格式化，供流式导出拼接静态字段。 */
+function formatIndentedJson(value: unknown, indent: number): string {
+  const prefix = ' '.repeat(indent)
+  return JSON.stringify(value, null, 2)
+    .split('\n')
+    .map((line, index) => (index === 0 ? line : prefix + line))
+    .join('\n')
+}
+
+/** 读取导出中不随逐点数据增长的元数据，并提前剥离不可 JSON 化的字段。 */
+async function loadExportMetadata(options: ExportOptions) {
   const {
     db: dbInstance = db,
     activityRepository = defaultActivityRepository,
@@ -134,30 +227,17 @@ export async function exportData(options: ExportOptions = {}): Promise<ExportBun
     recordBatchSize = DEFAULT_RECORD_BATCH_SIZE,
     now = new Date(),
   } = options
-
-  const [summaries, files, settings, segments] = await Promise.all([
+  const [activities, files, settings, segments] = await Promise.all([
     activityRepository.listAllSummaries(),
     fileRepository.listAll(),
     dbInstance.settings.toArray(),
     dbInstance.segments.toArray(),
   ])
-
-  // 逐活动分批读取逐点记录，并补上 activityId（getRecords 返回的领域记录不含归属）
-  const records: ExportedRecord[] = []
-  for (const summary of summaries) {
-    const batches = await listRecordsInBatches(activityRepository, summary.id, recordBatchSize)
-    for (const record of batches) {
-      records.push({ ...record, activityId: summary.id })
-    }
-  }
-
   return {
-    app: EXPORT_APP,
-    version: EXPORT_VERSION,
+    activityRepository,
+    recordBatchSize,
     exportedAt: now.toISOString(),
-    activities: summaries,
-    records,
-    // 剥离原始 FIT 字节（规格 §19）：ArrayBuffer 不可 JSON 序列化且体积大
+    activities,
     files: files.map(stripFileData),
     settings,
     segments: segments.map(stripSegmentId),
@@ -284,12 +364,24 @@ export async function importBundle(bundle: ExportBundle, options: ImportOptions 
 
 /**
  * 触发浏览器下载 JSON 备份文件（Blob + 临时 URL + a[download]）。
+ * 该函数保留给兼容调用方；设置页使用 downloadJsonStream 以降低记录导出的内存峰值。
  *
  * @param bundle 导出数据包
  * @param filename 下载文件名（默认 cycling-data-YYYY-MM-DD.json）
  */
 export function downloadJson(bundle: ExportBundle, filename: string = defaultExportFilename(bundle.exportedAt)): void {
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+  downloadBlob(blob, filename)
+}
+
+/** 将流式 JSON 导出结果收束为下载 Blob；避免先构造完整 ExportBundle 和 JSON 字符串。 */
+export async function downloadJsonStream(stream: ReadableStream<Uint8Array>, filename: string): Promise<void> {
+  const blob = await new Response(stream).blob()
+  downloadBlob(blob, filename)
+}
+
+/** 触发 Blob 下载并释放临时对象 URL。 */
+function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -334,28 +426,26 @@ function isExportBundle(value: unknown): value is ExportBundle {
 }
 
 /**
- * 分批读取一个活动的全部逐点记录。
+ * 分批读取一个活动的逐点记录。
  * 分批边界：返回条数小于批大小即视为读取完毕。
  *
  * @param repository 活动仓库
  * @param activityId 活动 ID
  * @param batchSize 每批条数
- * @returns 该活动的全部逐点记录
+ * @returns 该活动的记录批次
  */
-async function listRecordsInBatches(
+async function* iterateRecordBatches(
   repository: ActivityRepository,
   activityId: string,
   batchSize: number,
-): Promise<ActivityRecord[]> {
-  const all: ActivityRecord[] = []
+): AsyncGenerator<ExportedRecord[]> {
   let offset = 0
   for (;;) {
     const batch = await repository.getRecords(activityId, { offset, limit: batchSize })
-    all.push(...batch)
+    yield batch.map((record) => ({ ...record, activityId }))
     if (batch.length < batchSize) {
       break
     }
     offset += batch.length
   }
-  return all
 }

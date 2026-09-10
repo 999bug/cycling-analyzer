@@ -15,6 +15,7 @@ import {
   EXPORT_VERSION,
   defaultExportFilename,
   exportData,
+  exportDataAsStream,
   importBundle,
   parseExportBundle,
   type ExportBundle,
@@ -130,6 +131,31 @@ describe('数据导出', () => {
     expect(bundle.records).toEqual([])
     expect(bundle.files).toEqual([])
     expect(bundle.settings).toEqual([])
+  })
+
+  it('流式导出：输出与普通 bundle 相同的 JSON 结构', async () => {
+    await activityRepo.addActivity(
+      makeActivity('act-stream', 'fp-stream', { records: [makeRecord(1), makeRecord(2)] }),
+    )
+
+    const result = await exportDataAsStream({
+      db,
+      activityRepository: activityRepo,
+      fileRepository: fileRepo,
+      settingsRepository: settingsRepo,
+      recordBatchSize: 1,
+      now: new Date('2026-08-17T12:00:00.000Z'),
+    })
+    const text = await new Response(result.stream).text()
+    const parsed = JSON.parse(text) as ExportBundle
+
+    expect(result.exportedAt).toBe('2026-08-17T12:00:00.000Z')
+    expect(parsed.activities).toHaveLength(1)
+    expect(parsed.records.map((record) => record.timestamp)).toEqual([1, 2])
+    expect(parsed.files).toEqual([])
+    // 逐点记录元素按 4 空格缩进（首行缩进由元素分隔符补齐，内部字段由
+    // formatIndentedJson 补齐）；整段匹配避免被 activities 数组元素蒙混过关
+    expect(text).toContain('\n  "records": [\n    {\n      "timestamp"')
   })
 })
 
