@@ -207,6 +207,52 @@ describe('applyStravaMeta', () => {
     expect(activity.normalizedPower).toBe(200)
   })
 
+  it('CSV 活动类型覆盖文件内解析值（GPX 常无 <type>，CSV 才是权威源）', () => {
+    // GPX 解析器对缺失 <type> 返回空串，CSV 明确写了「跑步」即以此为准
+    const fromGpx = makeActivity({ activityType: '' })
+    applyStravaMeta(fromGpx, {
+      activityId: '1',
+      name: '早上跑步',
+      activityType: '跑步',
+      fileName: 'activities/1.gpx.gz',
+    })
+    expect(fromGpx.activityType).toBe('跑步')
+
+    // 文件内类型与 CSV 不一致时同样以 CSV 为准
+    const mismatch = makeActivity({ activityType: 'cycling' })
+    applyStravaMeta(mismatch, {
+      activityId: '2',
+      name: '午间散步',
+      activityType: '步行',
+      fileName: 'activities/2.fit.gz',
+    })
+    expect(mismatch.activityType).toBe('步行')
+  })
+
+  it('CSV 活动类型列为空时保留文件内解析值', () => {
+    const activity = makeActivity({ activityType: 'ride' })
+    applyStravaMeta(activity, {
+      activityId: '1',
+      name: '晨骑',
+      activityType: '',
+      fileName: 'activities/1.gpx.gz',
+    })
+
+    expect(activity.activityType).toBe('ride')
+  })
+
+  it('CSV 写了本站不认识的类型时原样保留，交由导入层归入 other（不臆测为骑行）', () => {
+    const activity = makeActivity({ activityType: '' })
+    applyStravaMeta(activity, {
+      activityId: '1',
+      name: '皮划艇',
+      activityType: '皮划艇',
+      fileName: 'activities/1.gpx.gz',
+    })
+
+    expect(activity.activityType).toBe('皮划艇')
+  })
+
   it('meta 为空时不修改活动', () => {
     const activity = makeActivity()
     applyStravaMeta(activity, undefined)

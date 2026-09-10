@@ -11,7 +11,8 @@
  * - GPX 无累计距离与速度字段：距离按相邻 GPS 点 haversine 累加，
  *   速度不伪造（undefined，规格 §25），平均速度由汇总计算得出（距离÷时长）；
  * - <gpx creator> 映射 device.productName（如 StravaGPX / Garmin Connect），
- *   <trk><type> 或 <metadata><type> 映射 activityType，缺失默认 cycling。
+ *   <trk><type> 或 <metadata><type> 映射 activityType，**缺失返回空串**
+ *   （不默认 cycling），由导入层按速度特征兜底推断。
  *
  * 运行环境：DOMParser 仅主线程可用（Web Worker 无 DOM），本模块经
  * 动态 import 在主线程按需加载；单文件体量几 MB，解析毫秒级无阻塞风险。
@@ -260,12 +261,15 @@ function childText(parent: Element, tagName: string): string {
 
 /**
  * 读取活动类型：<trk><type> 优先，回退 <metadata><type>；
- * trim + 小写规范化，缺失默认 cycling（本站为骑行数据分析场景）。
+ * trim + 小写规范化。
+ *
+ * **缺失返回空串，不再默认 cycling**。原先的默认值会把跑步/散步也标成骑行
+ * （实测 Strava 导出的 GPX 不含任何 `<type>` 元素，即全部命中该默认值），
+ * 进而污染骑行统计。缺类型属于「源未提供信息」，交由导入层按速度特征
+ * 兜底推断（见 features/activity/activityTypeInference），解析器只做忠实读取。
  */
 function readActivityType(doc: Document): string {
-  const type =
-    doc.getElementsByTagName('type')[0]?.textContent?.trim().toLowerCase() ?? ''
-  return type.length > 0 ? type : 'cycling'
+  return doc.getElementsByTagName('type')[0]?.textContent?.trim().toLowerCase() ?? ''
 }
 
 /** 读取来源识别文本：creator 属性 + metadata 的 name / author name。

@@ -80,3 +80,12 @@
 
 - **`npm run build` 需先 `rm -rf dist`**（2026-09-08）：vite emptyOutDir 触发 WorkBuddy safe-delete shim（移入回收站），dist 1800+ 文件时 genie-trash ETIMEDOUT 导致构建失败；dist 为 gitignored 构建产物，直接 rm 清空后重跑 build 即可。
 - **jest-dom `toHaveValue` 对 input[type=number]**：空值返回 null 而非 ''，`toHaveValue('')` 永远失败；断言空值改用 `(el as HTMLInputElement).value === ''`。userEvent.type 遇 `{xx}` 会按按键语法解析，含花括号输入用 fireEvent.change。
+
+## 已知待修复缺陷
+
+- **卫星底图在作者数据区域退化成矢量图**（2026-09-10 发现，**未修复**）：`src/map/localTiles.ts` 的
+  `parseAmapTileUrl()` 只抠 `x/y/z`、`hasLocalTile()` 查的 `tiles-manifest.json` key 也只有 `"z/x/y"`，
+  **都不含底图模式**；`CachingTileLayer.loadTile()` 的「本地预缓存优先」逻辑于是把卫星(webst style=6)
+  请求也返回本地矢量(webrd style=8)瓦片。表现：访客在作者快照覆盖区域切「卫星 / 卫星+路网」时，
+  旧视口那片显示路网图、其余显示真卫星（混杂）。修复建议（推荐后者）：非 normal 模式跳过本地预缓存
+  直接走在线瓦片（本地本就只预缓存了矢量瓦片），或清单 key 加模式前缀。详见 2026-09-10 日志。

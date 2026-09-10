@@ -46,6 +46,7 @@ import {
 import { formatDate } from '@/utils/format'
 import { formatDistanceByUnit } from '@/features/settings/settings'
 import MetricHelp from '@/components/MetricHelp'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/PerformancePage.css'
 
 /** 表现趋势周数（规格 §39） */
@@ -149,7 +150,7 @@ function PerformancePage() {
         if (cancelled) {
           return
         }
-        const summaries = await repository.listAllSummaries()
+        const summaries = await listCyclingSummaries(repository)
         if (cancelled) {
           return
         }

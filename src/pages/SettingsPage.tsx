@@ -12,12 +12,14 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { useLocation } from 'react-router-dom'
 import { db, type CyclingDatabase } from '@/storage/db'
 import { reloadPage } from '@/utils/navigation'
+import { switchIncludeOtherSports } from '@/features/activity/cyclingScope'
 import { DexieActivityRepository, type ActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieFileRepository, type FileRepository } from '@/storage/repositories/fileRepository'
 import { DexieSettingsRepository, type SettingsRepository } from '@/storage/repositories/settingsRepository'
 import { clearTileCache, getTileCacheStats, type TileCacheStats } from '@/storage/tileCache'
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_DATA,
   DEFAULT_UNITS,
   getSettings,
   saveSettings,
@@ -50,6 +52,7 @@ import {
   estimateFtp,
   estimateVo2max,
 } from '@/features/analysis/ftpEstimate'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/features/settings/settings-page.css'
 
 /** 清空确认文案（规格 §32 二次确认；含影响范围提示） */
@@ -133,6 +136,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   // 侧边栏行为（固定 / 自动收回，切换立即生效并保存；与侧边栏图钉按钮同步）
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(DEFAULT_APPEARANCE.sidebarMode)
 
+  // 数据口径（统计是否包含非骑行运动，默认关闭；切换后整页刷新让各页重新取数）
+  const [includeOtherSports, setIncludeOtherSports] = useState(DEFAULT_DATA.includeOtherSports)
+
   // 导入偏好（保存原始 FIT 文件开关，规格 §19 默认不保存）
   const [saveOriginalFit, setSaveOriginalFit] = useState(false)
 
@@ -175,6 +181,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         // 同步运行时镜像：正常启动路径已由 initSidebarMode 写入，
         // 此处兜底覆盖（如导入备份后设置表被改写）
         useUiStore.getState().setSidebarMode(data.appearance.sidebarMode)
+        setIncludeOtherSports(data.data.includeOtherSports)
         setSaveOriginalFit(data.import.saveOriginalFit)
         setTileCacheEnabled(data.offline.tileCacheEnabled)
       })
@@ -219,7 +226,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       const cutoffIso = new Date(Date.now() - ESTIMATE_WINDOW_DAYS * MS_PER_DAY).toISOString()
       const [settingsData, summaries] = await Promise.all([
         getSettings(context.settingsRepository),
-        context.activityRepository.listAllSummaries(),
+        listCyclingSummaries(context.activityRepository),
       ])
       const powered = summaries.filter(
         (summary) => summary.avgPower !== undefined && summary.startTime >= cutoffIso,
@@ -436,6 +443,32 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
    *
    * @param event 选择事件
    */
+  /**
+   * 切换「统计包含其他运动」。
+   *
+   * 运行时镜像（cyclingScope）用的是模块级变量，各页面在挂载时取数，
+   * 镜像变化不会自动重载——故切换后整页刷新，保证统计口径立即一致。
+   * 这里与「清空数据」「导入完成」同思路，属用户主动操作触发的单次刷新，
+   * 不存在重复刷新风险。
+   *
+   * @param event 开关变更事件
+   */
+  async function handleIncludeOtherSportsChange(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.checked
+    setIncludeOtherSports(next)
+    try {
+      await switchIncludeOtherSports(next, context.settingsRepository)
+      setMessage({
+        type: 'success',
+        text: next ? '统计已改为包含跑步、散步等全部运动' : '统计已改为仅包含骑行',
+      })
+      reloadPage()
+    } catch (error) {
+      console.error('Failed to switch cycling scope', error)
+      setMessage({ type: 'error', text: '保存失败，请重试' })
+    }
+  }
+
   async function handleSidebarModeChange(event: ChangeEvent<HTMLSelectElement>) {
     const next = event.target.value as SidebarMode
     setSidebarMode(next)
@@ -568,6 +601,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     applyTheme('dark')
     setSidebarMode(DEFAULT_APPEARANCE.sidebarMode)
     useUiStore.getState().setSidebarMode(DEFAULT_APPEARANCE.sidebarMode)
+    setIncludeOtherSports(DEFAULT_DATA.includeOtherSports)
     setSaveOriginalFit(false)
     setTileCacheEnabled(true)
     setTileCacheStats({ count: 0, bytes: 0 })
@@ -778,6 +812,32 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
               <option value="fixed">固定（默认）</option>
               <option value="auto">自动收回</option>
             </select>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section" aria-label="数据口径">
+        <h2 className="settings-section__title">数据口径</h2>
+        <p className="settings-section__hint">
+          本站以骑行分析为主。导入 Strava、佳明等批量导出包时，包里可能同时含跑步、
+          散步等非骑行记录——它们默认不计入统计，避免「骑行里程」被撑大。
+          开启后统计页、仪表盘、年度回顾、热力图等会一并计入全部运动；
+          骑行记录列表不受影响，任何类型始终可见、可按类型筛选。
+          切换后页面会自动刷新一次。
+        </p>
+        <div className="settings-fields">
+          <div className="settings-field">
+            <span className="settings-field__label">统计包含其他运动</span>
+            <label className="settings-field__checkbox">
+              <input
+                type="checkbox"
+                checked={includeOtherSports}
+                onChange={handleIncludeOtherSportsChange}
+              />
+              {includeOtherSports
+                ? '统计包含骑行、跑步、散步等全部运动'
+                : '统计仅包含骑行（默认）'}
+            </label>
           </div>
         </div>
       </section>

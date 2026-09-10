@@ -20,6 +20,7 @@ import { useActivityRepository } from '@/hooks/useActivityRepository'
 import type { Activity, ActivityRecord } from '@/types/activity'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { COMPARE_COLORS } from '@/theme/colors'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/features/activity/CompareSection.css'
 
 /** 当前活动轨迹颜色（蓝）与对比活动轨迹颜色（橙；调色板见 theme/colors.ts） */
@@ -87,8 +88,7 @@ function CompareSection({ activity, records, distanceUnit }: CompareSectionProps
   // 加载可对比活动列表（排除自身，最近优先）
   useEffect(() => {
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((all) => {
         if (!cancelled) {
           setSummaries(all.filter((item) => item.id !== activity.id).slice(0, MAX_OPTIONS))

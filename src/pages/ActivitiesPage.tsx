@@ -18,6 +18,8 @@ import BatchRenameDialog from '@/features/activity/BatchRenameDialog'
 import CustomFilterDialog from '@/features/activity/CustomFilterDialog'
 import DeleteActivitiesDialog from '@/features/activity/DeleteActivitiesDialog'
 import BatchFixDialog from '@/features/activity/BatchFixDialog'
+import BatchActivityTypeDialog from '@/features/activity/BatchActivityTypeDialog'
+import { detectTypeSuspects, type TypeSuspect } from '@/features/activity/suspectTypes'
 import { conditionsToBounds, describeCondition, type CustomFilterCondition } from '@/features/activity/customFilter'
 import '@/features/activity/activity-page.css'
 import { useUnits } from '@/hooks/useUnits'
@@ -50,7 +52,10 @@ interface ActivitiesPageProps {
   repository?: ActivityReadRepository
 
   /** 本地写仓库（批量重命名/批量删除/批量纠偏测试注入；缺省弹窗内部直连 Dexie） */
-  writeRepository?: Pick<ActivityRepository, 'updateName' | 'deleteActivity' | 'deleteActivities' | 'updateTrackSystem'>
+  writeRepository?: Pick<
+    ActivityRepository,
+    'updateName' | 'deleteActivity' | 'deleteActivities' | 'updateTrackSystem' | 'updateActivityType'
+  >
 }
 
 /**
@@ -83,6 +88,10 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
   const [fixItems, setFixItems] = useState<ActivitySummary[] | null>(null)
   // 自定义筛选弹窗（预设列表多选 + 新建/修改）
   const [customFilterOpen, setCustomFilterOpen] = useState(false)
+  // 批量修正运动类型：全量摘要（检测候选 + 影响预览）+ 候选列表 + 弹窗开关
+  const [allSummaries, setAllSummaries] = useState<ActivitySummary[]>([])
+  const [typeSuspects, setTypeSuspects] = useState<TypeSuspect[]>([])
+  const [typeFixOpen, setTypeFixOpen] = useState(false)
   // 勾选批量删除：ID → 摘要（跨翻页保留，删除弹窗需要展示摘要）
   const [selectedItems, setSelectedItems] = useState<Map<string, ActivitySummary>>(new Map())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -105,6 +114,7 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
       search: filters.search || undefined,
       year: filters.year || undefined,
       month: filters.month || undefined,
+      activityType: filters.activityType || undefined,
       minDistance: custom.minDistance,
       maxDistance: custom.maxDistance,
       minElevationGain: custom.minElevationGain,
@@ -120,7 +130,13 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
       startTimeFrom: custom.startTimeFrom,
       startTimeTo: custom.startTimeTo,
     }
-  }, [filters.search, filters.year, filters.month, filters.customFilters])
+  }, [
+    filters.search,
+    filters.year,
+    filters.month,
+    filters.activityType,
+    filters.customFilters,
+  ])
 
   const listQuery = useMemo(
     () => ({
@@ -150,6 +166,10 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
         // 显式降序：不依赖仓库返回顺序，保证下拉恒为「最新在前」
         setMonths([...monthSet].sort((a, b) => b.localeCompare(a)))
         setYears([...yearSet].sort((a, b) => b.localeCompare(a)))
+        // 顺带做一次类型复核检测（只读）：全量摘要是检测与影响预览的共同输入。
+        // 放在这里而非单独请求，避免全表再查一遍
+        setAllSummaries(result.items)
+        setTypeSuspects(detectTypeSuspects(result.items))
       })
       .catch(() => {
         // 选项加载失败不阻塞列表展示
@@ -157,7 +177,7 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     return () => {
       cancelled = true
     }
-  }, [repo])
+  }, [repo, reloadKey])
 
   // 查询参数变化时重新加载列表（排序/筛选/翻页/每页条数均触发）
   useEffect(() => {
@@ -336,6 +356,17 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     console.info(`Fixed coordinate system for ${count} activities`)
   }
 
+  /**
+   * 批量修正运动类型完成：刷新列表并重新检测候选。
+   *
+   * 类型不属于 scanKey 指纹（扫描缓存按骑行集合计算，过滤后指纹自然变化），
+   * 故热力图等页面下次进入会自动重算，无需额外失效处理。
+   */
+  function handleTypeFixed(count: number) {
+    setReloadKey((k) => k + 1)
+    console.info(`Fixed activity type for ${count} activities`)
+  }
+
   // 分页：切页 / 翻页（每页条数变更单独处理并回第一页）
   function handlePageChange(page: number) {
     setQuery((prev) => ({ ...prev, offset: (page - 1) * pageSize }))
@@ -390,9 +421,11 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
         months={monthOptions}
         year={filters.year}
         month={filters.month}
+        activityType={filters.activityType}
         search={filters.search}
         onYearChange={handleYearChange}
         onMonthChange={handleMonthChange}
+        onActivityTypeChange={filters.setActivityType}
         onSearchChange={handleSearchChange}
         presetNames={Object.keys(filters.presets)}
         onApplyPreset={handleApplyPreset}
@@ -405,6 +438,10 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
         onOpenBatchRename={handleOpenBatchRename}
         batchRenameDisabled={batchDisabled}
         batchRenameDisabledReason={batchDisabledReason}
+        onOpenBatchType={() => setTypeFixOpen(true)}
+        batchTypeSuspectCount={typeSuspects.length}
+        batchTypeDisabled={batchDisabled}
+        batchTypeDisabledReason={batchDisabledReason}
       />
       {/* 排序操作条：状态文案已移除（用户指定），仅排序偏离默认时显示重置按钮；兼勾选操作区 */}
       <div className="activity-sort-bar">
@@ -495,6 +532,16 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
           writeRepository={writeRepository}
           onClose={() => setFixItems(null)}
           onFixed={handleFixed}
+        />
+      )}
+      {typeFixOpen && (
+        <BatchActivityTypeDialog
+          suspects={typeSuspects}
+          allSummaries={allSummaries}
+          writeRepository={writeRepository}
+          distanceUnit={distanceUnit}
+          onClose={() => setTypeFixOpen(false)}
+          onApplied={handleTypeFixed}
         />
       )}
       {deleteDialogOpen && selectedCount > 0 && (

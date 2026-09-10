@@ -16,6 +16,7 @@ import { DeferredMount } from '@/components/DeferredMount'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/DashboardPage.css'
 
 /**
@@ -33,8 +34,7 @@ function DashboardPage() {
 
   const reload = useCallback(() => {
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((summaries) => {
         if (!cancelled) {
           setData(buildDashboardData(summaries))

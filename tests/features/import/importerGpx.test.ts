@@ -10,7 +10,9 @@ import { DexieActivityRepository } from '@/storage/repositories/activityReposito
 import { DexieFileRepository } from '@/storage/repositories/fileRepository';
 import { importFiles, type ImportFile } from '@/features/import/importer';
 
-/** 最小可用 GPX（带内部轨迹名与两点轨迹） */
+/** 最小可用 GPX（带内部轨迹名与两点轨迹）。
+ *  两点间距约 1.4km、间隔 3 分钟 → 均速约 28km/h，属骑行节奏：
+ *  缺 `<type>` 时导入层按速度特征兜底推断，夹具需落在骑行区间才能验证常规路径。 */
 function gpxWithTrackName(name: string): string {
   return `<?xml version="1.0"?>
 <gpx creator="StravaGPX">
@@ -18,7 +20,7 @@ function gpxWithTrackName(name: string): string {
     <name>${name}</name>
     <trkseg>
       <trkpt lat="39.9400" lon="116.1000"><ele>100</ele><time>2024-05-01T01:00:00Z</time></trkpt>
-      <trkpt lat="39.9500" lon="116.1100"><ele>120</ele><time>2024-05-01T01:30:00Z</time></trkpt>
+      <trkpt lat="39.9500" lon="116.1100"><ele>120</ele><time>2024-05-01T01:03:00Z</time></trkpt>
     </trkseg>
   </trk>
 </gpx>`
@@ -29,7 +31,7 @@ const gpxWithoutName = `<?xml version="1.0"?>
 <gpx creator="t">
   <trk><trkseg>
     <trkpt lat="39.9400" lon="116.1000"><time>2024-05-01T01:00:00Z</time></trkpt>
-    <trkpt lat="39.9500" lon="116.1100"><time>2024-05-01T01:30:00Z</time></trkpt>
+    <trkpt lat="39.9500" lon="116.1100"><time>2024-05-01T01:03:00Z</time></trkpt>
   </trkseg></trk>
 </gpx>`
 
@@ -68,7 +70,14 @@ describe('importFiles GPX 导入', () => {
       { activityRepository, fileRepository },
     );
 
-    expect(summary).toEqual({ total: 1, newImported: 1, skipped: 0, failed: 0, failedItems: [] });
+    expect(summary).toEqual({
+      total: 1,
+      newImported: 1,
+      skipped: 0,
+      failed: 0,
+      failedItems: [],
+      nonCyclingCounts: {},
+    });
     expect(await activityRepository.countActivities()).toBe(1);
 
     const activity = (await activityRepository.listAllSummaries())[0];
@@ -80,6 +89,37 @@ describe('importFiles GPX 导入', () => {
     // 台账记录为导入成功（无原始字节）
     const record = await fileRepository.get(activity.fingerprint);
     expect(record?.status).toBe('imported');
+  });
+
+  it('无 <type> 的 GPX 按速度特征兜底推断：慢速轨迹判步行并计入 nonCyclingCounts', async () => {
+    // 真实场景：Strava 导出的 GPX 不含 <type>，散步/跑步数据会被默认值污染骑行统计。
+    // 两点间距约 1.4km、间隔 30 分钟 → 均速约 2.8km/h，属步行区间。
+    const slowGpx = `<?xml version="1.0"?>
+<gpx creator="StravaGPX">
+  <trk><trkseg>
+    <trkpt lat="39.9400" lon="116.1000"><time>2024-05-01T01:00:00Z</time></trkpt>
+    <trkpt lat="39.9500" lon="116.1100"><time>2024-05-01T01:30:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>`;
+    const summary = await importFiles([makeTextFile('午间散步.gpx', slowGpx)], {
+      activityRepository,
+      fileRepository,
+    });
+
+    expect(summary.nonCyclingCounts).toEqual({ walking: 1 });
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.activityType).toBe('walking');
+  });
+
+  it('无 <type> 但速度符合骑行节奏时仍判骑行（不得把真骑行踢出统计）', async () => {
+    const summary = await importFiles([makeTextFile('晨骑.gpx', gpxWithTrackName('晨骑'))], {
+      activityRepository,
+      fileRepository,
+    });
+
+    expect(summary.nonCyclingCounts).toEqual({});
+    const activity = (await activityRepository.listAllSummaries())[0];
+    expect(activity.activityType).toBe('cycling');
   });
 
   it('无内部名时标题回退文件名去扩展名；纯数字文件名跳过兜底', async () => {
@@ -165,7 +205,14 @@ describe('importFiles GPX 导入', () => {
       { activityRepository, fileRepository },
     );
 
-    expect(summary).toEqual({ total: 2, newImported: 2, skipped: 0, failed: 0, failedItems: [] });
+    expect(summary).toEqual({
+      total: 2,
+      newImported: 2,
+      skipped: 0,
+      failed: 0,
+      failedItems: [],
+      nonCyclingCounts: {},
+    });
     const names = (await activityRepository.listAllSummaries()).map((a) => a.name).sort();
     // FIT 走文件名兜底，GPX 取内部名
     expect(names).toEqual(['from-device', '手机记录']);

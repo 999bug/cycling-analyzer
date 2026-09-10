@@ -256,7 +256,12 @@ export function matchStravaMeta(
 /**
  * 将 Strava 元数据补充到领域活动：
  * 描述直接写入；功率仅在 FIT 无数据（无功率计设备）时用 Strava 估算值填充，
- * 有实测功率的活动不被覆盖。
+ * 有实测功率的活动不被覆盖；**活动类型以 CSV 为准覆盖**。
+ *
+ * 类型优先级：CSV「活动类型」列 > 文件内解析值（FIT session.sport / GPX <type>）。
+ * CSV 是权威元数据且必然存在（批量导出包一定带 activities.csv），而文件内
+ * 的类型信息经常缺失（Strava 导出的 GPX 不含 `<type>`，会被判成默认值），
+ * 故 CSV 有值时一律覆盖。CSV 为空（列缺失或该行未填）时保留文件内解析值。
  *
  * @param activity 领域活动（就地修改）
  * @param meta Strava 元数据（可为空）
@@ -264,6 +269,11 @@ export function matchStravaMeta(
 export function applyStravaMeta(activity: Activity, meta: StravaActivityMeta | undefined): void {
   if (meta === undefined) {
     return
+  }
+  // 写入原始文本而非归一化结果：导入层需要区分「CSV 明确写了类型但我们认不出」
+  // （应尊重来源，不臆测）与「CSV 也没写」（才走速度特征兜底）
+  if (meta.activityType.trim() !== '') {
+    activity.activityType = meta.activityType
   }
   if (meta.description) {
     activity.description = meta.description

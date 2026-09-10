@@ -26,6 +26,8 @@ import { computeFingerprint } from '@/utils/fingerprint';
 import { sourceProfileById } from '@/geo/sourceProfiles';
 import type { ParseFileFn, ParseTaskInput } from '@/fit/worker/parseTask';
 import { calculateNormalizedPower } from '@/features/analysis/normalizedPower';
+import { resolveActivityType } from '@/features/activity/activityTypeInference';
+import type { ActivityType } from '@/types/activityType';
 import { gunzipBytes, shouldGunzip } from './gzip';
 import { classifyParseError } from './errorClassifier';
 import { createWorkerParser, type WorkerParserHandle } from './parseClient';
@@ -124,6 +126,15 @@ export interface ImportSummary {
 
   /** 失败明细（文件名 + 原因） */
   failedItems: FailedItem[];
+
+  /**
+   * 本批被判定为非骑行而自动归类的活动数（类型 → 条数）。
+   *
+   * Strava 批量导出包含跑步/散步时，这些活动若被计入骑行口径会污染统计，
+   * 故导入期即按 CSV 或速度特征归类；此处回传计数供导入结果提示用户复核。
+   * 无此类活动时为空对象。
+   */
+  nonCyclingCounts: Partial<Record<ActivityType, number>>;
 }
 
 /** 默认活动仓库（全局数据库单例） */
@@ -176,6 +187,7 @@ export async function importFiles(
   }
   const metas = buildStravaMetaLookup(options.stravaCsv);
   const failedItems: FailedItem[] = [];
+  const nonCyclingCounts: Partial<Record<ActivityType, number>> = {};
   let newImported = 0;
   let skipped = 0;
 
@@ -202,8 +214,14 @@ export async function importFiles(
         if (normalizedPower !== undefined) {
           activity.normalizedPower = normalizedPower;
         }
-        // Strava 元数据补充：描述 + 无功率计时用估算功率填充
+        // Strava 元数据补充：描述 + 无功率计时用估算功率填充 + 活动类型覆盖
         applyStravaMeta(activity, meta);
+        // 运动类型定稿：归一化（CSV / 设备原生 / GPX 类型）或按速度特征兜底
+        const resolvedType = resolveActivityType(activity);
+        activity.activityType = resolvedType;
+        if (resolvedType !== 'cycling') {
+          nonCyclingCounts[resolvedType] = (nonCyclingCounts[resolvedType] ?? 0) + 1;
+        }
         // 批次级来源覆盖：手动指定的来源优先于自动识别（坐标系随来源画像联动）
         if (options.sourceApp !== undefined) {
           const profile = sourceProfileById(options.sourceApp);
@@ -252,7 +270,14 @@ export async function importFiles(
   // 批次结束：释放 worker（防止长期驻留含 fitsdk 的 worker）
   fitHandle?.dispose();
 
-  return { total: files.length, newImported, skipped, failed: failedItems.length, failedItems };
+  return {
+    total: files.length,
+    newImported,
+    skipped,
+    failed: failedItems.length,
+    failedItems,
+    nonCyclingCounts,
+  };
 }
 
 /**

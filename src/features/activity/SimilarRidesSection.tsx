@@ -35,6 +35,7 @@ import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { readRouteEndpoints } from '@/storage/repositories/activityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/features/activity/SimilarRidesSection.css'
 
 /** 深色主题下坐标轴颜色 */
@@ -124,7 +125,7 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
       if (source === 'author') {
         groups = await defaultSnapshotClient.getRouteGroups()
       } else {
-        const summaries = await repository.listAllSummaries()
+        const summaries = await listCyclingSummaries(repository)
         const routeItems: RouteActivityInput[] = []
         for (const summary of summaries) {
           if (cancelled) {

@@ -70,7 +70,14 @@ describe('importFiles 导入执行器', () => {
       fileRepository,
     });
 
-    expect(summary).toEqual({ total: 1, newImported: 1, skipped: 0, failed: 0, failedItems: [] });
+    expect(summary).toEqual({
+      total: 1,
+      newImported: 1,
+      skipped: 0,
+      failed: 0,
+      failedItems: [],
+      nonCyclingCounts: {},
+    });
     expect(await activityRepository.countActivities()).toBe(1);
 
     const activity = (await activityRepository.listAllSummaries())[0];

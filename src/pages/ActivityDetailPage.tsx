@@ -83,6 +83,8 @@ import { ZONE_COLORS } from '@/theme/colors'
 import HeartRateChart from '@/charts/HeartRateChart'
 import MultiMetricChart from '@/charts/MultiMetricChart'
 import PowerCurveChart from '@/charts/PowerCurveChart'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
+import { isCyclingType, activityTypeLabel } from '@/types/activityType'
 import '@/pages/ActivityDetailPage.css'
 
 /** 本地库仓库（删除/重命名等写操作永远只进本地库） */
@@ -120,12 +122,6 @@ const POWER_ZONE_NAMES: readonly string[] = ['恢复', '耐力', '有氧', '阈�
 
 /** 加载状态：加载中 / 不存在 / 就绪 / 出错 */
 type LoadState = 'loading' | 'notFound' | 'ready' | 'error'
-
-/** 运动类型中文映射（未收录的类型显示原值） */
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  cycling: '骑行',
-  running: '跑步',
-}
 
 /**
  * 指标卡数据（缺失显示 '—'，不显示 0）。
@@ -388,8 +384,7 @@ function ActivityDetailPage() {
       return
     }
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((summaries) => {
         if (!cancelled) {
           setHistory(summaries)
@@ -482,9 +477,15 @@ function ActivityDetailPage() {
   )
   const powerZones = useMemo(() => calculatePowerZones(records, ftp), [records, ftp])
 
-  // 成就检测：与开始时间更早的历史活动比较纪录（首次骑行/无刷新为空数组）
+  // 成就检测：与开始时间更早的历史活动比较纪录（首次骑行/无刷新为空数组）。
+  // 成就口径是骑行专属（最长骑行/最大爬升等），故非骑行活动不参与检测——
+  // 否则「跑步 5km 刷新最长骑行纪录」这类错误结论会直接展示给用户；
+  // history 已在取数时按骑行口径过滤（见 cyclingScope）。
   const achievements = useMemo(
-    () => (activity === undefined ? [] : detectAchievements(activity, history ?? [])),
+    () =>
+      activity === undefined || !isCyclingType(activity.activityType)
+        ? []
+        : detectAchievements(activity, history ?? []),
     [activity, history],
   )
 
@@ -667,7 +668,8 @@ function ActivityDetailPage() {
     return <DetailNotice state="notFound" />
   }
 
-  const typeLabel = ACTIVITY_TYPE_LABELS[activity.activityType] ?? activity.activityType
+  // 未收录的类型统一显示「其他」，不把原始英文枚举值暴露给用户
+  const typeLabel = activityTypeLabel(activity.activityType)
   // 来源标签展示「原始来自哪个软件」，与当前坐标系分列：纠偏只改坐标系，不动来源
   const sourceProfile = sourceProfileById(activity.sourceApp)
   const systemLabel = COORDINATE_SYSTEM_LABELS[activity.coordinateSystem ?? 'wgs84']

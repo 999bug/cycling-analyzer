@@ -34,6 +34,7 @@ import {
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/RoutesMapPage.css'
 
 /** 轨迹抽稀阈值（米）：路线图与热力图口径一致 */
@@ -130,7 +131,7 @@ function RoutesMapPage() {
         return
       }
 
-      const summaries = await repository.listAllSummaries()
+      const summaries = await listCyclingSummaries(repository)
       const scanKey = summariesScanKey(summaries)
       // 两级缓存：内存（同会话）→ IndexedDB 持久化（刷新后免重扫）
       if (routeScanCache !== null && routeScanCache.key === scanKey) {

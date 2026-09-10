@@ -25,6 +25,7 @@ import {
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/HeatmapPage.css'
 
 /** 轨迹抽稀阈值（米）：热力图只看路线分布，允许更大的简化 */
@@ -104,7 +105,7 @@ function HeatmapPage() {
         return
       }
 
-      const summaries = await repository.listAllSummaries()
+      const summaries = await listCyclingSummaries(repository)
       const scanKey = summariesScanKey(summaries)
       // 两级缓存：内存（同会话二次进入零开销）→ IndexedDB 持久化（刷新后免重扫）
       if (trackScanCache !== null && trackScanCache.key === scanKey) {

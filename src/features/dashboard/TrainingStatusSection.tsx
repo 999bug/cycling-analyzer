@@ -30,6 +30,7 @@ import {
 import { useImportStore } from '@/stores/importStore'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import MetricHelp from '@/components/MetricHelp'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/features/dashboard/TrainingStatusSection.css'
 
 /** 本地库仓库（NP 回填是写操作，仅本地源执行） */
@@ -126,7 +127,7 @@ function TrainingStatusSection() {
         if (source === 'local') {
           await backfillNormalizedPower(localRepository)
         }
-        const summaries = await repository.listAllSummaries()
+        const summaries = await listCyclingSummaries(repository)
         if (cancelled) {
           return
         }

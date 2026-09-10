@@ -1,0 +1,292 @@
+/**
+ * 批量修正运动类型弹窗样式。
+ *
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary/--info/--warning），
+ * 与列表页及批量重命名弹窗保持一致的观感。
+ */
+
+/* 遮罩层 */
+.batch-type-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* 弹窗主体：较批量重命名更宽（复核表为 6 列） */
+.batch-type {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  overflow: hidden;
+}
+
+.batch-type__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-type__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.batch-type__subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.batch-type__close {
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.batch-type__close:hover {
+  color: var(--text);
+}
+
+/* ===== 影响预览（置顶：用户先要知道改完数字变成多少）===== */
+.batch-type__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.batch-type__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background-color: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.batch-type__metric-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.batch-type__metric-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.batch-type__metric-delta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ===== 分组 chips ===== */
+.batch-type__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 20px 14px;
+}
+
+.batch-type__chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: transparent;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.batch-type__chip:hover {
+  color: var(--text);
+  border-color: var(--text-secondary);
+}
+
+.batch-type__chip--active {
+  border-color: var(--info);
+  color: var(--info);
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+/* ===== 复核表 ===== */
+.batch-type__table {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-type__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 74px 74px 118px 190px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.batch-type__row:hover {
+  background-color: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.batch-type__row--head {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-surface);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.batch-type__row--head:hover {
+  background-color: var(--bg-surface);
+}
+
+.batch-type__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.batch-type__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-type__date {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.batch-type__change {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.batch-type__badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--info);
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.batch-type__badge--grey {
+  color: var(--warning);
+  background-color: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.batch-type__basis {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.batch-type__basis--grey {
+  color: var(--warning);
+}
+
+.batch-type__empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ===== 底部 ===== */
+.batch-type__result {
+  padding: 10px 20px;
+  font-size: 13px;
+  color: var(--success);
+}
+
+.batch-type__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+}
+
+.batch-type__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.batch-type__buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.batch-type__button {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.batch-type__button:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+}
+
+.batch-type__button--primary {
+  border-color: var(--primary);
+  background-color: var(--primary);
+  color: var(--on-primary);
+  font-weight: 500;
+}
+
+.batch-type__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 窄屏：复核表改为两行布局，避免 6 列挤压不可读 */
+@media (max-width: 720px) {
+  .batch-type__metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .batch-type__row {
+    grid-template-columns: 24px minmax(0, 1fr) 74px;
+  }
+
+  .batch-type__row > :nth-child(4),
+  .batch-type__row > :nth-child(5),
+  .batch-type__row > :nth-child(6) {
+    grid-column: 2 / -1;
+  }
+}

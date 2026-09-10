@@ -14,6 +14,7 @@ import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { useDataSourceStore, selectEffectiveSource } from '@/stores/dataSourceStore'
 import { getActivityRepository } from '@/storage/sourceActivityRepository'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/TrainingPlanPage.css'
 
 /** 默认每周可训练时长（小时） */
@@ -61,7 +62,7 @@ function TrainingPlanPage() {
         if (source === 'local') {
           await backfillNormalizedPower(getActivityRepository('local') as DexieActivityRepository)
         }
-        const summaries = await repository.listAllSummaries()
+        const summaries = await listCyclingSummaries(repository)
         if (cancelled) {
           return
         }

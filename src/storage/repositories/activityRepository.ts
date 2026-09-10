@@ -10,6 +10,7 @@
 import type { Activity, ActivityRecord } from '@/types/activity';
 import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
 import { localDateKeyFromIso } from '@/utils/format';
+import { normalizeActivityType } from '@/types/activityType';
 
 /**
  * 活动摘要（不含 records/route）。
@@ -73,7 +74,11 @@ export interface ActivityListOptions {
   /** 月份筛选（本地日期月份，如 2026-08） */
   month?: string;
 
-  /** 运动类型筛选 */
+  /**
+   * 运动类型筛选（传规范类型值，如 cycling / running）。
+   * 比对时会归一化库中存储值，因此历史遗留的原始写法（road_biking、骑行）
+   * 也能被正确筛出；传 undefined / 空串表示不限制。
+   */
   activityType?: string;
 
   /** 文本搜索（name/fileName 模糊匹配，忽略大小写） */
@@ -261,6 +266,14 @@ export interface ActivityRepository extends ActivityReadRepository {
   updateName(id: string, name: string): Promise<void>;
 
   /**
+   * 修正单条活动的运动类型（批量修正弹窗用；只改摘要标记，不动逐点数据）。
+   *
+   * @param id 活动 ID
+   * @param activityType 规范运动类型（cycling / running / walking / …）
+   */
+  updateActivityType(id: string, activityType: string): Promise<void>;
+
+  /**
    * 更新轨迹坐标系 / 来源 / 手动微调（纠偏写操作）。
    *
    * 只改标记与微调量，绝不改写 activity_records 中的原始坐标——
@@ -359,7 +372,9 @@ export function queryActivityList(
     items = items.filter((a) => localDateKeyFromIso(a.startTime)?.startsWith(month) === true);
   }
   if (activityType) {
-    items = items.filter((a) => a.activityType === activityType);
+    // 按归一化后的类型比对：库里可能存有各平台的原始写法
+    // （佳明 road_biking、Strava 中文「骑行」），直接比字面量会漏掉它们
+    items = items.filter((a) => normalizeActivityType(a.activityType) === activityType);
   }
   if (search) {
     const keyword = search.trim().toLowerCase();
@@ -605,6 +620,19 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async updateName(id: string, name: string): Promise<void> {
     await this.db.activities.update(id, { name });
+  }
+
+  /**
+   * 修正单条活动的运动类型（批量修正弹窗用）。
+   *
+   * 只改摘要上的类型标记：逐点数据与距离/时长等度量不受影响，
+   * 影响面仅限骑行语义页面是否计入该活动（见 features/activity/cyclingScope）。
+   *
+   * @param id 活动 ID
+   * @param activityType 规范运动类型
+   */
+  async updateActivityType(id: string, activityType: string): Promise<void> {
+    await this.db.activities.update(id, { activityType });
   }
 
   async updateNormalizedPower(id: string, normalizedPower: number): Promise<void> {

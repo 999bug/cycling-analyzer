@@ -84,6 +84,24 @@ export interface OfflinePreferences {
   tileCacheEnabled: boolean
 }
 
+/**
+ * 数据口径偏好。
+ *
+ * 本站定位是骑行数据分析，故导入 Strava 等批量导出包时其中的跑步/散步
+ * 默认不计入统计（否则「骑行里程」会凭空变大）。此开关用于把非骑行
+ * 活动重新纳入统计口径，供也想看全部运动的用户使用。
+ */
+export interface DataPreferences {
+  /**
+   * 统计是否包含非骑行运动（跑步/步行/徒步等）。
+   *
+   * 默认 false = 只统计骑行。开启后统计页、仪表盘、年度回顾、热力图等
+   * 骑行语义页面会把非骑行活动一并计入，并在页头标注口径。
+   * 列表页不受此开关影响，任何类型始终可见、可筛选。
+   */
+  includeOtherSports: boolean
+}
+
 /** 完整设置数据（getSettings 返回） */
 export interface SettingsData {
   /** 个人信息 */
@@ -100,6 +118,9 @@ export interface SettingsData {
 
   /** 离线偏好 */
   offline: OfflinePreferences
+
+  /** 数据口径偏好 */
+  data: DataPreferences
 }
 
 /** 设置保存片段（按域合并保存，未提供的字段保留原值） */
@@ -118,6 +139,9 @@ export interface SettingsPatch {
 
   /** 离线偏好（可只传需更新的字段） */
   offline?: Partial<OfflinePreferences>
+
+  /** 数据口径偏好（可只传需更新的字段） */
+  data?: Partial<DataPreferences>
 }
 
 /** profile 设置键（settings 表） */
@@ -135,6 +159,9 @@ export const IMPORT_KEY = 'import'
 /** offline 设置键（settings 表） */
 export const OFFLINE_KEY = 'offline'
 
+/** data 设置键（settings 表） */
+export const DATA_KEY = 'data'
+
 /** 默认单位偏好（规格 §27 默认全公制） */
 export const DEFAULT_UNITS: UnitPreferences = { distance: 'km', timeFormat: '24h' }
 
@@ -146,6 +173,9 @@ export const DEFAULT_IMPORT: ImportPreferences = { saveOriginalFit: false }
 
 /** 默认离线偏好（默认开启瓦片缓存） */
 export const DEFAULT_OFFLINE: OfflinePreferences = { tileCacheEnabled: true }
+
+/** 默认数据口径偏好（规格外增强：骑行语义页面只统计骑行） */
+export const DEFAULT_DATA: DataPreferences = { includeOtherSports: false }
 
 /** 默认个人信息（全字段未设置） */
 export const DEFAULT_PROFILE: UserProfile = {}
@@ -165,12 +195,13 @@ const defaultSettingsRepository = new DexieSettingsRepository(db)
 export async function getSettings(
   settingsRepository: SettingsRepository = defaultSettingsRepository,
 ): Promise<SettingsData> {
-  const [profileRaw, unitsRaw, appearanceRaw, importRaw, offlineRaw] = await Promise.all([
+  const [profileRaw, unitsRaw, appearanceRaw, importRaw, offlineRaw, dataRaw] = await Promise.all([
     settingsRepository.get(PROFILE_KEY),
     settingsRepository.get(UNITS_KEY),
     settingsRepository.get(APPEARANCE_KEY),
     settingsRepository.get(IMPORT_KEY),
     settingsRepository.get(OFFLINE_KEY),
+    settingsRepository.get(DATA_KEY),
   ])
   return {
     profile: { ...DEFAULT_PROFILE, ...asRecord(profileRaw) },
@@ -178,6 +209,7 @@ export async function getSettings(
     appearance: { ...DEFAULT_APPEARANCE, ...asRecord(appearanceRaw) },
     import: { ...DEFAULT_IMPORT, ...asRecord(importRaw) },
     offline: { ...DEFAULT_OFFLINE, ...asRecord(offlineRaw) },
+    data: { ...DEFAULT_DATA, ...asRecord(dataRaw) },
   }
 }
 
@@ -207,6 +239,9 @@ export async function saveSettings(
   }
   if (patch.offline !== undefined) {
     await settingsRepository.set(OFFLINE_KEY, { ...current.offline, ...patch.offline })
+  }
+  if (patch.data !== undefined) {
+    await settingsRepository.set(DATA_KEY, { ...current.data, ...patch.data })
   }
 }
 

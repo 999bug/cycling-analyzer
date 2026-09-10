@@ -156,7 +156,7 @@ describe('parseGpxActivity 缺失容错', () => {
     expect(activity.maxHeartRate).toBeUndefined()
   })
 
-  it('缺 type 默认 cycling，缺 creator 无设备信息', () => {
+  it('缺 type 返回空串（不默认 cycling，交由导入层兜底推断），缺 creator 无设备信息', () => {
     const xml = `<?xml version="1.0"?>
 <gpx>
   <trk><trkseg>
@@ -165,7 +165,8 @@ describe('parseGpxActivity 缺失容错', () => {
 </gpx>`
     const activity = parseGpxActivity(makeInput(xml))
 
-    expect(activity.activityType).toBe('cycling')
+    // Strava 导出的 GPX 实测不含 <type>：若在此默认 cycling，跑步/散步会被计入骑行口径
+    expect(activity.activityType).toBe('')
     expect(activity.device).toBeUndefined()
     expect(activity.name).toBeUndefined()
   })

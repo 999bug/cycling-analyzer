@@ -31,6 +31,7 @@ import {
   mapStravaSegment,
   trackBounds,
 } from '@/features/segments/stravaSegments'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/SegmentsPage.css'
 
 /** 赛段仓库单例 */
@@ -107,7 +108,7 @@ function SegmentsPage() {
         }
 
         // 扫描全部活动轨迹：每个赛段独立匹配成绩榜（命中缓存跳过全量扫描）
-        const summaries = await activityRepository.listAllSummaries()
+        const summaries = await listCyclingSummaries(activityRepository)
         const cacheKey = `${summariesScanKey(summaries)}#${allSegments.map((segment) => segment.id ?? 0).join(',')}`
         if (leaderboardCache !== null && leaderboardCache.key === cacheKey) {
           if (!cancelled) {
@@ -191,8 +192,7 @@ function SegmentsPage() {
       return
     }
     let cancelled = false
-    void activityRepository
-      .listAllSummaries()
+    void listCyclingSummaries(activityRepository)
       .then((all) => {
         if (cancelled) {
           return

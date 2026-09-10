@@ -11,6 +11,7 @@ import { DexieSettingsRepository } from '@/storage/repositories/settingsReposito
 import { clearAllData } from '@/features/settings/dataClear'
 import {
   DEFAULT_APPEARANCE,
+  DEFAULT_DATA,
   DEFAULT_IMPORT,
   DEFAULT_OFFLINE,
   DEFAULT_UNITS,
@@ -71,6 +72,7 @@ describe('clearAllData', () => {
       appearance: DEFAULT_APPEARANCE,
       import: DEFAULT_IMPORT,
       offline: DEFAULT_OFFLINE,
+      data: DEFAULT_DATA,
     })
   })
 })

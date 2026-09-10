@@ -15,6 +15,7 @@ import { buildMonthlyDistances, extractYears, yearRange } from '@/features/yearR
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/YearReviewPage.css'
 
 /**
@@ -36,8 +37,7 @@ function YearReviewPage() {
 
   const reload = useCallback(() => {
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((all) => {
         if (!cancelled) {
           setSummaries(all)

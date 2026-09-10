@@ -54,6 +54,15 @@ export interface ActivityFilterState {
   /** 月份筛选（'2026-08'，空 = 全部月份） */
   month: string
 
+  /**
+   * 运动类型筛选（规范类型值如 'cycling' / 'running'，空 = 全部类型）。
+   *
+   * 默认「全部类型」而非「骑行」：导入含跑步/散步的数据包后，
+   * 若默认只显示骑行，用户会以为数据没导进来。骑行语义页面
+   * （统计/仪表盘/热力图等）的类型隔离由 cyclingScope 负责，与本项无关。
+   */
+  activityType: string
+
   /** 当前排序字段（持久化，仅手动重置还原） */
   sortField: ActivitySortField
 
@@ -77,6 +86,9 @@ export interface ActivityFilterState {
 
   /** 设置月份筛选 */
   setMonth(month: string): void
+
+  /** 设置运动类型筛选（空串 = 全部类型） */
+  setActivityType(activityType: string): void
 
   /** 设置排序（表头点击） */
   setSort(field: ActivitySortField, order: ActivitySortOrder): void
@@ -113,6 +125,7 @@ export const useActivityFilterStore = create<ActivityFilterState>()(
       search: '',
       year: '',
       month: '',
+      activityType: '',
       sortField: DEFAULT_SORT_FIELD,
       sortOrder: DEFAULT_SORT_ORDER,
       pageSize: DEFAULT_PAGE_SIZE,
@@ -121,6 +134,7 @@ export const useActivityFilterStore = create<ActivityFilterState>()(
       setSearch: (search) => set({ search }),
       setYear: (year) => set({ year }),
       setMonth: (month) => set({ month }),
+      setActivityType: (activityType) => set({ activityType }),
       setSort: (sortField, sortOrder) => set({ sortField, sortOrder }),
       resetSort: () =>
         set({ sortField: DEFAULT_SORT_FIELD, sortOrder: DEFAULT_SORT_ORDER }),
@@ -146,6 +160,7 @@ export const useActivityFilterStore = create<ActivityFilterState>()(
           search: '',
           year: '',
           month: '',
+          activityType: '',
           customFilters: [],
         }),
     }),
@@ -155,6 +170,7 @@ export const useActivityFilterStore = create<ActivityFilterState>()(
         search: state.search,
         year: state.year,
         month: state.month,
+        activityType: state.activityType,
         sortField: state.sortField,
         sortOrder: state.sortOrder,
         pageSize: state.pageSize,

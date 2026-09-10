@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[IM] 侧边栏收起态改为左上角显示展开按钮——点击滑出、悬停只高亮，顶部图钉按钮加大加深；默认仍为固定；版本 2.54.1）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 运动类型识别与骑行统计口径隔离：修复导入 Strava 批量导出包时跑步、散步被计入骑行统计（GPX 缺 `<type>` 默认 cycling）；新增列表页类型列与类型筛选、批量修正运动类型弹窗（只读检测 + 用户确认）、作者快照非骑行 fail-fast、设置项「统计包含其他运动」；版本 2.55.0）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -19,6 +19,7 @@
 
 | 状态 | 任务 | 进度 | 下一步 |
 |---|---|---|---|
+| 🔄 待提交 | **运动类型识别与骑行口径隔离（v2.55.0）** | 代码与测试已完成（140 文件全绿、lint + tsc 绿），**尚未提交**——用户明确「未经当次许可不执行任何 git 写操作」 | 由用户决定提交时机；提交后本行移出 |
 | 🔄 运行中 | **代码审计遗留项（按 docs/代码审计报告-2026-09-01.md 路线图）** | 审计主体批次与首屏体积项已完成；SimilarRides 全量轨迹驻留问题已在 2.51.11 改为摘要首尾坐标优先，旧活动按需回退；跨时区日期筛选回归测试已在 2.51.12 固定东八区边界；Strava 历史 Token 已在 2.51.13 进入赛段页面时清理；流式导出已在 2.51.14 恢复 2 空格 JSON 层级；批量重命名、删除和纠偏已在 2.51.15 统一本地日期。剩余修复：工程清理；Vite PWA 插件内部仍有 `inlineDynamicImports` 弃用提示，待插件版本支持后再迁移 | 继续按子项单独提交 |
 | 📌 待办 | 手动下载文件「机场东路有氧_平均心率138.fit」在 activities.csv 中无对应行 | 该活动无描述/估算功率（CSV 无匹配） | 用户可选：CSV 补行或改文件名，或保持现状 |
 | ⏸️ 已搁置 | **小程序原生重构**（零域名方案；代码保留在 `feature/miniprogram` 分支，main 不含小程序代码） | 2026-08-26 决策搁置：Phase 0~3 已完成但体验与网站差距大（Canvas 手绘图表 vs Recharts、地图组件封闭、wx.chooseMessageFile 批量导入残废、发布需审核），微信限制与产品核心能力根本冲突。移动端入口改走 Web PWA 安装引导（2.27.0）。分支未删除，如重启可从 Phase 4 地图继续 | 无（不再推进） |
@@ -61,6 +62,12 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   - 「卫星+路网」＝影像底图 + `webst0{1-4}` + `style=8`（**透明**注记叠加层，实测 80% 像素 alpha=0；注意同名 `style=8` 在 webst 域才是透明注记层，在 webrd 域是不透明矢量底图）。
   **已移除 OpenTopoMap 地形层**：境外 OSM 系服务国内基本加载不出（表现为「点了没反应」），且其为 WGS-84 而底图/轨迹为 GCJ-02，即便加载成功也会整体错位数百米。瓦片降级到 OSM 后模式按钮置灰（`mapModeEnabled`），避免再次出现「点了没反应」。地图模式记忆在 localStorage（与地图高度同为用户偏好）；`FallbackTileLayer` 的 `mapMode` 为可选参数，其余三个用图组件（CompareSection / SegmentMiniMap / HeatmapPage）无需改动
 - **回放控制栏布局约定（v2.53.0 起）**：控制栏**通栏贴地图底部**（`bottom/left/right: 0`，只有上圆角）。它压在右下角 `.leaflet-bottom.leaflet-right`（缩放 + 版权署名）之上，因此 `TrackReplay` 用 ResizeObserver **实测自身高度**写入地图容器的 `--replay-bar-height`，`ActivityMap.css` 据此给该角加 `margin-bottom` 把控件抬上去——窄屏按钮换行导致控制栏变高也不会被挡；署名只上移不隐藏（底图版权必须可见）。播放中整条控制栏淡出到 `opacity: 0.2`（`.track-replay--playing`），`:hover` / `:focus-within` 恢复——触摸设备无 hover，但透明度不挡点击，点按带来的 focus 同样能恢复。以后改控制栏尺寸/位置时注意别再压住这两个控件
+
+- **运动类型与骑行统计口径（v2.55.0 起，硬约束）**：`src/types/activityType.ts` 是类型归一化的唯一入口——**判断是否为骑行一律用 `isCyclingType()`，禁止在业务代码里比 `=== 'cycling'`**，因为库里可能存有各平台原始写法（佳明 `road_biking`、Strava 中文「骑行」；实测佳明 GDPR 摘要 85 条中 84 条为 `road_biking`）。判据优先级：Strava `activities.csv` 活动类型 > FIT `session.sport` > GPX `<trk><type>` > 速度特征兜底（`features/activity/activityTypeInference.ts`，导入与作者快照构建共用 `resolveActivityType`）。
+  - **速度只能单向使用**：「快」是封闭的（马拉松世界纪录 ≈21.0 km/h、竞走 ≈13.5），故高速可可靠排除跑步；「慢」是开放的（共享单车 10~13、带娃 8~10、山地爬坡 9~12、折叠车 12~15），**低速不能判定为非骑行**。落进 10~20 km/h 重叠区一律保守判骑行（误判会让用户骑行里程凭空消失，比统计偏大严重得多），灰区只列进复核弹窗且默认不勾选。
+  - **分析类页面取数必须走 `listCyclingSummaries(repository)`**（`features/activity/cyclingScope.ts`），不得直接 `listAllSummaries()`。**过滤必须发生在 `summariesScanKey()` 之前**：热力图/路线图/赛段/统计页的抽稀缓存以该指纹为键、缓存在 IndexedDB 跨会话存活，若先按全量算指纹再过滤，会永久命中「混了非骑行轨迹」的旧缓存且刷新不自愈。不做过滤的例外仅两处：骑行记录列表页（数据管理入口）与导出/清空/补算等维护任务。
+  - **不得静默改写用户数据的类型**：导入期按上面判据定稿（属新数据初始化，并在导入汇总 `nonCyclingCounts` 中告知）；存量修正是**只读检测 → 用户确认 → 才写入**（`features/activity/suspectTypes.ts` + `BatchActivityTypeDialog`），理由是静默改历史统计会让用户看到「上次 3000km 今天 2400km」却无操作痕迹。
+  - 作者快照 `scripts/buildAuthorData.ts` 对非骑行 **fail-fast**（快照是所有访客的首屏，混入即污染且访客无从察觉）。设置项 `data.includeOtherSports`（默认关）可让分析页计入全部运动，切换后整页刷新一次（运行时镜像在 `cyclingScope`，模块级变量，各页面挂载时取数）。
 
 ### 测试约定
 

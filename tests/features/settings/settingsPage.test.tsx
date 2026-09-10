@@ -24,6 +24,10 @@ import {
 } from '@/features/pwa/install'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import { reloadPage } from '@/utils/navigation'
+import {
+  getIncludeOtherSports,
+  resetCyclingScopeForTest,
+} from '@/features/activity/cyclingScope'
 import type { Activity } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -370,6 +374,52 @@ describe('设置页原始 FIT 文件开关（规格 §19）', () => {
     expect(await screen.findByText(/已开启/)).toBeInTheDocument()
     const settings = await getSettings()
     expect(settings.import.saveOriginalFit).toBe(true)
+  })
+})
+
+describe('设置页数据口径（统计包含其他运动）', () => {
+  const user = userEvent.setup()
+
+  afterEach(() => {
+    // 运行时镜像为模块级变量：用例间必须复位，否则污染骑行口径相关断言
+    resetCyclingScopeForTest()
+  })
+
+  it('默认关闭：统计仅包含骑行', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: '统计仅包含骑行（默认）',
+    })
+    expect(checkbox).not.toBeChecked()
+    expect(getIncludeOtherSports()).toBe(false)
+  })
+
+  it('开启后立即持久化并整页刷新（各页取数口径同步）', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: '统计仅包含骑行（默认）',
+    })
+    await user.click(checkbox)
+
+    expect(
+      await screen.findByRole('checkbox', { name: '统计包含骑行、跑步、散步等全部运动' }),
+    ).toBeChecked()
+    const settings = await getSettings()
+    expect(settings.data.includeOtherSports).toBe(true)
+    // 运行时镜像同步：避免统计页仍按旧口径取数
+    expect(getIncludeOtherSports()).toBe(true)
+    // 各页面为挂载时快照，需刷新一次才能按新口径重新取数
+    expect(reloadPage).toHaveBeenCalled()
   })
 })
 

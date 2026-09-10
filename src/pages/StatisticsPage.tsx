@@ -48,6 +48,7 @@ import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/pages/StatisticsPage.css'
 
 /**
@@ -94,8 +95,7 @@ function StatisticsPage() {
 
   const reload = useCallback(() => {
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((all) => {
         if (!cancelled) {
           setSummaries(all)

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from '@/app/App'
 import { initTheme } from '@/features/settings/theme'
 import { initSidebarMode } from '@/features/settings/sidebar'
+import { initCyclingScope } from '@/features/activity/cyclingScope'
 import { initDataSource } from '@/stores/dataSourceStore'
 import '@/index.css'
 
@@ -34,6 +35,10 @@ void initTheme()
 
 // 启动时恢复侧边栏行为偏好（默认固定常驻；自动收回时延迟收起）
 void initSidebarMode()
+
+// 启动时恢复统计口径偏好：默认只统计骑行，非骑行活动（跑步/散步等）
+// 不进统计页、仪表盘、热力图等骑行语义页面（列表页始终可见可按类型筛选）
+void initCyclingScope()
 
 // 启动时探测作者数据快照（manifest.json）：成功则默认展示作者数据，
 // 失败（本地 dev 未生成快照等）静默回退本地数据源

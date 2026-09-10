@@ -160,6 +160,32 @@
   cursor: not-allowed;
 }
 
+/* 批量修正运动类型：中性描边按钮；检出可疑记录时转为 warning 实底提示 */
+.activity-filters__type-fix {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-filters__type-fix:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+}
+
+.activity-filters__type-fix--alert {
+  border-color: var(--warning);
+  color: var(--warning);
+  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.activity-filters__type-fix:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* 表格 */
 .activity-table {
   width: 100%;
@@ -363,6 +389,24 @@
 .activity-table__title-link:hover {
   color: var(--primary);
   text-decoration: underline;
+}
+
+/* ===== 运动类型列（骑行中性、非骑行高亮）=====
+   骑行是默认值且占比极高，染色只会淹没真正需要注意的行；
+   颜色仅用于标记「非骑行」这类例外，扫一眼即可定位。 */
+.activity-table__type {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background-color: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.activity-table__type--other {
+  color: var(--info);
+  background-color: color-mix(in srgb, var(--info) 12%, transparent);
 }
 
 /* ===== 勾选列（批量删除，仅本地数据源渲染）===== */

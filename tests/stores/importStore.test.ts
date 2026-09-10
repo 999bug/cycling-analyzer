@@ -19,7 +19,7 @@ const mockImportFiles = vi.mocked(importFiles)
 
 /** 构造导入汇总 */
 function makeSummary(newImported: number) {
-  return { total: 1, newImported, skipped: 0, failed: 0, failedItems: [] }
+  return { total: 1, newImported, skipped: 0, failed: 0, failedItems: [], nonCyclingCounts: {} }
 }
 
 /** 构造导入文件（importFiles 已 mock，内容不参与断言） */

@@ -23,7 +23,7 @@ vi.mock('@/utils/navigation', () => ({
 
 /** 构造导入汇总（仅关心 newImported 字段，其余填零值） */
 function makeSummary(newImported: number): ImportSummary {
-  return { total: newImported, newImported, skipped: 0, failed: 0, failedItems: [] }
+  return { total: newImported, newImported, skipped: 0, failed: 0, failedItems: [], nonCyclingCounts: {} }
 }
 
 /** 打开导入弹窗（点击侧边栏「同步骑行数据」toggle） */

@@ -148,7 +148,7 @@ describe('骑行记录列表页', () => {
 
     // 点击"距离"→ 距离降序，第一行为距离最大的 act-25
     await user.click(screen.getByRole('button', { name: /^距离/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
     // 偏离默认排序后，重置排序按钮出现
     expect(screen.getByRole('button', { name: '重置排序' })).toBeInTheDocument()
@@ -167,7 +167,7 @@ describe('骑行记录列表页', () => {
 
     await user.click(screen.getByRole('button', { name: /^时长/ }))
     // act-25 时长最长（3300 秒）
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
   })
 
   it('搜索按文件名模糊过滤（不区分大小写）', async () => {
@@ -204,6 +204,64 @@ describe('骑行记录列表页', () => {
     expect(screen.getAllByRole('row')[1]).toHaveTextContent(
       `${formatDate('2026-07-13T10:00:00.000Z')} 骑行`,
     )
+  })
+
+  it('运动类型筛选：选「跑步」只显示非骑行记录，选「骑行」把它们排除', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    // 种子：act-01~22 骑行，act-23~25 跑步
+    await user.selectOptions(screen.getByLabelText('类型'), 'running')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(4))
+
+    // 切回骑行：跑步记录被排除（22 条 > 每页 20 → 首页 20 行 + 表头）
+    await user.selectOptions(screen.getByLabelText('类型'), 'cycling')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(document.querySelectorAll('.activity-table__type--other')).toHaveLength(0)
+  })
+
+  it('类型列：非骑行加高亮标签，骑行用中性标签', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    // 默认时间降序，首行 act-01 为骑行 → 无高亮标签
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(1))
+    expect(screen.getAllByRole('row')[1].querySelector('.activity-table__type--other')).toBeNull()
+
+    await user.selectOptions(screen.getByLabelText('类型'), 'running')
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(4))
+    const runningRow = screen.getAllByRole('row')[1]
+
+    expect(runningRow.querySelector('.activity-table__type--other')).not.toBeNull()
+    expect(runningRow).toHaveTextContent('跑步')
+  })
+
+  it('批量修正运动类型：检出可疑记录时按钮带数量，点击打开复核弹窗', async () => {
+    // 追加一条「记为骑行、实际是跑步节奏」的记录（旧版 GPX 默认 cycling 的典型污染）
+    await repo.addActivities([
+      ...makeSeed(),
+      {
+        id: 'slow-run',
+        fileId: 'file-slow',
+        fileName: 'slow.fit',
+        fingerprint: 'fp-slow',
+        activityType: 'cycling',
+        startTime: '2026-09-09T10:00:00.000Z',
+        endTime: '2026-09-09T11:00:00.000Z',
+        duration: 1910,
+        elapsedTime: 1910,
+        distance: 5200,
+        elevationGain: 40,
+        avgSpeed: 9.8 / 3.6,
+      },
+    ])
+    renderPage()
+
+    const button = await screen.findByRole('button', { name: /批量修正运动类型（1）/ })
+    await user.click(button)
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/检测到 1 条活动的运动类型可能不准确/)).toBeInTheDocument()
   })
 
   it('年份筛选：仅显示所选年份记录，月份选项随年份过滤', async () => {
@@ -580,19 +638,19 @@ describe('骑行记录列表页', () => {
 
     // 爬升降序 → act-25 爬升最大（350m）
     await user.click(screen.getByRole('button', { name: /^爬升/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
     // 平均速度降序 → act-25 最大（6.25 m/s）
     await user.click(screen.getByRole('button', { name: /^平均速度/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
     // 平均心率降序 → act-25 最大（165 bpm，非 3 的倍数不缺失）
     await user.click(screen.getByRole('button', { name: /^平均心率/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
     // 平均功率降序 → act-25 功率缺失（5 的倍数），act-24 最大（224W）
     await user.click(screen.getByRole('button', { name: /^平均功率/ }))
-    await expectFirstRowText(`${formatDate('2026-06-06T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-06T10:00:00.000Z')} 跑步`)
   })
 
   it('标题列可按名称排序', async () => {
@@ -623,7 +681,7 @@ describe('骑行记录列表页', () => {
 
     // 距离降序
     await user.click(screen.getByRole('button', { name: /^距离/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 骑行`)
+    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
     // 修改筛选（月份）：排序保持距离降序，不重置
     await waitFor(() => expect(screen.getByRole('option', { name: '2026-07' })).toBeInTheDocument())
@@ -640,7 +698,7 @@ describe('骑行记录列表页', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
     expect(screen.getAllByRole('row')[1]).toHaveTextContent(
-      `${formatDate('2026-06-05T10:00:00.000Z')} 骑行`,
+      `${formatDate('2026-06-05T10:00:00.000Z')} 跑步`,
     )
 
     // 手动重置排序 → 回到默认开始时间降序（act-01 最新）

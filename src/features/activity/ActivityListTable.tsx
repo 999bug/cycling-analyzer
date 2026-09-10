@@ -10,7 +10,9 @@
  *   表头全选当前页行，勾选不触发行点击跳转
  */
 import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
+import { activityTypeLabel, isCyclingType } from '@/types/activityType'
 import { formatDate, formatDuration, formatElevation } from '@/utils/format'
 import {
   formatDistanceByUnit,
@@ -71,7 +73,7 @@ interface Column {
   /** 可排序字段（缺省 = 不可排序列） */
   sortBy?: SortField
   align: 'left' | 'right'
-  render: (item: ActivitySummary) => string
+  render: (item: ActivitySummary) => ReactNode
 }
 
 /**
@@ -87,7 +89,30 @@ function buildColumns(distanceUnit: DistanceUnit): Column[] {
       label: '标题',
       sortBy: 'name',
       align: 'left',
-      render: (item) => item.name ?? `${formatDate(item.startTime)} 骑行`,
+      // 无标题时用「日期 + 运动类型」兜底：跑步/散步不得显示成「… 骑行」
+      render: (item) =>
+        item.name ?? `${formatDate(item.startTime)} ${activityTypeLabel(item.activityType)}`,
+    },
+    {
+      key: 'type',
+      label: '类型',
+      align: 'left',
+      // 只给非骑行加色：骑行是默认值（占比极高），染色会淹没真正需要注意的行
+      render: (item) => {
+        const label = activityTypeLabel(item.activityType)
+        const isCycling = isCyclingType(item.activityType)
+        return (
+          <span
+            className={
+              isCycling
+                ? 'activity-table__type'
+                : 'activity-table__type activity-table__type--other'
+            }
+          >
+            {label}
+          </span>
+        )
+      },
     },
     {
       key: 'startTime',

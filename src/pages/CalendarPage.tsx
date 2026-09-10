@@ -22,6 +22,7 @@ import { formatDuration, formatElevation } from '@/utils/format'
 import { formatDistanceByUnit } from '@/features/settings/settings'
 import { useImportStore } from '@/stores/importStore'
 import { useUnits } from '@/hooks/useUnits'
+import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 
 /**
@@ -43,8 +44,7 @@ function CalendarPage() {
 
   const reload = useCallback(() => {
     let cancelled = false
-    repository
-      .listAllSummaries()
+    listCyclingSummaries(repository)
       .then((all) => {
         if (!cancelled) {
           setSummaries(all)
