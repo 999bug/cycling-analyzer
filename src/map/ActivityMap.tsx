@@ -79,6 +79,14 @@ export interface ActivityMapProps {
   /** 是否启用在线回放控制条 */
   replayEnabled?: boolean
 
+  /**
+   * 回放判定暂停用的密集采样源（未抽稀的逐点记录）。
+   *
+   * `points` 是抽稀结果，采样间隔可达分钟级；回放若直接用它判定暂停，
+   * 「>60s 缺口 = 暂停」会把正常骑行段误判成暂停，光标会横跨数百米瞬移。
+   */
+  replayMotionSource?: readonly { timestamp: number; distance?: number }[]
+
   /** 地形图层是否可见（父级受控） */
   terrainVisible?: boolean
 
@@ -183,7 +191,7 @@ function AutoInvalidate() {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -380,6 +388,7 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         {replayEnabled && (
           <TrackReplay
             points={displayPoints}
+            motionSource={replayMotionSource}
             distanceUnit={distanceUnit}
             terrainVisible={terrainVisible}
             onTerrainToggle={onTerrainToggle ?? (() => {})}

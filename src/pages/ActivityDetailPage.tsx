@@ -899,6 +899,7 @@ function ActivityDetailPage() {
           hoverPoint={hoverPoint}
           onHover={setHoverTimestamp}
           replayEnabled={replayMode}
+          replayMotionSource={cleanedRecords.cleaned}
           terrainVisible={terrainVisible}
           onTerrainToggle={() => setTerrainVisible(!terrainVisible)}
           distanceUnit={distanceUnit}

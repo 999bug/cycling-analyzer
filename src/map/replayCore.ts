@@ -34,29 +34,46 @@ export interface MovingTimelineInput {
  * **几何点一个不丢**（只改 timestamp）：已走高亮折线与底图完整轨迹始终重合，
  * 暂停段在时间轴上宽度为 0，因而不会被停留播放。
  *
+ * **判定源必须与展示点分开传**（`motionSource`）：详情页展示用的是 Douglas-Peucker
+ * 抽稀点，采样间隔可达分钟级——直接把「>60s 缺口 = 暂停」套在抽稀点上，会把
+ * 正常骑行段误判成暂停并折成 0 时长，光标于是横跨数百米瞬移。传入未抽稀的
+ * 密集逐点记录后，判定与活动计时时长完全同口径；抽稀点的时间戳是密集记录的
+ * 子集，按时间戳查表重映射即可（两点指针同步推进，O(N+M)）。
+ *
  * 兜底：点数不足、完全没有累计距离、或全程判定为静止（压缩后时长归零）时，
  * 原样返回入参数组——回退真实时间轴，行为与改造前一致。
  *
- * @param points 轨迹点（timestamp 升序，依赖累计距离字段）
+ * @param points 展示用轨迹点（timestamp 升序）
+ * @param motionSource 判定暂停用的密集采样源（timestamp 升序，含累计距离）；
+ *   缺省时用 points 自身判定（仅适用于本身就密集的点集，如视频导出的逐点记录）
  * @returns 时间戳重映射后的新数组（不修改入参）
  */
-export function buildMovingTimeline<T extends MovingTimelineInput>(points: T[]): T[] {
+export function buildMovingTimeline<T extends MovingTimelineInput>(
+  points: T[],
+  motionSource?: readonly MovingTimelineInput[],
+): T[] {
   const first = points[0]
-  if (first === undefined || points.length < 2) {
+  const source = motionSource ?? points
+  if (first === undefined || points.length < 2 || source.length < 2) {
     return points
   }
-  if (!points.some((point) => point.distance !== undefined)) {
+  if (!source.some((point) => point.distance !== undefined)) {
     return points
   }
-  const timeline: T[] = [{ ...first, timestamp: 0 }]
+  const timeline: T[] = []
   let movingClock = 0
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]!
-    const curr = points[i]!
-    if (isMovingSegment(prev, curr)) {
-      movingClock += Math.max(curr.timestamp - prev.timestamp, 0)
+  // 判定源指针：推进到「不在展示点之后」为止，把中间各运动段的时长累进 movingClock
+  let cursor = 0
+  for (const point of points) {
+    while (cursor + 1 < source.length && source[cursor + 1]!.timestamp <= point.timestamp) {
+      const prev = source[cursor]!
+      const curr = source[cursor + 1]!
+      if (isMovingSegment(prev, curr)) {
+        movingClock += Math.max(curr.timestamp - prev.timestamp, 0)
+      }
+      cursor++
     }
-    timeline.push({ ...curr, timestamp: movingClock })
+    timeline.push({ ...point, timestamp: movingClock })
   }
   return movingClock > 0 ? timeline : points
 }
@@ -79,6 +96,47 @@ export function findIndexAtTimestamp(points: ReplayPoint[], timestamp: number): 
     }
   }
   return low
+}
+
+/**
+ * 已走高亮线的两段切分点。
+ *
+ * 线头必须**恰好停在光标上**：骨架段若直接画到「光标所在段的右端点」，
+ * 线头会比圆点领先最多一个抽稀段（实测中位 170m、最大 1km+，视觉上就是
+ * 「橙线跑得比圆点快」，圆点像被甩在后面）。因此骨架只画到光标**身后**
+ * 的抽稀点，剩下的一小截由末段补齐并收在光标上。
+ */
+export interface TraveledSplit {
+  /** 骨架段应包含的抽稀点数（0 表示骨架尚未开始） */
+  backboneCount: number
+
+  /** 末段需要补的原始点起始下标（骨架尾点的下一个原始点） */
+  tailStart: number
+}
+
+/**
+ * 计算已走高亮线的骨架段/末段切分。
+ *
+ * @param pointIndex 光标所在段的右端点索引（findIndexAtTimestamp 的返回值）
+ * @param stride 骨架抽稀步长
+ * @param skeletonCount 骨架点数
+ */
+export function splitTraveledLine(
+  pointIndex: number,
+  stride: number,
+  skeletonCount: number,
+): TraveledSplit {
+  if (pointIndex <= 0) {
+    return { backboneCount: 0, tailStart: 0 }
+  }
+  // 光标位于 [pointIndex-1, pointIndex] 段内：骨架最多画到 pointIndex-1
+  const backedIndex = pointIndex - 1
+  const backboneCount = Math.min(skeletonCount, Math.floor(backedIndex / stride) + 1)
+  if (backboneCount === 0) {
+    return { backboneCount: 0, tailStart: 0 }
+  }
+  // 骨架尾点 = points[(backboneCount-1) * stride]，末段从它的下一个原始点接着画
+  return { backboneCount, tailStart: (backboneCount - 1) * stride + 1 }
 }
 
 /**

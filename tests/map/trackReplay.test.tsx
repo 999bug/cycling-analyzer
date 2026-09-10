@@ -6,10 +6,12 @@
  *   TrackReplay 内部 useMap 需要 Leaflet 上下文：统一包在 MapContainer 内渲染
  *   （jsdom 下 Leaflet 可初始化，地图交互由 Playwright 实测覆盖）。
  */
+import { createRef } from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MapContainer } from 'react-leaflet'
+import { CircleMarker, Polyline, type LatLng, type Layer, type Map as LeafletMap } from 'leaflet'
 import { TrackReplay } from '@/map/TrackReplay'
 import {
   buildCursorTipHtml,
@@ -17,6 +19,7 @@ import {
   buildReplaySkeleton,
   findIndexAtTimestamp,
   interpolatePositionAt,
+  splitTraveledLine,
 } from '@/map/replayCore'
 import type { RoutePoint } from '@/types/activity'
 
@@ -30,6 +33,23 @@ function makePoints(count: number): RoutePoint[] {
     speed: 5,
     heartRate: 120 + (i % 10),
   }))
+}
+
+/**
+ * 构造「展示点被抽稀、判定源密集」的场景：密集记录每秒 1 点、全程 10m/s 骑行；
+ * 展示点只保留 0/10/100/110s（相邻间隔最大 90s，> 暂停判定缺口 60s）。
+ * 直接用展示点判定会把 10→100s 这段正常骑行误判成暂停。
+ */
+function makeSparseWithDenseSource(): { sparse: RoutePoint[]; dense: RoutePoint[] } {
+  const dense: RoutePoint[] = Array.from({ length: 111 }, (_, t) => ({
+    timestamp: t,
+    latitude: 31.2 + t * 0.0001,
+    longitude: 121.5,
+    distance: t * 10,
+    speed: 10,
+  }))
+  const keep = new Set([0, 10, 100, 110])
+  return { sparse: dense.filter((point) => keep.has(point.timestamp)), dense }
 }
 
 /**
@@ -98,6 +118,25 @@ describe('buildReplaySkeleton（已走折线抽稀）', () => {
   })
 })
 
+describe('splitTraveledLine（已走高亮线段切分）', () => {
+  it('骨架只画到光标身后：线头不会领先圆点', () => {
+    // stride=1：光标在 5→6 段内时，骨架画到索引 5（=右端点-1），末段从 5 起
+    expect(splitTraveledLine(6, 1, 10)).toEqual({ backboneCount: 6, tailStart: 6 })
+    expect(splitTraveledLine(1, 1, 10)).toEqual({ backboneCount: 1, tailStart: 1 })
+  })
+
+  it('起点处骨架为空（末段只含光标）', () => {
+    expect(splitTraveledLine(0, 1, 10)).toEqual({ backboneCount: 0, tailStart: 0 })
+  })
+
+  it('抽稀步长 >1 时末段补上骨架尾点到光标之间的原始点', () => {
+    // stride=3、光标在 8→9 段内：骨架画到 points[6]（索引 6/3=2 → 3 点），末段从 points[7] 起
+    expect(splitTraveledLine(9, 3, 5)).toEqual({ backboneCount: 3, tailStart: 7 })
+    // stride=2、光标在 5→6 段内：骨架画到 points[4]，末段无原始点可补
+    expect(splitTraveledLine(6, 2, 5)).toEqual({ backboneCount: 3, tailStart: 5 })
+  })
+})
+
 describe('buildMovingTimeline（运动时间轴压缩）', () => {
   it('折叠暂停时段：末点时间戳 = 运动时长，几何点一个不丢', () => {
     const points = makePointsWithPause()
@@ -133,6 +172,18 @@ describe('buildMovingTimeline（运动时间轴压缩）', () => {
   it('全程静止（压缩后时长归零）时原样返回，避免零长度回放', () => {
     const points = makePoints(10).map((point) => ({ ...point, distance: 100 }))
     expect(buildMovingTimeline(points)).toBe(points)
+  })
+
+  it('展示点被抽稀到分钟级间隔时，判定必须换用密集采样源', () => {
+    const { sparse, dense } = makeSparseWithDenseSource()
+    // 只用抽稀点判定：10→100s 的 90s 缺口被当成暂停 → 总时长只剩 20s（正常骑行被折掉）
+    expect(buildMovingTimeline(sparse)[sparse.length - 1]!.timestamp).toBe(20)
+    // 换密集记录判定：全程 10m/s 骑行 → 总时长 110s，时间戳按真实运动时间推进
+    const timeline = buildMovingTimeline(sparse, dense)
+    expect(timeline.map((point) => point.timestamp)).toEqual([0, 10, 100, 110])
+    // 几何点与入参一一对应，不修改入参
+    expect(timeline.map((point) => point.latitude)).toEqual(sparse.map((point) => point.latitude))
+    expect(sparse[sparse.length - 1]!.timestamp).toBe(110)
   })
 })
 
@@ -234,6 +285,70 @@ describe('TrackReplay 控制条', () => {
       expect(screen.getByText(/00:20/)).toBeInTheDocument()
     })
     expect(screen.queryByText(/01:20/)).not.toBeInTheDocument()
+  })
+
+  it('传入密集采样源后，抽稀点之间的正常骑行段不再被误折', async () => {
+    const { sparse, dense } = makeSparseWithDenseSource()
+    render(
+      <MapContainer center={[31.2, 121.5]} zoom={14} style={{ width: 800, height: 600 }}>
+        <TrackReplay
+          points={sparse}
+          motionSource={dense}
+          distanceUnit="km"
+          terrainVisible={false}
+          onTerrainToggle={() => {}}
+        />
+      </MapContainer>,
+    )
+    fireEvent.change(screen.getByLabelText('回放进度'), { target: { value: '1000' } })
+    // 运动时长 110s；只用抽稀点判定则会被折成 20s（00:20）
+    await waitFor(() => {
+      expect(screen.getByText(/01:50/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/00:20/)).not.toBeInTheDocument()
+  })
+
+  it('已走高亮线的线头与光标重合（橙线不领先圆点）', async () => {
+    const mapRef = createRef<LeafletMap>()
+    render(
+      <MapContainer
+        ref={mapRef}
+        center={[31.2, 121.5]}
+        zoom={14}
+        style={{ width: 800, height: 600 }}
+      >
+        <TrackReplay
+          points={points}
+          distanceUnit="km"
+          terrainVisible={false}
+          onTerrainToggle={() => {}}
+        />
+      </MapContainer>,
+    )
+    const slider = screen.getByLabelText('回放进度') as HTMLInputElement
+    for (const value of ['250', '500', '870']) {
+      fireEvent.change(slider, { target: { value } })
+      await waitFor(() => {
+        const layers: Layer[] = []
+        mapRef.current!.eachLayer((layer) => layers.push(layer))
+        const tail = layers.find(
+          (layer): layer is Polyline =>
+            layer instanceof Polyline && layer.options.className === 'replay-traveled-tail',
+        )
+        const cursor = layers.find(
+          (layer): layer is CircleMarker => layer instanceof CircleMarker && layer.options.radius === 7,
+        )
+        expect(tail).toBeDefined()
+        expect(cursor).toBeDefined()
+        const tip = (tail!.getLatLngs() as LatLng[])[tail!.getLatLngs().length - 1]!
+        // 覆盖层不能被 React 渲染路径打回初始态（否则圆点会弹回起点、橙线被清空）
+        expect(tail!.getLatLngs().length).toBeGreaterThanOrEqual(2)
+        expect(cursor!.getLatLng().lat).toBeGreaterThan(points[0]!.latitude)
+        // 线头与圆点必须落在同一坐标（否则就是「橙线跑得比圆点快」）
+        expect(tip.lat).toBeCloseTo(cursor!.getLatLng().lat, 10)
+        expect(tip.lng).toBeCloseTo(cursor!.getLatLng().lng, 10)
+      })
+    }
   })
 
   it('拖动进度滑块联动时钟与距离 HUD', async () => {

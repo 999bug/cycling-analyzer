@@ -28,7 +28,12 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { CircleMarker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import { DomEvent } from 'leaflet'
-import type { CircleMarker as LeafletCircleMarker, Polyline as LeafletPolyline, LatLngTuple } from 'leaflet'
+import type {
+  CircleMarker as LeafletCircleMarker,
+  PathOptions,
+  Polyline as LeafletPolyline,
+  LatLngTuple,
+} from 'leaflet'
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import { ReplayEngine, type ReplayFrame } from '@/map/replayEngine'
@@ -37,6 +42,7 @@ import {
   buildMovingTimeline,
   buildReplaySkeleton,
   findIndexAtTimestamp,
+  splitTraveledLine,
 } from '@/map/replayCore'
 import './TrackReplay.css'
 
@@ -66,6 +72,38 @@ const FOLLOW_PAN_RESERVE_RATIO = 0.4
 const FOLLOW_PAN_DURATION_SECONDS = 0.3
 
 /**
+ * 模块级常量：react-leaflet 按 props **身份**（!== 比较）决定是否回写图层，
+ * 内联的 `positions={[]}` / `center={[...]}` / `pathOptions={{...}}` 每次渲染都是新对象，
+ * 会导致已走线被 setLatLngs([]) 清空、光标被 setLatLng(起点) 弹回——播放中快照
+ * 10Hz 重渲染、拖动进度暂停态都会命中。命令式更新必须用稳定引用，否则覆盖层会被
+ * React 渲染路径反复打回初始态（实测：拖动后圆点回到起点、橙线消失）。
+ */
+const EMPTY_POSITIONS: LatLngTuple[] = []
+const TRAVELED_PATH_OPTIONS: PathOptions = {
+  color: TRAVELED_COLOR,
+  weight: 6,
+  opacity: 0.95,
+  className: 'replay-traveled',
+}
+const TAIL_PATH_OPTIONS: PathOptions = {
+  ...TRAVELED_PATH_OPTIONS,
+  className: 'replay-traveled-tail',
+}
+const HALO_PATH_OPTIONS: PathOptions = {
+  color: CURSOR_COLOR,
+  weight: 2,
+  fillColor: CURSOR_COLOR,
+  fillOpacity: 0.25,
+  stroke: false,
+}
+const CORE_PATH_OPTIONS: PathOptions = {
+  color: '#fff',
+  weight: 2,
+  fillColor: CURSOR_COLOR,
+  fillOpacity: 1,
+}
+
+/**
  * 格式化秒 → mm:ss 或 h:mm:ss。
  *
  * @param seconds 秒数
@@ -87,6 +125,15 @@ export interface TrackReplayProps {
   /** 轨迹点（展示坐标系，与地图渲染一致） */
   points: RoutePoint[]
 
+  /**
+   * 判定暂停用的密集采样源（未抽稀的逐点记录）。
+   *
+   * `points` 是 Douglas-Peucker 抽稀结果，采样间隔可达分钟级；若直接用它判定
+   * 暂停，「>60s 缺口 = 暂停」会把正常骑行段误判成暂停并折成 0 时长，光标会
+   * 横跨数百米瞬移。传入密集记录后判定与活动计时时长同口径。
+   */
+  motionSource?: readonly { timestamp: number; distance?: number }[]
+
   /** 距离单位偏好（km/mi） */
   distanceUnit: DistanceUnit
 
@@ -101,8 +148,14 @@ export interface TrackReplayProps {
  * 地图覆盖层子组件：渲染当前位置标记与已走高亮轨迹。
  * 订阅引擎帧广播做纯命令式更新——播放期间不经任何 React 渲染路径。
  *
+ * 已走高亮线分两段绘制，保证线头**恰好停在光标上**（线不会领先圆点）：
+ * - 骨架段：抽稀骨架中位于光标身后（严格不超前）的部分，跨点时才 addLatLng 增量追加；
+ * - 末段：骨架尾点 → 光标之间的原始点 + 光标本身，逐帧 setLatLngs 重建
+ *   （点数 ≤ 抽稀步长 + 2，成本可忽略）。若只画骨架段，线头会比圆点领先
+ *   最多一个抽稀段——实测可达 400m，视觉上就是「橙线跑得比圆点快」。
+ *
  * @param props.engine 回放引擎（帧广播来源）
- * @param props.points 全量轨迹点
+ * @param props.points 全量轨迹点（运动时间轴）
  * @param props.skeleton 已走轨迹抽稀骨架（skeleton[i] ↔ points[i*stride]）
  * @param props.stride 抽稀步长
  */
@@ -116,6 +169,8 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
   const haloRef = useRef<LeafletCircleMarker | null>(null)
   const coreRef = useRef<LeafletCircleMarker | null>(null)
   const traveledRef = useRef<LeafletPolyline | null>(null)
+  // 已走线末段（骨架尾点 → 光标）：逐帧跟随，保证线头与圆点重合
+  const tailRef = useRef<LeafletPolyline | null>(null)
   // 光标数据牌（命令式 DOM：绕开 React 渲染路径，随帧更新位置与内容）
   const tipRef = useRef<HTMLDivElement | null>(null)
   const tipIndexRef = useRef(-1)
@@ -125,6 +180,10 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
   const userZoomedRef = useRef(false)
   // 跟随镜头动画进行中标志：动画期间不叠加新平移（动画由 CSS transform 驱动，零重投影）
   const panningRef = useRef(false)
+
+  // 光标初始中心（首点坐标）：必须保持稳定引用——新数组会让 react-leaflet
+  // 在每次渲染时 setLatLng 回起点，把帧广播推到光标位置覆盖掉
+  const startLatLng = useMemo(() => initialCenterOf(points), [points])
 
   // 监听用户手势触发的缩放（程序化调用前置标志位跳过）+ 镜头动画状态
   useEffect(() => {
@@ -165,26 +224,43 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
   }, [map])
 
   /**
-   * 把已走高亮折线命令式对齐到目标轨迹点索引。
-   * 前进（播放推进）：仅增量 addLatLng 追加新跨过的骨架点，Leaflet 局部更新；
-   * 回退（拖动/重播/初始）：setLatLngs 全量重建。以折线实际点数判断，
-   * 不依赖额外状态，天然兼容 remount。
+   * 把已走高亮折线命令式对齐到「光标所在位置」。
+   *
+   * 分两段：骨架段只画到光标**身后**的最后一个抽稀点（严格不超前，杜绝线头领先
+   * 圆点）；末段补上骨架尾点与光标之间的原始点并以光标收尾，使线头与圆点重合。
+   * 前进（播放推进）时骨架段仅增量 addLatLng；回退（拖动/重播/初始）时 setLatLngs
+   * 全量重建。以折线实际点数判断，不依赖额外状态，天然兼容 remount。
+   *
+   * @param pointIndex 光标所在段的右端点索引（findIndexAtTimestamp 的返回值）
+   * @param cursor 光标插值坐标（已走高亮线的终点）
    */
-  const syncTraveledTo = (pointIndex: number) => {
+  const syncTraveledTo = (pointIndex: number, cursor: LatLngTuple) => {
     const line = traveledRef.current
     if (line === null) {
       return
     }
     const clamped = Math.min(Math.max(pointIndex, 0), points.length - 1)
-    const targetCount = Math.min(skeleton.length, Math.floor(clamped / stride) + 1)
+    const { backboneCount, tailStart } = splitTraveledLine(clamped, stride, skeleton.length)
     const currentCount = line.getLatLngs().length
-    if (currentCount === 0 || currentCount > targetCount) {
-      line.setLatLngs(skeleton.slice(0, targetCount).map((p) => [p.latitude, p.longitude] as LatLngTuple))
-      return
+    if (currentCount === 0 || currentCount > backboneCount) {
+      line.setLatLngs(skeleton.slice(0, backboneCount).map(toLatLngTuple))
+    } else {
+      for (let i = currentCount; i < backboneCount; i++) {
+        line.addLatLng(toLatLngTuple(skeleton[i]!))
+      }
     }
-    for (let i = currentCount; i < targetCount; i++) {
-      const p = skeleton[i]!
-      line.addLatLng([p.latitude, p.longitude])
+    // 末段：骨架尾点 → 光标（含两者之间的原始点，避免抽稀段被拉成直线切角）
+    const tail = tailRef.current
+    if (tail !== null) {
+      const tailLatLngs: LatLngTuple[] = []
+      if (backboneCount > 0) {
+        tailLatLngs.push(toLatLngTuple(skeleton[backboneCount - 1]!))
+      }
+      for (let i = tailStart; i < clamped; i++) {
+        tailLatLngs.push(toLatLngTuple(points[i]!))
+      }
+      tailLatLngs.push(cursor)
+      tail.setLatLngs(tailLatLngs)
     }
   }
 
@@ -267,7 +343,7 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
       const latLng: LatLngTuple = [frame.latitude, frame.longitude]
       haloRef.current?.setLatLng(latLng)
       coreRef.current?.setLatLng(latLng)
-      syncTraveledTo(frame.index)
+      syncTraveledTo(frame.index, latLng)
       followCursor(latLng)
       updateTip(frame, latLng)
     })
@@ -277,20 +353,12 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
 
   return (
     <>
-      {/* 已走轨迹高亮：初始为空，全部由帧广播命令式更新（增量 addLatLng） */}
-      <Polyline ref={traveledRef} positions={[]} pathOptions={{ color: TRAVELED_COLOR, weight: 6, opacity: 0.95 }} />
-      <CircleMarker
-        ref={haloRef}
-        center={initialCenterOf(points)}
-        radius={14}
-        pathOptions={{ color: CURSOR_COLOR, weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 0.25, stroke: false }}
-      />
-      <CircleMarker
-        ref={coreRef}
-        center={initialCenterOf(points)}
-        radius={7}
-        pathOptions={{ color: '#fff', weight: 2, fillColor: CURSOR_COLOR, fillOpacity: 1 }}
-      />
+      {/* 已走轨迹高亮（骨架段）：初始为空，全部由帧广播命令式更新（增量 addLatLng） */}
+      <Polyline ref={traveledRef} positions={EMPTY_POSITIONS} pathOptions={TRAVELED_PATH_OPTIONS} />
+      {/* 已走轨迹末段：骨架尾点 → 光标，逐帧重建（≤ 抽稀步长 + 2 点），让线头与圆点重合 */}
+      <Polyline ref={tailRef} positions={EMPTY_POSITIONS} pathOptions={TAIL_PATH_OPTIONS} />
+      <CircleMarker ref={haloRef} center={startLatLng} radius={14} pathOptions={HALO_PATH_OPTIONS} />
+      <CircleMarker ref={coreRef} center={startLatLng} radius={7} pathOptions={CORE_PATH_OPTIONS} />
     </>
   )
 }
@@ -299,6 +367,11 @@ function ReplayOverlay({ engine, points, skeleton, stride }: {
 function initialCenterOf(points: RoutePoint[]): LatLngTuple {
   const first = points[0]
   return first !== undefined ? [first.latitude, first.longitude] : [0, 0]
+}
+
+/** 轨迹点 → Leaflet 坐标元组（帧循环内高频调用，统一在此转换） */
+function toLatLngTuple(point: { latitude: number; longitude: number }): LatLngTuple {
+  return [point.latitude, point.longitude]
 }
 
 /**
@@ -327,10 +400,12 @@ function TerrainLayer({ visible }: { visible: boolean }) {
  *
  * @param props 组件参数
  */
-export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainToggle }: TrackReplayProps) {
+export function TrackReplay({ points, motionSource, distanceUnit, terrainVisible, onTerrainToggle }: TrackReplayProps) {
   // 运动时间轴：把红灯/休息等暂停时段折叠为 0 长度（只重映射时间戳，几何点不丢，
-  // 已走高亮线与底图轨迹始终重合）。无法判定暂停时原样返回真实时间轴，行为与改造前一致。
-  const timeline = useMemo(() => buildMovingTimeline(points), [points])
+  // 已走高亮线与底图轨迹始终重合）。判定用密集采样源（motionSource）：展示点经过
+  // Douglas-Peucker 抽稀，采样间隔可达分钟级，直接判定会把正常骑行段误判成暂停。
+  // 无法判定暂停时原样返回真实时间轴，行为与改造前一致。
+  const timeline = useMemo(() => buildMovingTimeline(points, motionSource), [points, motionSource])
 
   // 引擎与轨迹点生命周期绑定：points 变更（切换活动）即重建引擎
   const engine = useMemo(() => new ReplayEngine(timeline), [timeline])

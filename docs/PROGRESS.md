@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[IM] 在线回放与回放视频导出改用运动时间轴：折叠红灯/休息等暂停时段；版本 2.52.0 → 2.52.1）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[BF] 回放覆盖层不再被 React 内联 props 打回初始态；暂停判定改用密集记录源，修掉光标瞬移与橙线领先圆点；版本 2.52.1 → 2.52.3）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -49,10 +49,11 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 新增功能先定位到对应层，跨层直接调用视为违规
 - **双数据源**：组件不直接 new 仓库，统一经 `useActivityRepository()` 按当前数据源（`dataSourceStore`）取本地 Dexie 仓库或作者快照仓库；作者源只读，写操作 UI 必须按源隐藏（规格外设计文档 §6.3）
 - **作者数据可见性（v2.48.0）**：作者数据定位为「空状态示例」。`dataSourceStore.authorVisibility: 'auto'|'show'|'hide'`（persist），auto = 本地有活动即隐藏（运行时 `hasLocalData` 判定，清空本地后自动回来）；`selectEffectiveSource` 在作者源被隐藏时无缝回退 local；切换器在作者档不可用时整体不渲染（`DataSourceSwitcher`）。配套：`AuthorHiddenNotice` 一次性提示（`authorHiddenNoticePending` persist，「去设置」跳 `/settings#author-data` 高亮）；深链兜底 `peekAuthorData`（运行时，仅详情页会话有效，显式切源即清除，设置值不动）；`initDataSource` 启动探测本地活动数（countActivities），导入成功/清空后同步 `setHasLocalData`
-- **运动时间口径（v2.52.1，单一来源）**：`src/features/activity/movingTime.ts` 是「相邻点是否处于运动中」的唯一判定处——正常间隔（≤30s）按位移速度 >0.5m/s、短缺口（30~60s）按两端位移 ≥8m、长缺口（>60s）整段剔除。两个消费方共用，禁止各自复制阈值：
+- **运动时间口径（v2.52.1 起，单一来源）**：`src/features/activity/movingTime.ts` 是「相邻点是否处于运动中」的唯一判定处——正常间隔（≤30s）按位移速度 >0.5m/s、短缺口（30~60s）按两端位移 ≥8m、长缺口（>60s）整段剔除。两个消费方共用，禁止各自复制阈值：
   - `fit/calculator` 的 `estimateMovingDuration` → GPX 等无 session 数据的「计时时长」（即均速分母）；
   - `map/replayCore` 的 `buildMovingTimeline` → 在线回放与回放视频导出的时间轴（暂停段压缩为 0 长度，只重映射 timestamp、几何点不丢）。
-  由此**回放总时长恒等于活动计时时长**（两者同为运动时长）。调整判定规则只改这一个文件
+  由此回放总时长等于记录的移动时长（GPX 等无 session 数据即活动计时时长）——**但判定源必须是密集逐点记录**：详情页展示点经 Douglas-Peucker 抽稀，采样间隔可达分钟级（实测 2102 条记录抽成 54 点、相邻间隔中位 29s 最大 155s），直接拿它判定会把正常骑行段误判成暂停（>60s 规则），实测一份 35 分钟骑行被折掉 1047s、光标横跨 1010m 瞬移。因此 `TrackReplay` 的 `motionSource` / `ActivityMap` 的 `replayMotionSource` 必须传未抽稀的 `cleanedRecords.cleaned`
+- **回放覆盖层禁止用内联 props（v2.52.3 起，硬约束）**：React 组件**不得**直接命令式操作 Leaflet 图层后，又给该图层传内联的 `positions={[]}` / `center={[...]}` / `pathOptions={{...}}`——react-leaflet 对 `positions`/`center` 做 `!==` 身份比较，新对象会触发 `setLatLngs([])` / `setLatLng(起点)`，把帧广播写入的状态**打回初始态**（播放中 10Hz 快照重渲染 + 拖动进度暂停态都会命中，实测拖动后圆点弹回起点、橙线消失）。覆盖层的这些 props 一律用模块级常量或 `useMemo` 稳定引用，几何状态只经帧广播命令式更新
 
 ### 测试约定
 
