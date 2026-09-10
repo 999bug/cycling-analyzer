@@ -43,11 +43,11 @@ const segmentRepository = new DexieSegmentRepository(db)
  */
 let leaderboardCache: { key: string; boards: ReadonlyMap<number, SegmentEffort[]> } | null = null
 
-/** localStorage key：Strava access token（6 小时过期，过期需重新粘贴） */
-const STRAVA_TOKEN_KEY = 'strava-access-token'
-
 /** Strava 导入状态：idle / importing / done / error */
 type ImportState = 'idle' | 'importing' | 'done' | 'error'
+
+/** 旧版本持久化 Token 的 localStorage key，仅用于一次性清理历史遗留值。 */
+const LEGACY_STRAVA_TOKEN_KEY = 'strava-access-token'
 
 /** 加载状态：loading / ready / error */
 type LoadState = 'loading' | 'ready' | 'error'
@@ -56,6 +56,11 @@ type LoadState = 'loading' | 'ready' | 'error'
  * 赛段页面。
  */
 function SegmentsPage() {
+  useEffect(() => {
+    // 2.51.3 起不再写入 Token；清理老版本留下的凭证，避免继续长期驻留。
+    localStorage.removeItem(LEGACY_STRAVA_TOKEN_KEY)
+  }, [])
+
   const [segments, setSegments] = useState<SegmentEntity[] | null>(null)
   const [leaderboards, setLeaderboards] = useState<ReadonlyMap<number, SegmentEffort[]> | null>(null)
   const [state, setState] = useState<LoadState>('loading')
@@ -171,7 +176,8 @@ function SegmentsPage() {
   }, [reload, importSummary])
 
   // ---- Strava 赛段导入状态（仅本地模式展示） ----
-  const [stravaToken, setStravaToken] = useState(() => localStorage.getItem(STRAVA_TOKEN_KEY) ?? '')
+  // Token 仅保存在当前页面内存，刷新后需要重新粘贴，避免凭证长期落在 localStorage。
+  const [stravaToken, setStravaToken] = useState('')
   const [importState, setImportState] = useState<ImportState>('idle')
   const [importMessage, setImportMessage] = useState('')
   const [summaries, setSummaries] = useState<{ id: string; name: string }[]>([])
@@ -218,7 +224,6 @@ function SegmentsPage() {
     setImportState('importing')
     setImportMessage('')
     try {
-      localStorage.setItem(STRAVA_TOKEN_KEY, stravaToken.trim())
       const existing = await segmentRepository.listSegments()
       const starred = await fetchStarredSegments(stravaToken.trim())
       const mapped = starred
@@ -376,7 +381,7 @@ function SegmentsPage() {
               />
             </label>
             <p className="segments-page__strava-hint">
-              API 方式：在 strava.com/settings/api 创建应用后获取；Token 过期后重新粘贴即可。
+              API 方式：在 strava.com/settings/api 创建应用后获取；Token 仅在当前页面使用，刷新后需重新粘贴。
             </p>
             <p className="segments-page__strava-hint">
               没有 Strava 订阅？免费方案：打开 Strava 赛段页 → 导出 GPX → 点「导入 GPX 文件」选择下载的 .gpx（可多选），自动解析建段并匹配成绩。

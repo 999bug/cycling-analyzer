@@ -222,6 +222,7 @@ describe('赛段页面', () => {
   })
 
   it('Strava 导入：粘贴 Token 拉收藏赛段去重入库', async () => {
+    localStorage.setItem('strava-access-token', 'legacy-token')
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -248,8 +249,8 @@ describe('赛段页面', () => {
     // 新赛段出现在列表
     expect(screen.getByText('外滩冲刺线')).toBeInTheDocument()
     expect(screen.getByText('滨江线 Strava')).toBeInTheDocument()
-    // token 已持久化
-    expect(localStorage.getItem('strava-access-token')).toBe('fake-token')
+    // Token 不持久化到 localStorage，刷新页面后需要重新粘贴
+    expect(localStorage.getItem('strava-access-token')).toBeNull()
   })
 
   it('Strava 导入：已存在 stravaId 的赛段跳过', async () => {
