@@ -80,6 +80,7 @@ async function seedActivities(activities: Activity[]): Promise<void> {
 
 describe('匹配的骑行区块', () => {
   it('同路线活动渲染折线图区块（含标题 + 匹配数量 + 图表容器）', async () => {
+    const singleRecordsSpy = vi.spyOn(DexieActivityRepository.prototype, 'getRecords')
     await seedActivities([
       makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
       makeActivity('a2', '机场东路夜骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
@@ -95,6 +96,38 @@ describe('匹配的骑行区块', () => {
     expect(await screen.findByText('匹配的骑行')).toBeInTheDocument()
     // 匹配数量
     expect(screen.getByText(/共 1 条同路线骑行/)).toBeInTheDocument()
+    expect(singleRecordsSpy).not.toHaveBeenCalled()
+  })
+
+  it('旧活动摘要缺端点时回退读取一次轨迹并回填摘要', async () => {
+    const singleRecordsSpy = vi.spyOn(DexieActivityRepository.prototype, 'getRecords')
+    await seedActivities([
+      makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-01T08:00:00'),
+      makeActivity('a2', '机场东路夜骑', 31.2001, 121.5001, 31.3001, 121.6001, 20500, '2026-08-02T08:00:00'),
+    ])
+    // 模拟历史活动：导入时摘要尚未冗余端点字段
+    for (const id of ['a1', 'a2']) {
+      await testDb.activities.update(id, {
+        routeStartLatitude: undefined,
+        routeStartLongitude: undefined,
+        routeEndLatitude: undefined,
+        routeEndLongitude: undefined,
+      })
+    }
+
+    render(
+      <MemoryRouter>
+        <SimilarRidesSection activityId="a1" currentDuration={3600} distanceUnit="km" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('匹配的骑行')).toBeInTheDocument()
+    // 每条旧活动各读取一次轨迹，读后即回填
+    expect(singleRecordsSpy).toHaveBeenCalledTimes(2)
+    await expect(testDb.activities.get('a1')).resolves.toMatchObject({
+      routeStartLatitude: 31.2,
+      routeEndLatitude: 31.3,
+    })
   })
 
   it('独一路线（无同组其他骑行）时不渲染区块', async () => {

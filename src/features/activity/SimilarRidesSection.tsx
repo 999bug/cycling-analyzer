@@ -18,7 +18,6 @@ import {
 } from 'recharts'
 import {
   buildRouteGroups,
-  extractEndpoints,
   type RouteActivityInput,
   type RouteGroup,
 } from '@/features/routes/routeGrouping'
@@ -33,6 +32,7 @@ import {
   type DistanceUnit,
 } from '@/features/settings/settings'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { readRouteEndpoints } from '@/storage/repositories/activityRepository'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import '@/features/activity/SimilarRidesSection.css'
@@ -127,11 +127,14 @@ function SimilarRidesSection({ activityId, currentDuration, distanceUnit }: Simi
         const summaries = await repository.listAllSummaries()
         const routeItems: RouteActivityInput[] = []
         for (const summary of summaries) {
-          const records = await repository.getRecords(summary.id)
           if (cancelled) {
             return
           }
-          const endpoints = extractEndpoints(records)
+          // 摘要已有端点时零轨迹读取；旧活动由仓储读取一次并写回摘要，下次起不再加载轨迹
+          const endpoints = readRouteEndpoints(summary) ?? (await repository.getRouteEndpoints(summary.id))
+          if (cancelled) {
+            return
+          }
           routeItems.push({
             id: summary.id,
             name: summary.name,
