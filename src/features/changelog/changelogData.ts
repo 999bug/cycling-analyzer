@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.52.6',
+    date: '2026-09-10',
+    features: [
+      '修复在线回放在记录断档处的跳变：设备停记或丢 GPS 期间骑出去的距离，此前会让光标瞬间跨越数百米，现在按上限速度平滑滑过',
+      '回放时长始终不超过该次骑行的总耗时（GPS 抖出的假位移不会把回放拉长）',
+      '回放视频导出同步该处理',
+    ],
+  },
+  {
     version: '2.52.5',
     date: '2026-09-10',
     features: ['内部开发笔记补齐（推送链路 502 的排查与重试经验），无功能变更'],

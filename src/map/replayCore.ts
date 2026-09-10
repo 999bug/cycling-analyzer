@@ -2,6 +2,7 @@
  * 在线回放纯计算模块：与 React 组件解耦（可单测、避免 fast-refresh 导出限制）。
  */
 import { isMovingSegment } from '@/features/activity/movingTime'
+import { haversineMeters } from '@/charts/timeline'
 
 /** 轨迹点最小结构（仅回放计算所需字段） */
 export interface ReplayPoint {
@@ -15,13 +16,50 @@ export interface ReplayPoint {
   longitude: number
 }
 
-/** 时间轴压缩的输入点：时间戳 + 累计距离（判定位移用） */
+/** 时间轴压缩的输入点：时间戳 + 累计距离（判定位移用）+ 可选坐标（限速用） */
 export interface MovingTimelineInput {
   /** Unix 秒时间戳（升序） */
   timestamp: number
 
   /** 累计距离（米）；全部缺失时无法判定暂停，时间轴原样返回 */
   distance?: number
+
+  /** 纬度；与 longitude 同时存在时可参与「光标限速」补时 */
+  latitude?: number
+
+  /** 经度；与 latitude 同时存在时可参与「光标限速」补时 */
+  longitude?: number
+}
+
+/**
+ * 回放光标的最大等效速度（m/s，90km/h）：高于任何真实骑行速度。
+ *
+ * 用途：设备停记/丢 GPS 期间骑出去的距离，会落在「一个记录缺口 = 判定为暂停」的
+ * 段里被折成 0 时长，光标于是瞬间跨越数百米（实测最大 3153m）。把这些段的时长
+ * 补足到「按该速度走完所需时间」即可让光标平滑滑过，而不是跳过去。
+ * 取值高于真实骑行速度，因此正常骑行段永远不会被补时。
+ */
+const MAX_CURSOR_SPEED_MPS = 25
+
+/**
+ * 单段时钟增量：以运动时长为下限、该段真实间隔为上限，位移过大时补足到限速所需时长。
+ *
+ * 上限保证「回放总时长 ≤ 活动总耗时」——GPS 抖出的假位移不会把回放拉长到失控。
+ *
+ * @param movingTime 该段的运动时长（密集记录判定结果，秒）
+ * @param prev 段起点（含原始时间戳；有坐标时限速生效）
+ * @param curr 段终点
+ */
+function segmentClockDelta(movingTime: number, prev: MovingTimelineInput, curr: MovingTimelineInput): number {
+  const realDt = Math.max(curr.timestamp - prev.timestamp, 0)
+  if (
+    prev.latitude === undefined || prev.longitude === undefined
+    || curr.latitude === undefined || curr.longitude === undefined
+  ) {
+    return movingTime
+  }
+  const needed = haversineMeters(prev.latitude, prev.longitude, curr.latitude, curr.longitude) / MAX_CURSOR_SPEED_MPS
+  return Math.min(Math.max(movingTime, needed), realDt)
 }
 
 /**
@@ -43,6 +81,10 @@ export interface MovingTimelineInput {
  * 兜底：点数不足、完全没有累计距离、或全程判定为静止（压缩后时长归零）时，
  * 原样返回入参数组——回退真实时间轴，行为与改造前一致。
  *
+ * 光标限速：设备停记/丢 GPS 期间真骑出去的距离，会落在被判为暂停的记录缺口里被折成
+ * 0 时长，光标于是瞬间跨越数百米（实测最大 3153m）。这类段按 MAX_CURSOR_SPEED_MPS
+ * 补足时长，光标平滑滑过；补时上限为该段真实间隔，故回放总时长始终 ≤ 活动总耗时。
+ *
  * @param points 展示用轨迹点（timestamp 升序）
  * @param motionSource 判定暂停用的密集采样源（timestamp 升序，含累计距离）；
  *   缺省时用 points 自身判定（仅适用于本身就密集的点集，如视频导出的逐点记录）
@@ -62,18 +104,24 @@ export function buildMovingTimeline<T extends MovingTimelineInput>(
   }
   const timeline: T[] = []
   let movingClock = 0
-  // 判定源指针：推进到「不在展示点之后」为止，把中间各运动段的时长累进 movingClock
+  // 判定源指针：推进到「不在展示点之后」为止，把中间各运动段的时长累进 pendingMovingTime
   let cursor = 0
+  let prevPoint: T | undefined
   for (const point of points) {
+    let pendingMovingTime = 0
     while (cursor + 1 < source.length && source[cursor + 1]!.timestamp <= point.timestamp) {
       const prev = source[cursor]!
       const curr = source[cursor + 1]!
       if (isMovingSegment(prev, curr)) {
-        movingClock += Math.max(curr.timestamp - prev.timestamp, 0)
+        pendingMovingTime += Math.max(curr.timestamp - prev.timestamp, 0)
       }
       cursor++
     }
+    movingClock += prevPoint === undefined
+      ? pendingMovingTime
+      : segmentClockDelta(pendingMovingTime, prevPoint, point)
     timeline.push({ ...point, timestamp: movingClock })
+    prevPoint = point
   }
   return movingClock > 0 ? timeline : points
 }

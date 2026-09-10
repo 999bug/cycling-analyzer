@@ -42,6 +42,15 @@
 - **UI 改动先出原型再动手**（用户 2026-09-09 明确要求）：涉及布局/交互调整时，先用 show_widget 画原型给用户审批，批准后才改代码并提交；不要「方案一写完就提交」。
 - **「完成后自动 reload」的链路必须防再入**（2026-09-09 无限刷新事故教训）：凡基于持久化状态决定是否刷新的组件，必须区分「本次刚完成」与「早就完成」（后者静默跳过）；实现前先列 状态×终态 表自查，且每个起点状态都要有测试。自动刷新一律走 `@/utils/navigation reloadPage`（jsdom 可注入），禁止直接 `window.location.reload()`。参考：main.tsx 的 sessionStorage 一次性标记模式。
 
+## 真实数据可用于测试（2026-09-10 用户明确授权）
+
+- 用户明确表示：`private-fixtures/` 里的骑行数据（FIT/GPX）**可以在测试与验证时直接使用**，不必绕开。
+  涉及算法/口径类改动（暂停判定、均速、抽稀、回放时间轴）时，优先用它做真实数据回归，而不是只靠合成的
+  `tests/fixtures/`——合成数据往往构造不出「抽稀后相邻点间隔 4 分钟」这类真实分布，本次回放 bug 就是靠它定位的。
+- 该目录 **gitignored，严禁提交、严禁写进任何入库文件**（文件名/内容都算）。诊断脚本可放在
+  `.workbuddy/tmp/`（同样 gitignored）：现成的有 `replay-batch-diag.ts`（全量轨迹跑新旧判定对比）。
+- 跑法：`npx tsx --tsconfig tsconfig.scripts.json .workbuddy/tmp/<脚本>.ts private-fixtures`。
+
 ## 测试强制规则（vitest Windows 小写盘符 bug，2026-09-08 实锤）
 
 - **Git Bash 里跑 vitest 前必须 `cd F:/<repo>`（盘符大写 F）**。若 cwd 是小写 `f:/...`，会触发 vitest #10692：小写盘符加载的 vitest runtime 与 Vite 规范化大写盘符的模块 ID 在 Node ESM 注册表里对不上，测试文件拿到第二份未初始化 runtime，所有测试报 `TypeError: Cannot read properties of undefined (reading 'config')` 或 "Vitest failed to find the current suite"。

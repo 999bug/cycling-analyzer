@@ -101,6 +101,12 @@ interface FramePoint {
   /** 画布像素 y */
   py: number
 
+  /** 纬度（时间轴「光标限速」补时用，见 buildMovingTimeline） */
+  latitude: number
+
+  /** 经度（时间轴「光标限速」补时用） */
+  longitude: number
+
   /** 累计距离（米） */
   distance?: number
 
@@ -362,6 +368,8 @@ function buildFramePoints(records: readonly ActivityRecord[], backdropZoom: numb
       timestamp: record.timestamp,
       px: lngToWorldPx(record.longitude!, backdropZoom) - centerX + CANVAS_WIDTH / 2,
       py: latToWorldPx(record.latitude!, backdropZoom) - centerY + CANVAS_HEIGHT / 2,
+      latitude: record.latitude!,
+      longitude: record.longitude!,
       distance: record.distance,
       speed: record.speed,
       heartRate: record.heartRate,
@@ -394,6 +402,8 @@ function buildFramePoints(records: readonly ActivityRecord[], backdropZoom: numb
     timestamp: record.timestamp,
     px: offsetX + (x - minX) * scale,
     py: CANVAS_HEIGHT - offsetY - (y - minY) * scale,
+    latitude: record.latitude!,
+    longitude: record.longitude!,
     distance: record.distance,
     speed: record.speed,
     heartRate: record.heartRate,

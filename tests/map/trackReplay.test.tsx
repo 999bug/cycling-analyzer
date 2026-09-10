@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MapContainer } from 'react-leaflet'
 import { CircleMarker, Polyline, type LatLng, type Layer, type Map as LeafletMap } from 'leaflet'
+import { haversineMeters } from '@/charts/timeline'
 import { TrackReplay } from '@/map/TrackReplay'
 import {
   buildCursorTipHtml,
@@ -169,21 +170,64 @@ describe('buildMovingTimeline（运动时间轴压缩）', () => {
     expect(buildMovingTimeline(points)).toBe(points)
   })
 
-  it('全程静止（压缩后时长归零）时原样返回，避免零长度回放', () => {
-    const points = makePoints(10).map((point) => ({ ...point, distance: 100 }))
+  it('全程静止且坐标不动（压缩后时长归零）时原样返回，避免零长度回放', () => {
+    // 坐标也必须不动：坐标有位移时「光标限速补时」会给出慢速回放（那是记录断档场景，另有专测）
+    const points = makePoints(10).map((point) => ({
+      ...point,
+      latitude: 31.2,
+      longitude: 121.5,
+      distance: 100,
+    }))
     expect(buildMovingTimeline(points)).toBe(points)
   })
 
   it('展示点被抽稀到分钟级间隔时，判定必须换用密集采样源', () => {
     const { sparse, dense } = makeSparseWithDenseSource()
+    // 去掉坐标：本用例只看判定源，排除「光标限速补时」的干扰（补时另有专测）
+    const withoutCoords = (points: RoutePoint[]): { timestamp: number; distance?: number }[] =>
+      points.map((point) => ({ timestamp: point.timestamp, distance: point.distance }))
     // 只用抽稀点判定：10→100s 的 90s 缺口被当成暂停 → 总时长只剩 20s（正常骑行被折掉）
-    expect(buildMovingTimeline(sparse)[sparse.length - 1]!.timestamp).toBe(20)
+    const sparseOnly = withoutCoords(sparse)
+    expect(buildMovingTimeline(sparseOnly)[sparseOnly.length - 1]!.timestamp).toBe(20)
     // 换密集记录判定：全程 10m/s 骑行 → 总时长 110s，时间戳按真实运动时间推进
-    const timeline = buildMovingTimeline(sparse, dense)
+    const timeline = buildMovingTimeline(withoutCoords(sparse), withoutCoords(dense))
     expect(timeline.map((point) => point.timestamp)).toEqual([0, 10, 100, 110])
-    // 几何点与入参一一对应，不修改入参
-    expect(timeline.map((point) => point.latitude)).toEqual(sparse.map((point) => point.latitude))
     expect(sparse[sparse.length - 1]!.timestamp).toBe(110)
+  })
+
+  it('记录断档（停记期间真骑出去了）：位移大但被判为暂停时按限速补足时长', () => {
+    // 10~197s 设备停记 187s、期间骑出去约 861m，而累计距离被冻结在 100m（真实数据实测形态）
+    const points: RoutePoint[] = [
+      { timestamp: 0, distance: 0, latitude: 31.2, longitude: 121.5 },
+      { timestamp: 10, distance: 100, latitude: 31.2009, longitude: 121.5 },
+      { timestamp: 197, distance: 100, latitude: 31.20864, longitude: 121.5 },
+      { timestamp: 207, distance: 200, latitude: 31.20954, longitude: 121.5 },
+    ]
+    const timeline = buildMovingTimeline(points)
+    // 断档段拿到了补时（时钟增量为正），光标是滑过去而不是瞬移过去
+    expect(timeline[2]!.timestamp - timeline[1]!.timestamp).toBeGreaterThan(0)
+    // 不变量：任一段的光标等效速度都不超过限速（25m/s）
+    for (let i = 1; i < timeline.length; i++) {
+      const disp = haversineMeters(
+        timeline[i - 1]!.latitude, timeline[i - 1]!.longitude,
+        timeline[i]!.latitude, timeline[i]!.longitude,
+      )
+      const dtClock = timeline[i]!.timestamp - timeline[i - 1]!.timestamp
+      if (dtClock > 0) {
+        expect(disp / dtClock).toBeLessThanOrEqual(25 + 1e-6)
+      }
+    }
+    // 不变量：回放总时长不超过该段真实跨度
+    expect(timeline[timeline.length - 1]!.timestamp).toBeLessThanOrEqual(207)
+  })
+
+  it('GPS 抖出的假位移不会把回放拉长（补时以该段真实间隔为上限）', () => {
+    const points: RoutePoint[] = [
+      { timestamp: 0, distance: 0, latitude: 31.2, longitude: 121.5 },
+      // 1 秒内"移动" 78km：若按限速补时会加 3000+ 秒
+      { timestamp: 1, distance: 0, latitude: 31.9, longitude: 121.5 },
+    ]
+    expect(buildMovingTimeline(points)[1]!.timestamp).toBeLessThanOrEqual(1)
   })
 })
 
