@@ -1,16 +1,18 @@
 /**
- * 活动轨迹地图测试（全屏查看 + 起终点标识 + 尺寸变化重新适配视野）。
+ * 活动轨迹地图测试（全屏查看 + 起终点标识 + 尺寸变化重新适配视野 + 底图模式角标）。
  *
  * - 渲染全屏按钮、起点圆点与终点黑白格旗标；
  * - 点击全屏按钮对包裹层调用 requestFullscreen（jsdom 未实现 Fullscreen API，补 stub）；
  * - 着色模式下仍渲染地图；
- * - 容器尺寸变化（全屏进出/窗口缩放）重新 fitBounds，用户手动操作后不再强行拉回。
+ * - 容器尺寸变化（全屏进出/窗口缩放）重新 fitBounds，用户手动操作后不再强行拉回；
+ * - 底图模式角标只在非回放态出现（回放态由控制条内的紧凑版负责）。
  */
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Map as LeafletMap } from 'leaflet'
 import ActivityMap from '@/map/ActivityMap'
+import { TILE_FALLBACK_STORAGE_KEY } from '@/map/tileSources'
 import type { RoutePoint } from '@/types/activity'
 
 // jsdom 未实现 Fullscreen API：补 stub（文件级，每个测试文件独立 jsdom 环境）
@@ -167,5 +169,56 @@ describe('尺寸变化时重新适配视野', () => {
     })
 
     expect(fitBounds.mock.calls.length).toBe(baseline + 1)
+  })
+})
+
+describe('底图模式角标（非回放态入口）', () => {
+  afterEach(() => {
+    sessionStorage.clear()
+  })
+
+  it('非回放态渲染三段模式角标，当前项为「正常」', () => {
+    const { container } = render(<ActivityMap points={TWO_POINTS} />)
+
+    expect(container.querySelector('.map-mode-switcher')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '正常' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '卫星' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: '卫星+路网' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('点击模式按钮回调父级（角标自身不持状态）', async () => {
+    const onMapModeChange = vi.fn()
+    render(<ActivityMap points={TWO_POINTS} onMapModeChange={onMapModeChange} />)
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: '卫星' }))
+
+    expect(onMapModeChange).toHaveBeenCalledWith('satellite')
+  })
+
+  it('受控模式：mapMode 为卫星时对应段为当前项', () => {
+    render(<ActivityMap points={TWO_POINTS} mapMode="satellite" />)
+
+    expect(screen.getByRole('button', { name: '卫星' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '正常' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('回放态隐藏角标（改由回放控制条内的紧凑版负责，避免重复堆叠）', () => {
+    const { container, rerender } = render(<ActivityMap points={TWO_POINTS} />)
+    expect(container.querySelector('.map-mode-switcher')).not.toBeNull()
+
+    rerender(<ActivityMap points={TWO_POINTS} replayEnabled />)
+
+    expect(container.querySelector('.map-mode-switcher')).toBeNull()
+  })
+
+  it('底图降级为 OSM 时三段整体禁用', () => {
+    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'osm')
+
+    render(<ActivityMap points={TWO_POINTS} />)
+
+    expect(screen.getByRole('button', { name: '正常' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '卫星' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '卫星+路网' })).toBeDisabled()
   })
 })

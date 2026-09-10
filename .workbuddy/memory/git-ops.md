@@ -9,6 +9,14 @@
   细节全部放正文 bullet —— 改了哪些文件与函数、关键实现点、测试情况、**版本号写正文**；**无 AI 署名**。
 - 提交前先更新 `docs/PROGRESS.md`；每次提交版本号都要前进（功能类 `[NF]` 升中位，其余升末位）。
 - 只读操作（`status`/`log`/`diff`/`show`/`ls-remote`）不受任何限制。
+- **提交前必须确认工作区没有「临时补丁残留」**（2026-09-10 真实事故）：`replay-video-record` 录屏技能
+  会临时改 `src/map/TrackReplay.tsx`（换倍速档位 + 注释掉 `followCursor`），脚本被 Ctrl+C 硬杀时不还原，
+  曾因此把 `SPEED_OPTIONS = [1, 8, 32, 600]` 和注释掉的 `followCursor` 提进 main（次日才发现）。
+  自查两条：① `grep -rn "\[replay-video-record\]" src/ tests/` 为空
+  （**别用 `git diff | grep 技能名`**——文档/注释里描述这个坑的文字本身就会命中，会误报）；
+  ② `grep -n "SPEED_OPTIONS =" src/map/TrackReplay.tsx` 是 5 档 `[1, 8, 32, 64, 128]`。
+  发现残留执行 `node .workbuddy/skills/replay-video-record/scripts/record-replay.mjs --restore-only` 清理。
+  机制细节见 `workflow.md` 的「录屏技能的源码补丁」小节。
 
 ## 事故恢复手册（仓库被掏空后，2026-09-10 实测可行）
 

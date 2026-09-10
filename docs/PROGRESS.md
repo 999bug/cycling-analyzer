@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 导出视频改为「录制真实页面」：点「生成」后录真实标签页画面（真实 Leaflet 渲染 + 真实控件 + 回放控制栏），未授权或不支持时回退原 canvas 自绘；录制期间地图切成居中竖屏画框（两侧留黑不进成片）、按目标时长反推倍速自动播放，字幕两条路线同源；顺带修复录制取景不重算 fitBounds 的问题；版本 2.58.0。此前 2.57.0 为地图模式切换下沉到热力图与路线图，2.57.1 为记忆目录拆分，2.56.0 为导出视频选项面板与两处地图修复）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 骑行记录详情页地图开放底图切换：**非回放态**右下角出现模式角标（正常 / 卫星 / 卫星+路网），**回放态自动隐藏**、交回控制栏内的紧凑版，两处互斥不重复；记忆与热力图/路线图共用一份；版本 2.59.0。此前 2.58.0 为导出视频改为「录制真实页面」（未授权回退 canvas 自绘），2.57.0 为地图模式切换下沉到热力图与路线图，2.57.1 为记忆目录拆分，2.56.0 为导出视频选项面板与两处地图修复）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -70,7 +70,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   **两条路线字幕同源**：`trackVideoExport.ts` 导出的 `drawVideoCaptions()` 与 `pickVideoMimeType()` 供录制链路复用，改字幕内容只需改一处。**画框两边只靠比例对齐，不锁像素**：CSS 侧 `.map-export-frame` 用 `aspect-ratio: 9/16` + `height: 100%` 随窗口高度自适应，合成侧 `canvasLayoutOf('9:16')` 固定 1080×1920，`cropSourceOf()` 按 `videoWidth / documentElement.clientWidth` 缩放换算裁剪矩形——**改任一侧比例时必须同步改另一侧**（当前同为 9:16）。
 - **本地预缓存瓦片只服务「正常」模式（v2.56.0 起，硬约束）**：`public/author-data/tiles/` 清单 key 只有 `"z/x/y"`、不含底图模式，故 `CachingTileLayer` 的 `allowLocalTile` 必须由 `FallbackTileLayer` 按 `mapMode === 'normal'` 传入；否则卫星与注记请求会命中本地矢量瓦片，作者快照覆盖区域出现「矢量/卫星混杂」。备选方案（清单 key 加模式前缀）需预缓存两套瓦片、体积翻倍，不采用
 - **⚠️ 测试环境约定**：`tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`（避免全量渲染时真实发包）；需要真实实现的测试文件必须用 `vi.mock(..., importOriginal)` 覆盖回原样（见 `tests/map/cachingTileLayer.test.tsx`）
-- **地图模式切换开放到热力图与路线图（v2.57.0 起）**：共享实现为 `src/map/MapModeSwitcher.tsx`（悬浮分段控件）+ `src/map/useMapMode.ts`（`[模式, 切换回调]`，切换即写 `cycling-map-mode`）。三处共用同一份记忆：详情页回放控制条内嵌版、热力图、路线图——任一处切换，其余地图与视频导出「跟随当前」立即沿用。底图降级到 OSM 时整组禁用（`enabled={isGcjSource(sourceIndex)}`）。`MapModeSwitcher` **只提供地图角标形态**；控制条里的紧凑版仍由 `TrackReplay` 自行渲染，别把角标样式套到控制条上。角标贴地图右下角，`mapModeSwitcher.css` 用 `:has()` 把 Leaflet 右下角控件（缩放 + 署名）整组上抬 48px 让位——**改控件高度时必须同步改这个值**（与回放控制栏用 `--replay-bar-height` 抬升是同一思路的静态版）。热力图在卫星模式下热力线换亮紫 `#c084fc` 且不透明度 0.45 → 0.7（`isSatellite` 派生自 `mapMode !== 'normal'`），矢量底图维持深紫 `#9333ea`
+- **地图模式切换的多处入口（v2.57.0 起，v2.59.0 补详情页非回放态）**：共享实现为 `src/map/MapModeSwitcher.tsx`（悬浮分段控件）+ `src/map/useMapMode.ts`（`[模式, 切换回调]`，切换即写 `cycling-map-mode`）。**详情页有两处入口且互斥**：非回放态用 `ActivityMap` 右下角的角标（`{!replayEnabled && <MapModeSwitcher/>}`），回放态由 `TrackReplay` 控制条内的紧凑版负责——两处同时出现会重复，且角标贴右下角会与通栏控制栏堆在一起，故判据取 `replayEnabled`（是否启用回放）而非「是否正在播放」。`ActivityMap` 目前只有详情页一个生产调用方，父级必须同时传 `mapMode` + `onMapModeChange`（不传时角标点了无反应）。热力图、路线图、详情页、视频导出「跟随当前」共用同一份记忆，任一处切换其余立即沿用。底图降级到 OSM 时整组禁用（`enabled={isGcjSource(sourceIndex)}`）。`MapModeSwitcher` **只提供地图角标形态**；控制条里的紧凑版仍由 `TrackReplay` 自行渲染，别把角标样式套到控制条上。角标贴地图右下角，`mapModeSwitcher.css` 用 `:has()` 把 Leaflet 右下角控件（缩放 + 署名）整组上抬 56px 让位——**改控件高度时必须同步改这个值**（与回放控制栏用 `--replay-bar-height` 抬升是同一思路的静态版）。导出录制舞台 `.map-export-stage` 需隐藏角标（连同拖拽把手、全屏按钮），否则控件会进成片。热力图在卫星模式下热力线换亮紫 `#c084fc` 且不透明度 0.45 → 0.7（`isSatellite` 派生自 `mapMode !== 'normal'`），矢量底图维持深紫 `#9333ea`
 - **地图悬浮控件的字色一律写死浅色（v2.57.0 起）**：底图角标类控件（全屏按钮、模式切换、回放控制栏）压在矢量底图与卫星影像上，配色固定为「深色半透明底 + 浅色字」，**不要用 `var(--text)` / `var(--border)`**——`mapFullscreen.css` 曾用主题变量，浅色主题下是深字压深底、按钮几乎看不见
 
 - **运动类型与骑行统计口径（v2.55.0 起，硬约束）**：`src/types/activityType.ts` 是类型归一化的唯一入口——**判断是否为骑行一律用 `isCyclingType()`，禁止在业务代码里比 `=== 'cycling'`**，因为库里可能存有各平台原始写法（佳明 `road_biking`、Strava 中文「骑行」；实测佳明 GDPR 摘要 85 条中 84 条为 `road_biking`）。判据优先级：Strava `activities.csv` 活动类型 > FIT `session.sport` > GPX `<trk><type>` > 速度特征兜底（`features/activity/activityTypeInference.ts`，导入与作者快照构建共用 `resolveActivityType`）。
@@ -78,6 +78,8 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   - **分析类页面取数必须走 `listCyclingSummaries(repository)`**（`features/activity/cyclingScope.ts`），不得直接 `listAllSummaries()`。**过滤必须发生在 `summariesScanKey()` 之前**：热力图/路线图/赛段/统计页的抽稀缓存以该指纹为键、缓存在 IndexedDB 跨会话存活，若先按全量算指纹再过滤，会永久命中「混了非骑行轨迹」的旧缓存且刷新不自愈。不做过滤的例外仅两处：骑行记录列表页（数据管理入口）与导出/清空/补算等维护任务。
   - **不得静默改写用户数据的类型**：导入期按上面判据定稿（属新数据初始化，并在导入汇总 `nonCyclingCounts` 中告知）；存量修正是**只读检测 → 用户确认 → 才写入**（`features/activity/suspectTypes.ts` + `BatchActivityTypeDialog`），理由是静默改历史统计会让用户看到「上次 3000km 今天 2400km」却无操作痕迹。
   - 作者快照 `scripts/buildAuthorData.ts` 对非骑行 **fail-fast**（快照是所有访客的首屏，混入即污染且访客无从察觉）。设置项 `data.includeOtherSports`（默认关）可让分析页计入全部运动，切换后整页刷新一次（运行时镜像在 `cyclingScope`，模块级变量，各页面挂载时取数）。
+
+- **⚠️ 录屏技能会临时改源码，提交前必须扫「补丁残留」（v2.59.0 记，已真实污染过一次）**：`.workbuddy/skills/replay-video-record` 录制前替换 `src/map/TrackReplay.tsx` 的 `SPEED_OPTIONS` 与 `followCursor`（留下 `[replay-video-record]` 标记），还原靠**进程内快照**，被 Ctrl+C 硬杀时不执行。曾因此在 main 上留下 `SPEED_OPTIONS = [1, 8, 32, 600]` 与注释掉的 `followCursor`——症状是本地测试全绿、直到下次拉取才冒出来（找不到「128×」按钮 + lint 报 `followCursor` 未使用）。**提交前自查**：`grep -rn "\[replay-video-record\]" src/ tests/` 为空（扫标记本身，别扫技能名——文档里描述这个坑的文字会误报）且 `SPEED_OPTIONS` 为 5 档 `[1, 8, 32, 64, 128]`；清理用 `node .workbuddy/skills/replay-video-record/scripts/record-replay.mjs --restore-only`（脚本每次启动也会先自愈）。
 
 ### 测试约定
 

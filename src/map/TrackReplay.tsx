@@ -48,7 +48,7 @@ import {
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
-const SPEED_OPTIONS = [1, 8, 32, 600] as const
+const SPEED_OPTIONS = [1, 8, 32, 64, 128] as const
 
 /** 已走高亮折线的最大点数（均匀抽稀上限，封顶 SVG path 重绘成本） */
 const REPLAY_LINE_MAX_POINTS = 2000
@@ -380,7 +380,7 @@ function ReplayOverlay({ engine, points, skeleton, stride, freezeCamera }: {
       syncTraveledTo(frame.index, latLng)
       // 录制态冻结镜头：跟随会把地图缩到街道级并高速平移，成片看不出轨迹全貌
       if (!freezeCamera) {
-        // followCursor(latLng) // [replay-video-record] 录制期禁用跟随镜头
+        followCursor(latLng)
       }
       updateTip(frame, latLng)
     })

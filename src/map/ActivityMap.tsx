@@ -5,6 +5,8 @@
  * 地图自动 fitBounds 到轨迹范围。
  * 默认单色轨迹；coloring 指定时按速度/心率/功率/海拔分段着色。
  * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
+ * 底图模式（正常 / 卫星 / 卫星+路网）非回放态由右下角角标切换（MapModeSwitcher，父级受控），
+ * 回放态交给控制条内的紧凑版，两处互斥不重复。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { divIcon } from 'leaflet'
@@ -25,6 +27,7 @@ import {
 import { TrackReplay, type ReplayExportSession } from '@/map/TrackReplay'
 import { clampMapHeight, loadSavedMapHeight, saveMapHeight } from '@/map/mapResize'
 import { isGcjSource, loadStoredSourceIndex, mapSystem, storeSourceIndex, type MapMode } from '@/map/tileSources'
+import MapModeSwitcher from '@/map/MapModeSwitcher'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -494,6 +497,15 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         <ZoomControlBottomRight />
       </MapContainer>
       <MapFullscreenButton targetRef={wrapperRef} />
+      {/* 底图模式切换（非回放态入口）。回放态由控制条内的紧凑版负责——
+          两者同时出现会重复，且角标贴右下角会与通栏控制栏堆在一起 */}
+      {!replayEnabled && (
+        <MapModeSwitcher
+          value={mapMode}
+          onChange={onMapModeChange ?? (() => {})}
+          enabled={isGcjSource(sourceIndex)}
+        />
+      )}
     </div>
   )
 }

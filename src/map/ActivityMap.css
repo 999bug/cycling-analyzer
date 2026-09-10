@@ -68,9 +68,10 @@
   border-radius: 0;
 }
 
-/* 录制期间不需要交互控件：拖拽把手与全屏按钮都会进画面 */
+/* 录制期间不需要交互控件：拖拽把手、全屏按钮、底图模式角标都会进画面 */
 .map-export-stage .map-resize-handle,
-.map-export-stage .map-fullscreen-button {
+.map-export-stage .map-fullscreen-button,
+.map-export-stage .map-mode-switcher {
   display: none;
 }
 
