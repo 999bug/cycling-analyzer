@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.61.1',
+    date: '2026-09-10',
+    features: [
+      '开发工具链：「在线回放录屏」技能（Playwright 驱动真实页面全屏回放录屏 → ffmpeg 切片变速烧字幕 → 1080×1920 竖屏 MP4）随仓库分发，ffmpeg 经 ffmpeg-static 随 npm install 自动就绪，clone 后无需额外配置即可录制回放视频（README 新增完整步骤）',
+    ],
+  },
+  {
     version: '2.61.0',
     date: '2026-09-10',
     features: [

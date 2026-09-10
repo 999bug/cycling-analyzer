@@ -107,6 +107,34 @@
 - 可选保存原始 FIT 文件字节
 - 删除单条记录 / 清空全部数据（二次确认）
 
+## 视频导出
+
+### 网页内生成竖屏视频（访客可用）
+
+活动详情页 →「生成竖屏视频」：浏览器内真实页面录制 + 合成，9:16 竖屏 1080×1920，比例 / 时长 / 底图 / 字幕（开头钩子与数据行可自定义文案）均可在面板里选，无需安装任何额外工具。
+
+### 回放录屏技能（开发工具，clone 后开箱即用）
+
+`.workbuddy/skills/replay-video-record/` 提供了一条更「纪录片」的路线：Playwright 驱动真实页面全屏回放并录屏，再由 ffmpeg 切片、变速、烧中文字幕成 H.264 MP4（成片观感与网页内导出不同，适合直接发布社交平台）。
+
+```bash
+npm install                            # ffmpeg 经 ffmpeg-static 自动就绪（国内网络 502 时：
+                                       #   FFMPEG_BINARIES_URL=https://registry.npmmirror.com/-/binary/ffmpeg-static npm install -D ffmpeg-static）
+npx playwright install chromium ffmpeg # 首次需要（或依赖系统 Chrome，加 --channel chrome）
+npm run dev                            # 起本地服务
+
+# 1) 查活动 ID（作者快照里的活动都可用）
+node -e "const a=require('./public/author-data/activities.json');a.slice(0,10).forEach(x=>console.log(x.id,(x.distance/1000).toFixed(1)+'km',x.name))"
+
+# 2) 录屏（倍速按运动时长反推：30 秒成片 ≈ 运动时长 ÷ 450）
+node .workbuddy/skills/replay-video-record/scripts/record-replay.mjs --activity <活动id> --speed 450 --mode 卫星
+
+# 3) 合成成片（ffmpeg 自动解析：--ffmpeg 参数 > 系统 PATH > ffmpeg-static）
+node .workbuddy/skills/replay-video-record/scripts/render-video.mjs --take .workbuddy/exports/take-<时间戳> --duration 30
+```
+
+产物输出在 `.workbuddy/exports/`（gitignored）。录制脚本会临时修改 `src/map/TrackReplay.tsx` 并在结束时自动还原；若进程被硬杀留下补丁，用 `--restore-only` 清理，提交代码前自查口径见 `docs/PROGRESS.md`。
+
 ## 作者数据与隐私
 
 - **作者数据公开**：站点默认展示作者 Saul 的骑行数据（侧栏「Saul 的数据 / 我的数据」切换器），`author-data/` 下 FIT 原始文件与生成快照（含 GPS 轨迹）随站点公开可下载——这是有意为之的公开分享

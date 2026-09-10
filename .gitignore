@@ -43,6 +43,10 @@ playwright-report/
 # Sensitive identifiers live in LOCAL-ONLY.md, which stays local.
 !.workbuddy/memory/
 .workbuddy/memory/LOCAL-ONLY.md
+# 回放录屏技能随仓库分发（clone 后配合 ffmpeg-static 开箱即用）；其余 skills 保持本地
+!.workbuddy/skills/
+.workbuddy/skills/*
+!.workbuddy/skills/replay-video-record/
 
 # ΢��С���򣺱���˽�����ã�AppID / ��ͼ Key ����⣩
 # ��¡���� miniprogram/project.config.example.json ���������Լ�������
