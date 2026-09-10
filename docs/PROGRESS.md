@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 导出视频改造与地图两处修复：导出改「生成竖屏视频」+ 选项面板（9:16/1:1/16:9、15/30/60 秒或跟随里程、底图正常/卫星、中文字幕），底图换高德并做 GCJ-02 投影；修复全屏后地图不重新适配视野、作者数据区域卫星底图退化为矢量图；版本 2.56.0。此前 2.55.0 为运动类型识别与骑行统计口径隔离，2.55.1 为工作区清理与待实现文档补录）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[NF] 地图模式切换开放到热力图与路线图：共享 `MapModeSwitcher` + `useMapMode`，三处地图共用同一份记忆（控件贴地图右下角，`:has()` 抬升 Leaflet 缩放与署名），底图降级时整组禁用，热力图卫星模式线色自动提亮加浓；顺带修复浅色主题下全屏按钮深字压深底；版本 2.57.0。此前 2.56.0 为导出视频改造与两处地图修复，2.55.0 为运动类型识别与骑行统计口径隔离，2.55.1 为工作区清理与待实现文档补录）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -59,13 +59,15 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   - 「正常」＝`webrd0{1-4}` + `style=8`（不透明矢量底图 + 路网 + 注记，与默认瓦片源同址）；
   - 「卫星」＝`webst0{1-4}` + `style=6`（JPEG 影像，无注记）；
   - 「卫星+路网」＝影像底图 + `webst0{1-4}` + `style=8`（**透明**注记叠加层，实测 80% 像素 alpha=0；注意同名 `style=8` 在 webst 域才是透明注记层，在 webrd 域是不透明矢量底图）。
-  **已移除 OpenTopoMap 地形层**：境外 OSM 系服务国内基本加载不出（表现为「点了没反应」），且其为 WGS-84 而底图/轨迹为 GCJ-02，即便加载成功也会整体错位数百米。瓦片降级到 OSM 后模式按钮置灰（`mapModeEnabled`），避免再次出现「点了没反应」。地图模式记忆在 localStorage（与地图高度同为用户偏好）；`FallbackTileLayer` 的 `mapMode` 为可选参数，其余三个用图组件（CompareSection / SegmentMiniMap / HeatmapPage）无需改动
+  **已移除 OpenTopoMap 地形层**：境外 OSM 系服务国内基本加载不出（表现为「点了没反应」），且其为 WGS-84 而底图/轨迹为 GCJ-02，即便加载成功也会整体错位数百米。瓦片降级到 OSM 后模式按钮置灰（`mapModeEnabled`），避免再次出现「点了没反应」。地图模式记忆在 localStorage（与地图高度同为用户偏好，共享实现见下方 v2.57.0 条目）；`FallbackTileLayer` 的 `mapMode` 为可选参数，未开放切换的用图组件（CompareSection / SegmentMiniMap）保持缺省「正常」
 - **回放控制栏布局约定（v2.53.0 起）**：控制栏**通栏贴地图底部**（`bottom/left/right: 0`，只有上圆角）。它压在右下角 `.leaflet-bottom.leaflet-right`（缩放 + 版权署名）之上，因此 `TrackReplay` 用 ResizeObserver **实测自身高度**写入地图容器的 `--replay-bar-height`，`ActivityMap.css` 据此给该角加 `margin-bottom` 把控件抬上去——窄屏按钮换行导致控制栏变高也不会被挡；署名只上移不隐藏（底图版权必须可见）。播放中整条控制栏淡出到 `opacity: 0.2`（`.track-replay--playing`），`:hover` / `:focus-within` 恢复——触摸设备无 hover，但透明度不挡点击，点按带来的 focus 同样能恢复。以后改控制栏尺寸/位置时注意别再压住这两个控件
 
 - **地图视野适配（v2.56.0 起）**：`ActivityMap` 的 `FitBounds` 除「轨迹点变化」外还监听 Leaflet 的 `resize` 事件重新 `fitBounds`——`invalidateSize()` 只保持 center + zoom、**不重算缩放级别**，全屏进出 / 窗口缩放 / 拖动地图高度后必须重算，否则轨迹缩成画面中间一小团（实测横向仅占 44%，按 fitBounds 本应约 96%）。尊重用户操作：`dragstart`（纯用户行为）与自动适配之外的 `zoomstart` 会置用户操作标记，此后尺寸变化不再自动适配；换活动（points 变化）时重置。改这里注意别把「自动 fitBounds 自身触发的 zoomstart」误判成用户操作
 - **导出回放视频（v2.56.0 起）**：`features/activity/trackVideoExport.ts` 的画布比例/时长/字幕全部参数化（`VIDEO_ASPECT_SIZES` 短边统一 1080；`canvasLayoutOf` 按短边算安全边距与各号字号）。底图恒用高德栅格瓦片（`mapModeOf()` 的图层栈，含「卫星+路网」双层叠加），**因此轨迹必须先经 `@/geo/projection` 的 `projectPoint` 投影到 GCJ-02**，否则整条轨迹整体偏移。时长档位 15/30/60 秒或「跟随里程」（每 5 km 1 秒，夹在 15~60 秒）；字幕取活动真实数据，缺失项整行省略。选项面板 `VideoExportDialog` + `videoExportSettings.ts`（选项模型 + localStorage 记忆）只负责收集参数，录制由详情页 `handleExportVideo` 执行并展示整秒进度
 - **本地预缓存瓦片只服务「正常」模式（v2.56.0 起，硬约束）**：`public/author-data/tiles/` 清单 key 只有 `"z/x/y"`、不含底图模式，故 `CachingTileLayer` 的 `allowLocalTile` 必须由 `FallbackTileLayer` 按 `mapMode === 'normal'` 传入；否则卫星与注记请求会命中本地矢量瓦片，作者快照覆盖区域出现「矢量/卫星混杂」。备选方案（清单 key 加模式前缀）需预缓存两套瓦片、体积翻倍，不采用
 - **⚠️ 测试环境约定**：`tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`（避免全量渲染时真实发包）；需要真实实现的测试文件必须用 `vi.mock(..., importOriginal)` 覆盖回原样（见 `tests/map/cachingTileLayer.test.tsx`）
+- **地图模式切换开放到热力图与路线图（v2.57.0 起）**：共享实现为 `src/map/MapModeSwitcher.tsx`（悬浮分段控件）+ `src/map/useMapMode.ts`（`[模式, 切换回调]`，切换即写 `cycling-map-mode`）。三处共用同一份记忆：详情页回放控制条内嵌版、热力图、路线图——任一处切换，其余地图与视频导出「跟随当前」立即沿用。底图降级到 OSM 时整组禁用（`enabled={isGcjSource(sourceIndex)}`）。`MapModeSwitcher` **只提供地图角标形态**；控制条里的紧凑版仍由 `TrackReplay` 自行渲染，别把角标样式套到控制条上。角标贴地图右下角，`mapModeSwitcher.css` 用 `:has()` 把 Leaflet 右下角控件（缩放 + 署名）整组上抬 48px 让位——**改控件高度时必须同步改这个值**（与回放控制栏用 `--replay-bar-height` 抬升是同一思路的静态版）。热力图在卫星模式下热力线换亮紫 `#c084fc` 且不透明度 0.45 → 0.7（`isSatellite` 派生自 `mapMode !== 'normal'`），矢量底图维持深紫 `#9333ea`
+- **地图悬浮控件的字色一律写死浅色（v2.57.0 起）**：底图角标类控件（全屏按钮、模式切换、回放控制栏）压在矢量底图与卫星影像上，配色固定为「深色半透明底 + 浅色字」，**不要用 `var(--text)` / `var(--border)`**——`mapFullscreen.css` 曾用主题变量，浅色主题下是深字压深底、按钮几乎看不见
 
 - **运动类型与骑行统计口径（v2.55.0 起，硬约束）**：`src/types/activityType.ts` 是类型归一化的唯一入口——**判断是否为骑行一律用 `isCyclingType()`，禁止在业务代码里比 `=== 'cycling'`**，因为库里可能存有各平台原始写法（佳明 `road_biking`、Strava 中文「骑行」；实测佳明 GDPR 摘要 85 条中 84 条为 `road_biking`）。判据优先级：Strava `activities.csv` 活动类型 > FIT `session.sport` > GPX `<trk><type>` > 速度特征兜底（`features/activity/activityTypeInference.ts`，导入与作者快照构建共用 `resolveActivityType`）。
   - **速度只能单向使用**：「快」是封闭的（马拉松世界纪录 ≈21.0 km/h、竞走 ≈13.5），故高速可可靠排除跑步；「慢」是开放的（共享单车 10~13、带娃 8~10、山地爬坡 9~12、折叠车 12~15），**低速不能判定为非骑行**。落进 10~20 km/h 重叠区一律保守判骑行（误判会让用户骑行里程凭空消失，比统计偏大严重得多），灰区只列进复核弹窗且默认不勾选。

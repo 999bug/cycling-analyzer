@@ -3,15 +3,20 @@
  *
  * 通过 vi.mock 注入独立数据库实例 + fake-indexeddb：
  * 空库/无坐标活动 → 引导文案；含坐标活动 → 轨迹计数与地图渲染；
- * 仓库异常 → 错误文案。
+ * 仓库异常 → 错误文案；右下角底图模式切换 → 记忆写入 + 热力线按底图换色。
  */
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import HeatmapPage from '@/pages/HeatmapPage'
+import {
+  MAP_MODE_STORAGE_KEY,
+  TILE_FALLBACK_STORAGE_KEY,
+} from '@/map/tileSources'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -33,6 +38,8 @@ beforeEach(async () => {
   await testDb.scan_cache.clear()
   // 数据源复位：默认有效源为本地
   localStorage.clear()
+  // 瓦片源降级记忆（sessionStorage）复位，避免上一个用例的 OSM 降级串味
+  sessionStorage.clear()
   useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })
 
@@ -46,9 +53,14 @@ afterEach(() => {
  *
  * @param id 活动 ID
  * @param records 逐点记录（可含坐标或不含）
+ * @param overrides 需要覆盖的摘要字段（如 startTime：扫描缓存键含开始时间，换值可强制重扫）
  * @returns 活动（含逐点记录）
  */
-function makeActivity(id: string, records: ActivityRecord[]): Activity {
+function makeActivity(
+  id: string,
+  records: ActivityRecord[],
+  overrides: Partial<Activity> = {},
+): Activity {
   return {
     id,
     fileId: `file-${id}`,
@@ -62,6 +74,7 @@ function makeActivity(id: string, records: ActivityRecord[]): Activity {
     distance: 30000,
     elevationGain: 100,
     records,
+    ...overrides,
   }
 }
 
@@ -166,5 +179,49 @@ describe('骑行热力图页', () => {
 
     // 2 条作者轨迹（本地那条不计入）
     expect(await screen.findByText(/共 2 条轨迹/)).toBeInTheDocument()
+  })
+
+  it('右下角底图模式控件：切换卫星写入记忆，热力线换亮紫加浓', async () => {
+    const repo = new DexieActivityRepository(testDb)
+    // 轨迹扫描缓存以「数量|总距离|开始时间|名称」为键（不含活动 ID）：换个开始时间，
+    // 避免命中同文件其它用例写入的空轨迹缓存
+    await repo.addActivity(
+      makeActivity('act-satellite', makeTrackRecords(31.2, 121.5, 20), {
+        startTime: '2026-09-01T08:00:00.000Z',
+        endTime: '2026-09-01T09:00:00.000Z',
+      }),
+    )
+    const { container } = render(<HeatmapPage />)
+
+    expect(await screen.findByText(/共 1 条轨迹/)).toBeInTheDocument()
+    // 默认「正常」：深紫 + 低透明度（浅色矢量瓦片上对比度高）
+    expect(screen.getByRole('button', { name: '正常' })).toHaveAttribute('aria-pressed', 'true')
+    expect(container.querySelector('path[stroke="#9333ea"]')).not.toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: '卫星' }))
+
+    expect(screen.getByRole('button', { name: '卫星' })).toHaveAttribute('aria-pressed', 'true')
+    // 记忆与详情页共用：切换后写入同一键
+    expect(localStorage.getItem(MAP_MODE_STORAGE_KEY)).toBe('satellite')
+    // 卫星底图是暗色影像：热力线换亮紫并提高不透明度（0.45 → 0.7）
+    expect(container.querySelector('path[stroke="#c084fc"]')).not.toBeNull()
+    expect(container.querySelector('path[stroke-opacity="0.7"]')).not.toBeNull()
+  })
+
+  it('底图降级为 OSM 时右下角控件整组禁用', async () => {
+    sessionStorage.setItem(TILE_FALLBACK_STORAGE_KEY, 'osm')
+    const repo = new DexieActivityRepository(testDb)
+    await repo.addActivity(
+      makeActivity('act-osm-fallback', makeTrackRecords(31.2, 121.5, 20), {
+        startTime: '2026-09-02T08:00:00.000Z',
+        endTime: '2026-09-02T09:00:00.000Z',
+      }),
+    )
+    render(<HeatmapPage />)
+
+    expect(await screen.findByText(/共 1 条轨迹/)).toBeInTheDocument()
+    for (const label of ['正常', '卫星', '卫星+路网']) {
+      expect(screen.getByRole('button', { name: label })).toBeDisabled()
+    }
   })
 })

@@ -1,0 +1,58 @@
+/**
+ * 地图模式分段控件样式（悬浮于地图右下角）。
+ *
+ * 配色固定为「深色半透明底 + 浅色字」，不随浅色/深色主题变量翻转：
+ * 控件压在矢量底图与卫星影像上都需可读，与右上角全屏按钮保持同款观感。
+ */
+
+.map-mode-switcher {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1000;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background-color: rgba(27, 30, 35, 0.85);
+  line-height: 1;
+}
+
+.map-mode-switcher__mode {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #c9d1d9;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.map-mode-switcher__mode:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.map-mode-switcher__mode--active {
+  background: #34d9ff;
+  color: #0d1117;
+}
+
+.map-mode-switcher__mode:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/*
+ * 控件贴底时把 Leaflet 右下角控件（缩放按钮 + 版权署名）整组上抬，避免相互遮挡。
+ *
+ * 56px = 控件自身高度（3px 内边距 ×2 + 按钮 5px 内边距 ×2 + 13px 字号 ×1.3 行高 + 2px 边框 ≈ 43px）
+ * 再加 10px 底边距与一点余量。Leaflet 该角 DOM 顺序为「缩放 → 署名」（均 float:right，先者在上），
+ * 署名的 margin 被 Leaflet 归零，因此这个值直接决定署名底边与控件的间距。改控件尺寸时同步改这里。
+ */
+.map-fullscreen-wrapper:has(.map-mode-switcher) .leaflet-bottom.leaflet-right {
+  margin-bottom: 56px;
+}

@@ -12,7 +12,11 @@
   background-color: var(--bg);
 }
 
-/* 全屏按钮：右上角悬浮，深色半透明底与主题一致 */
+/*
+ * 全屏按钮：右上角悬浮。底色与字色都写死为「深色半透明底 + 浅色字」，
+ * 不随主题变量翻转——此前用 var(--text)/var(--border) 在浅色主题下是深字压深底，几乎看不见。
+ * 与右下角地图模式控件、回放控制栏保持同款观感。
+ */
 .map-fullscreen-button {
   position: absolute;
   top: 10px;
@@ -26,14 +30,14 @@
   padding: 0;
   font-size: 16px;
   line-height: 1;
-  color: var(--text);
+  color: #e8eaed;
   background-color: rgba(27, 30, 35, 0.85);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .map-fullscreen-button:hover {
-  color: var(--primary);
-  border-color: var(--primary);
+  color: #34d9ff;
+  border-color: #34d9ff;
 }

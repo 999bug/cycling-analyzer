@@ -3,7 +3,8 @@
  *
  * 通过 vi.mock 注入独立数据库实例 + fake-indexeddb：
  * 空库 → 引导文案；不同路线 → 列表与地图轨迹渲染；
- * 相同路线聚类合并（次数累加）；点击列表选中/取消高亮；仓库异常 → 错误文案。
+ * 相同路线聚类合并（次数累加）；点击列表选中/取消高亮；仓库异常 → 错误文案；
+ * 右下角底图模式切换 → 记忆写入（与热力图、详情页共用同一键）。
  */
 import 'fake-indexeddb/auto'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -13,6 +14,7 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import RoutesMapPage from '@/pages/RoutesMapPage'
+import { MAP_MODE_STORAGE_KEY } from '@/map/tileSources'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -34,6 +36,8 @@ beforeEach(async () => {
   await testDb.scan_cache.clear()
   // 数据源复位：默认有效源为本地
   localStorage.clear()
+  // 瓦片源降级记忆（sessionStorage）复位，避免上一个用例的 OSM 降级串味
+  sessionStorage.clear()
   useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })
 
@@ -161,5 +165,23 @@ describe('骑行路线图页', () => {
     render(<RoutesMapPage />)
 
     expect(await screen.findByText(/路线加载失败/)).toBeInTheDocument()
+  })
+
+  it('右下角底图模式控件：默认正常，切换卫星+路网并写入记忆', async () => {
+    // 开始时间与本文件其它用例区分：路线扫描缓存键含开始时间，换值可避免命中上一个用例的缓存
+    await seedActivities([
+      makeActivity('sat-1', '滨江夜骑', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-05T08:00:00.000Z'),
+    ])
+    const user = userEvent.setup()
+
+    render(<RoutesMapPage />)
+
+    await screen.findByRole('button', { name: /滨江夜骑/ })
+    expect(screen.getByRole('button', { name: '正常' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: '卫星+路网' }))
+
+    expect(screen.getByRole('button', { name: '卫星+路网' })).toHaveAttribute('aria-pressed', 'true')
+    expect(localStorage.getItem(MAP_MODE_STORAGE_KEY)).toBe('satelliteRoads')
   })
 })

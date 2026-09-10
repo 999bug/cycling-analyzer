@@ -5,14 +5,22 @@
  * 形成"热力"效果（无新依赖，纯 Leaflet Polyline 叠加）。
  * 轨迹抽稀复用 Douglas-Peucker（simplifyRoute），加载期间显示进度，
  * 无坐标数据时显示引导文案（不伪造）。
- * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角。
+ * 支持右上角按钮全屏查看（mapFullscreen），缩放控件统一在右下角；
+ * 右下角另有底图模式切换（正常 / 卫星 / 卫星+路网，MapModeSwitcher），记忆与详情页共用。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
+import MapModeSwitcher from '@/map/MapModeSwitcher'
+import { useMapMode } from '@/map/useMapMode'
 import { simplifyRoute } from '@/map/simplify'
-import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
+import {
+  isGcjSource,
+  loadStoredSourceIndex,
+  mapSystem,
+  storeSourceIndex,
+} from '@/map/tileSources'
 import { applyOffsetMeters, toWgs84 } from '@/geo/coordinateSystem'
 import { projectPoint } from '@/geo/projection'
 import { buildGridCoverage } from '@/features/heatmap/gridCoverage'
@@ -34,14 +42,18 @@ const HEATMAP_SIMPLIFY_TOLERANCE_METERS = 10
 /** 一条可绘制轨迹至少需要 2 个点 */
 const MIN_TRACK_POINTS = 2
 
-/** 热力线颜色（紫色，OSM 浅色瓦片上对比度高，与轨迹路线主蓝 #4f8cff 明显区分） */
+/** 热力线颜色（矢量底图：深紫，浅色瓦片上对比度高，与轨迹路线主蓝 #4f8cff 明显区分） */
 const TRACK_COLOR = '#9333ea'
+
+/** 热力线颜色（卫星底图：亮紫，暗色影像纹理上才看得清） */
+const TRACK_COLOR_SATELLITE = '#c084fc'
 
 /** 热力线宽（像素）：略粗保证远景缩放时可见 */
 const TRACK_WEIGHT = 3
 
-/** 热力线透明度（低透明度叠加，重合越多越深；单条轨迹也要清晰可见） */
+/** 热力线透明度（矢量底图 / 卫星底图；低透明度叠加，重合越多越深） */
 const TRACK_OPACITY = 0.45
+const TRACK_OPACITY_SATELLITE = 0.7
 
 /** 经纬度元组（Leaflet 坐标） */
 type LatLng = [number, number]
@@ -79,6 +91,8 @@ function HeatmapPage() {
   const [tracks, setTracks] = useState<LatLng[][]>([])
   // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
   const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
+  // 底图模式（正常 / 卫星 / 卫星+路网）：与详情页共用同一份记忆
+  const [mapMode, setMapMode] = useMapMode()
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -197,6 +211,9 @@ function HeatmapPage() {
   // 区域覆盖统计（0.01° ≈ 1km 网格，骑过即覆盖，重复不计）
   const coverage = useMemo(() => buildGridCoverage(tracks), [tracks])
 
+  // 卫星底图是暗色影像：热力线需换亮紫并提高不透明度，否则 45% 的深紫几乎看不出
+  const isSatellite = mapMode !== 'normal'
+
   return (
     <div className="heatmap-page">
       <h1>骑行热力图</h1>
@@ -213,12 +230,20 @@ function HeatmapPage() {
           </p>
           <div className="heatmap-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
             <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
-              <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
+              <FallbackTileLayer
+                sourceIndex={sourceIndex}
+                mapMode={mapMode}
+                onFallback={handleFallback}
+              />
               {displayTracks.map((track, index) => (
                 <Polyline
                   key={index}
                   positions={track}
-                  pathOptions={{ color: TRACK_COLOR, weight: TRACK_WEIGHT, opacity: TRACK_OPACITY }}
+                  pathOptions={{
+                    color: isSatellite ? TRACK_COLOR_SATELLITE : TRACK_COLOR,
+                    weight: TRACK_WEIGHT,
+                    opacity: isSatellite ? TRACK_OPACITY_SATELLITE : TRACK_OPACITY,
+                  }}
                 />
               ))}
               <FitAllBounds tracks={displayTracks} />
@@ -226,6 +251,11 @@ function HeatmapPage() {
               <ZoomControlBottomRight />
             </MapContainer>
             <MapFullscreenButton targetRef={wrapperRef} />
+            <MapModeSwitcher
+              value={mapMode}
+              onChange={setMapMode}
+              enabled={isGcjSource(sourceIndex)}
+            />
           </div>
         </>
       )}

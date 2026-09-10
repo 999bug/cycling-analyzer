@@ -4,6 +4,7 @@
  * 全部骑行路线按路线聚类画在一张地图上：同一条路线同一颜色（黄金角色相分布），
  * 点击路线列表高亮该路线（其余路线降透明度），再次点击恢复。
  * 作者源用 CI 预计算 route-tracks.json；本地源实时扫描（复用热力图缓存模式）。
+ * 右下角提供底图模式切换（正常 / 卫星 / 卫星+路网），记忆与热力图、详情页共用。
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, Polyline, useMap } from 'react-leaflet'
@@ -16,7 +17,14 @@ import {
 import { buildRouteMapRoutes, routeColor, type RouteMapRoute } from '@/features/routes/routeMap'
 import { simplifyRoute } from '@/map/simplify'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
+import MapModeSwitcher from '@/map/MapModeSwitcher'
+import { useMapMode } from '@/map/useMapMode'
+import {
+  isGcjSource,
+  loadStoredSourceIndex,
+  mapSystem,
+  storeSourceIndex,
+} from '@/map/tileSources'
 import { applyOffsetMeters, toWgs84 } from '@/geo/coordinateSystem'
 import { projectPoint } from '@/geo/projection'
 import {
@@ -92,6 +100,8 @@ function RoutesMapPage() {
   const [selected, setSelected] = useState<number | null>(null)
   // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
   const [sourceIndex, setSourceIndex] = useState(() => loadStoredSourceIndex())
+  // 底图模式（正常 / 卫星 / 卫星+路网）：与热力图、详情页共用同一份记忆
+  const [mapMode, setMapMode] = useMapMode()
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -281,7 +291,11 @@ function RoutesMapPage() {
               zoom={12}
               scrollWheelZoom
             >
-              <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
+              <FallbackTileLayer
+                sourceIndex={sourceIndex}
+                mapMode={mapMode}
+                onFallback={handleFallback}
+              />
               {displayRoutes.map((route) =>
                 route.tracks.map((track, trackIndex) => {
                   // 未选中时几乎隐藏；选中路线加粗 + 白描边光晕（浅色瓦片上醒目）
@@ -318,6 +332,11 @@ function RoutesMapPage() {
               <ZoomControlBottomRight />
             </MapContainer>
             <MapFullscreenButton targetRef={wrapperRef} />
+            <MapModeSwitcher
+              value={mapMode}
+              onChange={setMapMode}
+              enabled={isGcjSource(sourceIndex)}
+            />
           </div>
         </div>
       )}
