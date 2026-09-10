@@ -17,19 +17,23 @@ import { DexieFileRepository, type FileRepository } from '@/storage/repositories
 import { DexieSettingsRepository, type SettingsRepository } from '@/storage/repositories/settingsRepository'
 import { clearTileCache, getTileCacheStats, type TileCacheStats } from '@/storage/tileCache'
 import {
+  DEFAULT_APPEARANCE,
   DEFAULT_UNITS,
   getSettings,
   saveSettings,
   type DistanceUnit,
+  type SidebarMode,
   type Theme,
   type TimeFormat,
 } from '@/features/settings/settings'
 import { switchTheme, applyTheme } from '@/features/settings/theme'
+import { switchSidebarMode } from '@/features/settings/sidebar'
 import InstallSection from '@/features/pwa/InstallSection'
 import {
   useDataSourceStore,
   type AuthorDataVisibility,
 } from '@/stores/dataSourceStore'
+import { useUiStore } from '@/stores/uiStore'
 import {
   defaultExportFilename,
   downloadJsonStream,
@@ -126,6 +130,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   // 外观偏好（主题切换立即生效并保存，规格 §36）
   const [theme, setTheme] = useState<Theme>('dark')
 
+  // 侧边栏行为（固定 / 自动收回，切换立即生效并保存；与侧边栏图钉按钮同步）
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(DEFAULT_APPEARANCE.sidebarMode)
+
   // 导入偏好（保存原始 FIT 文件开关，规格 §19 默认不保存）
   const [saveOriginalFit, setSaveOriginalFit] = useState(false)
 
@@ -164,6 +171,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
         setDistanceUnit(data.units.distance)
         setTimeFormat(data.units.timeFormat)
         setTheme(data.appearance.theme)
+        setSidebarMode(data.appearance.sidebarMode)
+        // 同步运行时镜像：正常启动路径已由 initSidebarMode 写入，
+        // 此处兜底覆盖（如导入备份后设置表被改写）
+        useUiStore.getState().setSidebarMode(data.appearance.sidebarMode)
         setSaveOriginalFit(data.import.saveOriginalFit)
         setTileCacheEnabled(data.offline.tileCacheEnabled)
       })
@@ -420,6 +431,26 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     }
   }
 
+  /**
+   * 切换侧边栏行为：立即生效并持久化（无需点「保存设置」）。
+   *
+   * @param event 选择事件
+   */
+  async function handleSidebarModeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const next = event.target.value as SidebarMode
+    setSidebarMode(next)
+    try {
+      await switchSidebarMode(next, context.settingsRepository)
+      setMessage({
+        type: 'success',
+        text: next === 'fixed' ? '侧边栏已设为固定常驻' : '侧边栏已设为自动收回',
+      })
+    } catch (error) {
+      console.error('Failed to switch sidebar mode', error)
+      setMessage({ type: 'error', text: '侧边栏设置保存失败，请重试' })
+    }
+  }
+
   // 提示条「去设置」跳入：滚动到「作者数据」区块并高亮一次
   useEffect(() => {
     if (location.hash !== '#author-data') {
@@ -521,7 +552,8 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   }
 
   /**
-   * 清空后重置表单为默认值（规格 §27 默认公制；主题复位深色，规格 §36）。
+   * 清空后重置表单为默认值（规格 §27 默认公制；主题复位深色，规格 §36；
+   * 侧边栏复位固定常驻）。设置表已清空，运行时镜像同步复位，避免界面停留在旧偏好。
    */
   function resetForm() {
     setNickname('')
@@ -534,6 +566,8 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTimeFormat(DEFAULT_UNITS.timeFormat)
     setTheme('dark')
     applyTheme('dark')
+    setSidebarMode(DEFAULT_APPEARANCE.sidebarMode)
+    useUiStore.getState().setSidebarMode(DEFAULT_APPEARANCE.sidebarMode)
     setSaveOriginalFit(false)
     setTileCacheEnabled(true)
     setTileCacheStats({ count: 0, bytes: 0 })
@@ -711,7 +745,10 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
 
       <section className="settings-section" aria-label="外观">
         <h2 className="settings-section__title">外观</h2>
-        <p className="settings-section__hint">主题切换后立即生效并自动保存。</p>
+        <p className="settings-section__hint">
+          主题与侧边栏设置切换后立即生效并自动保存。自动收回仅在桌面端生效：
+          鼠标移出侧边栏后收起，移到屏幕左边缘再滑出展开。
+        </p>
         <div className="settings-fields">
           <div className="settings-field">
             <label className="settings-field__label" htmlFor="settings-appearance-theme">
@@ -726,6 +763,20 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
               <option value="dark">深色</option>
               <option value="light">浅色</option>
               <option value="system">跟随系统</option>
+            </select>
+          </div>
+          <div className="settings-field">
+            <label className="settings-field__label" htmlFor="settings-appearance-sidebar">
+              侧边栏
+            </label>
+            <select
+              id="settings-appearance-sidebar"
+              className="settings-field__select"
+              value={sidebarMode}
+              onChange={handleSidebarModeChange}
+            >
+              <option value="fixed">固定（默认）</option>
+              <option value="auto">自动收回</option>
             </select>
           </div>
         </div>

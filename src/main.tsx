@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from '@/app/App'
 import { initTheme } from '@/features/settings/theme'
+import { initSidebarMode } from '@/features/settings/sidebar'
 import { initDataSource } from '@/stores/dataSourceStore'
 import '@/index.css'
 
@@ -30,6 +31,9 @@ window.setTimeout(() => sessionStorage.removeItem('qileme:preloadReloaded'), 10_
 
 // 启动时恢复持久化主题（规格 §36，异步应用，失败回退默认深色）
 void initTheme()
+
+// 启动时恢复侧边栏行为偏好（默认固定常驻；自动收回时延迟收起）
+void initSidebarMode()
 
 // 启动时探测作者数据快照（manifest.json）：成功则默认展示作者数据，
 // 失败（本地 dev 未生成快照等）静默回退本地数据源

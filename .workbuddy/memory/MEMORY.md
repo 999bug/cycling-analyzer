@@ -47,6 +47,9 @@
 - **UI 改动先出原型再动手**（用户 2026-09-09 明确要求）：涉及布局/交互调整时，先用 show_widget 画原型给用户审批，批准后才改代码并提交；不要「方案一写完就提交」。
 - **「完成后自动 reload」的链路必须防再入**（2026-09-09 无限刷新事故教训）：凡基于持久化状态决定是否刷新的组件，必须区分「本次刚完成」与「早就完成」（后者静默跳过）；实现前先列 状态×终态 表自查，且每个起点状态都要有测试。自动刷新一律走 `@/utils/navigation reloadPage`（jsdom 可注入），禁止直接 `window.location.reload()`。参考：main.tsx 的 sessionStorage 一次性标记模式。
 
+- **不在 effect 里同步 setState**（2026-09-10 实测）：本项目 ESLint 启用了 `react-hooks/set-state-in-effect`，在 effect 体内直接 `setState` 会报 error（"Calling setState synchronously within an effect can trigger cascading renders"）。需要「外部状态变化 → 派生界面状态」时，优先把状态写成纯派生（例：侧边栏是否收起 = `sidebarMode === 'auto' && !revealed`，悬停/焦点事件照常维护 revealed），而不是用 effect 去重置。
+- **可折叠侧边栏/面板的裁剪式收起**（2026-09-10 沉淀，参照 `AppLayout.css`）：外层 `width` 过渡 + 内层固定宽度容器 + 外层 `overflow: hidden`，内容不重排；内层用 `flex: 1 0 auto` 撑满而非 `height: 100%`；收起态给内层加 `inert`（React 19 原生支持）让键盘焦点跳过不可见内容；异步读取的偏好加 hydrated 标记 + 首帧 `transition: none`，避免启动「先展开再收起」的闪动。
+
 ## 真实数据可用于测试（2026-09-10 用户明确授权）
 
 - 用户明确表示：`private-fixtures/` 里的骑行数据（FIT/GPX）**可以在测试与验证时直接使用**，不必绕开。

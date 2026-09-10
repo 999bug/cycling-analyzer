@@ -23,6 +23,14 @@ export type TimeFormat = '24h' | '12h'
 export type Theme = 'dark' | 'light' | 'system'
 
 /**
+ * 桌面端侧边栏行为（默认固定）：
+ * - 'fixed'：常驻固定，与历史行为一致
+ * - 'auto'：鼠标移出后自动收起（移入屏幕左边缘再滑出），收起后不显示品牌 logo
+ * 仅影响桌面端（>768px）；移动端恒为抽屉式，本设置不生效。
+ */
+export type SidebarMode = 'fixed' | 'auto'
+
+/**
  * 个人信息（规格 §27）。
  * 数字字段单位：体重 kg、身高 cm、FTP/心率 bpm 用 W/bpm。
  */
@@ -59,6 +67,9 @@ export interface UnitPreferences {
 export interface AppearancePreferences {
   /** 主题（默认深色） */
   theme: Theme
+
+  /** 侧边栏行为（默认固定常驻） */
+  sidebarMode: SidebarMode
 }
 
 /** 导入偏好（规格 §19） */
@@ -127,8 +138,8 @@ export const OFFLINE_KEY = 'offline'
 /** 默认单位偏好（规格 §27 默认全公制） */
 export const DEFAULT_UNITS: UnitPreferences = { distance: 'km', timeFormat: '24h' }
 
-/** 默认外观偏好（规格 §36 默认深色） */
-export const DEFAULT_APPEARANCE: AppearancePreferences = { theme: 'dark' }
+/** 默认外观偏好（规格 §36 默认深色；侧边栏默认固定常驻） */
+export const DEFAULT_APPEARANCE: AppearancePreferences = { theme: 'dark', sidebarMode: 'fixed' }
 
 /** 默认导入偏好（规格 §19 默认不保存原始文件） */
 export const DEFAULT_IMPORT: ImportPreferences = { saveOriginalFit: false }

@@ -35,15 +35,139 @@
   flex-shrink: 0;
 }
 
-/* 侧边栏（桌面端常驻） */
+/* 侧边栏（桌面端常驻；自动收回模式下宽度归零） */
 .app-layout__sidebar {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   width: 220px;
-  padding: 16px 12px;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border);
+  /* 收起时裁掉内层内容：内层为固定宽度，因此内容不重排，只是被裁切 */
+  overflow: hidden;
+  transition: width 0.22s ease;
+}
+
+/* 内层：固定宽度承载实际内容，宽度不随外层收缩变化（避免文字换行/图片压扁） */
+.app-layout__sidebar-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* 撑满侧栏高度（底部版本行靠 margin-top:auto 贴底）；内容超高时不压缩，交给外层裁切/滚动 */
+  flex: 1 0 auto;
+  width: 220px;
+  padding: 16px 12px;
+}
+
+/* 收起态（自动收回 + 鼠标移出）：宽度归零，右边线一并收掉 */
+.app-layout__sidebar--collapsed {
+  width: 0;
+  border-right-width: 0;
+}
+
+/* 启动读取偏好未完成时禁用过渡：首帧直接落在正确宽度，避免「先展开再收起」闪动 */
+.app-layout__sidebar--instant {
+  transition: none;
+}
+
+/* ---- 自动收回：贴边抓条与图钉按钮 ---- */
+
+/* 贴边抓条（仅收起态渲染）：透明热区比可见细条宽，便于命中 */
+.app-layout__sidebar-handle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 64px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-layout__sidebar-handle::before {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 40px;
+  border-radius: 0 4px 4px 0;
+  background-color: color-mix(in srgb, var(--text) 32%, transparent);
+  transition:
+    background-color 0.15s ease,
+    height 0.15s ease;
+}
+
+.app-layout__sidebar-handle:hover::before,
+.app-layout__sidebar-handle:focus-visible::before {
+  height: 56px;
+  background-color: var(--primary);
+}
+
+.app-layout__sidebar-handle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/**
+ * 图钉按钮：叠在 logo 横幅右上角。
+ * logo 为白底横幅图（不随主题变化），因此此处用固定的浅底深字配色，
+ * 避免浅色/深色主题下与图片底色撞色导致看不清。
+ */
+.app-layout__pin {
+  --pin-surface: rgba(255, 255, 255, 0.88);
+  --pin-surface-hover: #ffffff;
+  --pin-border: rgba(13, 59, 76, 0.16);
+  --pin-ink: #0d3b4c;
+
+  position: absolute;
+  /* 定位补偿：内层内边距（16px / 12px）+ 8px 内缩，使按钮落在 logo 图右上角内侧 */
+  top: 24px;
+  right: 20px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  border: 1px solid var(--pin-border);
+  border-radius: 7px;
+  background-color: var(--pin-surface);
+  color: var(--pin-ink);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* 非固定态（自动收回）：图标淡化并带斜杠，与高亮态形成对比 */
+.app-layout__pin:not(.app-layout__pin--pinned) svg {
+  opacity: 0.55;
+}
+
+.app-layout__pin:hover {
+  background-color: var(--pin-surface-hover);
+  border-color: color-mix(in srgb, var(--pin-ink) 40%, transparent);
+}
+
+.app-layout__pin:hover svg {
+  opacity: 1;
+}
+
+.app-layout__pin:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* 系统「减少动态效果」时禁用展开/收起过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .app-layout__sidebar {
+    transition: none;
+  }
 }
 
 .app-layout__brand {
@@ -285,12 +409,29 @@
     left: 0;
     z-index: 50;
     width: min(280px, 84vw);
-    /* 保持与桌面端一致的列布局，顶部留足抽屉头 */
-    padding-top: 20px;
     transform: translateX(-105%);
     transition: transform 0.25s ease;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  /* 抽屉内层：跟随抽屉宽度，顶部留足抽屉头 */
+  .app-layout__sidebar-inner {
+    width: 100%;
+    padding-top: 20px;
+  }
+
+  /* 移动端恒为抽屉，开合由 --open 的位移控制：
+     桌面端的「自动收回」收起态在此恢复为正常抽屉宽度 */
+  .app-layout__sidebar--collapsed {
+    width: min(280px, 84vw);
+    border-right-width: 1px;
+  }
+
+  /* 贴边抓条与图钉按钮仅桌面端使用 */
+  .app-layout__sidebar-handle,
+  .app-layout__pin {
+    display: none;
   }
 
   .app-layout__sidebar--open {
