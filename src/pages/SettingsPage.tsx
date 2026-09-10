@@ -73,6 +73,19 @@ const AUTHOR_VISIBILITY_OPTIONS: Array<{
 /** 一天的毫秒数（估算窗口换算） */
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
+/** 设置页区块目录（锚点 id + 显示名，顺序即页面展示顺序，供左侧目录与 hash 跳转复用） */
+const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
+  { id: 'settings-profile', label: '个人信息' },
+  { id: 'settings-units', label: '单位' },
+  { id: 'settings-appearance', label: '外观' },
+  { id: 'settings-scope', label: '数据口径' },
+  { id: 'settings-offline', label: '离线地图' },
+  { id: 'settings-import', label: '导入' },
+  { id: 'author-data', label: '作者数据' },
+  { id: 'settings-data', label: '数据管理' },
+  { id: 'settings-install', label: '安装应用' },
+]
+
 /** FTP/VO2Max 估算状态（loading=扫描中，noPower=近 90 天无功率数据） */
 type EstimateStatus = 'loading' | 'noPower' | 'ready' | 'error'
 
@@ -484,12 +497,13 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     }
   }
 
-  // 提示条「去设置」跳入：滚动到「作者数据」区块并高亮一次
+  // 提示条「去设置」/ 目录点击跳入：滚动到对应区块并高亮一次
   useEffect(() => {
-    if (location.hash !== '#author-data') {
+    const id = location.hash.startsWith('#') ? location.hash.slice(1) : ''
+    if (id === '' || !SETTINGS_SECTIONS.some((section) => section.id === id)) {
       return
     }
-    const section = document.getElementById('author-data')
+    const section = document.getElementById(id)
     if (section === null) {
       return
     }
@@ -607,389 +621,416 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTileCacheStats({ count: 0, bytes: 0 })
   }
 
+  // 目录当前选中项：由 location.hash 派生（无 hash 时默认第一个区块）
+  const activeSectionId = location.hash.startsWith('#') ? location.hash.slice(1) : SETTINGS_SECTIONS[0].id
+
   return (
     <div className="settings-page">
       <h1>设置</h1>
 
-      <form className="settings-form" onSubmit={handleSubmit}>
-        <section className="settings-section" aria-label="个人信息">
-          <h2 className="settings-section__title">个人信息</h2>
-          <p className="settings-section__hint">
-            训练配置仅作用于「我的数据」；查看作者数据时使用作者发布的配置。
-          </p>
-          <div className="settings-fields">
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-nickname">
-                昵称
-              </label>
-              <input
-                id="settings-profile-nickname"
-                type="text"
-                className="settings-field__input"
-                placeholder="如：晨骑爱好者"
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-              />
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-weight">
-                体重
-              </label>
-              <input
-                id="settings-profile-weight"
-                type="number"
-                className="settings-field__input settings-field__input--number"
-                value={weightKg}
-                onChange={(event) => setWeightKg(event.target.value)}
-              />
-              <span className="settings-field__unit">kg</span>
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-height">
-                身高
-              </label>
-              <input
-                id="settings-profile-height"
-                type="number"
-                className="settings-field__input settings-field__input--number"
-                value={heightCm}
-                onChange={(event) => setHeightCm(event.target.value)}
-              />
-              <span className="settings-field__unit">cm</span>
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-ftp">
-                FTP
-              </label>
-              <input
-                id="settings-profile-ftp"
-                type="number"
-                className="settings-field__input settings-field__input--number"
-                value={ftp}
-                onChange={(event) => setFtp(event.target.value)}
-              />
-              <span className="settings-field__unit">W</span>
-            </div>
-            <div className="settings-estimate" aria-label="训练估算">
-              {estimateStatus === 'loading' && (
-                <p className="settings-estimate__text">正在根据近 90 天的骑行数据估算…</p>
-              )}
-              {estimateStatus === 'noPower' && (
-                <p className="settings-estimate__text">
-                  近 90 天没有功率数据，导入含功率计的骑行后可估算 FTP 与 VO2Max
-                </p>
-              )}
-              {estimateStatus === 'error' && (
-                <p className="settings-estimate__text">估算失败，请刷新重试</p>
-              )}
-              {estimateStatus === 'ready' && (
-                <>
-                  {ftpEstimate !== undefined && (
-                    <p className="settings-estimate__text">
-                      估算 FTP：{ftpEstimate} W（近 90 天 20 分钟最佳功率 × 0.95）
-                      <button
-                        type="button"
-                        className="settings-button settings-estimate__adopt"
-                        onClick={handleAdoptFtp}
-                        disabled={adopting}
-                      >
-                        {adopting ? '采用中…' : '采用'}
-                      </button>
-                    </p>
-                  )}
-                  {vo2maxEstimate !== undefined ? (
-                    <p className="settings-estimate__text">
-                      估算 VO2Max：{vo2maxEstimate} ml/kg/min（5 分钟最佳功率 ÷ 体重）
-                    </p>
-                  ) : (
-                    <p className="settings-estimate__text">填写并保存体重后可估算 VO2Max</p>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-max-hr">
-                最大心率
-              </label>
-              <input
-                id="settings-profile-max-hr"
-                type="number"
-                className="settings-field__input settings-field__input--number"
-                value={maxHeartRate}
-                onChange={(event) => setMaxHeartRate(event.target.value)}
-              />
-              <span className="settings-field__unit">bpm</span>
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-profile-resting-hr">
-                静息心率
-              </label>
-              <input
-                id="settings-profile-resting-hr"
-                type="number"
-                className="settings-field__input settings-field__input--number"
-                value={restingHeartRate}
-                onChange={(event) => setRestingHeartRate(event.target.value)}
-              />
-              <span className="settings-field__unit">bpm</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="settings-section" aria-label="单位">
-          <h2 className="settings-section__title">单位</h2>
-          <div className="settings-fields">
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-unit-distance">
-                距离
-              </label>
-              <select
-                id="settings-unit-distance"
-                className="settings-field__select"
-                value={distanceUnit}
-                onChange={(event) => setDistanceUnit(event.target.value as DistanceUnit)}
-              >
-                <option value="km">公里（km）</option>
-                <option value="mi">英里（mi）</option>
-              </select>
-            </div>
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="settings-unit-time">
-                时间格式
-              </label>
-              <select
-                id="settings-unit-time"
-                className="settings-field__select"
-                value={timeFormat}
-                onChange={(event) => setTimeFormat(event.target.value as TimeFormat)}
-              >
-                <option value="24h">24 小时制</option>
-                <option value="12h">12 小时制</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <div className="settings-form__actions">
-          <button type="submit" className="settings-button settings-button--primary" disabled={saving}>
-            {saving ? '保存中…' : '保存设置'}
-          </button>
-        </div>
-      </form>
-
-      <section className="settings-section" aria-label="外观">
-        <h2 className="settings-section__title">外观</h2>
-        <p className="settings-section__hint">
-          主题与侧边栏设置切换后立即生效并自动保存。自动收回仅在桌面端生效：
-          鼠标移出侧边栏后收起，移到屏幕左边缘再滑出展开。
-        </p>
-        <div className="settings-fields">
-          <div className="settings-field">
-            <label className="settings-field__label" htmlFor="settings-appearance-theme">
-              主题
-            </label>
-            <select
-              id="settings-appearance-theme"
-              className="settings-field__select"
-              value={theme}
-              onChange={handleThemeChange}
+      <div className="settings-layout">
+        <nav className="settings-toc" aria-label="设置区块">
+          {SETTINGS_SECTIONS.map((section) => (
+            <a
+              key={section.id}
+              href={`#${section.id}`}
+              className={
+                section.id === activeSectionId
+                  ? 'settings-toc__item settings-toc__item--active'
+                  : 'settings-toc__item'
+              }
             >
-              <option value="dark">深色</option>
-              <option value="light">浅色</option>
-              <option value="system">跟随系统</option>
-            </select>
-          </div>
-          <div className="settings-field">
-            <label className="settings-field__label" htmlFor="settings-appearance-sidebar">
-              侧边栏
-            </label>
-            <select
-              id="settings-appearance-sidebar"
-              className="settings-field__select"
-              value={sidebarMode}
-              onChange={handleSidebarModeChange}
-            >
-              <option value="fixed">固定（默认）</option>
-              <option value="auto">自动收回</option>
-            </select>
-          </div>
-        </div>
-      </section>
+              {section.label}
+            </a>
+          ))}
+        </nav>
 
-      <section className="settings-section" aria-label="数据口径">
-        <h2 className="settings-section__title">数据口径</h2>
-        <p className="settings-section__hint">
-          本站以骑行分析为主。导入 Strava、佳明等批量导出包时，包里可能同时含跑步、
-          散步等非骑行记录——它们默认不计入统计，避免「骑行里程」被撑大。
-          开启后统计页、仪表盘、年度回顾、热力图等会一并计入全部运动；
-          骑行记录列表不受影响，任何类型始终可见、可按类型筛选。
-          切换后页面会自动刷新一次。
-        </p>
-        <div className="settings-fields">
-          <div className="settings-field">
-            <span className="settings-field__label">统计包含其他运动</span>
-            <label className="settings-field__checkbox">
-              <input
-                type="checkbox"
-                checked={includeOtherSports}
-                onChange={handleIncludeOtherSportsChange}
-              />
-              {includeOtherSports
-                ? '统计包含骑行、跑步、散步等全部运动'
-                : '统计仅包含骑行（默认）'}
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <InstallSection />
-
-      <section id="author-data" className="settings-section" aria-label="作者数据">
-        <h2 className="settings-section__title">作者数据</h2>
-        <p className="settings-section__hint">
-          作者发布的公开数据仅作为空状态示例，让你在导入前先看到站点的样子。
-          导入你自己的数据后默认隐藏，可在此重新打开。
-        </p>
-        <div className="settings-fields">
-          <div className="settings-field">
-            <span className="settings-field__label">显示策略</span>
-            <div className="settings-visibility-options">
-              {AUTHOR_VISIBILITY_OPTIONS.map((option) => (
-                <label key={option.value} className="settings-visibility-option">
+        <div className="settings-grid">
+          <form className="settings-form settings-column" onSubmit={handleSubmit}>
+            <section className="settings-section" aria-label="个人信息" id="settings-profile">
+              <h2 className="settings-section__title">个人信息</h2>
+              <p className="settings-section__hint">
+                训练配置仅作用于「我的数据」；查看作者数据时使用作者发布的配置。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-nickname">
+                    昵称
+                  </label>
                   <input
-                    type="radio"
-                    name="settings-author-visibility"
-                    checked={authorVisibility === option.value}
-                    onChange={() => handleAuthorVisibilityChange(option.value)}
+                    id="settings-profile-nickname"
+                    type="text"
+                    className="settings-field__input"
+                    placeholder="如：晨骑爱好者"
+                    value={nickname}
+                    onChange={(event) => setNickname(event.target.value)}
                   />
-                  <span>
-                    {option.label}
-                    <span className="settings-visibility-option__hint"> · {option.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-weight">
+                    体重
+                  </label>
+                  <input
+                    id="settings-profile-weight"
+                    type="number"
+                    className="settings-field__input settings-field__input--number"
+                    value={weightKg}
+                    onChange={(event) => setWeightKg(event.target.value)}
+                  />
+                  <span className="settings-field__unit">kg</span>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-height">
+                    身高
+                  </label>
+                  <input
+                    id="settings-profile-height"
+                    type="number"
+                    className="settings-field__input settings-field__input--number"
+                    value={heightCm}
+                    onChange={(event) => setHeightCm(event.target.value)}
+                  />
+                  <span className="settings-field__unit">cm</span>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-ftp">
+                    FTP
+                  </label>
+                  <input
+                    id="settings-profile-ftp"
+                    type="number"
+                    className="settings-field__input settings-field__input--number"
+                    value={ftp}
+                    onChange={(event) => setFtp(event.target.value)}
+                  />
+                  <span className="settings-field__unit">W</span>
+                </div>
+                <div className="settings-estimate" aria-label="训练估算">
+                  {estimateStatus === 'loading' && (
+                    <p className="settings-estimate__text">正在根据近 90 天的骑行数据估算…</p>
+                  )}
+                  {estimateStatus === 'noPower' && (
+                    <p className="settings-estimate__text">
+                      近 90 天没有功率数据，导入含功率计的骑行后可估算 FTP 与 VO2Max
+                    </p>
+                  )}
+                  {estimateStatus === 'error' && (
+                    <p className="settings-estimate__text">估算失败，请刷新重试</p>
+                  )}
+                  {estimateStatus === 'ready' && (
+                    <>
+                      {ftpEstimate !== undefined && (
+                        <p className="settings-estimate__text">
+                          估算 FTP：{ftpEstimate} W（近 90 天 20 分钟最佳功率 × 0.95）
+                          <button
+                            type="button"
+                            className="settings-button settings-estimate__adopt"
+                            onClick={handleAdoptFtp}
+                            disabled={adopting}
+                          >
+                            {adopting ? '采用中…' : '采用'}
+                          </button>
+                        </p>
+                      )}
+                      {vo2maxEstimate !== undefined ? (
+                        <p className="settings-estimate__text">
+                          估算 VO2Max：{vo2maxEstimate} ml/kg/min（5 分钟最佳功率 ÷ 体重）
+                        </p>
+                      ) : (
+                        <p className="settings-estimate__text">填写并保存体重后可估算 VO2Max</p>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-max-hr">
+                    最大心率
+                  </label>
+                  <input
+                    id="settings-profile-max-hr"
+                    type="number"
+                    className="settings-field__input settings-field__input--number"
+                    value={maxHeartRate}
+                    onChange={(event) => setMaxHeartRate(event.target.value)}
+                  />
+                  <span className="settings-field__unit">bpm</span>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-profile-resting-hr">
+                    静息心率
+                  </label>
+                  <input
+                    id="settings-profile-resting-hr"
+                    type="number"
+                    className="settings-field__input settings-field__input--number"
+                    value={restingHeartRate}
+                    onChange={(event) => setRestingHeartRate(event.target.value)}
+                  />
+                  <span className="settings-field__unit">bpm</span>
+                </div>
+              </div>
+            </section>
 
-      <section className="settings-section" aria-label="离线地图">
-        <h2 className="settings-section__title">离线地图</h2>
-        <p className="settings-section__hint">
-          开启后地图瓦片会缓存到浏览器本地（IndexedDB），离线或弱网时底图仍可显示。缓存有自动上限，超出后会清理最久未使用的瓦片。
-        </p>
-        <div className="settings-fields">
-          <div className="settings-field">
-            <span className="settings-field__label">瓦片缓存</span>
-            <label className="settings-field__checkbox">
-              <input
-                type="checkbox"
-                checked={tileCacheEnabled}
-                onChange={handleTileCacheToggleChange}
-              />
-              缓存地图瓦片（离线可用）
-            </label>
-          </div>
-          {tileCacheEnabled && (
-            <div className="settings-field settings-tile-cache">
-              <span className="settings-field__label">当前缓存</span>
-              <span className="settings-tile-cache__stats">
-                {formatBytes(tileCacheStats.bytes)} / {tileCacheStats.count} 张
-              </span>
-              <button
-                type="button"
-                className="settings-button settings-button--danger"
-                onClick={handleClearTileCache}
-                disabled={clearingTiles}
-              >
-                {clearingTiles ? '清空中…' : '清空瓦片缓存'}
+            <section className="settings-section" aria-label="单位" id="settings-units">
+              <h2 className="settings-section__title">单位</h2>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-unit-distance">
+                    距离
+                  </label>
+                  <select
+                    id="settings-unit-distance"
+                    className="settings-field__select"
+                    value={distanceUnit}
+                    onChange={(event) => setDistanceUnit(event.target.value as DistanceUnit)}
+                  >
+                    <option value="km">公里（km）</option>
+                    <option value="mi">英里（mi）</option>
+                  </select>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-unit-time">
+                    时间格式
+                  </label>
+                  <select
+                    id="settings-unit-time"
+                    className="settings-field__select"
+                    value={timeFormat}
+                    onChange={(event) => setTimeFormat(event.target.value as TimeFormat)}
+                  >
+                    <option value="24h">24 小时制</option>
+                    <option value="12h">12 小时制</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <div className="settings-form__actions">
+              <button type="submit" className="settings-button settings-button--primary" disabled={saving}>
+                {saving ? '保存中…' : '保存设置'}
               </button>
             </div>
-          )}
-        </div>
-      </section>
+          </form>
 
-      <section className="settings-section" aria-label="导入">
-        <h2 className="settings-section__title">导入</h2>
-        <p className="settings-section__hint">
-          开启后导入的原始 FIT 字节会保存在浏览器本地（占用存储空间），默认不保存。
-        </p>
-        <div className="settings-fields">
-          <div className="settings-field">
-            <span className="settings-field__label">原始文件</span>
-            <label className="settings-field__checkbox">
-              <input
-                type="checkbox"
-                checked={saveOriginalFit}
-                onChange={handleSaveOriginalFitChange}
-              />
-              保存原始 FIT 文件
-            </label>
+          <div className="settings-column">
+            <section className="settings-section" aria-label="外观" id="settings-appearance">
+              <h2 className="settings-section__title">外观</h2>
+              <p className="settings-section__hint">
+                主题与侧边栏设置切换后立即生效并自动保存。自动收回仅在桌面端生效：
+                鼠标移出侧边栏后收起，移到屏幕左边缘再滑出展开。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-appearance-theme">
+                    主题
+                  </label>
+                  <select
+                    id="settings-appearance-theme"
+                    className="settings-field__select"
+                    value={theme}
+                    onChange={handleThemeChange}
+                  >
+                    <option value="dark">深色</option>
+                    <option value="light">浅色</option>
+                    <option value="system">跟随系统</option>
+                  </select>
+                </div>
+                <div className="settings-field">
+                  <label className="settings-field__label" htmlFor="settings-appearance-sidebar">
+                    侧边栏
+                  </label>
+                  <select
+                    id="settings-appearance-sidebar"
+                    className="settings-field__select"
+                    value={sidebarMode}
+                    onChange={handleSidebarModeChange}
+                  >
+                    <option value="fixed">固定（默认）</option>
+                    <option value="auto">自动收回</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section" aria-label="数据口径" id="settings-scope">
+              <h2 className="settings-section__title">数据口径</h2>
+              <p className="settings-section__hint">
+                本站以骑行分析为主。导入 Strava、佳明等批量导出包时，包里可能同时含跑步、
+                散步等非骑行记录——它们默认不计入统计，避免「骑行里程」被撑大。
+                开启后统计页、仪表盘、年度回顾、热力图等会一并计入全部运动；
+                骑行记录列表不受影响，任何类型始终可见、可按类型筛选。
+                切换后页面会自动刷新一次。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <span className="settings-field__label">统计包含其他运动</span>
+                  <label className="settings-field__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={includeOtherSports}
+                      onChange={handleIncludeOtherSportsChange}
+                    />
+                    {includeOtherSports
+                      ? '统计包含骑行、跑步、散步等全部运动'
+                      : '统计仅包含骑行（默认）'}
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section className="settings-section" aria-label="离线地图" id="settings-offline">
+              <h2 className="settings-section__title">离线地图</h2>
+              <p className="settings-section__hint">
+                开启后地图瓦片会缓存到浏览器本地（IndexedDB），离线或弱网时底图仍可显示。缓存有自动上限，超出后会清理最久未使用的瓦片。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <span className="settings-field__label">瓦片缓存</span>
+                  <label className="settings-field__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={tileCacheEnabled}
+                      onChange={handleTileCacheToggleChange}
+                    />
+                    缓存地图瓦片（离线可用）
+                  </label>
+                </div>
+                {tileCacheEnabled && (
+                  <div className="settings-field settings-tile-cache">
+                    <span className="settings-field__label">当前缓存</span>
+                    <span className="settings-tile-cache__stats">
+                      {formatBytes(tileCacheStats.bytes)} / {tileCacheStats.count} 张
+                    </span>
+                    <button
+                      type="button"
+                      className="settings-button settings-button--danger"
+                      onClick={handleClearTileCache}
+                      disabled={clearingTiles}
+                    >
+                      {clearingTiles ? '清空中…' : '清空瓦片缓存'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="settings-section" aria-label="导入" id="settings-import">
+              <h2 className="settings-section__title">导入</h2>
+              <p className="settings-section__hint">
+                开启后导入的原始 FIT 字节会保存在浏览器本地（占用存储空间），默认不保存。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <span className="settings-field__label">原始文件</span>
+                  <label className="settings-field__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={saveOriginalFit}
+                      onChange={handleSaveOriginalFitChange}
+                    />
+                    保存原始 FIT 文件
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section id="author-data" className="settings-section" aria-label="作者数据">
+              <h2 className="settings-section__title">作者数据</h2>
+              <p className="settings-section__hint">
+                作者发布的公开数据仅作为空状态示例，让你在导入前先看到站点的样子。
+                导入你自己的数据后默认隐藏，可在此重新打开。
+              </p>
+              <div className="settings-fields">
+                <div className="settings-field">
+                  <span className="settings-field__label">显示策略</span>
+                  <div className="settings-visibility-options">
+                    {AUTHOR_VISIBILITY_OPTIONS.map((option) => (
+                      <label key={option.value} className="settings-visibility-option">
+                        <input
+                          type="radio"
+                          name="settings-author-visibility"
+                          checked={authorVisibility === option.value}
+                          onChange={() => handleAuthorVisibilityChange(option.value)}
+                        />
+                        <span>
+                          {option.label}
+                          <span className="settings-visibility-option__hint"> · {option.hint}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="settings-column settings-column--wide">
+            <section className="settings-section" aria-label="数据管理" id="settings-data">
+              <h2 className="settings-section__title">数据管理</h2>
+              <p className="settings-section__hint">
+                你的数据全部保存在本浏览器的 IndexedDB 中——解析与统计均在本地完成，不上传任何服务器。
+                清除浏览器站点数据或卸载浏览器会导致数据丢失，建议定期导出 JSON 备份。
+              </p>
+              <p className="settings-section__hint">
+                导出 JSON 备份可迁移到其他设备；导入会合并到当前数据。
+                导出/清空仅作用于「我的数据」，不影响作者发布的数据。
+              </p>
+              <div className="settings-actions">
+                <button type="button" className="settings-button" onClick={handleExport} disabled={exporting}>
+                  {exporting ? '导出中…' : '导出数据'}
+                </button>
+                <button
+                  type="button"
+                  className="settings-button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  {importing ? '导入中…' : '导入数据'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="settings-file-input"
+                  onChange={handleImportFile}
+                />
+                <button
+                  type="button"
+                  className="settings-button settings-button--danger"
+                  onClick={handleClearAll}
+                  disabled={clearing}
+                >
+                  {clearing ? '清空中…' : '清空全部本地数据'}
+                </button>
+              </div>
+            </section>
+
+            <InstallSection id="settings-install" />
+
+            {message !== null && (
+              <p
+                role="status"
+                className={
+                  message.type === 'success'
+                    ? 'settings-message settings-message--success'
+                    : 'settings-message settings-message--error'
+                }
+              >
+                {message.text}
+              </p>
+            )}
+
+            <section className="settings-section" aria-label="关于" id="settings-about">
+              <h2 className="settings-section__title">关于</h2>
+              <p className="settings-section__hint">
+                本站为 {authorName ?? '作者'} 的公开骑行数据站点：默认展示作者发布的数据（只读快照）。
+                你可以通过左侧「同步骑行数据」导入自己的 FIT 文件——
+                你的数据仅保存在当前浏览器本地（IndexedDB），不会上传。
+              </p>
+            </section>
           </div>
         </div>
-      </section>
-
-      <section className="settings-section" aria-label="数据管理">
-        <h2 className="settings-section__title">数据管理</h2>
-        <p className="settings-section__hint">
-          你的数据全部保存在本浏览器的 IndexedDB 中——解析与统计均在本地完成，不上传任何服务器。
-          清除浏览器站点数据或卸载浏览器会导致数据丢失，建议定期导出 JSON 备份。
-        </p>
-        <p className="settings-section__hint">
-          导出 JSON 备份可迁移到其他设备；导入会合并到当前数据。
-          导出/清空仅作用于「我的数据」，不影响作者发布的数据。
-        </p>
-        <div className="settings-actions">
-          <button type="button" className="settings-button" onClick={handleExport} disabled={exporting}>
-            {exporting ? '导出中…' : '导出数据'}
-          </button>
-          <button
-            type="button"
-            className="settings-button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? '导入中…' : '导入数据'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="settings-file-input"
-            onChange={handleImportFile}
-          />
-          <button
-            type="button"
-            className="settings-button settings-button--danger"
-            onClick={handleClearAll}
-            disabled={clearing}
-          >
-            {clearing ? '清空中…' : '清空全部本地数据'}
-          </button>
-        </div>
-      </section>
-
-      {message !== null && (
-        <p
-          role="status"
-          className={
-            message.type === 'success'
-              ? 'settings-message settings-message--success'
-              : 'settings-message settings-message--error'
-          }
-        >
-          {message.text}
-        </p>
-      )}
-
-      <section className="settings-section" aria-label="关于">
-        <h2 className="settings-section__title">关于</h2>
-        <p className="settings-section__hint">
-          本站为 {authorName ?? '作者'} 的公开骑行数据站点：默认展示作者发布的数据（只读快照）。
-          你可以通过左侧「同步骑行数据」导入自己的 FIT 文件——
-          你的数据仅保存在当前浏览器本地（IndexedDB），不会上传。
-        </p>
-      </section>
+      </div>
     </div>
   )
 }

@@ -4,12 +4,83 @@
  * 深色基调与全局一致；危险操作按钮使用红色强调（规格 §32）。
  */
 
-/* 页面布局 */
+/* 页面布局：作为容器查询的容器（container-type），双栏/单栏由 @container 按实际内容区宽度决定 */
 .settings-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 560px;
+  max-width: 1280px;
+  container-type: inline-size;
+}
+
+/* 目录 + 内容区横向骨架：左侧 sticky 目录 + 右侧栅格 */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* 左侧锚点目录（桌面端 sticky，随滚动固定在视口顶部） */
+.settings-toc {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-toc__item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.settings-toc__item:hover {
+  color: var(--text);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme='light'] .settings-toc__item:hover {
+  background-color: rgba(13, 59, 76, 0.06);
+}
+
+/* 目录选中项：主色文字 + 淡主色底 */
+.settings-toc__item--active {
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* 内容区栅格：默认单栏，@container 命中后双栏 */
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+/* 左/右栏与通栏：纵向堆叠各自的区块 */
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 通栏（数据管理/安装应用/关于/操作提示）：跨满两栏 */
+.settings-column--wide {
+  grid-column: 1 / -1;
+}
+
+/* 表单本体作为左栏，纵向堆叠区块，保持原保存按钮紧随表单 */
+.settings-form.settings-column {
+  gap: 16px;
 }
 
 /* 设置区块（个人信息 / 单位 / 数据管理） */
@@ -245,4 +316,25 @@
 .settings-section--highlight {
   border-color: color-mix(in srgb, var(--primary) 60%, transparent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+/* ---- 容器查询：按设置页自身（内容区）真实宽度切换布局 ----
+ * 目录占 160px + 16px 间距，双栏需内容区 ≥ 900px 才有足够列宽；
+ * 阈值以下退回单栏（目录列保留，右侧内容单列排布）。
+ * 侧边栏「自动收回」时内容区变宽，容器查询能正确响应（media query 做不到）。 */
+@container (min-width: 900px) {
+  .settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* 移动端（≤768px）：目录隐藏，退化为纯单列（与改造前一致） */
+@media (max-width: 768px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-toc {
+    display: none;
+  }
 }

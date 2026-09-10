@@ -10,7 +10,13 @@
 import { useState } from 'react'
 import { usePwaInstall } from '@/features/pwa/usePwaInstall'
 
-function InstallSection() {
+/** 安装区块 props（设置页锚点目录需要给它一个可滚动的锚点 id） */
+interface InstallSectionProps {
+  /** 区块 DOM id（供设置页目录跳转定位，可选） */
+  id?: string
+}
+
+function InstallSection({ id }: InstallSectionProps) {
   const { support, platform, install } = usePwaInstall()
   // 原生弹窗等待中禁用按钮，防重复触发
   const [prompting, setPrompting] = useState(false)
@@ -29,7 +35,7 @@ function InstallSection() {
   }
 
   return (
-    <section className="settings-section" aria-label="安装应用">
+    <section className="settings-section" aria-label="安装应用" id={id}>
       <h2 className="settings-section__title">安装应用</h2>
       {support === 'installed' ? (
         <p className="settings-section__hint" data-testid="install-status">
