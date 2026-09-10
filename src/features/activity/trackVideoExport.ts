@@ -6,6 +6,9 @@
  * 缺失字段省略不伪造），位置在记录点间线性插值平滑移动；左上角 HUD 展示活动名
  * 与已骑行距离/时长，右下角 OSM 版权署名。
  *
+ * 时间轴与在线回放同一口径：按「运动时间」推进（折叠红灯/休息等暂停时段，
+ * 见 buildMovingTimeline），HUD 时长展示的也是运动时长，不会出现光标长时间静止的画段。
+ *
  * 技术路线：Canvas 2D 逐帧绘制 → canvas.captureStream() → MediaRecorder 录制。
  * 浏览器优先选择 video/mp4 编码（Chrome 126+/Safari 原生支持），不支持时降级
  * video/webm 并保留 .webm 后缀。地图瓦片以 crossOrigin=anonymous 加载（OSM 支持
@@ -14,7 +17,7 @@
  * 无外部依赖，作者源只读活动同样可导出。
  */
 import type { ActivityRecord } from '@/types/activity'
-import { formatCursorTipItems } from '@/map/replayCore'
+import { buildMovingTimeline, formatCursorTipItems } from '@/map/replayCore'
 
 /** 默认视频时长（秒） */
 const VIDEO_DURATION_SECONDS = 10
@@ -725,12 +728,14 @@ export async function exportTrackReplayVideo(
   if (points === undefined) {
     return undefined
   }
-  // 显式非空引用：rAF 闭包内 TS 收窄不跨函数边界
-  const framePoints: readonly FramePoint[] = points
+  // 显式非空引用：rAF 闭包内 TS 收窄不跨函数边界。
+  // 时间轴改用运动时间（折叠红灯/休息等暂停，与在线回放同一口径），
+  // 视频里不再出现光标长时间静止的画段；几何坐标不变，全程轨迹线形状一致
+  const framePoints: readonly FramePoint[] = buildMovingTimeline(points)
 
   const durationSeconds = options?.durationSeconds ?? VIDEO_DURATION_SECONDS
-  const firstTs = points[0]!.timestamp
-  const lastTs = points[points.length - 1]!.timestamp
+  const firstTs = framePoints[0]!.timestamp
+  const lastTs = framePoints[framePoints.length - 1]!.timestamp
   const totalSpan = Math.max(lastTs - firstTs, 1)
 
   const canvas = document.createElement('canvas')

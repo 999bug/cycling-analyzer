@@ -1,6 +1,7 @@
 /**
  * 在线回放纯计算模块：与 React 组件解耦（可单测、避免 fast-refresh 导出限制）。
  */
+import { isMovingSegment } from '@/features/activity/movingTime'
 
 /** 轨迹点最小结构（仅回放计算所需字段） */
 export interface ReplayPoint {
@@ -12,6 +13,52 @@ export interface ReplayPoint {
 
   /** 经度 */
   longitude: number
+}
+
+/** 时间轴压缩的输入点：时间戳 + 累计距离（判定位移用） */
+export interface MovingTimelineInput {
+  /** Unix 秒时间戳（升序） */
+  timestamp: number
+
+  /** 累计距离（米）；全部缺失时无法判定暂停，时间轴原样返回 */
+  distance?: number
+}
+
+/**
+ * 把真实时间轴压缩为「运动时间轴」：暂停（红灯/休息/记录断档）时段增量为 0。
+ *
+ * 动机：真实时间轴下暂停时段会一秒钟不差地播出来（1× 尤其难受——光标原地
+ * 不动、时钟照走）。压缩后光标匀速穿过轨迹，回放总时长等于活动的计时时长
+ * （判定规则与 @/fit/calculator 的均速分母同源，见 @/features/activity/movingTime）。
+ *
+ * **几何点一个不丢**（只改 timestamp）：已走高亮折线与底图完整轨迹始终重合，
+ * 暂停段在时间轴上宽度为 0，因而不会被停留播放。
+ *
+ * 兜底：点数不足、完全没有累计距离、或全程判定为静止（压缩后时长归零）时，
+ * 原样返回入参数组——回退真实时间轴，行为与改造前一致。
+ *
+ * @param points 轨迹点（timestamp 升序，依赖累计距离字段）
+ * @returns 时间戳重映射后的新数组（不修改入参）
+ */
+export function buildMovingTimeline<T extends MovingTimelineInput>(points: T[]): T[] {
+  const first = points[0]
+  if (first === undefined || points.length < 2) {
+    return points
+  }
+  if (!points.some((point) => point.distance !== undefined)) {
+    return points
+  }
+  const timeline: T[] = [{ ...first, timestamp: 0 }]
+  let movingClock = 0
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]!
+    const curr = points[i]!
+    if (isMovingSegment(prev, curr)) {
+      movingClock += Math.max(curr.timestamp - prev.timestamp, 0)
+    }
+    timeline.push({ ...curr, timestamp: movingClock })
+  }
+  return movingClock > 0 ? timeline : points
 }
 
 /**

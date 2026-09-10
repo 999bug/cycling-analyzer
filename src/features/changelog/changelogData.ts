@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.52.1',
+    date: '2026-09-10',
+    features: [
+      '在线回放只播运动中的轨迹：红灯、休息、记录断档等暂停时段不再占用回放时间，光标匀速推进，回放总时长等于活动的计时时长',
+      '控制条时钟改为「运动」时间（不含暂停），与进度条口径一致',
+      '回放视频导出同步该口径，导出的视频里不再出现光标长时间静止的画面',
+    ],
+  },
+  {
     version: '2.52.0',
     date: '2026-09-10',
     features: [

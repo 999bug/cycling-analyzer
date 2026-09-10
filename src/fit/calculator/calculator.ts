@@ -14,36 +14,8 @@
  * 缺失字段一律返回 undefined（规格 §25：null ≠ 0）。
  */
 import type { RawFitSession } from '@/fit/decoder/fitDecoder'
+import { movingDurationOf } from '@/features/activity/movingTime'
 import type { ActivityRecord } from '@/types/activity'
-
-/**
- * 移动判定速度阈值（m/s，≈1.8km/h，Strava 同级）：
- * 相邻点位移速度高于该值的时间段计入移动时间，低于视为静止（GPS 抖动单点
- * 位移通常 < 0.5m/s，不会累积进移动时间）。
- */
-const MOVING_SPEED_THRESHOLD_MPS = 0.5
-
-/**
- * 正常采样间隔上限（秒）：不超过该值的相邻点按位移速度判定移动/静止。
- */
-const MOVING_GAP_LIMIT_SEC = 30
-
-/**
- * 暂停判定缺口（秒）：MOVING_GAP_LIMIT_SEC ～ 该值之间的记录缺口视为
- * 「短停」——行者等 App 静止时会降频记录（几十秒一个点）或短暂停歇，
- * 是否计入活动时间按「行者是否检测到停止」区分（见 PAUSE_DRIFT_METERS）；
- * 超过该值的缺口视为暂停/记录断档，整段剔除。
- */
-const PAUSE_GAP_LIMIT_SEC = 60
-
-/**
- * 短缺口停止判定位移（米）：30~60s 短缺口两端的 haversine 位移低于该值
- * 视为「完全停止」（GPS 漂移级位移，行者 App/码表自动暂停已触发、计时
- * 冻结），时间不计入；有真实挪动（≥ 该值，如推车挪步、极慢通过路口）
- * 视为仍在活动状态，行者计时未停，时间计入。实测两份行者导出样本：
- * 手机版计入的短停两端位移均 ≥8m，码表版判停的短停两端位移中位 3.7m。
- */
-const PAUSE_DRIFT_METERS = 8
 
 /**
  * 统计汇总结果（Activity 的部分字段）。
@@ -200,44 +172,13 @@ function recordsDuration(records: ActivityRecord[]): number {
  *
  * 用于无 session 的数据源（GPX）：GPX 没有设备计时/暂停信息，若直接用
  * 首末时间差，红绿灯与休息的静止时间会拉低均速（行者/Strava/佳明 App 均
- * 按移动时间显示均速）。三档判定：
- * - 正常间隔（≤ 30s）：位移速度高于 MOVING_SPEED_THRESHOLD_MPS 才计入，
- *   防静止 GPS 抖动虚增；
- * - 短缺口（30s ～ 60s）：行者等 App 静止降频/短歇不写点的痕迹，按两端
- *   位移区分——挪动 ≥ PAUSE_DRIFT_METERS 视为活动状态计时不停（计入），
- *   几乎没动视为已暂停（剔除）；
- * - 长缺口（> 60s）：视为暂停/记录断档，整段剔除。
+ * 按移动时间显示均速）。判定规则见 `@/features/activity/movingTime`
+ * （与在线回放的时间轴压缩同源，保证均速分母与回放时长口径一致）。
  *
  * @param records 标准化逐点记录（依赖累计距离字段）
  */
 function estimateMovingDuration(records: ActivityRecord[]): number {
-  let moving = 0
-  for (let i = 1; i < records.length; i++) {
-    const prev = records[i - 1]
-    const curr = records[i]
-    const dt = curr.timestamp - prev.timestamp
-    if (dt <= 0 || dt > PAUSE_GAP_LIMIT_SEC) {
-      continue
-    }
-    if (dt > MOVING_GAP_LIMIT_SEC) {
-      // 短缺口：行者是否计时取决于自动暂停是否触发——
-      // 两端有真实挪动（推车挪步/极慢过路口）计时未停，计入；
-      // 位移仅 GPS 漂移级（完全没动）为已暂停，剔除
-      const dd = (curr.distance ?? 0) - (prev.distance ?? 0)
-      if (dd >= PAUSE_DRIFT_METERS) {
-        moving += dt
-      }
-      continue
-    }
-    const dd = (curr.distance ?? 0) - (prev.distance ?? 0)
-    if (dd <= 0) {
-      continue
-    }
-    if (dd / dt > MOVING_SPEED_THRESHOLD_MPS) {
-      moving += dt
-    }
-  }
-  return moving
+  return movingDurationOf(records)
 }
 
 /** 末点累计距离（米），无 distance 字段时为 undefined */

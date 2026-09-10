@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-09（[CU] 鸣谢页文案更新：「致谢」→「鸣谢」+ 三行引语，侧边栏导航同步；静默更新，不升版本）。
+> 供后续开发（含 AI agent）继续工作参考。最后更新：2026-09-10（[IM] 在线回放与回放视频导出改用运动时间轴：折叠红灯/休息等暂停时段；版本 2.52.0 → 2.52.1）。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -49,6 +49,10 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 新增功能先定位到对应层，跨层直接调用视为违规
 - **双数据源**：组件不直接 new 仓库，统一经 `useActivityRepository()` 按当前数据源（`dataSourceStore`）取本地 Dexie 仓库或作者快照仓库；作者源只读，写操作 UI 必须按源隐藏（规格外设计文档 §6.3）
 - **作者数据可见性（v2.48.0）**：作者数据定位为「空状态示例」。`dataSourceStore.authorVisibility: 'auto'|'show'|'hide'`（persist），auto = 本地有活动即隐藏（运行时 `hasLocalData` 判定，清空本地后自动回来）；`selectEffectiveSource` 在作者源被隐藏时无缝回退 local；切换器在作者档不可用时整体不渲染（`DataSourceSwitcher`）。配套：`AuthorHiddenNotice` 一次性提示（`authorHiddenNoticePending` persist，「去设置」跳 `/settings#author-data` 高亮）；深链兜底 `peekAuthorData`（运行时，仅详情页会话有效，显式切源即清除，设置值不动）；`initDataSource` 启动探测本地活动数（countActivities），导入成功/清空后同步 `setHasLocalData`
+- **运动时间口径（v2.52.1，单一来源）**：`src/features/activity/movingTime.ts` 是「相邻点是否处于运动中」的唯一判定处——正常间隔（≤30s）按位移速度 >0.5m/s、短缺口（30~60s）按两端位移 ≥8m、长缺口（>60s）整段剔除。两个消费方共用，禁止各自复制阈值：
+  - `fit/calculator` 的 `estimateMovingDuration` → GPX 等无 session 数据的「计时时长」（即均速分母）；
+  - `map/replayCore` 的 `buildMovingTimeline` → 在线回放与回放视频导出的时间轴（暂停段压缩为 0 长度，只重映射 timestamp、几何点不丢）。
+  由此**回放总时长恒等于活动计时时长**（两者同为运动时长）。调整判定规则只改这一个文件
 
 ### 测试约定
 

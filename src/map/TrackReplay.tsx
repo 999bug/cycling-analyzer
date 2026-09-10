@@ -5,6 +5,11 @@
  * 播放时当前位置光标沿轨迹推进，地图自动跟随平移；HUD 展示已骑距离/当前速度/心率。
  * 可选叠加 OpenTopoMap 地形底图（免费无 key，WGS-84 坐标系与 OSM 一致）。
  *
+ * 时间轴（用户需求：只回放运动中的轨迹）：进度轴为**运动时间**而非真实时间——
+ * 红灯/休息/记录断档等暂停时段由 `buildMovingTimeline` 折叠为 0 长度
+ * （只重映射时间戳，几何点不丢），镜头不再原地停留；回放总时长等于活动计时时长
+ * （判定口径见 @/features/activity/movingTime，与均速分母同源）。
+ *
  * 架构（重写）：全部时序逻辑收敛到 `ReplayEngine`（框架无关状态机，唯一 rAF 循环），
  * 组件只做两件事：
  * - 控制条：useSyncExternalStore 订阅引擎 10Hz 快照 → 滑块/时钟/HUD 常规渲染；
@@ -27,7 +32,12 @@ import type { CircleMarker as LeafletCircleMarker, Polyline as LeafletPolyline, 
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import { ReplayEngine, type ReplayFrame } from '@/map/replayEngine'
-import { buildCursorTipHtml, buildReplaySkeleton, findIndexAtTimestamp } from '@/map/replayCore'
+import {
+  buildCursorTipHtml,
+  buildMovingTimeline,
+  buildReplaySkeleton,
+  findIndexAtTimestamp,
+} from '@/map/replayCore'
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
@@ -318,8 +328,12 @@ function TerrainLayer({ visible }: { visible: boolean }) {
  * @param props 组件参数
  */
 export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainToggle }: TrackReplayProps) {
+  // 运动时间轴：把红灯/休息等暂停时段折叠为 0 长度（只重映射时间戳，几何点不丢，
+  // 已走高亮线与底图轨迹始终重合）。无法判定暂停时原样返回真实时间轴，行为与改造前一致。
+  const timeline = useMemo(() => buildMovingTimeline(points), [points])
+
   // 引擎与轨迹点生命周期绑定：points 变更（切换活动）即重建引擎
-  const engine = useMemo(() => new ReplayEngine(points), [points])
+  const engine = useMemo(() => new ReplayEngine(timeline), [timeline])
   useEffect(() => () => engine.dispose(), [engine])
 
   // 10Hz 快照订阅：滑块/时钟/HUD 的唯一渲染驱动（播放中每秒仅 ~10 次 reconcile）
@@ -336,20 +350,22 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
     }
   }, [])
 
-  const firstTs = points[0]?.timestamp ?? 0
-  const lastTs = points[points.length - 1]?.timestamp ?? 0
+  const firstTs = timeline[0]?.timestamp ?? 0
+  const lastTs = timeline[timeline.length - 1]?.timestamp ?? 0
   const totalSpan = Math.max(lastTs - firstTs, 1)
 
   // HUD 数据源：按快照进度定位当前点（10Hz × O(log N) 二分，成本可忽略）
   const currentIndex = useMemo(
-    () => findIndexAtTimestamp(points, firstTs + snapshot.progress * totalSpan),
-    [points, firstTs, snapshot.progress, totalSpan],
+    () => findIndexAtTimestamp(timeline, firstTs + snapshot.progress * totalSpan),
+    [timeline, firstTs, snapshot.progress, totalSpan],
   )
-  const currentPosition = points[Math.min(currentIndex, points.length - 1)] ?? points[0]
+  const currentPosition = timeline[Math.min(currentIndex, timeline.length - 1)] ?? timeline[0]
 
   // 已走高亮骨架：≤2000 点均匀抽稀，由覆盖层命令式增量消费（不进入渲染路径）
-  const skeleton = useMemo(() => buildReplaySkeleton(points, REPLAY_LINE_MAX_POINTS), [points])
-  const stride = points.length > 0 ? Math.max(1, Math.ceil(points.length / REPLAY_LINE_MAX_POINTS)) : 1
+  const skeleton = useMemo(() => buildReplaySkeleton(timeline, REPLAY_LINE_MAX_POINTS), [timeline])
+  const stride = timeline.length > 0
+    ? Math.max(1, Math.ceil(timeline.length / REPLAY_LINE_MAX_POINTS))
+    : 1
 
   // 已骑距离 / 当前速度 / 当前心率（缺失字段不伪造，显示 '—'）
   const distanceLabel = currentPosition?.distance !== undefined
@@ -370,8 +386,8 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
   return (
     <>
       <TerrainLayer visible={terrainVisible} />
-      {points.length > 0 && (
-        <ReplayOverlay engine={engine} points={points} skeleton={skeleton} stride={stride} />
+      {timeline.length > 0 && (
+        <ReplayOverlay engine={engine} points={timeline} skeleton={skeleton} stride={stride} />
       )}
       <div className="track-replay" ref={barRef}>
         {/* 进度滑块 */}
@@ -406,7 +422,9 @@ export function TrackReplay({ points, distanceUnit, terrainVisible, onTerrainTog
               {option}×
             </button>
           ))}
-          <span className="track-replay__clock">{formatClock(snapshot.progress * totalSpan)}</span>
+          <span className="track-replay__clock" title="运动时间（不含红灯、休息等暂停）">
+            运动 {formatClock(snapshot.progress * totalSpan)}
+          </span>
           <span className="track-replay__stat">{distanceLabel}</span>
           <span className="track-replay__stat">{speedLabel}</span>
           <span className="track-replay__stat">{heartRateLabel}</span>

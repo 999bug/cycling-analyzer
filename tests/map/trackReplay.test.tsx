@@ -13,6 +13,7 @@ import { MapContainer } from 'react-leaflet'
 import { TrackReplay } from '@/map/TrackReplay'
 import {
   buildCursorTipHtml,
+  buildMovingTimeline,
   buildReplaySkeleton,
   findIndexAtTimestamp,
   interpolatePositionAt,
@@ -29,6 +30,36 @@ function makePoints(count: number): RoutePoint[] {
     speed: 5,
     heartRate: 120 + (i % 10),
   }))
+}
+
+/**
+ * 构造带暂停的轨迹：0~10s 骑行、10~70s 红灯静止（位置与累计距离不变）、
+ * 70~80s 继续骑行。真实跨度 80s，运动时长 20s。
+ */
+function makePointsWithPause(): RoutePoint[] {
+  const points: RoutePoint[] = []
+  for (let i = 0; i <= 10; i++) {
+    points.push({
+      timestamp: i,
+      latitude: 31.2 + i * 0.0001,
+      longitude: 121.5,
+      distance: i * 10,
+      speed: 10,
+    })
+  }
+  for (let t = 20; t <= 70; t += 10) {
+    points.push({ timestamp: t, latitude: 31.201, longitude: 121.5, distance: 100, speed: 0 })
+  }
+  for (let i = 1; i <= 10; i++) {
+    points.push({
+      timestamp: 70 + i,
+      latitude: 31.201 + i * 0.0001,
+      longitude: 121.5,
+      distance: 100 + i * 10,
+      speed: 10,
+    })
+  }
+  return points
 }
 
 describe('findIndexAtTimestamp（二分定位）', () => {
@@ -64,6 +95,44 @@ describe('buildReplaySkeleton（已走折线抽稀）', () => {
     expect(skeleton[0]).toBe(points[0])
     // 相邻抽样点步长一致
     expect(findIndexAtTimestamp(points, skeleton[1]!.timestamp)).toBe(10)
+  })
+})
+
+describe('buildMovingTimeline（运动时间轴压缩）', () => {
+  it('折叠暂停时段：末点时间戳 = 运动时长，几何点一个不丢', () => {
+    const points = makePointsWithPause()
+    const timeline = buildMovingTimeline(points)
+    // 真实跨度 80s；运动时长 20s（0→10 与 70→80）
+    expect(timeline).toHaveLength(points.length)
+    expect(timeline[timeline.length - 1]!.timestamp).toBe(20)
+    // 暂停段所有点共用同一时间戳（进度轴上宽度为 0）
+    const paused = timeline.filter((point) => point.speed === 0)
+    expect(paused.length).toBeGreaterThan(0)
+    expect(new Set(paused.map((point) => point.timestamp)).size).toBe(1)
+    expect(paused[0]!.timestamp).toBe(10)
+    // 坐标原样保留：已走高亮线与底图完整轨迹始终重合
+    expect(timeline.map((point) => point.latitude)).toEqual(points.map((point) => point.latitude))
+  })
+
+  it('不修改入参点集', () => {
+    const points = makePointsWithPause()
+    const before = points.map((point) => point.timestamp)
+    buildMovingTimeline(points)
+    expect(points.map((point) => point.timestamp)).toEqual(before)
+  })
+
+  it('无累计距离时原样返回（回退真实时间轴）', () => {
+    const points: RoutePoint[] = Array.from({ length: 10 }, (_, i) => ({
+      timestamp: i,
+      latitude: 31.2 + i * 0.0001,
+      longitude: 121.5,
+    }))
+    expect(buildMovingTimeline(points)).toBe(points)
+  })
+
+  it('全程静止（压缩后时长归零）时原样返回，避免零长度回放', () => {
+    const points = makePoints(10).map((point) => ({ ...point, distance: 100 }))
+    expect(buildMovingTimeline(points)).toBe(points)
   })
 })
 
@@ -134,7 +203,7 @@ describe('TrackReplay 控制条', () => {
     for (const option of ['1×', '8×', '32×', '128×']) {
       expect(screen.getByRole('button', { name: option })).toBeInTheDocument()
     }
-    expect(screen.getByText('00:00')).toBeInTheDocument()
+    expect(screen.getByText(/00:00/)).toBeInTheDocument()
     expect(screen.getByLabelText('回放进度')).toHaveValue('0')
   })
 
@@ -146,22 +215,43 @@ describe('TrackReplay 控制条', () => {
     expect(screen.getByRole('button', { name: '1×' }).className).not.toContain('--active')
   })
 
+  it('暂停时段不计入回放时长：拖到末尾时钟显示运动时长而非真实跨度', async () => {
+    const pausePoints = makePointsWithPause()
+    render(
+      <MapContainer center={[31.2, 121.5]} zoom={14} style={{ width: 800, height: 600 }}>
+        <TrackReplay
+          points={pausePoints}
+          distanceUnit="km"
+          terrainVisible={false}
+          onTerrainToggle={() => {}}
+        />
+      </MapContainer>,
+    )
+    const slider = screen.getByLabelText('回放进度') as HTMLInputElement
+    fireEvent.change(slider, { target: { value: '1000' } })
+    await waitFor(() => {
+      // 运动时长 20s；按真实时间轴（含 60s 红灯）则会显示 01:20
+      expect(screen.getByText(/00:20/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/01:20/)).not.toBeInTheDocument()
+  })
+
   it('拖动进度滑块联动时钟与距离 HUD', async () => {
     setup()
     // 初始时钟 00:00；fireEvent.change 直接模拟拖动到 50%（控制条在 MapContainer 内，
     // userEvent 点击/键盘会冒泡进 Leaflet 容器引发双击模拟报错，故用 fireEvent）
-    expect(screen.getByText('00:00')).toBeInTheDocument()
+    expect(screen.getByText(/00:00/)).toBeInTheDocument()
     const slider = screen.getByLabelText('回放进度') as HTMLInputElement
     fireEvent.change(slider, { target: { value: '500' } })
     // 模拟时间 300s → 时钟离开零值、距离 HUD 出现数值
     await waitFor(() => {
-      expect(screen.queryByText('00:00')).not.toBeInTheDocument()
+      expect(screen.queryByText(/00:00/)).not.toBeInTheDocument()
       expect((screen.getByLabelText('回放进度') as HTMLInputElement).value).toBe('500')
     })
     // 10 步 = 模拟时间 6s → 时钟离开零值且距离 HUD 出现非零值
     await waitFor(() => {
       expect(Number((slider as HTMLInputElement).value)).toBeGreaterThan(0)
-      expect(screen.queryByText('00:00')).not.toBeInTheDocument()
+      expect(screen.queryByText(/00:00/)).not.toBeInTheDocument()
     })
   })
 
