@@ -145,7 +145,11 @@ function AppLayout() {
     .join(' ')
 
   return (
-    <div className="app-layout">
+    <div
+      className={
+        'app-layout' + (sidebarCollapsed ? ' app-layout--sidebar-collapsed' : '')
+      }
+    >
       <a className="app-layout__skip-link" href="#main-content">
         跳转到主内容
       </a>
