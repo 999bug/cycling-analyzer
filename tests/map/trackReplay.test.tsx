@@ -285,8 +285,9 @@ describe('TrackReplay 控制条', () => {
         <TrackReplay
           points={points}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )
@@ -310,6 +311,97 @@ describe('TrackReplay 控制条', () => {
     expect(screen.getByRole('button', { name: '1×' }).className).not.toContain('--active')
   })
 
+  it('播放中整条控制栏淡出，暂停后恢复', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    })
+    try {
+      setup()
+      const classNameOf = () => document.querySelector('.track-replay')!.className
+      expect(classNameOf()).not.toContain('--playing')
+
+      fireEvent.click(screen.getByRole('button', { name: '▶' }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(classNameOf()).toContain('--playing')
+
+      fireEvent.click(screen.getByRole('button', { name: '⏸' }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+      expect(classNameOf()).not.toContain('--playing')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('控制栏高度写入地图容器变量（右下角控件据此上移避让），卸载后清除', () => {
+    const mapRef = createRef<LeafletMap>()
+    const { unmount } = render(
+      <MapContainer
+        ref={mapRef}
+        center={[31.2, 121.5]}
+        zoom={14}
+        style={{ width: 800, height: 600 }}
+      >
+        <TrackReplay
+          points={points}
+          distanceUnit="km"
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
+        />
+      </MapContainer>,
+    )
+    const container = mapRef.current!.getContainer()
+    const bar = document.querySelector('.track-replay') as HTMLElement
+    // jsdom 无布局测量（高度恒为 0），这里校验的是「避让链路已接通」：变量必须已写入实测高度
+    expect(container.style.getPropertyValue('--replay-bar-height')).toBe(`${bar.offsetHeight}px`)
+
+    unmount()
+    expect(container.style.getPropertyValue('--replay-bar-height')).toBe('')
+  })
+
+  it('地图模式分段控件：默认「正常」激活，点击切换回传所选模式', () => {
+    const onMapModeChange = vi.fn()
+    render(
+      <MapContainer center={[31.2, 121.5]} zoom={14} style={{ width: 800, height: 600 }}>
+        <TrackReplay
+          points={points}
+          distanceUnit="km"
+          mapMode="normal"
+          onMapModeChange={onMapModeChange}
+          mapModeEnabled
+        />
+      </MapContainer>,
+    )
+    for (const label of ['正常', '卫星', '卫星+路网']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    expect(screen.getByRole('button', { name: '正常' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '卫星' })).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: '卫星' }))
+    expect(onMapModeChange).toHaveBeenCalledWith('satellite')
+  })
+
+  it('降级底图不支持多模式时模式按钮置灰（避免点了没反应）', () => {
+    render(
+      <MapContainer center={[31.2, 121.5]} zoom={14} style={{ width: 800, height: 600 }}>
+        <TrackReplay
+          points={points}
+          distanceUnit="km"
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled={false}
+        />
+      </MapContainer>,
+    )
+    expect(screen.getByRole('button', { name: '卫星' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '卫星+路网' })).toBeDisabled()
+  })
+
   it('暂停时段不计入回放时长：拖到末尾时钟显示运动时长而非真实跨度', async () => {
     const pausePoints = makePointsWithPause()
     render(
@@ -317,8 +409,9 @@ describe('TrackReplay 控制条', () => {
         <TrackReplay
           points={pausePoints}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )
@@ -339,8 +432,9 @@ describe('TrackReplay 控制条', () => {
           points={sparse}
           motionSource={dense}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )
@@ -364,8 +458,9 @@ describe('TrackReplay 控制条', () => {
         <TrackReplay
           points={points}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )
@@ -467,8 +562,9 @@ describe('TrackReplay 控制条', () => {
         <TrackReplay
           points={sparse}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )
@@ -491,8 +587,9 @@ describe('TrackReplay 控制条', () => {
         <TrackReplay
           points={sparse}
           distanceUnit="km"
-          terrainVisible={false}
-          onTerrainToggle={() => {}}
+          mapMode="normal"
+          onMapModeChange={() => {}}
+          mapModeEnabled
         />
       </MapContainer>,
     )

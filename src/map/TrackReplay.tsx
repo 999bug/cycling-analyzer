@@ -1,9 +1,9 @@
 /**
  * 轨迹在线回放（规格外：用户需求）——重写版。
  *
- * 在活动轨迹地图上叠加回放控制条：播放/暂停、进度拖动、倍速选择。
+ * 在活动轨迹地图上叠加回放控制条：播放/暂停、进度拖动、倍速选择、地图模式切换。
  * 播放时当前位置光标沿轨迹推进，地图自动跟随平移；HUD 展示已骑距离/当前速度/心率。
- * 可选叠加 OpenTopoMap 地形底图（免费无 key，WGS-84 坐标系与 OSM 一致）。
+ * 地图模式（正常/卫星/卫星+路网）只换底图瓦片样式——同为高德 GCJ-02，轨迹无需重新投影。
  *
  * 时间轴（用户需求：只回放运动中的轨迹）：进度轴为**运动时间**而非真实时间——
  * 红灯/休息/记录断档等暂停时段由 `buildMovingTimeline` 折叠为 0 长度
@@ -26,7 +26,7 @@
  * - 光标数据牌（速度/心率/功率）随帧命令式更新，内容仅跨点时刷新。
  */
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { CircleMarker, Polyline, TileLayer, useMap } from 'react-leaflet'
+import { CircleMarker, Polyline, useMap } from 'react-leaflet'
 import { DomEvent } from 'leaflet'
 import type {
   CircleMarker as LeafletCircleMarker,
@@ -37,6 +37,7 @@ import type {
 import type { RoutePoint } from '@/types/activity'
 import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
 import { ReplayEngine, type ReplayFrame } from '@/map/replayEngine'
+import { MAP_MODES, type MapMode } from '@/map/tileSources'
 import {
   buildCursorTipHtml,
   buildMovingTimeline,
@@ -70,6 +71,12 @@ const FOLLOW_PAN_RESERVE_RATIO = 0.4
 /** 跟随镜头单次平移时长（秒）：带动画平移期间 Leaflet 仅以 CSS transform 移动窗格，
  * 不触发 moveend 全量重投影——这正是消除"光标闪烁/刷新感"的关键 */
 const FOLLOW_PAN_DURATION_SECONDS = 0.3
+
+/**
+ * 控制栏高度 CSS 变量名：写在地图容器上，供 ActivityMap.css 把右下角控件
+ * （缩放 + 版权署名）抬到控制栏上方——控制栏通栏贴底后不能再压住它们。
+ */
+const REPLAY_BAR_HEIGHT_VAR = '--replay-bar-height'
 
 /**
  * 模块级常量：react-leaflet 按 props **身份**（!== 比较）决定是否回写图层，
@@ -137,11 +144,17 @@ export interface TrackReplayProps {
   /** 距离单位偏好（km/mi） */
   distanceUnit: DistanceUnit
 
-  /** 地形图层开关状态 + 切换回调由父级管理（保持与着色切换一致的受控模式） */
-  terrainVisible: boolean
+  /** 当前地图显示模式（底图样式，父级受控，与着色切换同属受控模式） */
+  mapMode: MapMode
 
-  /** 地形图层开关回调 */
-  onTerrainToggle: () => void
+  /** 地图模式切换回调 */
+  onMapModeChange: (mode: MapMode) => void
+
+  /**
+   * 是否允许切换地图模式：降级到非高德底图时为 false——
+   * 那时没有多模式底图可选，按钮置灰避免出现「点了没反应」。
+   */
+  mapModeEnabled: boolean
 }
 
 /**
@@ -375,32 +388,19 @@ function toLatLngTuple(point: { latitude: number; longitude: number }): LatLngTu
 }
 
 /**
- * 地形图层子组件：terrainVisible 时叠加 OpenTopoMap 瓦片。
- *
- * @param visible 是否显示地形层
- */
-function TerrainLayer({ visible }: { visible: boolean }) {
-  if (!visible) {
-    return null
-  }
-  return (
-    <TileLayer
-      url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
-      subdomains={['a', 'b', 'c']}
-      attribution='&copy; <a href="https://www.opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
-      maxZoom={17}
-      opacity={0.85}
-    />
-  )
-}
-
-/**
  * 轨迹在线回放控制条（挂在 MapContainer 内部，使用 useMap 联动）。
  * 时序逻辑全部委托 ReplayEngine；本组件仅按 10Hz 快照渲染 UI。
  *
  * @param props 组件参数
  */
-export function TrackReplay({ points, motionSource, distanceUnit, terrainVisible, onTerrainToggle }: TrackReplayProps) {
+export function TrackReplay({
+  points,
+  motionSource,
+  distanceUnit,
+  mapMode,
+  onMapModeChange,
+  mapModeEnabled,
+}: TrackReplayProps) {
   // 运动时间轴：把红灯/休息等暂停时段折叠为 0 长度（只重映射时间戳，几何点不丢，
   // 已走高亮线与底图轨迹始终重合）。判定用密集采样源（motionSource）：展示点经过
   // Douglas-Peucker 抽稀，采样间隔可达分钟级，直接判定会把正常骑行段误判成暂停。
@@ -424,6 +424,28 @@ export function TrackReplay({ points, motionSource, distanceUnit, terrainVisible
       DomEvent.disableScrollPropagation(el)
     }
   }, [])
+
+  // 实测控制栏高度写入地图容器 CSS 变量：右下角缩放控件与版权署名据此上移，
+  // 窄屏按钮换行导致控制栏变高时也不会被挡住（jsdom 无 ResizeObserver 时只测一次）
+  const map = useMap()
+  useEffect(() => {
+    const el = barRef.current
+    if (el === null) {
+      return
+    }
+    const container = map.getContainer()
+    const sync = () => container.style.setProperty(REPLAY_BAR_HEIGHT_VAR, `${el.offsetHeight}px`)
+    sync()
+    if (typeof ResizeObserver === 'undefined') {
+      return () => container.style.removeProperty(REPLAY_BAR_HEIGHT_VAR)
+    }
+    const observer = new ResizeObserver(sync)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      container.style.removeProperty(REPLAY_BAR_HEIGHT_VAR)
+    }
+  }, [map])
 
   const firstTs = timeline[0]?.timestamp ?? 0
   const lastTs = timeline[timeline.length - 1]?.timestamp ?? 0
@@ -460,11 +482,13 @@ export function TrackReplay({ points, motionSource, distanceUnit, terrainVisible
 
   return (
     <>
-      <TerrainLayer visible={terrainVisible} />
       {timeline.length > 0 && (
         <ReplayOverlay engine={engine} points={timeline} skeleton={skeleton} stride={stride} />
       )}
-      <div className="track-replay" ref={barRef}>
+      <div
+        className={snapshot.playing ? 'track-replay track-replay--playing' : 'track-replay'}
+        ref={barRef}
+      >
         {/* 进度滑块 */}
         <input
           type="range"
@@ -503,14 +527,26 @@ export function TrackReplay({ points, motionSource, distanceUnit, terrainVisible
           <span className="track-replay__stat">{distanceLabel}</span>
           <span className="track-replay__stat">{speedLabel}</span>
           <span className="track-replay__stat">{heartRateLabel}</span>
-          <button
-            type="button"
-            className={terrainVisible ? 'track-replay__btn track-replay__terrain--active' : 'track-replay__btn'}
-            onClick={onTerrainToggle}
-            title="切换地形图底图"
-          >
-            地形
-          </button>
+          {/* 地图模式：正常（高德矢量）/ 卫星 / 卫星+路网，均取高德同一坐标系底图 */}
+          <span className="track-replay__modes" role="group" aria-label="地图模式">
+            {MAP_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={
+                  mapMode === mode.id
+                    ? 'track-replay__mode track-replay__mode--active'
+                    : 'track-replay__mode'
+                }
+                aria-pressed={mapMode === mode.id}
+                disabled={!mapModeEnabled}
+                title={mapModeEnabled ? `切换底图：${mode.label}` : '当前为降级底图，暂不支持切换地图模式'}
+                onClick={() => onMapModeChange(mode.id)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </span>
         </div>
       </div>
     </>

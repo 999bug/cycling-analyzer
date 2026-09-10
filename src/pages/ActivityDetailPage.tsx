@@ -75,6 +75,7 @@ import {
 } from '@/features/analysis/zones'
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
+import { loadStoredMapMode, storeMapMode, type MapMode } from '@/map/tileSources'
 import { routePointAtTimestamp } from '@/charts/timeline'
 import ActivityMap from '@/map/ActivityMap'
 import ColoringLegend from '@/map/ColoringLegend'
@@ -259,9 +260,9 @@ function ActivityDetailPage() {
   const [saving, setSaving] = useState(false)
   /** 回放视频导出中标记 */
   const [exportingVideo, setExportingVideo] = useState(false)
-  // 在线轨迹回放模式开关 + 地形图叠加开关
+  // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网，记忆到 localStorage）
   const [replayMode, setReplayMode] = useState(false)
-  const [terrainVisible, setTerrainVisible] = useState(false)
+  const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
   // 轨迹纠偏：面板开关 + 预览参数（undefined = 无未保存的预览改动，地图按已保存标记渲染）
   const [fixPanelOpen, setFixPanelOpen] = useState(false)
   const [fixPreview, setFixPreview] = useState<TrackFixPreview>()
@@ -626,6 +627,12 @@ function ActivityDetailPage() {
     setFixPreview(preview)
   }, [])
 
+  // 地图模式切换：同步写入 localStorage（与地图高度同为跨会话保留的显示偏好）
+  const handleMapModeChange = useCallback((mode: MapMode) => {
+    setMapMode(mode)
+    storeMapMode(mode)
+  }, [])
+
   /**
    * 保存轨迹纠偏：只改坐标系 / 来源 / 微调三个标记，逐点原始坐标不动
    * （这是「任意次来回切换严格还原、零误差累积」的前提）。
@@ -900,8 +907,8 @@ function ActivityDetailPage() {
           onHover={setHoverTimestamp}
           replayEnabled={replayMode}
           replayMotionSource={cleanedRecords.cleaned}
-          terrainVisible={terrainVisible}
-          onTerrainToggle={() => setTerrainVisible(!terrainVisible)}
+          mapMode={mapMode}
+          onMapModeChange={handleMapModeChange}
           distanceUnit={distanceUnit}
           coordinateSystem={fixPreview?.coordinateSystem ?? activity.coordinateSystem}
           trackOffset={fixPreview?.trackOffset ?? activity.trackOffset}

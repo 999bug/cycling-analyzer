@@ -91,8 +91,7 @@ describe('降级瓦片层', () => {
     expect(onFallback).not.toHaveBeenCalled()
   })
 
-  it('成功加载重置失败计数（网络抖动不误判）', () => {
-    const onFallback = vi.fn()
+  it('成功加载重置失败计数（网络抖动不误判）', () => {    const onFallback = vi.fn()
     render(<FallbackTileLayer sourceIndex={0} onFallback={onFallback} />)
 
     // 一次成功夹在两次失败之间：重置计数，随后再失败两次仍不达阈值
@@ -137,5 +136,33 @@ describe('降级瓦片层', () => {
     // on 注册了 tileerror 与 tileload，off 应成对移除（事件名 + 处理函数）
     expect(fakeMap.off).toHaveBeenCalledWith('tileerror', expect.any(Function))
     expect(fakeMap.off).toHaveBeenCalledWith('tileload', expect.any(Function))
+  })
+
+  it('按地图模式渲染图层栈：卫星+路网 = 影像底图 + 透明注记叠加层', () => {
+    render(<FallbackTileLayer sourceIndex={0} mapMode="satelliteRoads" onFallback={vi.fn()} />)
+
+    const layers = screen.getAllByTestId('tile-layer')
+    expect(layers).toHaveLength(2)
+    expect(layers[0]!.getAttribute('data-url')).toContain('style=6')
+    // 署名只挂底图：叠加层重复署名会让版权控件出现两遍
+    expect(layers[0]!.getAttribute('data-attribution')).toContain('高德')
+    expect(layers[1]!.getAttribute('data-url')).toContain('style=8')
+    expect(layers[1]!.getAttribute('data-attribution')).toBe('')
+  })
+
+  it('默认（正常）模式只渲染一张矢量底图，地址与默认瓦片源一致', () => {
+    render(<FallbackTileLayer sourceIndex={0} onFallback={vi.fn()} />)
+
+    const layers = screen.getAllByTestId('tile-layer')
+    expect(layers).toHaveLength(1)
+    expect(layers[0]).toHaveAttribute('data-url', TILE_SOURCES[0].url)
+  })
+
+  it('降级到 OSM 后忽略地图模式，只渲染该源自身', () => {
+    render(<FallbackTileLayer sourceIndex={1} mapMode="satellite" onFallback={vi.fn()} />)
+
+    const layers = screen.getAllByTestId('tile-layer')
+    expect(layers).toHaveLength(1)
+    expect(layers[0]).toHaveAttribute('data-url', TILE_SOURCES[1].url)
   })
 })

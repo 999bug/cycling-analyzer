@@ -97,3 +97,12 @@
 .leaflet-control-attribution a {
   color: var(--text-secondary);
 }
+
+/*
+ * 回放控制栏通栏贴底时，把右下角控件（缩放 + 版权署名）抬到控制栏上方。
+ * 高度由 TrackReplay 实测自身高度后写入 --replay-bar-height；无回放时变量缺省为 0，控件回到原位。
+ * 署名必须保持可见（底图版权），所以只上移、不隐藏。
+ */
+.leaflet-container .leaflet-bottom.leaflet-right {
+  margin-bottom: var(--replay-bar-height, 0px);
+}

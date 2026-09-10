@@ -38,8 +38,10 @@ export interface MovingTimelineInput {
  * 段里被折成 0 时长，光标于是瞬间跨越数百米（实测最大 3153m）。把这些段的时长
  * 补足到「按该速度走完所需时间」即可让光标平滑滑过，而不是跳过去。
  * 取值高于真实骑行速度，因此正常骑行段永远不会被补时。
+ *
+ * 导出以便 scripts/check-replay-timeline.ts 用同一阈值做真实数据回归。
  */
-const MAX_CURSOR_SPEED_MPS = 25
+export const MAX_CURSOR_SPEED_MPS = 25
 
 /**
  * 单段时钟增量：以运动时长为下限、该段真实间隔为上限，位移过大时补足到限速所需时长。

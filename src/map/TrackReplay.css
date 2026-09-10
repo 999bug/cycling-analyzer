@@ -3,19 +3,39 @@
  */
 .track-replay {
   position: absolute;
-  bottom: 56px;
-  left: 12px;
-  right: 12px;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 10px 14px;
-  background: rgba(13, 17, 23, 0.88);
+  background: rgba(13, 17, 23, 0.9);
   backdrop-filter: blur(8px);
-  border-radius: 12px;
+  border-radius: 12px 12px 0 0;
   color: #c9d1d9;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.25s ease;
+}
+
+/*
+ * 播放中整条控制栏淡出，把地图让出来；鼠标移入 / 键盘聚焦即恢复
+ * （触摸设备上没有 hover，但淡化只是透明度变化、不挡点击，点按钮带来的 focus 也会恢复）。
+ */
+.track-replay--playing {
+  opacity: 0.2;
+}
+
+.track-replay--playing:hover,
+.track-replay--playing:focus-within {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-replay {
+    transition: none;
+  }
 }
 
 .track-replay__slider {
@@ -83,6 +103,40 @@
 .track-replay__terrain--active {
   background: #34d9ff;
   color: #0d1117;
+}
+
+/* 地图模式分段控件：正常 / 卫星 / 卫星+路网 */
+.track-replay__modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.track-replay__mode {
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #c9d1d9;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.track-replay__mode:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.track-replay__mode--active {
+  background: #34d9ff;
+  color: #0d1117;
+}
+
+.track-replay__mode:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .track-replay__clock {

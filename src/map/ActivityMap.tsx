@@ -24,7 +24,7 @@ import {
 } from '@/map/routeColoring'
 import { TrackReplay } from '@/map/TrackReplay'
 import { clampMapHeight, loadSavedMapHeight, saveMapHeight } from '@/map/mapResize'
-import { loadStoredSourceIndex, mapSystem, storeSourceIndex } from '@/map/tileSources'
+import { isGcjSource, loadStoredSourceIndex, mapSystem, storeSourceIndex, type MapMode } from '@/map/tileSources'
 import {
   FullscreenSync,
   MapFullscreenButton,
@@ -87,11 +87,11 @@ export interface ActivityMapProps {
    */
   replayMotionSource?: readonly { timestamp: number; distance?: number }[]
 
-  /** 地形图层是否可见（父级受控） */
-  terrainVisible?: boolean
+  /** 地图显示模式（底图样式，父级受控；缺省「正常」矢量底图） */
+  mapMode?: MapMode
 
-  /** 地形图层切换回调（父级受控） */
-  onTerrainToggle?: () => void
+  /** 地图模式切换回调（父级受控） */
+  onMapModeChange?: (mode: MapMode) => void
 
   /** 距离单位偏好（回放 HUD 展示用；缺省 km） */
   distanceUnit?: 'km' | 'mi'
@@ -191,7 +191,7 @@ function AutoInvalidate() {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, terrainVisible = false, onTerrainToggle, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -353,7 +353,7 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         bounds={latLngs}
         scrollWheelZoom
       >
-        <FallbackTileLayer sourceIndex={sourceIndex} onFallback={handleFallback} />
+        <FallbackTileLayer sourceIndex={sourceIndex} mapMode={mapMode} onFallback={handleFallback} />
         {compareLatLngs.length >= MIN_POINTS && (
           <Polyline
             positions={compareLatLngs}
@@ -390,8 +390,9 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
             points={displayPoints}
             motionSource={replayMotionSource}
             distanceUnit={distanceUnit}
-            terrainVisible={terrainVisible}
-            onTerrainToggle={onTerrainToggle ?? (() => {})}
+            mapMode={mapMode}
+            onMapModeChange={onMapModeChange ?? (() => {})}
+            mapModeEnabled={isGcjSource(sourceIndex)}
           />
         )}
         <FullscreenSync />

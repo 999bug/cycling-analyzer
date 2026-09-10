@@ -1,12 +1,13 @@
 {
   "name": "cycling-analyzer",
   "private": true,
-  "version": "2.52.6",
+  "version": "2.53.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:author-data": "tsx --tsconfig tsconfig.scripts.json scripts/build-author-data.ts",
+    "check:replay": "tsx --tsconfig tsconfig.scripts.json scripts/check-replay-timeline.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",

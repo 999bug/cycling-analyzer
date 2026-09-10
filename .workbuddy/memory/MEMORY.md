@@ -30,6 +30,11 @@
   失效 blob，此时无 pathspec 的 `git commit` 必失败（`invalid object 100644 xxx` / `Error building trees`）。
   解法是 **`git commit -F <msg文件> -- <pathspec...>`**——带 pathspec 时 git 用 HEAD tree + 指定路径的
   工作区内容建提交，绕过失效 index；按主题分组逐个提交即可。`git add -u` 救不了（stat 未变的文件不重写 blob）。
+- **⛔ 未经当次明确许可，不执行任何 git 写操作**（2026-09-10 用户第三次强调，原话「别动我 git 了我真是怕了，你已经搞坏我 3 次 git 目录了」）：
+  在用户针对**本次任务明确说"提交"**之前，`git add` / `commit` / `push` 一律不做；更不要为了「整理提交历史 / 合并更新日志 / 修字面 `\n`」这类**体感收益很低**的目的去动仓库。只读操作（`status`/`log`/`diff`/`show`/`ls-remote`）不受限。
+  背景：`.git` 被掏空的那几次都源于「想把提交历史整理得更好看」（`rebase -i` 改提交信息）。教训是——**用户对仓库安全的在意程度远高于提交信息的整齐度**，宁可留着一堆小提交，也不要动历史。
+  写代码时正常改文件即可，改完把「待提交清单」列给用户，由他决定何时提交。
+
 - 事故后 `git fsck` 会持续报 `failed to load pack in position 0/1` + `failed to load pack entry for oid`：
   这是残留 `multi-pack-index` 指向已消失的旧 pack 造成的**误报**。判据是
   `git rev-list --objects --all | awk '{print $1}' | git cat-file --batch-check | grep -c missing` 为 0（可达对象全在）。
@@ -47,9 +52,15 @@
 - 用户明确表示：`private-fixtures/` 里的骑行数据（FIT/GPX）**可以在测试与验证时直接使用**，不必绕开。
   涉及算法/口径类改动（暂停判定、均速、抽稀、回放时间轴）时，优先用它做真实数据回归，而不是只靠合成的
   `tests/fixtures/`——合成数据往往构造不出「抽稀后相邻点间隔 4 分钟」这类真实分布，本次回放 bug 就是靠它定位的。
-- 该目录 **gitignored，严禁提交、严禁写进任何入库文件**（文件名/内容都算）。诊断脚本可放在
-  `.workbuddy/tmp/`（同样 gitignored）：现成的有 `replay-batch-diag.ts`（全量轨迹跑新旧判定对比）。
-- 跑法：`npx tsx --tsconfig tsconfig.scripts.json .workbuddy/tmp/<脚本>.ts private-fixtures`。
+- 该目录 **gitignored，严禁提交、严禁写进任何入库文件**（文件名/内容都算）。入口脚本：**`npm run check:replay`**
+  （`scripts/check-replay-timeline.ts`）——在全量真实轨迹上复算回放时间轴，校验「运动时长 ≤ 回放时长 ≤ 总耗时」
+  与「无可见瞬移」两条不变量，硬失败退出码 1。改时间轴/暂停/移动时长口径后跑一次。
+  `.workbuddy/tmp/` 下另有两个临时脚本（`replay-batch-diag.ts` 指标对比、`replay-segment-drill.ts` 单段钻取）。
+- 跑法：`npm run check:replay [-- <数据目录>] [--verbose]`；
+  临时脚本用 `npx tsx --tsconfig tsconfig.scripts.json .workbuddy/tmp/<脚本>.ts private-fixtures`。
+- **GPX 口径决定（2026-09-10 用户拍板）**：「长缺口 + 明显位移」**暂不**算作运动中——
+  即不改 `isMovingSegment`，GPX 的计时时长/均速维持现有与行者/佳明对齐的口径。
+  回放侧的平滑由 `buildMovingTimeline` 的限速补时单独解决，不回头改均速分母。
 
 ## 测试强制规则（vitest Windows 小写盘符 bug，2026-09-08 实锤）
 

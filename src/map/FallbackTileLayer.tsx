@@ -8,7 +8,13 @@ import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import { useOfflinePreferences } from '@/hooks/useOfflinePreferences'
 import { CachingTileLayerComponent } from '@/map/CachingTileLayer'
-import { FALLBACK_TILE_ERROR_THRESHOLD, TILE_SOURCES } from '@/map/tileSources'
+import {
+  FALLBACK_TILE_ERROR_THRESHOLD,
+  isGcjSource,
+  mapModeOf,
+  TILE_SOURCES,
+  type MapMode,
+} from '@/map/tileSources'
 
 /**
  * 降级瓦片层 props。
@@ -16,6 +22,12 @@ import { FALLBACK_TILE_ERROR_THRESHOLD, TILE_SOURCES } from '@/map/tileSources'
 export interface FallbackTileLayerProps {
   /** 当前瓦片源索引（TILE_SOURCES 下标） */
   sourceIndex: number
+
+  /**
+   * 地图显示模式（底图样式）。仅对高德源生效——降级到 OSM 后没有多模式底图，
+   * 一律按该源自身渲染。缺省「正常」（矢量底图），其它用图组件无需关心模式。
+   */
+  mapMode?: MapMode
 
   /** 连续失败达阈值时触发的降级回调（单向，仅触发一次） */
   onFallback: () => void
@@ -26,7 +38,7 @@ export interface FallbackTileLayerProps {
  *
  * @param props 组件参数
  */
-export function FallbackTileLayer({ sourceIndex, onFallback }: FallbackTileLayerProps) {
+export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback }: FallbackTileLayerProps) {
   const map = useMap()
   const { tileCacheEnabled } = useOfflinePreferences()
   // 连续失败计数（任一瓦片成功加载后清零，避免网络抖动误判）
@@ -61,6 +73,24 @@ export function FallbackTileLayer({ sourceIndex, onFallback }: FallbackTileLayer
 
   const source = TILE_SOURCES[sourceIndex]
   // key 随源变化：换源时强制重建瓦片图层，立即清空旧源瓦片重新加载
+  // 高德源按地图模式渲染图层栈（底图 + 可选透明注记叠加层），坐标系同为 GCJ-02
+  if (isGcjSource(sourceIndex)) {
+    return (
+      <>
+        {mapModeOf(mapMode).layers.map((layer, index) => (
+          <CachingTileLayerComponent
+            key={layer.url}
+            url={layer.url}
+            subdomains={layer.subdomains}
+            // 署名只挂底图：叠加层重复署名会让版权控件出现两遍
+            attribution={index === 0 ? source.attribution : ''}
+            opacity={layer.opacity ?? 1}
+            cacheEnabled={tileCacheEnabled}
+          />
+        ))}
+      </>
+    )
+  }
   return (
     <CachingTileLayerComponent
       key={source.url}

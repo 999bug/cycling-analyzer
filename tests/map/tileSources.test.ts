@@ -6,14 +6,24 @@
  *   storeSourceIndex 会话记忆（语义字符串存储，调换顺序互不干扰）；
  * - wgs84ToGcj02：境内点向东北偏移数百米、境外点原样返回、转换确定性。
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   isGcjSource,
+  loadStoredMapMode,
   loadStoredSourceIndex,
+  MAP_MODE_STORAGE_KEY,
+  MAP_MODES,
+  mapModeOf,
+  storeMapMode,
   storeSourceIndex,
   TILE_SOURCES,
   wgs84ToGcj02,
+  type MapMode,
 } from '@/map/tileSources'
+
+afterEach(() => {
+  localStorage.clear()
+})
 
 describe('瓦片源定义', () => {
   it('默认源为高德，降级源为 OSM', () => {
@@ -81,5 +91,44 @@ describe('wgs84ToGcj02 坐标转换', () => {
   it('同输入转换结果确定', () => {
     const point = { longitude: 116.391275, latitude: 39.906217 }
     expect(wgs84ToGcj02(point)).toEqual(wgs84ToGcj02(point))
+  })
+})
+
+describe('地图显示模式', () => {
+  it('三种模式：正常（默认）/ 卫星 / 卫星+路网', () => {
+    expect(MAP_MODES.map((mode) => mode.id)).toEqual(['normal', 'satellite', 'satelliteRoads'])
+    expect(MAP_MODES.map((mode) => mode.label)).toEqual(['正常', '卫星', '卫星+路网'])
+  })
+
+  it('「正常」与默认瓦片源同址：切模式不需要重新投影轨迹', () => {
+    expect(mapModeOf('normal').layers[0]!.url).toBe(TILE_SOURCES[0].url)
+    expect(TILE_SOURCES[0].system).toBe('gcj02')
+  })
+
+  it('卫星为单层影像底图；卫星+路网为影像底图 + 透明注记叠加层', () => {
+    const satellite = mapModeOf('satellite').layers
+    expect(satellite).toHaveLength(1)
+    expect(satellite[0]!.url).toContain('webst')
+    expect(satellite[0]!.url).toContain('style=6')
+
+    const withRoads = mapModeOf('satelliteRoads').layers
+    expect(withRoads).toHaveLength(2)
+    expect(withRoads[0]!.url).toContain('style=6')
+    expect(withRoads[1]!.url).toContain('style=8')
+    expect(withRoads[1]!.url).toContain('webst')
+  })
+
+  it('未知模式回退「正常」', () => {
+    expect(mapModeOf('bogus' as MapMode).id).toBe('normal')
+  })
+
+  it('模式记忆：默认正常，写入后读回，无效值回退正常', () => {
+    expect(loadStoredMapMode()).toBe('normal')
+
+    storeMapMode('satelliteRoads')
+    expect(loadStoredMapMode()).toBe('satelliteRoads')
+
+    localStorage.setItem(MAP_MODE_STORAGE_KEY, 'bogus')
+    expect(loadStoredMapMode()).toBe('normal')
   })
 })
