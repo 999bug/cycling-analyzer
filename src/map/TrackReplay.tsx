@@ -41,7 +41,7 @@ import {
 import './TrackReplay.css'
 
 /** 回放速度选项（倍率）：1x = 真实时间流速 */
-const SPEED_OPTIONS = [1, 8, 32, 128] as const
+const SPEED_OPTIONS = [1, 8, 32, 64, 128] as const
 
 /** 已走高亮折线的最大点数（均匀抽稀上限，封顶 SVG path 重绘成本） */
 const REPLAY_LINE_MAX_POINTS = 2000

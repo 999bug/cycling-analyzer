@@ -200,7 +200,7 @@ describe('TrackReplay 控制条', () => {
   it('渲染播放按钮、倍速选项与初始零进度时钟', () => {
     setup()
     expect(screen.getByRole('button', { name: '▶' })).toBeInTheDocument()
-    for (const option of ['1×', '8×', '32×', '128×']) {
+    for (const option of ['1×', '8×', '32×', '64×', '128×']) {
       expect(screen.getByRole('button', { name: option })).toBeInTheDocument()
     }
     expect(screen.getByText(/00:00/)).toBeInTheDocument()

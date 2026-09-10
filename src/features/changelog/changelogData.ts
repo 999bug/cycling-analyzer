@@ -20,6 +20,11 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.52.2',
+    date: '2026-09-10',
+    features: ['在线回放新增 64× 倍速档位'],
+  },
+  {
     version: '2.52.1',
     date: '2026-09-10',
     features: [
