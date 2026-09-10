@@ -10,6 +10,23 @@
 - git 历史不可撤销：一旦推送含敏感内容的日记，删除也洗不掉，写之前多想一秒
 - 已入库的旧日记已按此规则清理（路径 → `F:/<repo>`、佳明导出包 → `<私人导出包>`、地点 → `<地名>`）
 
+## ⛔⛔ git 仓库安全：绝不使用 rebase（2026-09-10 二次事故，最高优先级）
+
+- **`git rebase`（含 `-i`）在本环境会直接掏空仓库**：2026-09-10 实测，`git rebase -i` 先报
+  `could not mark as interactive`，随即 `.git/refs/` 消失、`.git/objects` 被清空（数百 MB → 2 个 tree）、
+  reflog 消失、残留 `.git/shallow` 让 fetch 只拉回 1 个提交，整个仓库变成 `not a git repository`。
+  这是 2026-09-08 之后的**第二次**同类事故。
+- **工作区文件与 index 通常完好**，丢的只是 commit 对象和 ref —— 代码不会没，但提交历史会没。
+- 恢复手册（已验证可行）：
+  1. `cp -r .git <工作区外路径>` 留现场
+  2. `mkdir -p .git/refs/heads .git/refs/tags`（git 靠 refs 目录判定仓库）
+  3. `git fetch origin`；若只回 1 个提交 → `.git/shallow` 作祟 → `git fetch --unshallow origin`
+  4. fetch 后 ref 可能不落盘（`show-ref` 仍是旧值）→ `git update-ref refs/heads/main <sha>` 手动指过去
+  5. `git status` 应看到"原提交的全部内容"变成待提交改动
+- **改已提交信息的唯一安全路径**：未 push 时先完整备份 `.git` 到工作区外，再动手；已 push 的 message 视为不可变。
+- 环境 shim 怪癖：fetch 不落盘、`git branch a/b`（带斜杠）静默失败不创建、跨目录 `mv` 报 Permission denied。
+  涉及 ref 变更一律用 `git update-ref`，不要手改 `.git` 内文件。
+
 ## 工作流强制规则
 
 - **`codegraph sync` 已由 pre-commit 钩子自动执行**（2026-09-09 验证：commit 后输出 "Syncing CodeGraph ... Done"，无需手动再跑）。提交顺序：先更新 `docs/PROGRESS.md` → 提交 → push。
