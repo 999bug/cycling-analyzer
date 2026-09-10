@@ -20,6 +20,11 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.52.5',
+    date: '2026-09-10',
+    features: ['内部开发笔记补齐（推送链路 502 的排查与重试经验），无功能变更'],
+  },
+  {
     version: '2.52.4',
     date: '2026-09-10',
     features: ['内部开发笔记补齐（回放时间轴与覆盖层排查记录），无功能变更'],
