@@ -69,6 +69,11 @@
   outline: none;
 }
 
+.activity-detail__rename-input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .activity-detail__rename-save,
 .activity-detail__rename-cancel {
   flex-shrink: 0;

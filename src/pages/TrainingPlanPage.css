@@ -52,6 +52,11 @@
   border-color: var(--primary);
 }
 
+.training-plan__input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .training-plan__submit {
   padding: 9px 16px;
   border: 1px solid var(--primary);

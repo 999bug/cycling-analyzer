@@ -104,6 +104,11 @@
   border-color: var(--primary);
 }
 
+.batch-rename__template:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 /* 预览列表 */
 .batch-rename__preview {
   max-height: 220px;
