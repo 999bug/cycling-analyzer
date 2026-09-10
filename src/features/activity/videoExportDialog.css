@@ -157,6 +157,61 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 上一次导出结果提示（如「录制已中断，已生成前 x 秒」），醒目但不喧宾夺主 */
+.video-export__notice {
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--warning, #b8860b);
+  font-weight: 500;
+}
+
+/* 字幕文案编辑区：勾选对应字幕时展示 */
+.video-export__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.video-export__caption-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.video-export__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.video-export__textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.video-export__reset {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.video-export__reset:hover {
+  text-decoration: underline;
+}
+
 /* 录制流程说明：真实页面录制需要用户授权共享标签页，事先说清避免以为卡住 */
 .video-export__hint {
   margin: 0;

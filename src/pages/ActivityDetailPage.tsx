@@ -54,10 +54,11 @@ import {
   resolveVideoDuration,
   type TrackVideoExportResult,
 } from '@/features/activity/trackVideoExport'
-import { requestTabCaptureStream, startPageCapture } from '@/features/activity/pageCaptureExport'
+import { canCaptureTab, requestTabCaptureStream, startPageCapture } from '@/features/activity/pageCaptureExport'
 import type { ReplayExportSession } from '@/map/TrackReplay'
 import VideoExportDialog from '@/features/activity/VideoExportDialog'
-import type { VideoExportSettings } from '@/features/activity/videoExportSettings'
+import VideoExportGuide from '@/features/activity/VideoExportGuide'
+import type { VideoCaptionData, VideoExportSettings } from '@/features/activity/videoExportSettings'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import TrackFixPanel, { type TrackFixPreview } from '@/features/activity/TrackFixPanel'
 import '@/features/activity/TrackFixPanel.css'
@@ -271,6 +272,10 @@ function ActivityDetailPage() {
   const [videoExportStage, setVideoExportStage] = useState(false)
   /** 导出录制会话：交给回放组件自动按倍速开播，播完回报（见 TrackReplay） */
   const [replayExportSession, setReplayExportSession] = useState<ReplayExportSession>()
+  /** 录制前的引导层（说明将发生什么 + 明确选择录真实页面或直接用内置绘制） */
+  const [exportGuideOpen, setExportGuideOpen] = useState(false)
+  /** 导出面板上次结果提示（如「录制已中断，已生成前 x 秒」） */
+  const [videoExportNotice, setVideoExportNotice] = useState<string>()
   // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网，记忆到 localStorage）
   const [replayMode, setReplayMode] = useState(false)
   const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
@@ -559,6 +564,9 @@ function ActivityDetailPage() {
    */
   const replayEndedRef = useRef<(() => void) | null>(null)
 
+  /** 引导层暂存的面板选项：点「开始录制」或「不用授权」时据此真正发起导出 */
+  const pendingExportRef = useRef<VideoExportSettings | null>(null)
+
   /**
    * 「真实页面录制」路线：取标签页流 → 进录制舞台 → 回放自动开播 → 收尾取片。
    *
@@ -573,11 +581,7 @@ function ActivityDetailPage() {
   async function recordRealPage(
     settings: VideoExportSettings,
     durationSeconds: number,
-    captionData: {
-      distanceMeters?: number
-      elevationGainMeters?: number
-      movingSeconds?: number
-    },
+    captionData: VideoCaptionData,
   ): Promise<TrackVideoExportResult | undefined> {
     // getDisplayMedia 必须由用户手势直接触发：这一行之前不能插入其他 await
     const stream = await requestTabCaptureStream()
@@ -600,6 +604,8 @@ function ActivityDetailPage() {
         videoSeconds: durationSeconds,
         showHook: settings.hook,
         showDataLine: settings.dataLine,
+        hookText: settings.hookText,
+        dataLineText: settings.dataLineText,
       }),
       aspectRatio: settings.aspectRatio,
       maxSeconds: durationSeconds,
@@ -611,6 +617,7 @@ function ActivityDetailPage() {
     }
 
     let result: TrackVideoExportResult | undefined
+    let interrupted = false
     let guardId: ReturnType<typeof setTimeout> | undefined
     try {
       // 片头静止画面录完后开播：此时画面已是整条轨迹的全景
@@ -625,7 +632,15 @@ function ActivityDetailPage() {
       )
       setReplayMode(true)
       setReplayExportSession({ speed, onEnded: () => replayEndedRef.current?.() })
-      await ended
+      // 等回放走到终态，或用户点浏览器「停止共享」触发中断——两者取先者，
+      // 中断时立即收尾，避免页面空等回放终态而卡死
+      await Promise.race([
+        ended.then(() => undefined),
+        session.interrupted.then(() => {
+          interrupted = true
+          return undefined
+        }),
+      ])
       setVideoProgressLabel('正在生成视频…')
       result = await session.finish()
     } finally {
@@ -637,6 +652,10 @@ function ActivityDetailPage() {
       setReplayMode(wasReplayMode)
       setVideoExportStage(false)
       session.dispose()
+      if (interrupted) {
+        // 中途停止共享：告知用户只保留了已录制的部分
+        setVideoExportNotice('录制已中断：已生成停止共享前录制到的画面。')
+      }
     }
     return result
   }
@@ -650,22 +669,27 @@ function ActivityDetailPage() {
    * 字幕两条路线同源（{@link buildVideoCaptionTexts}），取活动真实数据、缺失字段整行省略。
    *
    * @param settings 面板选项（比例/时长/底图/字幕）
+   * @param useRealCapture 是否走真实页面录制（false = 强制自绘，来自引导层的「不用授权」选择）
    */
-  async function handleExportVideo(settings: VideoExportSettings) {
+  async function handleExportVideo(settings: VideoExportSettings, useRealCapture = true) {
     if (activity === undefined || exportingVideo) {
       return
     }
     setExportingVideo(true)
+    setVideoExportNotice(undefined)
+    // 真正进入录制后收起引导层，让录制舞台露出来（进度改由舞台顶部状态条展示）
+    setExportGuideOpen(false)
     try {
       const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
       const durationSeconds = resolveVideoDuration(settings.duration, activity.distance)
-      const captionData = {
+      const captionData: VideoCaptionData = {
         distanceMeters: activity.distance,
         elevationGainMeters: activity.elevationGain,
         movingSeconds: activity.duration,
       }
 
-      const recorded = await recordRealPage(settings, durationSeconds, captionData)
+      const recorded =
+        useRealCapture ? await recordRealPage(settings, durationSeconds, captionData) : undefined
       const result =
         recorded ??
         (await exportTrackReplayVideo(cleanedRecords.cleaned, trackName, {
@@ -674,20 +698,42 @@ function ActivityDetailPage() {
           mapMode: settings.mapMode,
           coordinateSystem: activity.coordinateSystem,
           trackOffset: activity.trackOffset,
-          captions: { ...captionData, hook: settings.hook, dataLine: settings.dataLine },
+          captions: {
+            ...captionData,
+            hook: settings.hook,
+            dataLine: settings.dataLine,
+            hookText: settings.hookText,
+            dataLineText: settings.dataLineText,
+          },
           onProgress: (elapsed, total) => setVideoProgressLabel(`录制中 ${elapsed}/${total} 秒`),
         }))
 
       if (result !== undefined) {
         downloadVideo(buildVideoFileName(activity.fileName, result.extension), result.blob)
         setVideoDialogOpen(false)
+        setExportGuideOpen(false)
       }
     } catch (err: unknown) {
       console.error('Failed to export track replay video', err)
+      setVideoExportNotice('导出失败，请重试。')
     } finally {
       setExportingVideo(false)
       setVideoProgressLabel(undefined)
     }
+  }
+
+  /**
+   * 导出面板「生成」回调：先收起面板，再决定是直接走真实录制还是先出引导层。
+   *
+   * 引导层的意义：屏幕共享是浏览器权限弹窗，用户若没留意说明会完全摸不着头脑，
+   * 甚至误以为卡死。先出一页说清「将发生什么 + 两个明确选择」比小字提示可靠得多。
+   *
+   * @param settings 面板选项
+   */
+  function handleExportConfirm(settings: VideoExportSettings) {
+    pendingExportRef.current = settings
+    setExportGuideOpen(true)
+    setVideoDialogOpen(false)
   }
 
   /**
@@ -1041,6 +1087,7 @@ function ActivityDetailPage() {
           replayMotionSource={cleanedRecords.cleaned}
           replayExportSession={replayExportSession}
           exportStage={videoExportStage}
+          exportProgressLabel={videoProgressLabel}
           mapMode={mapMode}
           onMapModeChange={handleMapModeChange}
           distanceUnit={distanceUnit}
@@ -1119,8 +1166,43 @@ function ActivityDetailPage() {
         <VideoExportDialog
           exporting={exportingVideo}
           progressLabel={videoProgressLabel}
+          notice={videoExportNotice}
+          captionData={
+            activity !== undefined
+              ? {
+                  distanceMeters: activity.distance,
+                  elevationGainMeters: activity.elevationGain,
+                  movingSeconds: activity.duration,
+                }
+              : undefined
+          }
           onClose={() => setVideoDialogOpen(false)}
-          onConfirm={(settings) => void handleExportVideo(settings)}
+          onConfirm={handleExportConfirm}
+        />
+      )}
+
+      {/* 录制前引导层：说明将要发生什么，并给出「录真实页面 / 不用授权」两个明确选择 */}
+      {exportGuideOpen && (
+        <VideoExportGuide
+          canCapture={canCaptureTab()}
+          exporting={exportingVideo}
+          progressLabel={videoProgressLabel}
+          onClose={() => {
+            setExportGuideOpen(false)
+            pendingExportRef.current = null
+          }}
+          onRecord={() => {
+            const settings = pendingExportRef.current
+            if (settings !== null) {
+              void handleExportVideo(settings, true)
+            }
+          }}
+          onBuiltin={() => {
+            const settings = pendingExportRef.current
+            if (settings !== null) {
+              void handleExportVideo(settings, false)
+            }
+          }}
         />
       )}
     </div>

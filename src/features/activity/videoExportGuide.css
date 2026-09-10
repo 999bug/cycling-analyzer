@@ -1,0 +1,150 @@
+/**
+ * 录制前引导层样式。
+ *
+ * 颜色取自全局 CSS 变量，与导出面板/批量修正弹窗一致，深浅主题自动适配。
+ */
+
+.video-export-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.video-export-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(460px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.video-export-guide__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.video-export-guide__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.video-export-guide__close {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.video-export-guide__close:hover {
+  color: var(--text);
+}
+
+.video-export-guide__steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.video-export-guide__steps li + li {
+  margin-top: 6px;
+}
+
+.video-export-guide__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.video-export-guide__btn {
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.video-export-guide__btn--primary {
+  background-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.video-export-guide__btn--ghost {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.video-export-guide__btn--ghost:hover:not(:disabled) {
+  background-color: var(--bg-elevated);
+}
+
+.video-export-guide__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.video-export-guide__warning {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--warning, #b8860b);
+}
+
+.video-export-guide__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.video-export-guide__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #e53935;
+  animation: video-export-guide-pulse 1.1s ease-in-out infinite;
+}
+
+.video-export-guide__progress-tip {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+@keyframes video-export-guide-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px rgba(229, 57, 53, 0);
+  }
+}

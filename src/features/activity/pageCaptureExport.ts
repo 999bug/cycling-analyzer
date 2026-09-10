@@ -32,6 +32,12 @@ export const EXPORT_FRAME_SELECTOR = '.map-export-frame'
 /** 录制帧率（与自绘版一致） */
 const CAPTURE_FPS = 30
 
+/** 合成循环节流间隔（毫秒）：对齐录制帧率，避免全速 rAF 白烧 CPU 导致录制卡顿 */
+const DRAW_INTERVAL_MS = 1000 / CAPTURE_FPS
+
+/** 画框矩形缓存重算间隔（毫秒）：窗口缩放/滚动不频繁，不必每帧强制布局 */
+const FRAME_CACHE_TTL_MS = 250
+
 /** 码率（与自绘版一致：6 Mbps） */
 const CAPTURE_BITRATE = 6_000_000
 
@@ -104,6 +110,14 @@ export interface PageCaptureSession {
 
   /** 放弃录制：停止录制器与媒体流，不产出成片 */
   dispose: () => void
+
+  /**
+   * 录制被外部中断（用户点了浏览器「停止共享」提示条上的停止）时 resolve。
+   *
+   * 页面据此立即退出录制舞台并收尾成片，而不是继续空等回放走到终态——否则会卡死。
+   * 正常收尾时永不 resolve（页面靠回放终态驱动，不依赖本信号）。
+   */
+  interrupted: Promise<void>
 }
 
 /**
@@ -219,6 +233,50 @@ async function waitForTilesSettled(maxMs: number): Promise<void> {
 }
 
 /**
+ * 用已知画框矩形计算「从录到的标签页画面里裁出录制画框」的源矩形（视频像素）。
+ *
+ * 与 {@link cropSourceOf} 的区别：直接吃一个矩形，不再查 DOM、不做强制布局——
+ * 供合成循环配合画框矩形缓存复用，避免每帧 `getBoundingClientRect` 触发 layout thrash。
+ *
+ * 缩放比例用「视频宽 ÷ 视口 CSS 宽」现算，兼容设备像素比与浏览器缩放；
+ * 画框越界时钳制，保证不画出画面外的透明区。
+ *
+ * @param video 承载标签页流的视频元素
+ * @param targetRatio 目标画布宽高比（画框缺失时的退化路径用）
+ * @param rect 画框矩形（CSS 像素）
+ */
+export function cropSourceOfWithRect(
+  video: HTMLVideoElement,
+  targetRatio: number,
+  rect: { left: number; top: number; width: number; height: number },
+): { sx: number; sy: number; sw: number; sh: number } {
+  const videoWidth = Math.max(video.videoWidth, 0)
+  const videoHeight = Math.max(video.videoHeight, 0)
+  if (videoWidth === 0 || videoHeight === 0) {
+    return { sx: 0, sy: 0, sw: 0, sh: 0 }
+  }
+  const viewWidth = typeof document === 'undefined' ? 0 : document.documentElement.clientWidth
+  if (rect.width > 1 && rect.height > 1 && viewWidth > 0) {
+    const scale = videoWidth / viewWidth
+    const sx = Math.min(Math.max(rect.left * scale, 0), videoWidth - 2)
+    const sy = Math.min(Math.max(rect.top * scale, 0), videoHeight - 2)
+    const sw = Math.min(rect.width * scale, videoWidth - sx)
+    const sh = Math.min(rect.height * scale, videoHeight - sy)
+    if (sw > 1 && sh > 1) {
+      return { sx, sy, sw, sh }
+    }
+  }
+  // 退化：整幅居中裁剪到目标比例
+  const videoRatio = videoWidth / videoHeight
+  if (videoRatio > targetRatio) {
+    const sw = videoHeight * targetRatio
+    return { sx: (videoWidth - sw) / 2, sy: 0, sw, sh: videoHeight }
+  }
+  const sh = videoWidth / targetRatio
+  return { sx: 0, sy: (videoHeight - sh) / 2, sw: videoWidth, sh }
+}
+
+/**
  * 计算「从录到的标签页画面里裁出录制画框」的源矩形（视频像素）。
  *
  * 画框在页面里是居中的竖屏容器，窗口未必竖屏，两侧留黑不能进成片。
@@ -232,36 +290,24 @@ export function cropSourceOf(
   video: HTMLVideoElement,
   targetRatio: number,
 ): { sx: number; sy: number; sw: number; sh: number } {
-  const videoWidth = Math.max(video.videoWidth, 0)
-  const videoHeight = Math.max(video.videoHeight, 0)
-  if (videoWidth === 0 || videoHeight === 0) {
-    return { sx: 0, sy: 0, sw: 0, sh: 0 }
-  }
-
   const frame = typeof document === 'undefined' ? null : document.querySelector(EXPORT_FRAME_SELECTOR)
-  const viewWidth = typeof document === 'undefined' ? 0 : document.documentElement.clientWidth
-  if (frame !== null && viewWidth > 0) {
-    const rect = frame.getBoundingClientRect()
-    if (rect.width > 1 && rect.height > 1) {
-      const scale = videoWidth / viewWidth
-      const sx = Math.min(Math.max(rect.left * scale, 0), videoWidth - 2)
-      const sy = Math.min(Math.max(rect.top * scale, 0), videoHeight - 2)
-      const sw = Math.min(rect.width * scale, videoWidth - sx)
-      const sh = Math.min(rect.height * scale, videoHeight - sy)
-      if (sw > 1 && sh > 1) {
-        return { sx, sy, sw, sh }
-      }
+  if (frame === null) {
+    const videoWidth = Math.max(video.videoWidth, 0)
+    const videoHeight = Math.max(video.videoHeight, 0)
+    if (videoWidth === 0 || videoHeight === 0) {
+      return { sx: 0, sy: 0, sw: 0, sh: 0 }
     }
+    // 无画框：整幅居中裁剪到目标比例
+    const videoRatio = videoWidth / videoHeight
+    if (videoRatio > targetRatio) {
+      const sw = videoHeight * targetRatio
+      return { sx: (videoWidth - sw) / 2, sy: 0, sw, sh: videoHeight }
+    }
+    const sh = videoWidth / targetRatio
+    return { sx: 0, sy: (videoHeight - sh) / 2, sw: videoWidth, sh }
   }
-
-  // 退化：整幅居中裁剪到目标比例
-  const videoRatio = videoWidth / videoHeight
-  if (videoRatio > targetRatio) {
-    const sw = videoHeight * targetRatio
-    return { sx: (videoWidth - sw) / 2, sy: 0, sw, sh: videoHeight }
-  }
-  const sh = videoWidth / targetRatio
-  return { sx: 0, sy: (videoHeight - sh) / 2, sw: videoWidth, sh }
+  const rect = frame.getBoundingClientRect()
+  return cropSourceOfWithRect(video, targetRatio, rect)
 }
 
 /**
@@ -332,23 +378,54 @@ export async function startPageCapture(
 
   const startedAt = performance.now()
   let rafId = 0
-  // 画布合成循环：裁剪画框 → 叠字幕（钩子前 4 秒 + 底部数据行）
-  const drawFrame = () => {
-    const source = cropSourceOf(video, layout.width / layout.height)
-    if (source.sw > 0 && source.sh > 0) {
-      ctx.drawImage(
-        video,
-        source.sx,
-        source.sy,
-        source.sw,
-        source.sh,
-        0,
-        0,
-        layout.width,
-        layout.height,
-      )
+  let lastDrawAt = 0
+
+  // 画框源矩形缓存：getBoundingClientRect 会强制同步布局，每帧调用会 layout thrash。
+  // 矩形只需「窗口缩放/滚动」时刷新，故按 TTL 缓存，其余帧复用上次结果。
+  let cachedFrame: { rect: { left: number; top: number; width: number; height: number }; at: number } | undefined
+
+  /** 现取录制画框矩形（带 TTL 缓存，避免每帧强制布局） */
+  const frameRectOf = (): { left: number; top: number; width: number; height: number } | undefined => {
+    const now = performance.now()
+    if (cachedFrame !== undefined && now - cachedFrame.at < FRAME_CACHE_TTL_MS) {
+      return cachedFrame.rect
     }
-    drawVideoCaptions(ctx, layout, options.captions, (performance.now() - startedAt) / 1000)
+    const frame = document.querySelector(EXPORT_FRAME_SELECTOR)
+    if (frame === null) {
+      return undefined
+    }
+    const rect = frame.getBoundingClientRect()
+    const next = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    cachedFrame = { rect: next, at: now }
+    return next
+  }
+
+  // 画布合成循环：裁剪画框 → 叠字幕（钩子前 4 秒 + 底部数据行）。
+  // 用真实时钟节流到录制帧率：rAF 全速跑只会多画几十帧被编码器丢弃，白烧 CPU。
+  const drawFrame = () => {
+    const now = performance.now()
+    if (now - lastDrawAt >= DRAW_INTERVAL_MS) {
+      lastDrawAt = now
+      const frameRect = frameRectOf()
+      const source =
+        frameRect !== undefined
+          ? cropSourceOfWithRect(video, layout.width / layout.height, frameRect)
+          : cropSourceOf(video, layout.width / layout.height)
+      if (source.sw > 0 && source.sh > 0) {
+        ctx.drawImage(
+          video,
+          source.sx,
+          source.sy,
+          source.sw,
+          source.sh,
+          0,
+          0,
+          layout.width,
+          layout.height,
+        )
+      }
+      drawVideoCaptions(ctx, layout, options.captions, (now - startedAt) / 1000)
+    }
     rafId = requestAnimationFrame(drawFrame)
   }
 
@@ -357,6 +434,12 @@ export async function startPageCapture(
   // 硬超时句柄：回放异常未结束时兜底收尾。用常量盒子承载——
   // finish/dispose 需要清除它，而它们定义在定时器之前，直接引用 let 变量会踩声明顺序
   const guardBox: { id: ReturnType<typeof setTimeout> | undefined } = { id: undefined }
+
+  // 中断信号：用户点浏览器「停止共享」时 resolve，页面据此立即收尾而非空等回放终态
+  let resolveInterrupted: (() => void) | undefined
+  const interrupted = new Promise<void>((resolve) => {
+    resolveInterrupted = resolve
+  })
 
   /** 释放媒体资源：停合成循环、停录制器、停流（幂等） */
   const release = () => {
@@ -414,9 +497,11 @@ export async function startPageCapture(
     release()
   }
 
-  // 用户在浏览器「正在共享」提示条上点停止：自动收尾（页面随后会拿到成片）
+  // 用户在浏览器「正在共享」提示条上点停止：自动收尾（页面随后会拿到成片），
+  // 同时通过 interrupted 信号通知页面立刻退出录制舞台，避免空等回放走到终态而卡死
   const videoTrack = stream.getVideoTracks()[0]
   videoTrack?.addEventListener('ended', () => {
+    resolveInterrupted?.()
     if (!finished) {
       void finish()
     }
@@ -435,5 +520,5 @@ export async function startPageCapture(
   drawFrame()
 
   const ready = sleep(LEAD_IN_MS)
-  return { ready, finish, dispose }
+  return { ready, finish, dispose, interrupted }
 }

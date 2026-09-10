@@ -212,6 +212,15 @@ export interface VideoCaptionInput {
 
   /** 是否显示底部数据行 */
   showDataLine: boolean
+
+  /**
+   * 自定义开头钩子文案（多行，每行一条字幕）。
+   * 非空时**完全覆盖**自动生成（不再要求有里程数据），空串/未传则走自动生成。
+   */
+  hookText?: string
+
+  /** 自定义底部数据行文案（多行，每行一条字幕）；语义同上 */
+  dataLineText?: string
 }
 
 /**
@@ -226,10 +235,31 @@ export interface VideoCaptionTexts {
 }
 
 /**
+ * 把自定义字幕文案拆成字幕行：按换行拆、去首尾空白、丢弃空行。
+ *
+ * 全为空白时返回 undefined（= 没写自定义文案，调用方回退自动生成），
+ * 这样「输入框留空」与「没填过」语义一致，用户清空即可恢复自动文案。
+ *
+ * @param text 自定义文案（未传 = 无自定义）
+ * @returns 字幕行；无有效内容时 undefined
+ */
+export function splitCaptionLines(text: string | undefined): readonly string[] | undefined {
+  if (text === undefined) {
+    return undefined
+  }
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return lines.length > 0 ? lines : undefined
+}
+
+/**
  * 生成字幕文本（纯函数，便于单测）。
  *
- * 钩子：`这条 {km} 公里的回放` / `别人要开会员才能看`；
- * 数据行：`{km} km · 爬升 {gain} m` / `运动 {时长} · {倍速}× 加速`。
+ * 钩子默认：`这条 {km} 公里的回放` / `别人要开会员才能看`；
+ * 数据行默认：`{km} km · 爬升 {gain} m` / `运动 {时长} · {倍速}× 加速`。
+ * 传入 `hookText` / `dataLineText` 时整块替换为自定义文案（见 {@link splitCaptionLines}）。
  *
  * @param input 字幕输入
  */
@@ -237,29 +267,39 @@ export function buildVideoCaptionTexts(input: VideoCaptionInput): VideoCaptionTe
   const { distanceMeters, elevationGainMeters, movingSeconds, videoSeconds } = input
 
   const hasDistance = distanceMeters !== undefined && distanceMeters > 0
-  const hook =
-    input.showHook && hasDistance
-      ? [`这条 ${(distanceMeters / 1000).toFixed(1)} 公里的回放`, '别人要开会员才能看']
-      : undefined
+  const customHook = splitCaptionLines(input.hookText)
+  let hook: readonly string[] | undefined
+  if (input.showHook) {
+    if (customHook !== undefined) {
+      hook = customHook
+    } else if (hasDistance) {
+      hook = [`这条 ${(distanceMeters / 1000).toFixed(1)} 公里的回放`, '别人要开会员才能看']
+    }
+  }
 
+  const customDataLine = splitCaptionLines(input.dataLineText)
   let dataLine: readonly string[] | undefined
   if (input.showDataLine) {
-    const firstRow: string[] = []
-    if (hasDistance) {
-      firstRow.push(`${(distanceMeters / 1000).toFixed(1)} km`)
-    }
-    if (elevationGainMeters !== undefined) {
-      firstRow.push(`爬升 ${Math.round(elevationGainMeters)} m`)
-    }
-    const secondRow: string[] = []
-    if (movingSeconds !== undefined && movingSeconds > 0) {
-      secondRow.push(`运动 ${formatDuration(movingSeconds)}`)
-      if (videoSeconds > 0) {
-        secondRow.push(`${Math.max(1, Math.round(movingSeconds / videoSeconds))}× 加速`)
+    if (customDataLine !== undefined) {
+      dataLine = customDataLine
+    } else {
+      const firstRow: string[] = []
+      if (hasDistance) {
+        firstRow.push(`${(distanceMeters / 1000).toFixed(1)} km`)
       }
+      if (elevationGainMeters !== undefined) {
+        firstRow.push(`爬升 ${Math.round(elevationGainMeters)} m`)
+      }
+      const secondRow: string[] = []
+      if (movingSeconds !== undefined && movingSeconds > 0) {
+        secondRow.push(`运动 ${formatDuration(movingSeconds)}`)
+        if (videoSeconds > 0) {
+          secondRow.push(`${Math.max(1, Math.round(movingSeconds / videoSeconds))}× 加速`)
+        }
+      }
+      const rows = [firstRow.join(' · '), secondRow.join(' · ')].filter((row) => row.length > 0)
+      dataLine = rows.length > 0 ? rows : undefined
     }
-    const rows = [firstRow.join(' · '), secondRow.join(' · ')].filter((row) => row.length > 0)
-    dataLine = rows.length > 0 ? rows : undefined
   }
 
   return { hook, dataLine }
@@ -274,6 +314,12 @@ export interface TrackVideoCaptionOptions {
 
   /** 是否显示底部数据行（缺省显示） */
   dataLine?: boolean
+
+  /** 自定义开头钩子文案（多行；非空时覆盖自动生成，见 {@link buildVideoCaptionTexts}） */
+  hookText?: string
+
+  /** 自定义底部数据行文案（多行；非空时覆盖自动生成） */
+  dataLineText?: string
 
   /** 总里程（米；缺省取轨迹末点的累计距离） */
   distanceMeters?: number
@@ -1289,6 +1335,8 @@ export async function exportTrackReplayVideo(
     videoSeconds: durationSeconds,
     showHook: captionOptions.hook ?? true,
     showDataLine: captionOptions.dataLine ?? true,
+    hookText: captionOptions.hookText,
+    dataLineText: captionOptions.dataLineText,
   })
 
   const canvas = document.createElement('canvas')

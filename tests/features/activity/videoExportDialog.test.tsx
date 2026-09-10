@@ -66,10 +66,45 @@ describe('导出视频选项面板', () => {
       mapMode: 'satellite',
       hook: true,
       dataLine: false,
+      hookText: '',
+      dataLineText: '',
     }
     expect(onConfirm).toHaveBeenCalledTimes(1)
     expect(onConfirm).toHaveBeenCalledWith(expected)
     expect(loadVideoExportSettings()).toEqual(expected)
+  })
+
+  it('勾选字幕时展示可编辑文案输入框，改动随「生成」一并回传', async () => {
+    const { onConfirm } = renderDialog()
+    const user = userEvent.setup()
+
+    const hookInput = screen.getByLabelText(/钩子文案/)
+    await user.clear(hookInput)
+    await user.type(hookInput, '今天骑了这条线\n超爽')
+    const dataInput = screen.getByLabelText(/数据行文案/)
+    await user.clear(dataInput)
+    await user.type(dataInput, '自定义数据')
+
+    await user.click(screen.getByRole('button', { name: '生成' }))
+
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ hookText: '今天骑了这条线\n超爽', dataLineText: '自定义数据' }),
+    )
+    expect(loadVideoExportSettings().hookText).toBe('今天骑了这条线\n超爽')
+  })
+
+  it('取消勾选字幕时隐藏对应输入框', async () => {
+    renderDialog()
+    const user = userEvent.setup()
+
+    expect(screen.getByLabelText(/钩子文案/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/数据行文案/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: '开头钩子' }))
+    await user.click(screen.getByRole('checkbox', { name: '数据行' }))
+
+    expect(screen.queryByLabelText(/钩子文案/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/数据行文案/)).not.toBeInTheDocument()
   })
 
   it('取消只关闭面板，不触发导出', async () => {
@@ -99,6 +134,8 @@ describe('导出视频选项面板', () => {
       mapMode: 'normal',
       hook: false,
       dataLine: true,
+      hookText: '',
+      dataLineText: '自定义一行',
     })
 
     renderDialog()
@@ -107,6 +144,8 @@ describe('导出视频选项面板', () => {
     expect(screen.getByRole('radio', { name: '跟随里程' })).toBeChecked()
     expect(screen.getByRole('radio', { name: '正常' })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: '开头钩子' })).not.toBeChecked()
+    // 数据行开启且有自定义文案：输入框展示记忆内容
+    expect(screen.getByLabelText(/数据行文案/)).toHaveValue('自定义一行')
   })
 
   it('记忆损坏/字段非法时逐字段回退默认（不整条丢弃）', () => {

@@ -95,6 +95,12 @@ export interface ActivityMapProps {
   exportStage?: boolean
 
   /**
+   * 导出录制进度文案（如「录制中 4/30 秒」）。录制舞台顶部会显示一个醒目的状态条
+   * （红色脉动点 + 文案 + 提示勿切换标签页），它位于画框外的黑边区，不会进成片。
+   */
+  exportProgressLabel?: string
+
+  /**
    * 回放判定暂停用的密集采样源（未抽稀的逐点记录）。
    *
    * `points` 是抽稀结果，采样间隔可达分钟级；回放若直接用它判定暂停，
@@ -282,7 +288,7 @@ function ExportFrameSync({ enabled }: { enabled: boolean }) {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, replayExportSession, exportStage = false, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, replayExportSession, exportStage = false, exportProgressLabel, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -429,6 +435,14 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
       ref={wrapperRef}
       style={mapHeight !== null ? { height: mapHeight } : undefined}
     >
+      {/* 录制状态条：位于画框外的顶部黑边区，不进成片（cropSourceOf 只裁画框） */}
+      {exportStage && (
+        <div className="activity-map__export-status" role="status">
+          <span className="activity-map__export-status-dot" aria-hidden="true" />
+          <span>{exportProgressLabel ?? '正在准备录制…'}</span>
+          <span className="activity-map__export-status-tip">请勿切换或最小化标签页</span>
+        </div>
+      )}
       {/* 高度拖拽把手：置于地图顶缘中央，上下拖动调整地图高度（松手持久化） */}
       <div
         className="map-resize-handle"

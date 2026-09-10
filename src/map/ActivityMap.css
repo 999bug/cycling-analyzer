@@ -54,18 +54,72 @@
   background: #000;
 }
 
-/* 画框：绝对居中 + 由高度反推宽度（窗口比画框更扁时两侧留黑，比画框更窄时 max-width 兜底） */
+/* 画框：绝对居中 + 由高度反推宽度（窗口比画框更扁时两侧留黑，比画框更窄时 max-width 兜底）。
+ * 顶部给录制状态条让出 EXPORT_STATUS_HEIGHT 的空间，避免状态条叠进画框被录进成片 */
 .map-export-stage .map-export-frame {
   position: absolute;
-  top: 50%;
+  top: calc(50% + var(--export-status-height, 64px) / 2);
   left: 50%;
   width: auto;
-  height: 100% !important;
+  height: calc(100% - var(--export-status-height, 64px)) !important;
   max-width: 100%;
   aspect-ratio: 9 / 16;
   transform: translate(-50%, -50%);
   border: none;
   border-radius: 0;
+}
+
+/* 录制状态条：贴在画框上方、舞台顶部的黑边区，醒目提示进度与「勿切换标签页」。
+ * 位于画框外，cropSourceOf 只裁画框区域，故不会进成片 */
+.activity-map__export-status {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3010;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.activity-map__export-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #e53935;
+  animation: activity-map-export-pulse 1.1s ease-in-out infinite;
+}
+
+.activity-map__export-status-tip {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+@keyframes activity-map-export-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.55);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px rgba(229, 57, 53, 0);
+  }
+}
+
+/* 移动端状态条收起提示文案，避免顶到两侧 */
+@media (max-width: 560px) {
+  .activity-map__export-status-tip {
+    display: none;
+  }
 }
 
 /* 录制期间不需要交互控件：拖拽把手、全屏按钮、底图模式角标都会进画面 */

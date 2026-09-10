@@ -2,19 +2,24 @@
  * 回放视频导出选项面板（方案 B：点击按钮先出面板，再按所选参数生成）。
  *
  * 分五组：比例 / 时长 / 底图 / 字幕 / 操作，默认 9:16 竖屏 + 30 秒 + 跟随当前底图 + 双字幕都开。
+ * 字幕文案可改：打开时预填「按当前活动自动生成」的文案，用户改过的内容会记住，
+ * 清空输入框即恢复自动生成（存储里记空串，见 videoExportSettings.ts）。
  * 选项的数据模型与本地记忆见 `videoExportSettings.ts`（本文件只导出组件）。
  *
  * 只负责收集选项并回调父组件，不直接触发导出——录制期间父组件要显示进度并禁用重复点击。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ASPECT_OPTIONS,
+  CAPTION_TEXT_MAX_LENGTH,
   DURATION_OPTIONS,
   MAP_MODE_OPTIONS,
   loadVideoExportSettings,
   storeVideoExportSettings,
+  type VideoCaptionData,
   type VideoExportSettings,
 } from '@/features/activity/videoExportSettings'
+import { buildVideoCaptionTexts, resolveVideoDuration } from '@/features/activity/trackVideoExport'
 import './videoExportDialog.css'
 
 /** 选中态追加的修饰类名 */
@@ -33,6 +38,12 @@ interface VideoExportDialogProps {
   /** 录制进度文案（如「录制中 4/30 秒」） */
   progressLabel?: string
 
+  /** 上一次导出的结果提示（如「录制已中断」）；无提示时不渲染 */
+  notice?: string
+
+  /** 字幕自动文案的数据源（活动真实数据，供输入框预填与「留空即自动」） */
+  captionData?: VideoCaptionData
+
   /** 关闭回调（取消 / 遮罩 / Esc） */
   onClose: () => void
 
@@ -45,9 +56,53 @@ interface VideoExportDialogProps {
  *
  * @param props 组件参数
  */
-function VideoExportDialog({ exporting, progressLabel, onClose, onConfirm }: VideoExportDialogProps) {
+function VideoExportDialog({
+  exporting,
+  progressLabel,
+  notice,
+  captionData,
+  onClose,
+  onConfirm,
+}: VideoExportDialogProps) {
   const [settings, setSettings] = useState<VideoExportSettings>(loadVideoExportSettings)
   const confirmRef = useRef<HTMLButtonElement>(null)
+
+  // 自动文案：按当前活动数据 + 当前时长档位推导（倍速行里含时长换算，故随时长变化）
+  const durationSeconds = resolveVideoDuration(settings.duration, captionData?.distanceMeters)
+  const autoTexts = useMemo(() => {
+    const texts = buildVideoCaptionTexts({
+      distanceMeters: captionData?.distanceMeters,
+      elevationGainMeters: captionData?.elevationGainMeters,
+      movingSeconds: captionData?.movingSeconds,
+      videoSeconds: durationSeconds,
+      showHook: true,
+      showDataLine: true,
+    })
+    return {
+      hook: (texts.hook ?? []).join('\n'),
+      dataLine: (texts.dataLine ?? []).join('\n'),
+    }
+  }, [
+    captionData?.distanceMeters,
+    captionData?.elevationGainMeters,
+    captionData?.movingSeconds,
+    durationSeconds,
+  ])
+
+  /**
+   * 字幕输入框的「编辑态」：undefined = 未改过（值跟随自动文案），string = 用户输入/记忆的值。
+   *
+   * 用「派生值 + 可空编辑态」而不是 effect 同步：既避免级联渲染（项目约定），
+   * 又让清空输入框（''）不会回弹成自动文案，用户能顺畅从零重写。
+   */
+  const [hookEdit, setHookEdit] = useState<string | undefined>(
+    settings.hookText === '' ? undefined : settings.hookText,
+  )
+  const [dataLineEdit, setDataLineEdit] = useState<string | undefined>(
+    settings.dataLineText === '' ? undefined : settings.dataLineText,
+  )
+  const hookText = hookEdit ?? autoTexts.hook
+  const dataLineText = dataLineEdit ?? autoTexts.dataLine
 
   // Esc 关闭（录制中不响应，避免半截文件）
   useEffect(() => {
@@ -70,10 +125,21 @@ function VideoExportDialog({ exporting, progressLabel, onClose, onConfirm }: Vid
     setSettings((previous) => ({ ...previous, ...patch }))
   }
 
-  /** 生成：先记忆选项再回调（取消不会污染记忆） */
+  /**
+   * 生成：先记忆选项再回调（取消不会污染记忆）。
+   *
+   * 自定义文案与「自动文案」完全一致时按空串存储（= 没自定义）——否则换个活动后
+   * 会把上个活动的里程数字带过去，用户会看到串味的文案。
+   */
   function handleConfirm() {
-    storeVideoExportSettings(settings)
-    onConfirm(settings)
+    const next: VideoExportSettings = {
+      ...settings,
+      hookText: hookEdit === undefined || hookText === autoTexts.hook ? '' : hookText,
+      dataLineText:
+        dataLineEdit === undefined || dataLineText === autoTexts.dataLine ? '' : dataLineText,
+    }
+    storeVideoExportSettings(next)
+    onConfirm(next)
   }
 
   return (
@@ -193,11 +259,64 @@ function VideoExportDialog({ exporting, progressLabel, onClose, onConfirm }: Vid
                 <span>数据行</span>
               </label>
             </div>
+
+            {settings.hook && (
+              <div className="video-export__caption">
+                <label className="video-export__caption-label" htmlFor="video-export-hook-text">
+                  钩子文案（前 4 秒，每行一条）
+                </label>
+                <textarea
+                  id="video-export-hook-text"
+                  className="video-export__textarea"
+                  rows={2}
+                  maxLength={CAPTION_TEXT_MAX_LENGTH}
+                  placeholder="留空则不显示开头钩子"
+                  value={hookText}
+                  onChange={(event) => setHookEdit(event.target.value)}
+                />
+                {hookEdit !== undefined && (
+                  <button
+                    type="button"
+                    className="video-export__reset"
+                    onClick={() => setHookEdit(undefined)}
+                  >
+                    恢复默认文案
+                  </button>
+                )}
+              </div>
+            )}
+
+            {settings.dataLine && (
+              <div className="video-export__caption">
+                <label className="video-export__caption-label" htmlFor="video-export-data-text">
+                  数据行文案（全程显示，每行一条）
+                </label>
+                <textarea
+                  id="video-export-data-text"
+                  className="video-export__textarea"
+                  rows={2}
+                  maxLength={CAPTION_TEXT_MAX_LENGTH}
+                  placeholder="留空则不显示数据行"
+                  value={dataLineText}
+                  onChange={(event) => setDataLineEdit(event.target.value)}
+                />
+                {dataLineEdit !== undefined && (
+                  <button
+                    type="button"
+                    className="video-export__reset"
+                    onClick={() => setDataLineEdit(undefined)}
+                  >
+                    恢复默认文案
+                  </button>
+                )}
+              </div>
+            )}
           </fieldset>
 
           <p className="video-export__hint">
-            点「生成」后浏览器会弹出共享提示，请选择<strong>当前标签页</strong>——录制的是真实地图画面
-            （含真实控件与回放控制栏），观感与录屏一致；未授权或浏览器不支持时会自动改用内置绘制方式。
+            <strong>接下来会先弹出一个说明页</strong>，讲清楚怎么授权；点其中的「开始录制」后，
+            浏览器会再弹出共享窗口——请选择<strong>「当前标签页」</strong>，录制才能取到真实地图画面
+            （含真实控件与回放控制栏），观感与录屏一致。也可以直接选「不用授权，改用内置绘制」。
           </p>
         </div>
 
@@ -205,6 +324,11 @@ function VideoExportDialog({ exporting, progressLabel, onClose, onConfirm }: Vid
           {exporting && (
             <span className="video-export__progress" role="status">
               {progressLabel ?? '录制中…'}
+            </span>
+          )}
+          {!exporting && notice !== undefined && (
+            <span className="video-export__notice" role="status">
+              {notice}
             </span>
           )}
           <button

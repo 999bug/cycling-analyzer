@@ -307,4 +307,25 @@ describe('录制会话', () => {
 
     expect(result?.extension).toBe('mp4')
   }, 20000)
+
+  it('停止共享时 interrupted 信号 resolve，页面可据此立即收尾而非空等', async () => {
+    stubVideoSize(1080, 1920)
+    stubViewportWidth(1080)
+    mountExportFrame({ left: 0, top: 0, width: 1080, height: 1920 })
+    stubRecorderEnvironment()
+    const fake = makeFakeStream()
+
+    const session = await startPageCapture(fake.stream, { captions: {}, maxSeconds: 30 })
+    expect(session).toBeDefined()
+
+    let interrupted = false
+    const raced = session!.interrupted.then(() => {
+      interrupted = true
+    })
+
+    fake.endTrack()
+    await raced
+
+    expect(interrupted).toBe(true)
+  }, 20000)
 })

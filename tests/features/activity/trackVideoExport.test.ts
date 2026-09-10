@@ -121,6 +121,48 @@ describe('字幕文案', () => {
     expect(captions.hook).toBeUndefined()
     expect(captions.dataLine).toEqual(['运动 1:00:00 · 120× 加速'])
   })
+
+  it('自定义文案整块覆盖自动生成（钩子与数据行各自独立）', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      distanceMeters: 33_900,
+      hookText: '今天骑了这条线',
+      dataLineText: '自定义第一行\n自定义第二行',
+    })
+    expect(captions.hook).toEqual(['今天骑了这条线'])
+    expect(captions.dataLine).toEqual(['自定义第一行', '自定义第二行'])
+  })
+
+  it('自定义文案空串/纯空白时按自动生成处理（清空即恢复默认）', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      distanceMeters: 20_000,
+      hookText: '   \n  ',
+      dataLineText: '',
+    })
+    expect(captions.hook).toEqual(['这条 20.0 公里的回放', '别人要开会员才能看'])
+    expect(captions.dataLine).toEqual(['20.0 km'])
+  })
+
+  it('自定义钩子不依赖里程数据（无里程也能显示自定义文案）', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      hookText: '随便一句开场',
+    })
+    expect(captions.hook).toEqual(['随便一句开场'])
+    expect(captions.dataLine).toBeUndefined()
+  })
+
+  it('自定义文案仍受开关控制（关闭钩子即不显示自定义钩子）', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      showHook: false,
+      hookText: '这句不该出现',
+      dataLineText: '这句会出现',
+    })
+    expect(captions.hook).toBeUndefined()
+    expect(captions.dataLine).toEqual(['这句会出现'])
+  })
 })
 
 describe('导出文件名', () => {

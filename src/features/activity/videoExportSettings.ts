@@ -29,18 +29,48 @@ export interface VideoExportSettings {
 
   /** 是否显示底部数据行字幕 */
   dataLine: boolean
+
+  /**
+   * 自定义开头钩子文案（多行，每行一条字幕）。
+   * **空串 = 没自定义**，按当前活动数据自动生成——用户清空输入框即可恢复自动。
+   */
+  hookText: string
+
+  /** 自定义底部数据行文案（多行，每行一条字幕）；语义同上 */
+  dataLineText: string
 }
+
+/**
+ * 字幕自动文案的数据源（活动真实数据；缺失字段整行省略，不伪造）。
+ *
+ * 面板用它算出「留空时会生成什么」，并在打开时预填进输入框供用户修改。
+ */
+export interface VideoCaptionData {
+  /** 总里程（米） */
+  distanceMeters?: number
+
+  /** 总爬升（米） */
+  elevationGainMeters?: number
+
+  /** 运动时长（秒） */
+  movingSeconds?: number
+}
+
+/** 自定义字幕文案的长度上限（字符）：防止误粘贴长文把画面撑爆，也约束存储体积 */
+export const CAPTION_TEXT_MAX_LENGTH = 120
 
 /** 面板选择记忆 key（localStorage：跨会话保留用户偏好） */
 const VIDEO_EXPORT_SETTINGS_KEY = 'cycling-video-export-settings'
 
-/** 默认选项：竖屏 + 30 秒 + 跟随当前底图 + 双字幕都开（方案 B 已确认） */
+/** 默认选项：竖屏 + 30 秒 + 跟随当前底图 + 双字幕都开（方案 B 已确认）+ 文案走自动 */
 export const DEFAULT_VIDEO_EXPORT_SETTINGS: VideoExportSettings = {
   aspectRatio: DEFAULT_VIDEO_ASPECT_RATIO,
   duration: '30',
   mapMode: 'follow',
   hook: true,
   dataLine: true,
+  hookText: '',
+  dataLineText: '',
 }
 
 /** 比例选项（顺序即面板顺序，首个为默认） */
@@ -76,6 +106,15 @@ function inOptions<T extends string>(value: unknown, options: readonly { value: 
 }
 
 /**
+ * 校验并截断自定义字幕文案：非字符串或超长时回退空串（= 自动生成）。
+ *
+ * @param value 待校验值
+ */
+function readCaptionText(value: unknown): string {
+  return typeof value === 'string' ? value.slice(0, CAPTION_TEXT_MAX_LENGTH) : ''
+}
+
+/**
  * 从 localStorage 读取记忆的导出选项（无记忆/解析失败/存储不可用均回退默认）。
  * 逐字段校验：单个字段非法只回退该字段，不整条丢弃。
  */
@@ -105,6 +144,8 @@ export function loadVideoExportSettings(): VideoExportSettings {
         typeof record.dataLine === 'boolean'
           ? record.dataLine
           : DEFAULT_VIDEO_EXPORT_SETTINGS.dataLine,
+      hookText: readCaptionText(record.hookText),
+      dataLineText: readCaptionText(record.dataLineText),
     }
   } catch {
     return DEFAULT_VIDEO_EXPORT_SETTINGS
