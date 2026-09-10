@@ -20,6 +20,109 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.51.16',
+    date: '2026-09-10',
+    features: ['仅开发笔记补齐，无功能变更'],
+  },
+  {
+    version: '2.51.15',
+    date: '2026-09-10',
+    features: [
+      '一致性修复：批量重命名、批量删除和批量纠偏统一使用本地日期，避免跨 UTC 日界显示不一致',
+    ],
+  },
+  {
+    version: '2.51.14',
+    date: '2026-09-10',
+    features: [
+      '改进数据备份可读性：流式导出恢复 2 空格 JSON 层级，同时保持逐批生成和低内存峰值',
+    ],
+  },
+  {
+    version: '2.51.13',
+    date: '2026-09-10',
+    features: [
+      '安全修复：进入赛段页面时清理旧版本遗留的 Strava Access Token，避免凭证继续驻留在 localStorage',
+    ],
+  },
+  {
+    version: '2.51.12',
+    date: '2026-09-10',
+    features: [
+      '测试修复：跨时区日期筛选回归测试固定使用东八区边界，确保 UTC CI 也能捕获日期口径回退',
+    ],
+  },
+  {
+    version: '2.51.11',
+    date: '2026-09-10',
+    features: [
+      '性能修复：匹配骑行优先使用活动摘要中的首尾坐标，避免打开详情页时把全库轨迹加载进内存',
+    ],
+  },
+  {
+    version: '2.51.10',
+    date: '2026-09-10',
+    features: [
+      '性能改进：取消图表依赖在首页的预加载，保留进入图表页面后的按需加载，降低首屏网络开销',
+    ],
+  },
+  {
+    version: '2.51.9',
+    date: '2026-09-10',
+    features: [
+      '工程修复：同步 package-lock 版本、隔离 E2E 开发服务器，并补强跨时区日期筛选回归测试',
+    ],
+  },
+  {
+    version: '2.51.8',
+    date: '2026-09-09',
+    features: [
+      '工程修复：将 Playwright E2E 测试从 Vitest 单元测试发现范围中排除，避免 npm run test 误加载浏览器测试',
+    ],
+  },
+  {
+    version: '2.51.7',
+    date: '2026-09-09',
+    features: [
+      '性能改进：匹配骑行扫描改用批量轨迹读取，减少本地活动数量增长后的 IndexedDB 查询次数',
+    ],
+  },
+  {
+    version: '2.51.6',
+    date: '2026-09-09',
+    features: [
+      '可访问性修复：为重命名、训练计划、批量重命名和导入编辑输入补充键盘焦点指示',
+    ],
+  },
+  {
+    version: '2.51.5',
+    date: '2026-09-09',
+    features: [
+      '工程修复：恢复本地 Playwright E2E smoke 测试命令，覆盖首页导航与 GitHub Pages 深链接入口',
+    ],
+  },
+  {
+    version: '2.51.4',
+    date: '2026-09-09',
+    features: [
+      '改进数据备份导出：设置页改用逐批写入 JSON 流，降低大规模骑行记录同时驻留多份副本造成的内存峰值',
+    ],
+  },
+  {
+    version: '2.51.3',
+    date: '2026-09-09',
+    features: [
+      '安全加固：Strava Access Token 改为仅保存在当前页面内存，不再持久化到浏览器 localStorage',
+    ],
+  },
+  {
+    version: '2.51.2',
+    date: '2026-09-09',
+    features: [
+      '修复骑行记录按年/月与日期范围筛选的时区口径：统一按本地日期归类，与日历、统计页保持一致',
+    ],
+  },
+  {
     version: '2.51.1',
     date: '2026-09-09',
     features: [
@@ -604,4 +707,3 @@ export const CHANGELOG: readonly ChangelogEntry[] = [
     ],
   },
 ] as const
-
