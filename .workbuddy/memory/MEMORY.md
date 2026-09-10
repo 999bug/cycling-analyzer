@@ -26,6 +26,14 @@
 - **改已提交信息的唯一安全路径**：未 push 时先完整备份 `.git` 到工作区外，再动手；已 push 的 message 视为不可变。
 - 环境 shim 怪癖：fetch 不落盘、`git branch a/b`（带斜杠）静默失败不创建、跨目录 `mv` 报 Permission denied。
   涉及 ref 变更一律用 `git update-ref`，不要手改 `.git` 内文件。
+- **仓库被掏空后重建提交历史的方法（2026-09-10 实测成功）**：objects 丢失会让 index 里残留
+  失效 blob，此时无 pathspec 的 `git commit` 必失败（`invalid object 100644 xxx` / `Error building trees`）。
+  解法是 **`git commit -F <msg文件> -- <pathspec...>`**——带 pathspec 时 git 用 HEAD tree + 指定路径的
+  工作区内容建提交，绕过失效 index；按主题分组逐个提交即可。`git add -u` 救不了（stat 未变的文件不重写 blob）。
+- 事故后 `git fsck` 会持续报 `failed to load pack in position 0/1` + `failed to load pack entry for oid`：
+  这是残留 `multi-pack-index` 指向已消失的旧 pack 造成的**误报**。判据是
+  `git rev-list --objects --all | awk '{print $1}' | git cat-file --batch-check | grep -c missing` 为 0（可达对象全在）。
+  沙箱内无法 mv/rm 掉该索引，可忽略；有写权限时删掉 `.git/objects/pack/multi-pack-index` 即可自动重建。
 
 ## 工作流强制规则
 
