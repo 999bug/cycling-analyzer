@@ -1,14 +1,135 @@
 /**
- * 回放视频导出纯计算测试：Web Mercator 投影、拟合缩放、瓦片范围。
- * 画布/MediaRecorder 相关路径依赖真实浏览器环境，不在 jsdom 覆盖范围。
+ * 回放视频导出纯计算测试：画布比例、Web Mercator 投影、拟合缩放、瓦片范围、
+ * 时长选项与字幕文案。画布/MediaRecorder 相关路径依赖真实浏览器环境，不在 jsdom 覆盖范围。
  */
 import { describe, expect, it } from 'vitest'
 import {
+  buildVideoCaptionTexts,
+  buildVideoFileName,
+  canvasLayoutOf,
   computeFittedZoom,
   computeTileRange,
+  distanceBasedDurationSeconds,
+  expandTileUrl,
   latToWorldPx,
   lngToWorldPx,
+  resolveVideoDuration,
+  VIDEO_ASPECT_SIZES,
 } from '@/features/activity/trackVideoExport'
+
+describe('画布比例', () => {
+  it('三种比例的尺寸：短边统一 1080', () => {
+    expect(VIDEO_ASPECT_SIZES['9:16']).toEqual({ width: 1080, height: 1920 })
+    expect(VIDEO_ASPECT_SIZES['1:1']).toEqual({ width: 1080, height: 1080 })
+    expect(VIDEO_ASPECT_SIZES['16:9']).toEqual({ width: 1920, height: 1080 })
+  })
+
+  it('安全边距按短边换算（三种比例一致，均为 80px）', () => {
+    expect(canvasLayoutOf('9:16').padding).toBe(80)
+    expect(canvasLayoutOf('1:1').padding).toBe(80)
+    expect(canvasLayoutOf('16:9').padding).toBe(80)
+    expect(canvasLayoutOf('9:16').shortSide).toBe(1080)
+  })
+
+  it('竖屏比例下轨迹能占满短边（fitBounds 余量充足）', () => {
+    const layout = canvasLayoutOf('9:16')
+    const zoom = computeFittedZoom(
+      { minLat: 31.15, maxLat: 31.35, minLng: 121.3, maxLng: 121.6 },
+      layout.width,
+      layout.height,
+      layout.padding,
+    )
+    const spanX = lngToWorldPx(121.6, zoom) - lngToWorldPx(121.3, zoom)
+    expect(spanX).toBeLessThanOrEqual(layout.width - layout.padding * 2)
+  })
+})
+
+describe('时长选项', () => {
+  it('固定档位直接取秒数', () => {
+    expect(resolveVideoDuration('15', undefined)).toBe(15)
+    expect(resolveVideoDuration('30', undefined)).toBe(30)
+    expect(resolveVideoDuration('60', undefined)).toBe(60)
+  })
+
+  it('「跟随里程」约每 5 km 1 秒', () => {
+    expect(distanceBasedDurationSeconds(25_000)).toBe(15)
+    expect(distanceBasedDurationSeconds(100_000)).toBe(20)
+  })
+
+  it('「跟随里程」夹在 15~60 秒区间', () => {
+    expect(distanceBasedDurationSeconds(5_000)).toBe(15)
+    expect(distanceBasedDurationSeconds(210_000)).toBe(42)
+    expect(distanceBasedDurationSeconds(800_000)).toBe(60)
+  })
+
+  it('里程缺失或非法时回退默认 30 秒（不伪造）', () => {
+    expect(distanceBasedDurationSeconds(undefined)).toBe(30)
+    expect(distanceBasedDurationSeconds(0)).toBe(30)
+    expect(distanceBasedDurationSeconds(Number.NaN)).toBe(30)
+    expect(resolveVideoDuration('distance', undefined)).toBe(30)
+  })
+})
+
+describe('瓦片 URL 展开', () => {
+  it('替换 {s}/{z}/{x}/{y} 占位符，子域按坐标轮询', () => {
+    const template = 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'
+    expect(expandTileUrl(template, ['1', '2', '3', '4'], 12, 3372, 1556)).toBe(
+      'https://webst01.is.autonavi.com/appmaptile?style=6&x=3372&y=1556&z=12',
+    )
+    // (x + y) 变化 → 子域轮换，避免单域名限流
+    expect(expandTileUrl(template, ['1', '2', '3', '4'], 12, 3373, 1556)).toContain('webst02')
+  })
+
+  it('无子域的模板不残留 {s}', () => {
+    expect(expandTileUrl('https://t/{s}/{z}/{x}/{y}.png', [], 1, 1, 1)).toBe('https://t//1/1/1.png')
+  })
+})
+
+describe('字幕文案', () => {
+  const base = { videoSeconds: 30, showHook: true, showDataLine: true }
+
+  it('钩子 + 数据行都取真实数据', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      distanceMeters: 33_900,
+      elevationGainMeters: 620,
+      movingSeconds: 6000,
+    })
+    expect(captions.hook).toEqual(['这条 33.9 公里的回放', '别人要开会员才能看'])
+    expect(captions.dataLine).toEqual(['33.9 km · 爬升 620 m', '运动 1:40:00 · 200× 加速'])
+  })
+
+  it('缺少爬升时数据行只留里程（不伪造）', () => {
+    const captions = buildVideoCaptionTexts({ ...base, distanceMeters: 20_000 })
+    expect(captions.dataLine).toEqual(['20.0 km'])
+    expect(captions.hook).toEqual(['这条 20.0 公里的回放', '别人要开会员才能看'])
+  })
+
+  it('开关关闭时不生成对应字幕', () => {
+    const captions = buildVideoCaptionTexts({
+      ...base,
+      showHook: false,
+      showDataLine: false,
+      distanceMeters: 20_000,
+    })
+    expect(captions.hook).toBeUndefined()
+    expect(captions.dataLine).toBeUndefined()
+  })
+
+  it('里程缺失时钩子省略、数据行仅保留时长', () => {
+    const captions = buildVideoCaptionTexts({ ...base, movingSeconds: 3600 })
+    expect(captions.hook).toBeUndefined()
+    expect(captions.dataLine).toEqual(['运动 1:00:00 · 120× 加速'])
+  })
+})
+
+describe('导出文件名', () => {
+  it('去掉 .fit / .fit.gz 后缀并追加 -replay', () => {
+    expect(buildVideoFileName('ride.fit', 'mp4')).toBe('ride-replay.mp4')
+    expect(buildVideoFileName('ride.fit.gz', 'webm')).toBe('ride-replay.webm')
+    expect(buildVideoFileName('北京骑行.fit', 'mp4')).toBe('北京骑行-replay.mp4')
+  })
+})
 
 describe('Web Mercator 投影', () => {
   it('lngToWorldPx：经度 0 在世界中心，每升一级缩放坐标翻倍', () => {

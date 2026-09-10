@@ -50,7 +50,10 @@ import {
   buildVideoFileName,
   downloadVideo,
   exportTrackReplayVideo,
+  resolveVideoDuration,
 } from '@/features/activity/trackVideoExport'
+import VideoExportDialog from '@/features/activity/VideoExportDialog'
+import type { VideoExportSettings } from '@/features/activity/videoExportSettings'
 import { cleanTrackDrift } from '@/features/activity/trackCleanup'
 import TrackFixPanel, { type TrackFixPreview } from '@/features/activity/TrackFixPanel'
 import '@/features/activity/TrackFixPanel.css'
@@ -256,6 +259,10 @@ function ActivityDetailPage() {
   const [saving, setSaving] = useState(false)
   /** 回放视频导出中标记 */
   const [exportingVideo, setExportingVideo] = useState(false)
+  /** 导出选项面板开关（方案 B：先出面板再按参数生成） */
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false)
+  /** 录制进度文案（「录制中 x/y 秒」，录制中在面板底部展示） */
+  const [videoProgressLabel, setVideoProgressLabel] = useState<string>()
   // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网，记忆到 localStorage）
   const [replayMode, setReplayMode] = useState(false)
   const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
@@ -539,24 +546,46 @@ function ActivityDetailPage() {
   }
 
   /**
-   * 导出轨迹回放视频：当前活动轨迹 → 10 秒 MP4/WebM 回放下载。
+   * 导出轨迹回放视频（方案 B）：按面板选项生成 MP4/WebM 回放并下载。
+   * 底图恒为高德（GCJ-02），轨迹按活动落库坐标系 + 微调量投影后绘制，与页面地图一致；
+   * 字幕取活动真实数据，缺失字段整行省略（规格 §25 不伪造）。
    * 浏览器不支持 MediaRecorder 或无轨迹时按钮已禁用，此处兜底静默返回。
+   *
+   * @param settings 面板选项（比例/时长/底图/字幕）
    */
-  async function handleExportVideo() {
+  async function handleExportVideo(settings: VideoExportSettings) {
     if (activity === undefined || exportingVideo) {
       return
     }
     setExportingVideo(true)
     try {
       const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
-      const result = await exportTrackReplayVideo(cleanedRecords.cleaned, trackName)
+      const durationSeconds = resolveVideoDuration(settings.duration, activity.distance)
+      setVideoProgressLabel(`录制中 0/${durationSeconds} 秒`)
+      const result = await exportTrackReplayVideo(cleanedRecords.cleaned, trackName, {
+        durationSeconds,
+        aspectRatio: settings.aspectRatio,
+        mapMode: settings.mapMode,
+        coordinateSystem: activity.coordinateSystem,
+        trackOffset: activity.trackOffset,
+        captions: {
+          hook: settings.hook,
+          dataLine: settings.dataLine,
+          distanceMeters: activity.distance,
+          elevationGainMeters: activity.elevationGain,
+          movingSeconds: activity.duration,
+        },
+        onProgress: (elapsed, total) => setVideoProgressLabel(`录制中 ${elapsed}/${total} 秒`),
+      })
       if (result !== undefined) {
         downloadVideo(buildVideoFileName(activity.fileName, result.extension), result.blob)
+        setVideoDialogOpen(false)
       }
     } catch (err: unknown) {
       console.error('Failed to export track replay video', err)
     } finally {
       setExportingVideo(false)
+      setVideoProgressLabel(undefined)
     }
   }
 
@@ -773,11 +802,11 @@ function ActivityDetailPage() {
           <button
             type="button"
             className="activity-detail__export"
-            onClick={() => void handleExportVideo()}
-            disabled={!hasTrack || exportingVideo}
-            title={hasTrack ? '导出轨迹回放视频：真实地图底图，光标实时显示速度/心率/功率' : '该活动无轨迹坐标，无法导出'}
+            onClick={() => setVideoDialogOpen(true)}
+            disabled={!hasTrack}
+            title={hasTrack ? '生成竖屏回放视频：真实地图底图，光标实时显示速度/心率/功率，可带中文字幕' : '该活动无轨迹坐标，无法导出'}
           >
-            {exportingVideo ? '录制中…' : '导出回放视频'}
+            生成竖屏视频
           </button>
           {/* 设为赛段 / 删除活动：作者源只读时保留可见但禁用（提示切源），不再凭空隐藏 */}
           <button
@@ -981,6 +1010,16 @@ function ActivityDetailPage() {
         minHeartRate={minHeartRate}
         heartRateRecords={chartRecords}
       />
+
+      {/* 导出选项面板（方案 B）：录制期间保持打开并展示进度，禁止重复触发 */}
+      {videoDialogOpen && (
+        <VideoExportDialog
+          exporting={exportingVideo}
+          progressLabel={videoProgressLabel}
+          onClose={() => setVideoDialogOpen(false)}
+          onConfirm={(settings) => void handleExportVideo(settings)}
+        />
+      )}
     </div>
   )
 }

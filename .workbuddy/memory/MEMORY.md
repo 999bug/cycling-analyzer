@@ -80,12 +80,15 @@
 
 - **`npm run build` 需先 `rm -rf dist`**（2026-09-08）：vite emptyOutDir 触发 WorkBuddy safe-delete shim（移入回收站），dist 1800+ 文件时 genie-trash ETIMEDOUT 导致构建失败；dist 为 gitignored 构建产物，直接 rm 清空后重跑 build 即可。
 - **jest-dom `toHaveValue` 对 input[type=number]**：空值返回 null 而非 ''，`toHaveValue('')` 永远失败；断言空值改用 `(el as HTMLInputElement).value === ''`。userEvent.type 遇 `{xx}` 会按按键语法解析，含花括号输入用 fireEvent.change。
+- **vitest 4 启动报 `Cannot find native binding` / `@rolldown/binding-wasm32-wasi`**（2026-09-10 遇到）：node_modules 里 `@rolldown/binding-win32-x64-msvc` 丢失（可选依赖被跳过）。
+  修法：`npm install --no-save @rolldown/binding-win32-x64-msvc@<rolldown 版本>`（版本对齐 `node_modules/rolldown/package.json` 的 optionalDependencies），装完 vitest 正常。
+- **`tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`**（避免全量渲染时真实发包）：需要真实实现的测试文件必须自己
+  `vi.mock('@/map/CachingTileLayer', async (importOriginal) => ({ ...(await importOriginal()) }))` 覆盖回原样，否则报
+  `No "X" export is defined on the ... mock`。
 
 ## 已知待修复缺陷
 
-- **卫星底图在作者数据区域退化成矢量图**（2026-09-10 发现，**未修复**）：`src/map/localTiles.ts` 的
-  `parseAmapTileUrl()` 只抠 `x/y/z`、`hasLocalTile()` 查的 `tiles-manifest.json` key 也只有 `"z/x/y"`，
-  **都不含底图模式**；`CachingTileLayer.loadTile()` 的「本地预缓存优先」逻辑于是把卫星(webst style=6)
-  请求也返回本地矢量(webrd style=8)瓦片。表现：访客在作者快照覆盖区域切「卫星 / 卫星+路网」时，
-  旧视口那片显示路网图、其余显示真卫星（混杂）。修复建议（推荐后者）：非 normal 模式跳过本地预缓存
-  直接走在线瓦片（本地本就只预缓存了矢量瓦片），或清单 key 加模式前缀。详见 2026-09-10 日志。
+- （无）2026-09-10 记录的三条已全部修复并随 2.56.0 落地：卫星底图在作者数据区域退化为矢量图
+  （`CachingTileLayer` 新增 `allowLocalTile`，仅 normal 模式开放本地预缓存）、全屏后地图不重新适配视野
+  （`FitBounds` 监听 Leaflet `resize` 重算，且尊重用户手动操作）、导出视频观感偏弱
+  （比例/时长/底图/字幕参数化 + 选项面板）。

@@ -75,6 +75,9 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
   // key 随源变化：换源时强制重建瓦片图层，立即清空旧源瓦片重新加载
   // 高德源按地图模式渲染图层栈（底图 + 可选透明注记叠加层），坐标系同为 GCJ-02
   if (isGcjSource(sourceIndex)) {
+    // 本地预缓存只有矢量底图瓦片（清单 key 不含底图模式）：非「正常」模式必须关掉，
+    // 否则卫星请求会命中本地矢量瓦片，作者数据区域切卫星后出现「矢量/卫星混杂」
+    const allowLocalTile = mapMode === 'normal'
     return (
       <>
         {mapModeOf(mapMode).layers.map((layer, index) => (
@@ -86,6 +89,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
             attribution={index === 0 ? source.attribution : ''}
             opacity={layer.opacity ?? 1}
             cacheEnabled={tileCacheEnabled}
+            allowLocalTile={allowLocalTile}
           />
         ))}
       </>

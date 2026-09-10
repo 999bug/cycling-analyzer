@@ -114,19 +114,71 @@ export interface ActivityMapProps {
 }
 
 /**
- * 自动适配视野子组件：轨迹点变化时重算 fitBounds。
+ * 自动适配视野子组件：轨迹点变化时重算 fitBounds，容器尺寸变化时重新适配。
  * MapContainer 的子组件才能访问 map 实例（react-leaflet context）。
+ *
+ * 为什么必须监听 resize：`invalidateSize()` 只保持 center + zoom，**不会**重算缩放级别。
+ * 全屏时容器从「宽扁」变成「竖长」，沿用旧缩放级别会让轨迹缩成画面中间一小团
+ * （实测横向仅占 44%，而 fitBounds 本应约 96%）。Leaflet 在 invalidateSize 时
+ * 触发 resize 事件，据此重算即可。
+ *
+ * 尊重用户操作：用户手动拖拽/缩放后不再自动适配，避免尺寸抖动（窗口缩放、旋转屏幕）
+ * 把正在看细节的用户强行拉回全景；切换轨迹（换活动）时重置该标记。
  *
  * @param points 轨迹点
  */
 function FitBounds({ points }: { points: RoutePoint[] }) {
   const map = useMap()
+  // 用户是否手动调整过视野（dragstart / 轮播缩放、按钮缩放触发的 zoomstart）
+  const userMovedRef = useRef(false)
+  // 自动 fitBounds 进行中标记：fitBounds 自身也会触发 zoomstart，不能算作「用户操作」
+  const autoFitRef = useRef(false)
+
   useEffect(() => {
-    if (points.length >= MIN_POINTS) {
-      const latLngs = points.map((point) => [point.latitude, point.longitude] as [number, number])
-      map.fitBounds(latLngs, { padding: [24, 24] })
+    // dragstart 只可能来自用户拖拽（fitBounds / setView 不会触发 dragstart），无条件计入
+    const markUserDragged = () => {
+      userMovedRef.current = true
     }
-    // points 变化时重新适配视野
+    // zoomstart 会被自动 fitBounds 自身触发，需用 autoFitRef 排除，否则每次适配都自我标记
+    const markUserZoomed = () => {
+      if (!autoFitRef.current) {
+        userMovedRef.current = true
+      }
+    }
+    map.on('dragstart', markUserDragged)
+    map.on('zoomstart', markUserZoomed)
+    return () => {
+      map.off('dragstart', markUserDragged)
+      map.off('zoomstart', markUserZoomed)
+    }
+  }, [map])
+
+  useEffect(() => {
+    if (points.length < MIN_POINTS) {
+      return undefined
+    }
+    // 轨迹变了（换活动/纠偏后坐标变化）视为新一轮适配，重置用户操作标记
+    userMovedRef.current = false
+    const latLngs = points.map((point) => [point.latitude, point.longitude] as [number, number])
+    const fit = () => {
+      autoFitRef.current = true
+      // animate: false —— 尺寸变化时立即落位，避免过渡动画期间的中间帧抖动
+      map.fitBounds(latLngs, { padding: [24, 24], animate: false })
+      // 兜底延迟清除：zoomstart 若被异步派发也不会误记为「用户操作」
+      setTimeout(() => {
+        autoFitRef.current = false
+      }, 0)
+    }
+    fit()
+    const handleResize = () => {
+      if (!userMovedRef.current) {
+        fit()
+      }
+    }
+    map.on('resize', handleResize)
+    return () => {
+      map.off('resize', handleResize)
+    }
   }, [map, points])
   return null
 }

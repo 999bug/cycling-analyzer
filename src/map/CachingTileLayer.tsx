@@ -8,6 +8,11 @@
  *    让 tileerror 正常触发，既有「OSM→高德」降级逻辑不受影响。
  *
  * 用 react-leaflet 的 createTileLayerComponent 包装，替换既有 TileLayer。
+ *
+ * `allowLocalTile` 开关（2026-09-10 修卫星底图 bug）：`public/author-data/tiles/`
+ * 只预缓存了**矢量底图**瓦片（清单 key 为 "z/x/y"，不含底图模式），若卫星请求也走
+ * 「本地预缓存优先」，作者数据区域切卫星后旧视口那片会显示路网图、其余显示真卫星。
+ * 因此非「正常」模式的图层一律传 false，直接走在线瓦片。
  */
 import { createElementObject, createTileLayerComponent, updateGridLayer, withPane, type LayerProps } from '@react-leaflet/core'
 import { TileLayer as LeafletTileLayer, type Coords, type DoneCallback, type TileLayerOptions } from 'leaflet'
@@ -16,21 +21,41 @@ import { getCachedTile, putCachedTile } from '@/storage/tileCache'
 import { hasLocalTile, localTileUrl, parseAmapTileUrl } from '@/map/localTiles'
 
 /**
+ * 解析「本地预缓存优先」的瓦片坐标：开关关闭或非高德模板一律返回 null。
+ *
+ * @param url 已实例化的瓦片 URL
+ * @param allowLocalTile 是否允许命中本地预缓存
+ */
+export function resolveLocalTileCoords(
+  url: string,
+  allowLocalTile: boolean,
+): { z: number; x: number; y: number } | null {
+  if (!allowLocalTile) {
+    return null
+  }
+  return parseAmapTileUrl(url)
+}
+
+/**
  * 缓存优先的瓦片图层（Leaflet 层，供 createTileLayerComponent 使用）。
  *
  * createTile 定义为两个参数（coords, done）时 Leaflet 判定为异步瓦片，
  * 会等待 done 回调后再标记 ready——缓存读取/fetch 都可在此完成。
  */
-class CachingTileLayer extends LeafletTileLayer {
+export class CachingTileLayer extends LeafletTileLayer {
   /** 已创建的 Blob URL（tileunload 时 revoke，避免内存泄漏） */
   private readonly objectUrls = new WeakMap<HTMLElement, string>()
 
   /** 瓦片缓存开关（false 时退化为普通 TileLayer，直接原生加载） */
   private cacheEnabled: boolean
 
-  constructor(url: string, options?: object, cacheEnabled = true) {
+  /** 是否允许命中本地预缓存瓦片（仅矢量底图模式可用） */
+  private allowLocalTile: boolean
+
+  constructor(url: string, options?: object, cacheEnabled = true, allowLocalTile = true) {
     super(url, options)
     this.cacheEnabled = cacheEnabled
+    this.allowLocalTile = allowLocalTile
     this.on('tileunload', this.handleTileUnload, this)
   }
 
@@ -41,6 +66,15 @@ class CachingTileLayer extends LeafletTileLayer {
    */
   setCacheEnabled(enabled: boolean): void {
     this.cacheEnabled = enabled
+  }
+
+  /**
+   * 更新「本地预缓存优先」开关。
+   *
+   * @param allow 是否允许命中本地预缓存
+   */
+  setAllowLocalTile(allow: boolean): void {
+    this.allowLocalTile = allow
   }
 
   /**
@@ -87,8 +121,9 @@ class CachingTileLayer extends LeafletTileLayer {
       return
     }
 
-    // 预缓存静态瓦片优先（作者数据区域）：同域直读零跨域，命中则完全绕过在线请求
-    const amapCoords = parseAmapTileUrl(url)
+    // 预缓存静态瓦片优先（作者数据区域）：同域直读零跨域，命中则完全绕过在线请求。
+    // 仅矢量底图模式开放——本地只预缓存了矢量瓦片，卫星/注记层查清单必然错拿矢量图
+    const amapCoords = resolveLocalTileCoords(url, this.allowLocalTile)
     if (amapCoords !== null && (await hasLocalTile(amapCoords.z, amapCoords.x, amapCoords.y))) {
       tile.src = localTileUrl(amapCoords.z, amapCoords.x, amapCoords.y)
       return
@@ -154,6 +189,12 @@ export interface CachingTileLayerProps extends TileLayerOptions, LayerProps {
 
   /** 瓦片缓存开关（false 时退化为普通瓦片层） */
   cacheEnabled?: boolean
+
+  /**
+   * 是否允许命中本地预缓存瓦片（默认 true）。
+   * 仅矢量底图（「正常」模式）为 true；卫星底图与透明注记层必须传 false。
+   */
+  allowLocalTile?: boolean
 }
 
 /**
@@ -166,8 +207,11 @@ export const CachingTileLayerComponent = createTileLayerComponent<
   CachingTileLayer,
   CachingTileLayerProps
 >(
-  function createCachingTileLayer({ url, cacheEnabled = true, ...options }, context) {
-    const layer = new CachingTileLayer(url, withPane(options, context), cacheEnabled)
+  function createCachingTileLayer(
+    { url, cacheEnabled = true, allowLocalTile = true, ...options },
+    context,
+  ) {
+    const layer = new CachingTileLayer(url, withPane(options, context), cacheEnabled, allowLocalTile)
     return createElementObject(layer, context)
   },
   function updateCachingTileLayer(layer, props, prevProps) {
@@ -178,6 +222,11 @@ export const CachingTileLayerComponent = createTileLayerComponent<
     }
     if (props.cacheEnabled !== prevProps.cacheEnabled) {
       layer.setCacheEnabled(props.cacheEnabled ?? true)
+    }
+    if (props.allowLocalTile !== prevProps.allowLocalTile) {
+      layer.setAllowLocalTile(props.allowLocalTile ?? true)
+      // 开关变化会影响已生成瓦片的来源（本地/在线），重绘一遍
+      layer.redraw()
     }
   },
 )

@@ -1,0 +1,202 @@
+/**
+ * 回放视频导出选项面板样式。
+ *
+ * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary/--on-primary），
+ * 与批量修正运动类型弹窗保持一致的观感；深浅主题自动适配。
+ */
+
+/* 遮罩层 */
+.video-export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* 弹窗主体 */
+.video-export {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 94vw);
+  max-height: 90vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.video-export__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.video-export__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.video-export__subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.video-export__close {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.video-export__close:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.video-export__close:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.video-export__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+/* 分组（fieldset 去掉默认边框，只留 legend 作分组标题） */
+.video-export__group {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.video-export__legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.video-export__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 选项：单选/复选都渲染成同款胶囊按钮（原生 input 保留可访问性） */
+.video-export__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.video-export__option:hover {
+  border-color: var(--text-secondary);
+}
+
+.video-export__option--active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.video-export__option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.video-export__group:disabled .video-export__option {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.video-export__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.video-export__progress {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.video-export__btn {
+  padding: 8px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.video-export__btn--ghost {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.video-export__btn--ghost:hover:not(:disabled) {
+  background-color: var(--bg-elevated);
+}
+
+.video-export__btn--primary {
+  background-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.video-export__btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .video-export__body {
+    padding: 14px 14px;
+  }
+
+  .video-export__head,
+  .video-export__footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

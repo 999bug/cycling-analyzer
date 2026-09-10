@@ -46,16 +46,19 @@ vi.mock('@/map/CachingTileLayer', () => ({
     url,
     attribution,
     cacheEnabled,
+    allowLocalTile,
   }: {
     url: string
     attribution: string
     cacheEnabled: boolean
+    allowLocalTile?: boolean
   }) => (
     <div
       data-testid="tile-layer"
       data-url={url}
       data-attribution={attribution}
       data-cache-enabled={cacheEnabled}
+      data-allow-local-tile={String(allowLocalTile)}
     />
   ),
 }))
@@ -164,5 +167,19 @@ describe('降级瓦片层', () => {
     const layers = screen.getAllByTestId('tile-layer')
     expect(layers).toHaveLength(1)
     expect(layers[0]).toHaveAttribute('data-url', TILE_SOURCES[1].url)
+  })
+
+  it('仅「正常」模式开放本地预缓存（作者数据区域卫星不再错拿矢量瓦片）', () => {
+    const { unmount } = render(<FallbackTileLayer sourceIndex={0} mapMode="normal" onFallback={vi.fn()} />)
+    expect(screen.getAllByTestId('tile-layer')[0]).toHaveAttribute('data-allow-local-tile', 'true')
+    unmount()
+
+    for (const mode of ['satellite', 'satelliteRoads'] as const) {
+      const rendered = render(<FallbackTileLayer sourceIndex={0} mapMode={mode} onFallback={vi.fn()} />)
+      for (const layer of screen.getAllByTestId('tile-layer')) {
+        expect(layer).toHaveAttribute('data-allow-local-tile', 'false')
+      }
+      rendered.unmount()
+    }
   })
 })
