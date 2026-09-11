@@ -68,6 +68,7 @@ import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
 import { computeQualityScore } from '@/features/analysis/qualityScore'
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
+import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
@@ -461,10 +462,15 @@ function ActivityDetailPage() {
   // 用户配置（设置未加载完成时为 undefined）：IF/TSS/区间分布均依赖它们
   const ftp = profile?.ftp
   const maxHeartRate = profile?.maxHeartRate
+  // 近期骑行基线（历史对比洞察输入）：history 未加载或样本不足时为 undefined
+  const recentBaseline = useMemo(
+    () => (history === undefined ? undefined : buildRecentBaseline(history, activity?.id)),
+    [history, activity],
+  )
   // 骑行洞察计算参数（对象引用稳定，避免逐次渲染重复计算；须位于条件早退之前）
   const insightsOptions = useMemo(
-    () => ({ ftp, maxHeartRate, distanceUnit: settings?.units.distance ?? 'km' }),
-    [ftp, maxHeartRate, settings],
+    () => ({ ftp, maxHeartRate, distanceUnit: settings?.units.distance ?? 'km', recentBaseline }),
+    [ftp, maxHeartRate, settings, recentBaseline],
   )
   // 骑行质量综合分（总结条展示档位短语用；须位于条件早退之前）
   const qualityOverall = useMemo(() => computeQualityScore(records).overall, [records])

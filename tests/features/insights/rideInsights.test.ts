@@ -191,7 +191,7 @@ describe('buildRideInsights 骑行洞察', () => {
     expect(overview?.text).toContain('120')
   })
 
-  it('洞察上限 5 条且负面优先排序', () => {
+  it('洞察上限 6 条且负面优先排序', () => {
     // 同时触发多条规则：掉速 + 心率漂移 + 配速波动 + 爬坡日 + 长距离 + 极速
     const records = uniformRecords(60).map((record, index) => {
       const ratio = record.distance! / 6000
@@ -215,7 +215,7 @@ describe('buildRideInsights 骑行洞察', () => {
     })
     const insights = buildRideInsights(activity, records)
 
-    expect(insights.length).toBeLessThanOrEqual(5)
+    expect(insights.length).toBeLessThanOrEqual(6)
     // 前 3 条应为负面（fade/cardiacDrift/steadyPace 任一在前）
     expect(insights[0].kind).toBe('negative')
   })
@@ -241,5 +241,203 @@ describe('buildRideInsights 骑行洞察', () => {
     const top = insights.find((insight) => insight.key === 'topSpeed')
     expect(top).toBeDefined()
     expect(top?.text).toContain('61.2')
+  })
+
+  it('平均踏频低于 65 时生成踏频偏低洞察', () => {
+    const records = uniformRecords(40).map((record) => ({ ...record, cadence: 55 }))
+    const insights = buildRideInsights(makeActivity(), records)
+
+    const cadence = insights.find((insight) => insight.key === 'cadence')
+    expect(cadence).toBeDefined()
+    expect(cadence?.kind).toBe('info')
+    expect(cadence?.title).toBe('踏频偏低')
+    expect(cadence?.text).toContain('55')
+  })
+
+  it('踏频高且波动小时生成踏频稳定洞察', () => {
+    // 88~92 rpm 交替，均值 90、CV 远低于 15%
+    const records = uniformRecords(40).map((record, index) => ({
+      ...record,
+      cadence: index % 2 === 0 ? 88 : 92,
+    }))
+    const insights = buildRideInsights(makeActivity(), records)
+
+    const cadence = insights.find((insight) => insight.key === 'cadence')
+    expect(cadence?.kind).toBe('positive')
+    expect(cadence?.title).toBe('踏频稳定')
+  })
+
+  it('滑行零踏频不参与统计，全滑行时不生成踏频洞察', () => {
+    const records = uniformRecords(40).map((record) => ({ ...record, cadence: 0 }))
+    const insights = buildRideInsights(makeActivity(), records)
+    expect(insights.find((insight) => insight.key === 'cadence')).toBeUndefined()
+  })
+
+  it('NP 接近均功率时生成输出平顺洞察（VI ≤ 1.05）', () => {
+    const activity = makeActivity({ avgPower: 200, normalizedPower: 208 })
+    const insights = buildRideInsights(activity, [])
+
+    const vi = insights.find((insight) => insight.key === 'variabilityIndex')
+    expect(vi).toBeDefined()
+    expect(vi?.kind).toBe('positive')
+    expect(vi?.title).toBe('输出平顺')
+    expect(vi?.text).toContain('1.04')
+  })
+
+  it('NP 明显高于均功率时生成输出波动洞察（VI ≥ 1.15）', () => {
+    const activity = makeActivity({ avgPower: 200, normalizedPower: 245 })
+    const insights = buildRideInsights(activity, uniformRecords(40))
+
+    const vi = insights.find((insight) => insight.key === 'variabilityIndex')
+    expect(vi?.kind).toBe('info')
+    expect(vi?.title).toBe('输出波动')
+  })
+
+  it('VI 处于中间区间不生成变动指数洞察', () => {
+    const activity = makeActivity({ avgPower: 200, normalizedPower: 220 })
+    const insights = buildRideInsights(activity, uniformRecords(40))
+    expect(insights.find((insight) => insight.key === 'variabilityIndex')).toBeUndefined()
+  })
+
+  it('20 分钟峰值功率接近 FTP 时生成正面峰值功率洞察', () => {
+    // 10s 采样 150 点：20 分钟窗口 = 120 样本，可用
+    const records = uniformRecords(150).map((record) => ({ ...record, power: 195 }))
+    const insights = buildRideInsights(makeActivity(), records, { ftp: 200 })
+
+    const peak = insights.find((insight) => insight.key === 'peakPower')
+    expect(peak).toBeDefined()
+    expect(peak?.kind).toBe('positive')
+    expect(peak?.text).toContain('195')
+    expect(peak?.text).toContain('98%')
+  })
+
+  it('5 分钟峰值功率亮眼（≥110% FTP）时生成峰值功率洞察', () => {
+    // 10s 采样 40 点：20 分钟窗口样本不足退到 5 分钟（30 样本可用）
+    const records = uniformRecords(40).map((record) => ({ ...record, power: 230 }))
+    const insights = buildRideInsights(makeActivity(), records, { ftp: 200 })
+
+    const peak = insights.find((insight) => insight.key === 'peakPower')
+    expect(peak).toBeDefined()
+    expect(peak?.kind).toBe('info')
+    expect(peak?.text).toContain('5 分钟')
+  })
+
+  it('无 FTP 或峰值不亮眼时不生成峰值功率洞察', () => {
+    // 100W 对 FTP 120 仅 83%，各窗口均低于阈值
+    const records = uniformRecords(150).map((record) => ({ ...record, power: 100 }))
+    expect(
+      buildRideInsights(makeActivity(), records).find(
+        (insight) => insight.key === 'peakPower',
+      ),
+    ).toBeUndefined()
+    expect(
+      buildRideInsights(makeActivity(), records, { ftp: 120 }).find(
+        (insight) => insight.key === 'peakPower',
+      ),
+    ).toBeUndefined()
+  })
+
+  it('阈值以上输出时间占比达到 10% 时生成阈值输出洞察', () => {
+    const records = uniformRecords(40).map((record) => ({ ...record, power: 210 }))
+    const insights = buildRideInsights(makeActivity(), records, { ftp: 200 })
+
+    const threshold = insights.find((insight) => insight.key === 'thresholdTime')
+    expect(threshold).toBeDefined()
+    expect(threshold?.kind).toBe('info')
+    expect(threshold?.title).toBe('阈值输出')
+    expect(threshold?.text).toContain('100%')
+  })
+
+  it('停走样本占比高时生成频繁停走洞察', () => {
+    const records = uniformRecords(80).map((record, index) => ({
+      ...record,
+      speed: index % 2 === 0 ? 8 : 0.3,
+    }))
+    const insights = buildRideInsights(makeActivity(), records)
+
+    const stopGo = insights.find((insight) => insight.key === 'stopGo')
+    expect(stopGo).toBeDefined()
+    expect(stopGo?.kind).toBe('info')
+    expect(stopGo?.title).toBe('频繁停走')
+    expect(stopGo?.text).toContain('50%')
+  })
+
+  it('几乎不停歇时生成节奏连贯洞察', () => {
+    const records = uniformRecords(80)
+    const insights = buildRideInsights(makeActivity(), records)
+
+    const stopGo = insights.find((insight) => insight.key === 'stopGo')
+    expect(stopGo?.kind).toBe('positive')
+    expect(stopGo?.title).toBe('节奏连贯')
+  })
+
+  it('爬坡时间占比高时生成地形构成洞察', () => {
+    // 相邻点海拔 +4m / 距离 +100m → 恒定 4% 爬坡
+    const records = uniformRecords(60).map((record, index) => ({
+      ...record,
+      altitude: index * 4,
+    }))
+    const insights = buildRideInsights(makeActivity(), records)
+
+    const terrain = insights.find((insight) => insight.key === 'terrain')
+    expect(terrain).toBeDefined()
+    expect(terrain?.kind).toBe('info')
+    expect(terrain?.title).toBe('地形构成')
+    expect(terrain?.text).toContain('爬坡')
+  })
+
+  it('海拔数据覆盖不足时不生成地形构成洞察', () => {
+    const records = uniformRecords(40).map((record, index) => ({
+      ...record,
+      altitude: index * 4,
+    }))
+    const insights = buildRideInsights(makeActivity(), records)
+    expect(insights.find((insight) => insight.key === 'terrain')).toBeUndefined()
+  })
+
+  it('均速快于近期均值 5% 以上时生成正面近期对比洞察', () => {
+    const activity = makeActivity({ avgSpeed: 7 })
+    const insights = buildRideInsights(activity, uniformRecords(40), {
+      recentBaseline: { sampleCount: 10, avgSpeed: 6 },
+    })
+
+    const compare = insights.find((insight) => insight.key === 'recentCompare')
+    expect(compare).toBeDefined()
+    expect(compare?.kind).toBe('positive')
+    expect(compare?.title).toBe('近期对比')
+    expect(compare?.text).toContain('10 次')
+  })
+
+  it('均速慢于近期均值 8% 以上时生成中性近期对比洞察', () => {
+    const activity = makeActivity({ avgSpeed: 5 })
+    const insights = buildRideInsights(activity, uniformRecords(40), {
+      recentBaseline: { sampleCount: 8, avgSpeed: 6 },
+    })
+
+    const compare = insights.find((insight) => insight.key === 'recentCompare')
+    expect(compare?.kind).toBe('info')
+    expect(compare?.text).toContain('慢')
+  })
+
+  it('基线缺失、样本不足或差异不显著时不生成近期对比洞察', () => {
+    const activity = makeActivity({ avgSpeed: 6.1 })
+    // 基线缺省
+    expect(
+      buildRideInsights(activity, uniformRecords(40)).find(
+        (insight) => insight.key === 'recentCompare',
+      ),
+    ).toBeUndefined()
+    // 样本不足（< 5）
+    expect(
+      buildRideInsights(activity, uniformRecords(40), {
+        recentBaseline: { sampleCount: 3, avgSpeed: 6 },
+      }).find((insight) => insight.key === 'recentCompare'),
+    ).toBeUndefined()
+    // 差异 ±1.7% 不显著
+    expect(
+      buildRideInsights(activity, uniformRecords(40), {
+        recentBaseline: { sampleCount: 10, avgSpeed: 6 },
+      }).find((insight) => insight.key === 'recentCompare'),
+    ).toBeUndefined()
   })
 })
