@@ -11,6 +11,11 @@
   `TypeError: Cannot read properties of undefined (reading 'config')` 或 "Vitest failed to find the current suite"。
 - 判别方法：看输出 `RUN v4.x.x X:/path` 的**盘符大小写**——小写必挂，大写必过。
   与 NODE_OPTIONS/环境变量无关（曾误诊为宿主 shim 注入，已纠正）。
+- **`npm run check` 同样中招（2026-09-11 实测）**：fast-check.mjs 用当前会话 cwd spawn vitest，
+  会话 bash cwd 是小写 `f:` 时 vitest related 照样全挂。所以**会话里跑任何 vitest（含 npm run check）
+  之前，先 `cd F:/<repo>` 把 cwd 大写化**；报 config 错先看 RUN 行盘符，别急着查缓存/依赖。
+  npx 在本环境还可能拉起 wsl.exe 被安全策略拦截——用
+  `"C:/Users/<home>/.workbuddy/binaries/node/versions/<ver>/node.exe" node_modules/vitest/vitest.mjs run ...` 直跑。
 - PowerShell 跑 vitest 天然免疫（Set-Location 自动大写盘符），但其 stdout 会被工具吞掉：
   用 `npx vitest run ... *> out.txt` 落盘再读，或直接 bash `cd F:/...` 跑最省事。
 
