@@ -24,6 +24,46 @@
   padding: 24px 0;
 }
 
+/* ---- 数据切换页签（我的路线 / 热门路线）---- */
+.routes-map-page__tabs {
+  display: inline-flex;
+  gap: 4px;
+  width: fit-content;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.routes-map-page__tab {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.routes-map-page__tab:hover {
+  color: var(--text);
+}
+
+.routes-map-page__tab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.routes-map-page__tab--active {
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
 .routes-map-page__layout {
   display: flex;
   flex: 1;
@@ -115,6 +155,56 @@
   font-size: 12px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* 精选路线条目：两行（名称行 + 指标行） */
+.routes-map-page__item--curated {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.routes-map-page__item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.routes-map-page__kind {
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.routes-map-page__meta {
+  display: flex;
+  gap: 12px;
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 精选路线详情（底部信息区内，选中时替换提示行） */
+.routes-map-page__curated-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.routes-map-page__curated-detail p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.routes-map-page__curated-detail p:first-child {
+  color: var(--text);
+  font-size: 13px;
 }
 
 .routes-map-page__map-wrapper {

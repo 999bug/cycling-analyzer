@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.68.0',
+    date: '2026-09-11',
+    features: [
+      '路线图页新增「热门路线」：一期上线北京 3 条经典骑行路线（妙峰山 19.7km/爬升868m、潭王路 29.7km/558m、戒台寺 4.96km/213m），里程与爬升取官方口径并标注来源',
+      '热门路线与「我的路线」共用地图交互：点击列表单独高亮、底图模式切换，选中后底部展示路线介绍/骑行提示/数据来源；路径线为 OSM 路网简化示意',
+      '二期预留：精选路线按地区组织（src/features/curatedRoutes/），后续加全国路线只需新增数据文件',
+    ],
+  },
+  {
     version: '2.67.2',
     date: '2026-09-11',
     features: [

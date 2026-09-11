@@ -45,6 +45,14 @@ import { formatDistance } from '@/utils/format'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
+import {
+  ALL_CURATED_ROUTES,
+  CURATED_REGIONS,
+} from '@/features/curatedRoutes'
+import {
+  difficultyLabel,
+  routeKindLabel,
+} from '@/features/curatedRoutes/types'
 import '@/pages/RoutesMapPage.css'
 
 /** 轨迹抽稀阈值（米）：路线图与热力图口径一致 */
@@ -66,6 +74,9 @@ const ROUTE_OPACITY_DIM = 0.06
 
 /** 加载状态：loading / empty / ready / error */
 type LoadState = 'loading' | 'empty' | 'ready' | 'error'
+
+/** 页面数据切换：「我的路线」（聚类自骑行历史）/「热门路线」（精选静态数据） */
+type RouteTab = 'mine' | 'curated'
 
 /** 经纬度元组（Leaflet 坐标） */
 type LatLng = [number, number]
@@ -93,11 +104,26 @@ function FitAllBounds({ tracks }: { tracks: LatLng[][] }) {
 }
 
 /**
+ * 热门路线的地图展示数据（模块级常量：精选路线为静态数据，配色与我的路线共用
+ * 黄金角色板，索引即数组序）。count / lastActivityId 为占位值，精选路线无活动关联。
+ */
+const CURATED_DISPLAY: RouteMapRoute[] = ALL_CURATED_ROUTES.map((route, index) => ({
+  index,
+  color: routeColor(index),
+  name: route.name,
+  count: 0,
+  tracks: route.tracks,
+  lastActivityId: '',
+}))
+
+/**
  * 骑行路线图页面。
  */
 function RoutesMapPage() {
   const [state, setState] = useState<LoadState>('loading')
   const [routes, setRoutes] = useState<RouteMapRoute[]>([])
+  // 数据切换：我的路线（骑行历史聚类）/ 热门路线（精选静态数据）
+  const [tab, setTab] = useState<RouteTab>('mine')
   // 选中路线索引（null = 全部高亮）
   const [selected, setSelected] = useState<number | null>(null)
   // 当前瓦片源索引：默认高德；本会话已降级过则直接使用 OSM
@@ -116,6 +142,15 @@ function RoutesMapPage() {
     setSourceIndex(1)
     storeSourceIndex(1)
   }, [])
+
+  // 切换数据页签：选中态随之清空（两个页签的索引空间互不通用）
+  const handleTabSelect = useCallback((next: RouteTab) => {
+    setTab(next)
+    setSelected(null)
+  }, [])
+
+  // 当前页签的路线集合：热门路线为静态数据，无需加载
+  const activeRoutes = tab === 'curated' ? CURATED_DISPLAY : routes
 
   // 加载路线地图数据：作者源预计算 / 本地源全量扫描
   useEffect(() => {
@@ -223,14 +258,14 @@ function RoutesMapPage() {
     }
   }, [repository, source])
 
-  // 展示路线：扫描产物已统一为 WGS-84，渲染前投影到底图坐标系（与热力图页同口径）；
-  // 转换仅作用于渲染，routes 状态中的 WGS-84 轨迹保持不变
+  // 展示路线：数据统一为 WGS-84，渲染前投影到底图坐标系（与热力图页同口径）；
+  // 转换仅作用于渲染，activeRoutes 中的 WGS-84 轨迹保持不变
   const displayRoutes = useMemo(() => {
     const target = mapSystem(sourceIndex)
     if (target === 'wgs84') {
-      return routes
+      return activeRoutes
     }
-    return routes.map((route) => ({
+    return activeRoutes.map((route) => ({
       ...route,
       tracks: route.tracks.map((track) =>
         track.map(([lat, lng]) => {
@@ -239,7 +274,7 @@ function RoutesMapPage() {
         }),
       ),
     }))
-  }, [routes, sourceIndex])
+  }, [activeRoutes, sourceIndex])
 
   // 全部轨迹（fitBounds 视野用；选中时仅选中路线轨迹）
   const visibleTracks = useMemo(
@@ -250,10 +285,10 @@ function RoutesMapPage() {
     [displayRoutes, selected],
   )
 
-  // 底部汇总：路线数 / 累计骑行次数 / 覆盖里程（里程按抽稀后的轨迹累加，与地图所见一致）
+  // 底部汇总：路线数 / 累计骑行次数 / 覆盖里程（里程按轨迹累加，与地图所见一致）
   const summary = useMemo(() => {
     let totalMeters = 0
-    for (const route of routes) {
+    for (const route of activeRoutes) {
       for (const track of route.tracks) {
         for (let i = 1; i < track.length; i += 1) {
           const previous = track[i - 1]!
@@ -266,47 +301,111 @@ function RoutesMapPage() {
       }
     }
     return {
-      routeCount: routes.length,
-      totalRides: routes.reduce((sum, route) => sum + route.count, 0),
+      routeCount: activeRoutes.length,
+      totalRides: activeRoutes.reduce((sum, route) => sum + route.count, 0),
       totalMeters,
     }
-  }, [routes])
+  }, [activeRoutes])
+
+  // 热门路线页签下当前选中的精选路线（详情展示用）
+  const selectedCurated =
+    tab === 'curated' && selected !== null ? (ALL_CURATED_ROUTES[selected] ?? undefined) : undefined
 
   return (
     <div className="routes-map-page">
       <h1>骑行路线图</h1>
-      {state === 'loading' && <p className="routes-map-page__notice">路线加载中…</p>}
-      {state === 'error' && <p className="routes-map-page__notice">路线加载失败，请刷新重试</p>}
-      {state === 'empty' && (
+      <div className="routes-map-page__tabs" role="group" aria-label="路线数据切换">
+        <button
+          type="button"
+          className={
+            'routes-map-page__tab' + (tab === 'mine' ? ' routes-map-page__tab--active' : '')
+          }
+          aria-pressed={tab === 'mine'}
+          onClick={() => handleTabSelect('mine')}
+        >
+          我的路线
+        </button>
+        <button
+          type="button"
+          className={
+            'routes-map-page__tab' + (tab === 'curated' ? ' routes-map-page__tab--active' : '')
+          }
+          aria-pressed={tab === 'curated'}
+          onClick={() => handleTabSelect('curated')}
+        >
+          {CURATED_REGIONS.map((region) => region.label).join(' / ')}热门路线
+        </button>
+      </div>
+      {tab === 'mine' && state === 'loading' && <p className="routes-map-page__notice">路线加载中…</p>}
+      {tab === 'mine' && state === 'error' && (
+        <p className="routes-map-page__notice">路线加载失败，请刷新重试</p>
+      )}
+      {tab === 'mine' && state === 'empty' && (
         <p className="routes-map-page__notice">还没有可展示的骑行路线，先导入含 GPS 的骑行数据</p>
       )}
-      {state === 'ready' && (
+      {(tab === 'curated' || state === 'ready') && (
         <div className="routes-map-page__layout">
           <ul className="routes-map-page__list" aria-label="路线列表">
-            {routes.map((route) => (
-              <li key={route.index}>
-                <button
-                  type="button"
-                  className={
-                    'routes-map-page__item' +
-                    (selected === route.index ? ' routes-map-page__item--active' : '')
-                  }
-                  aria-pressed={selected === route.index}
-                  onClick={() =>
-                    setSelected(selected === route.index ? null : route.index)
-                  }
-                >
-                  <span
-                    className="routes-map-page__dot"
-                    style={{ backgroundColor: route.color }}
-                  />
-                  <span className="routes-map-page__name" title={route.name}>
-                    {route.name}
-                  </span>
-                  <span className="routes-map-page__count">{route.count} 次</span>
-                </button>
-              </li>
-            ))}
+            {tab === 'curated'
+              ? ALL_CURATED_ROUTES.map((route, index) => (
+                  <li key={route.id}>
+                    <button
+                      type="button"
+                      className={
+                        'routes-map-page__item routes-map-page__item--curated' +
+                        (selected === index
+                          ? ' routes-map-page__item--active'
+                          : '')
+                      }
+                      aria-pressed={selected === index}
+                      onClick={() =>
+                        setSelected(selected === index ? null : index)
+                      }
+                    >
+                      <span className="routes-map-page__item-top">
+                        <span
+                          className="routes-map-page__dot"
+                          style={{ backgroundColor: CURATED_DISPLAY[index]?.color }}
+                        />
+                        <span className="routes-map-page__name" title={route.name}>
+                          {route.name}
+                        </span>
+                        <span className="routes-map-page__kind">
+                          {route.area} · {routeKindLabel(route.kind)} ·{' '}
+                          {difficultyLabel(route.difficulty)}
+                        </span>
+                      </span>
+                      <span className="routes-map-page__meta">
+                        <span>{formatDistance(route.distanceMeters)}</span>
+                        <span>爬升 {Math.round(route.elevationGainMeters)} m</span>
+                      </span>
+                    </button>
+                  </li>
+                ))
+              : routes.map((route) => (
+                  <li key={route.index}>
+                    <button
+                      type="button"
+                      className={
+                        'routes-map-page__item' +
+                        (selected === route.index ? ' routes-map-page__item--active' : '')
+                      }
+                      aria-pressed={selected === route.index}
+                      onClick={() =>
+                        setSelected(selected === route.index ? null : route.index)
+                      }
+                    >
+                      <span
+                        className="routes-map-page__dot"
+                        style={{ backgroundColor: route.color }}
+                      />
+                      <span className="routes-map-page__name" title={route.name}>
+                        {route.name}
+                      </span>
+                      <span className="routes-map-page__count">{route.count} 次</span>
+                    </button>
+                  </li>
+                ))}
           </ul>
           <div className="routes-map-page__main">
           <div className="routes-map-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
@@ -370,10 +469,12 @@ function RoutesMapPage() {
                 <span className="routes-map-page__stat-label">路线</span>
                 <span className="routes-map-page__stat-value">{summary.routeCount} 条</span>
               </span>
-              <span className="routes-map-page__stat">
-                <span className="routes-map-page__stat-label">累计骑行</span>
-                <span className="routes-map-page__stat-value">{summary.totalRides} 次</span>
-              </span>
+              {tab === 'mine' && (
+                <span className="routes-map-page__stat">
+                  <span className="routes-map-page__stat-label">累计骑行</span>
+                  <span className="routes-map-page__stat-value">{summary.totalRides} 次</span>
+                </span>
+              )}
               <span className="routes-map-page__stat">
                 <span className="routes-map-page__stat-label">覆盖里程</span>
                 <span className="routes-map-page__stat-value">
@@ -383,13 +484,25 @@ function RoutesMapPage() {
               <span className="routes-map-page__stat">
                 <span className="routes-map-page__stat-label">当前选中</span>
                 <span className="routes-map-page__stat-value">
-                  {selected === null ? '全部路线' : (routes[selected]?.name ?? '全部路线')}
+                  {selected === null ? '全部路线' : (activeRoutes[selected]?.name ?? '全部路线')}
                 </span>
               </span>
             </div>
-            <p className="routes-map-page__tip">
-              点击左侧路线单独高亮，再次点击恢复全部
-            </p>
+            {selectedCurated ? (
+              <div className="routes-map-page__curated-detail">
+                <p>{selectedCurated.description}</p>
+                <p>提示：{selectedCurated.tips}</p>
+                <p>
+                  里程/爬升来源：{selectedCurated.source}；路径线为 OSM 简化示意，导航请以实际道路为准
+                </p>
+              </div>
+            ) : (
+              <p className="routes-map-page__tip">
+                {tab === 'curated'
+                  ? '点击左侧路线单独高亮并查看详情，再次点击恢复全部'
+                  : '点击左侧路线单独高亮，再次点击恢复全部'}
+              </p>
+            )}
           </div>
           </div>
         </div>
