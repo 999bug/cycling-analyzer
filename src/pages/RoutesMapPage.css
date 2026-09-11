@@ -1,10 +1,12 @@
 /**
- * 骑行路线图页样式：左列表 + 右地图布局。
+ * 骑行路线图页样式（2026-09 大改版）。
  *
- * 自适应撑满（2026-09-11 二次调整）：页面作为主内容区 flex 子项撑满剩余高度，
- * 地图列 flex:1 吃掉全部可用高度，底部只留一条信息区（路线总览 + 操作提示）；
- * 列表列与右侧主区同高、独立滚动，不再出现大块空白。
- * 地图保留四周留白与完整圆角；颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深浅主题一致。
+ * 结构：顶部标题 + 大分区切换（我的路线 / 热门路线，带副标题）→ 双列布局。
+ * - 我的路线：主列 = 地图（撑满）+ 统计格，副列 = 聚类列表（独立滚动）；
+ * - 热门路线：主列 = 地图（固定高度）+ 地区 chips + 卡片网格（独立滚动），
+ *   副列 = 详情侧栏（来源等级 + 免责声明）。
+ * 颜色全部取自全局 CSS 变量（--bg-surface/--text/--border/--primary），
+ * 难度标签色用 color-mix 与 var(--text) 调和，深浅主题下均保证可读。
  */
 .routes-map-page {
   display: flex;
@@ -24,46 +26,74 @@
   padding: 24px 0;
 }
 
-/* ---- 数据切换页签（我的路线 / 热门路线）---- */
-.routes-map-page__tabs {
-  display: inline-flex;
+/* ---- 顶部：标题 + 大分区切换 ---- */
+.routes-map-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.routes-map-page__switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  width: fit-content;
+  width: min(100%, 460px);
   padding: 4px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--bg-surface);
 }
 
-.routes-map-page__tab {
-  padding: 6px 14px;
+.routes-map-page__switch-btn {
+  padding: 10px 8px;
   border: none;
-  border-radius: 7px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
+  /* 移动端消除双击缩放延迟 */
   touch-action: manipulation;
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
 }
 
-.routes-map-page__tab:hover {
+.routes-map-page__switch-btn:active {
+  transform: scale(0.97);
+}
+
+.routes-map-page__switch-btn:hover {
   color: var(--text);
 }
 
-.routes-map-page__tab:focus-visible {
+.routes-map-page__switch-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
 
-.routes-map-page__tab--active {
-  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
-  color: var(--primary);
+.routes-map-page__switch-btn--active {
+  background-color: var(--primary);
+  color: var(--bg-surface);
 }
 
+/* 激活态在荧光绿底上保持可读：副标题回到主题底色 */
+.routes-map-page__switch-btn--active .routes-map-page__switch-hint {
+  color: var(--bg-surface);
+}
+
+.routes-map-page__switch-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+/* ---- 双列布局 ---- */
 .routes-map-page__layout {
   display: flex;
   flex: 1;
@@ -73,8 +103,8 @@
   min-width: 0;
 }
 
-/* 右侧主区（地图 + 底部信息区） */
-.routes-map-page__main {
+/* 主列（地图 + 统计格 / 地区 chips + 卡片网格） */
+.routes-map-page__primary {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -83,6 +113,66 @@
   min-width: 0;
 }
 
+/* ---- 地图（两个板块共用，保留四周留白与完整圆角）---- */
+.routes-map-page__map-wrapper {
+  position: relative;
+  /* 我的路线：吃掉列表以外全部宽度、高度自适应撑满主区剩余空间。
+     与热力图同款 flex 结构：包裹层纵向 flex、地图 flex:1——
+     地图以 flex 子项参与高度分配（不用 height:100%），
+     避免百分比高度在自动高度链上循环解析把地图撑出异常高度 */
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 320px;
+  min-width: 0;
+}
+
+/* 热门路线：地图固定高度，主列剩余空间留给卡片网格 */
+.routes-map-page__layout--curated .routes-map-page__map-wrapper {
+  flex: none;
+  height: clamp(280px, 44vh, 460px);
+}
+
+.routes-map-page__map {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+/* ---- 我的路线：统计格（地图下方一行四格）---- */
+.routes-map-page__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.routes-map-page__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.routes-map-page__stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.routes-map-page__stat-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 我的路线：聚类列表（副列）---- */
 .routes-map-page__list {
   list-style: none;
   margin: 0;
@@ -92,7 +182,7 @@
   gap: 4px;
   width: 260px;
   flex-shrink: 0;
-  /* 与右侧主区（地图 + 信息区）同高独立滚动：align-items: stretch 拉齐；
+  /* 与主列同高独立滚动：align-items: stretch 拉齐；
      overscroll 隔离防止滚到底带崩页面 */
   min-height: 0;
   overflow-y: auto;
@@ -112,7 +202,6 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  /* 移动端消除双击缩放延迟 */
   touch-action: manipulation;
   transition:
     background-color 0.15s ease,
@@ -157,119 +246,250 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 精选路线条目：两行（名称行 + 指标行） */
-.routes-map-page__item--curated {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.routes-map-page__item-top {
+/* ---- 热门路线：地区筛选 chips ---- */
+.routes-map-page__chips {
   display: flex;
-  align-items: center;
   gap: 8px;
-  min-width: 0;
+  /* 一行排布、横向滚动（地区多时不换行挤压卡片空间） */
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
 }
 
-.routes-map-page__kind {
+.routes-map-page__chips::-webkit-scrollbar {
+  display: none;
+}
+
+.routes-map-page__chip {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-surface);
   color: var(--text-secondary);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.routes-map-page__meta {
-  display: flex;
-  gap: 12px;
-  padding-left: 20px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 精选路线详情（底部信息区内，选中时替换提示行） */
-.routes-map-page__curated-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-basis: 100%;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.routes-map-page__curated-detail p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.routes-map-page__curated-detail p:first-child {
-  color: var(--text);
+  font: inherit;
   font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
 }
 
-.routes-map-page__map-wrapper {
-  position: relative;
-  /* 吃掉列表以外全部宽度；高度自适应撑满主区剩余空间（底部只留信息区一条）。
-     与热力图同款 flex 结构：包裹层纵向 flex、地图 flex:1——
-     地图以 flex 子项参与高度分配（不用 height:100%），
-     避免百分比高度在自动高度链上循环解析把地图撑出异常高度 */
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 320px;
-  min-width: 0;
+.routes-map-page__chip:active {
+  transform: scale(0.95);
 }
 
-.routes-map-page__map {
-  flex: 1;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-surface);
+.routes-map-page__chip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
-/* 底部信息区：路线总览 + 操作提示（地图不再贴底，这里作为页面收尾） */
-.routes-map-page__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-surface);
-}
-
-.routes-map-page__stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-
-.routes-map-page__stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.routes-map-page__stat-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.routes-map-page__stat-value {
-  font-size: 15px;
+.routes-map-page__chip--active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--bg-surface);
   font-weight: 600;
+}
+
+/* ---- 热门路线：卡片网格 ---- */
+.routes-map-page__cards {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: grid;
+  /* 免媒体查询响应网格：卡片最小 230px，空间够时自动多列 */
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.routes-map-page__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  /* 左侧色条与地图路线同色（内联 style 注入 borderLeftColor） */
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.routes-map-page__card:active {
+  transform: scale(0.98);
+}
+
+.routes-map-page__card:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.routes-map-page__card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.routes-map-page__card--active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-surface));
+}
+
+.routes-map-page__card-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.routes-map-page__card-name {
+  flex: 1;
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.routes-map-page__card-meta {
+  display: flex;
+  gap: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.routes-map-page__tip {
-  margin: 0;
-  font-size: 12px;
+.routes-map-page__card-area {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
+  font-size: 12px;
 }
 
-/* ---- 移动端（≤768px）：常规文档流，地图与列表上下堆叠 ----
+/* 标签（类型 / 难度）：小圆角胶囊 */
+.routes-map-page__tag {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.routes-map-page__tag--kind {
+  color: var(--primary);
+}
+
+/* 难度色阶：与 var(--text) 调和，深色主题提亮、浅色主题压暗，两端均可读 */
+.routes-map-page__tag--diff-1 {
+  color: color-mix(in srgb, #7ecb8f 62%, var(--text));
+}
+
+.routes-map-page__tag--diff-2 {
+  color: color-mix(in srgb, #5fc9a8 62%, var(--text));
+}
+
+.routes-map-page__tag--diff-3 {
+  color: color-mix(in srgb, #e8c04c 62%, var(--text));
+}
+
+.routes-map-page__tag--diff-4 {
+  color: color-mix(in srgb, #ef9552 62%, var(--text));
+}
+
+.routes-map-page__tag--diff-5 {
+  color: color-mix(in srgb, #ef6a5a 62%, var(--text));
+}
+
+/* ---- 热门路线：详情侧栏（副列）---- */
+.routes-map-page__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+
+.routes-map-page__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.routes-map-page__detail h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.routes-map-page__detail-area {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.routes-map-page__detail p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.routes-map-page__detail p strong {
+  color: var(--text);
+}
+
+/* 描述 / 指标行比普通段落更醒目（选择器带 p 压过通用段落规则） */
+.routes-map-page__detail p.routes-map-page__detail-desc {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.routes-map-page__detail p.routes-map-page__detail-meta {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.routes-map-page__detail p.routes-map-page__detail-src {
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+}
+
+.routes-map-page__panel-hint p {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---- 移动端（≤768px）：单列，地图在上 ----
    移动端退出「撑满剩余高度」模式：页面自然高度随内容滚动 */
 @media (max-width: 768px) {
   .routes-map-page,
@@ -283,17 +503,40 @@
     gap: 12px;
   }
 
+  .routes-map-page__map-wrapper {
+    flex: none;
+    height: 55vh;
+    min-height: 0;
+  }
+
+  .routes-map-page__stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
   .routes-map-page__list {
     width: 100%;
     max-height: 40vh;
   }
 
-  .routes-map-page__map-wrapper {
+  /* 卡片网格随页面自然滚动，不在容器内二次滚动 */
+  .routes-map-page__cards {
     flex: none;
-    height: 55vh;
+    min-height: 0;
+    overflow: visible;
   }
 
-  .routes-map-page__stats {
-    gap: 16px;
+  .routes-map-page__panel {
+    width: 100%;
+    overflow: visible;
+  }
+}
+
+/* ---- 桌面端微调（≥768px）：分区切换与标题同行 ---- */
+@media (min-width: 768px) {
+  .routes-map-page__head {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 }

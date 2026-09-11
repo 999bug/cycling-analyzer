@@ -42,11 +42,33 @@ export interface CuratedRoute {
   /** 里程与爬升的数据来源（权威口径标注） */
   source: string
 
+  /** 来源可信度等级：A=官方（政府/景区规程），B=权威媒体，C=社区码表（仅供参考） */
+  sourceGrade?: 'A' | 'B' | 'C'
+
+  /**
+   * 几何覆盖范围：full=路径线覆盖申报里程全程；
+   * core=仅覆盖核心精华段（长距离环线/往返路线，路径线明显短于申报里程）。
+   * 默认 full；core 时 UI 需注明「路径线为核心段示意」。
+   */
+  geometryScope?: 'full' | 'core'
+
   /**
    * 路径线（WGS-84 [纬度, 经度][]，每条路线可为多段折线）。
    * OSM 简化示意，可能与官方口径里程有出入——展示时以 distanceMeters 为准并注明。
    */
   tracks: [number, number][][]
+}
+
+/** 来源等级文案（展示用） */
+export function sourceGradeLabel(grade: NonNullable<CuratedRoute['sourceGrade']>): string {
+  switch (grade) {
+    case 'A':
+      return '官方口径'
+    case 'B':
+      return '权威媒体'
+    default:
+      return '社区码表'
+  }
 }
 
 /** 精选路线地区 ID（二期新增地区即扩展此联合类型并加数据文件） */

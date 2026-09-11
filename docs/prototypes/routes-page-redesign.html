@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>路线页改版原型 — 我的路线 / 热门路线</title>
+<style>
+  /* ===== 原型本地 token（对齐站点现有配色体系） ===== */
+  :root {
+    --bg: #0b2833;
+    --surface: #103643;
+    --surface-2: #16404f;
+    --line: #1e4f60;
+    --text: #e8f1f2;
+    --text-muted: #9db8bf;
+    --brand: #b8e62e;
+    --brand-ink: #0d3b4c;
+    --gold: #e8b64c;
+    --d1: #7ecb8f; --d2: #5fc9a8; --d3: #e8c04c; --d4: #ef9552; --d5: #ef6a5a;
+    --radius: 12px;
+    --shadow: 0 4px 16px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px; line-height: 1.5;
+  }
+  .page { max-width: 1080px; margin: 0 auto; padding: 16px 16px 48px; }
+  h1 { font-size: 24px; font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ===== 顶部：标题 + 大号分区切换 ===== */
+  .page-head { display: flex; flex-direction: column; gap: 14px; padding: 8px 0 16px; }
+  .scope-switch {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 4px;
+  }
+  .scope-switch button {
+    appearance: none; border: 0; border-radius: 10px; padding: 12px 8px;
+    font-size: 16px; font-weight: 600; color: var(--text-muted);
+    background: transparent; cursor: pointer; transition: transform .15s, background .2s, color .2s;
+  }
+  .scope-switch button:active { transform: scale(.97); }
+  .scope-switch button[aria-pressed="true"] {
+    background: var(--brand); color: var(--brand-ink);
+  }
+  .scope-switch .hint { display:block; font-size: 12px; font-weight: 400; margin-top: 2px; opacity: .75; }
+
+  /* ===== 通用 ===== */
+  .section { display: none; }
+  .section.active { display: block; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+  }
+  .chip-row { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; scrollbar-width: none; }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface);
+    color: var(--text-muted); border-radius: 999px; padding: 7px 16px;
+    font-size: 14px; cursor: pointer; transition: transform .15s;
+  }
+  .chip:active { transform: scale(.95); }
+  .chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+
+  /* ===== 地图占位（SVG 示意） ===== */
+  .map-wrap { position: relative; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); margin-bottom: 14px; }
+  .map-wrap svg { display: block; width: 100%; height: auto; }
+  .map-badge {
+    position: absolute; left: 10px; top: 10px; display: flex; gap: 6px;
+  }
+  .map-badge span {
+    background: rgba(13,59,76,.85); border: 1px solid var(--line); color: var(--text);
+    font-size: 12px; border-radius: 999px; padding: 4px 10px;
+  }
+
+  /* ===== 热门路线卡片 ===== */
+  .route-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .route-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; cursor: pointer; transition: transform .15s, border-color .2s;
+    border-left: 4px solid var(--brand);
+  }
+  .route-card:active { transform: scale(.98); }
+  .route-card.selected { border-color: var(--brand); background: var(--surface-2); }
+  .rc-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .rc-name { font-size: 17px; font-weight: 600; margin-right: auto; }
+  .tag { font-size: 12px; border-radius: 999px; padding: 3px 10px; }
+  .tag-kind { background: rgba(184,230,46,.14); color: var(--brand); }
+  .tag-diff { font-weight: 600; }
+  .rc-meta { display: flex; gap: 18px; color: var(--text-muted); font-size: 14px; }
+  .rc-meta b { color: var(--text); font-weight: 600; }
+  .rc-area { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+
+  /* ===== 详情面板 ===== */
+  .detail { margin-top: 12px; display: none; }
+  .detail.show { display: block; }
+  .detail h3 { font-size: 17px; margin-bottom: 8px; }
+  .detail p { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+  .detail .src { font-size: 12px; color: var(--text-muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+
+  /* ===== 我的路线 ===== */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 8px; text-align: center; }
+  .stat .k { font-size: 12px; color: var(--text-muted); display: block; }
+  .stat .v { font-size: 15px; font-weight: 600; }
+  .mine-list { display: grid; gap: 8px; }
+  .mine-item {
+    display: flex; align-items: center; gap: 10px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer;
+  }
+  .mine-item.selected { border-color: var(--brand); background: var(--surface-2); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .mine-item .n { font-weight: 500; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mine-item .c { color: var(--text-muted); font-size: 13px; flex: 0 0 auto; }
+
+  /* ===== 桌面增强 ===== */
+  @media (min-width: 768px) {
+    .page-head { flex-direction: row; align-items: center; justify-content: space-between; }
+    .scope-switch { width: 460px; }
+    .two-col { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; align-items: start; }
+    .route-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (min-width: 992px) {
+    .route-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .proto-note { margin-top: 28px; color: var(--text-muted); font-size: 13px; border-top: 1px dashed var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <h1>路线</h1>
+    <div class="scope-switch" role="tablist" aria-label="路线板块切换">
+      <button id="tab-mine" aria-pressed="false">我的路线<span class="hint">我的骑行足迹聚合</span></button>
+      <button id="tab-hot" aria-pressed="true">热门路线<span class="hint">精选经典赛段 · 按地区</span></button>
+    </div>
+  </div>
+
+  <!-- ===================== 热门路线 ===================== -->
+  <section id="sec-hot" class="section active">
+    <div class="two-col">
+      <div>
+        <!-- 地图：SVG 示意（实际实现复用现有地图组件与配色） -->
+        <div class="map-wrap">
+          <svg viewBox="0 0 400 240" role="img" aria-label="地图示意">
+            <rect width="400" height="240" fill="#0e3140"/>
+            <path d="M0 60 Q 100 40 200 70 T 400 55" stroke="#1e4f60" stroke-width="10" fill="none"/>
+            <path d="M20 240 Q 60 160 30 100" stroke="#1e4f60" stroke-width="8" fill="none"/>
+            <path d="M150 240 Q 170 150 140 60" stroke="#1e4f60" stroke-width="8" fill="none"/>
+            <path d="M60 200 C 120 190 180 150 220 110 C 250 80 300 60 370 50"
+                  stroke="#b8e62e" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M90 220 C 150 200 190 170 240 140"
+                  stroke="#e8b64c" stroke-width="4" fill="none" stroke-dasharray="1 8" stroke-linecap="round"/>
+            <circle cx="60" cy="200" r="6" fill="#b8e62e"/>
+            <circle cx="370" cy="50" r="6" fill="#b8e62e"/>
+            <text x="60" y="186" fill="#e8f1f2" font-size="11">起点 · 十渡</text>
+            <text x="300" y="38" fill="#e8f1f2" font-size="11">红井路观景台</text>
+          </svg>
+          <div class="map-badge"><span>北京 · 6 条</span><span>底图：OSM</span></div>
+        </div>
+
+        <!-- 地区筛选 chips -->
+        <div class="chip-row" id="region-chips" aria-label="地区筛选">
+          <button class="chip" aria-pressed="true">全部</button>
+          <button class="chip" aria-pressed="false">北京</button>
+          <button class="chip" aria-pressed="false">西安</button>
+          <button class="chip" aria-pressed="false">杭州</button>
+          <button class="chip" aria-pressed="false">台州</button>
+          <button class="chip" aria-pressed="false">深圳</button>
+          <button class="chip" aria-pressed="false">成都</button>
+          <button class="chip" aria-pressed="false">昆明</button>
+        </div>
+
+        <!-- 路线卡片 -->
+        <div class="route-grid" id="route-grid">
+          <div class="route-card selected" data-region="北京">
+            <div class="rc-top">
+              <span class="rc-name">妙峰山</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d4)">硬核挑战</span>
+            </div>
+            <div class="rc-meta num"><span><b>19.7</b> km</span><span>爬升 <b>868</b> m</span></div>
+            <div class="rc-area">门头沟 · 牌楼 → 金顶 · 公路车圣地</div>
+          </div>
+          <div class="route-card" data-region="北京">
+            <div class="rc-top">
+              <span class="rc-name">红井路</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d4)">硬核挑战</span>
+            </div>
+            <div class="rc-meta num"><span><b>14</b> km</span><span>爬升 <b>635</b> m</span></div>
+            <div class="rc-area">房山 · 十渡 → 观景台 · 北京秋名山</div>
+          </div>
+          <div class="route-card" data-region="北京">
+            <div class="rc-top">
+              <span class="rc-name">四海</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d3)">中级进阶</span>
+            </div>
+            <div class="rc-meta num"><span><b>21.7</b> km</span><span>爬升 <b>660</b> m</span></div>
+            <div class="rc-area">怀柔 · 九渡河 → 四海镇 · 京北第一坡</div>
+          </div>
+          <div class="route-card" data-region="北京">
+            <div class="rc-top">
+              <span class="rc-name">解字石</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d3)">中级进阶</span>
+            </div>
+            <div class="rc-meta num"><span><b>12.5</b> km</span><span>爬升 <b>544</b> m</span></div>
+            <div class="rc-area">昌平 · 长陵 → 解字石 · 爬坡训练经典</div>
+          </div>
+          <div class="route-card" data-region="西安">
+            <div class="rc-top">
+              <span class="rc-name">秦岭分水岭</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d5)">极限挑战</span>
+            </div>
+            <div class="rc-meta num"><span><b>34.3</b> km</span><span>爬升 <b>1595</b> m</span></div>
+            <div class="rc-area">G210 · 沣峪口 → 秦岭界碑 · 陕西车友驾考</div>
+          </div>
+          <div class="route-card" data-region="杭州">
+            <div class="rc-top">
+              <span class="rc-name">龙井北坡</span>
+              <span class="tag tag-kind">爬坡</span>
+              <span class="tag tag-diff" style="color:var(--d2)">新手入门</span>
+            </div>
+            <div class="rc-meta num"><span><b>2.6</b> km</span><span>爬升 <b>130</b> m</span></div>
+            <div class="rc-area">西湖景区 · 市区日常刷坡圣地</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <!-- 选中详情（桌面侧栏 / 移动端卡片下方展开） -->
+        <div class="card detail show" id="detail-panel">
+          <h3>妙峰山 <span style="font-size:13px;color:var(--text-muted)">门头沟</span></h3>
+          <p>北京公路车爬坡圣地、自行车联赛赛段。全程铺装、弯道连续，山顶可俯瞰京城。周末车流量大，早出发。</p>
+          <p><b>骑行提示：</b>补给在牌楼与涧沟村；山顶温差大带防风；下坡控速。</p>
+          <p class="src num">19.7 km · 爬升 868 m · 难度 4/5<br/>来源：门头沟区政府「中国骑行地图」公示口径<br/>路径线为 OSM 简化示意，导航以实际道路为准</p>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button style="flex:1;padding:10px;border:0;border-radius:10px;background:var(--brand);color:var(--brand-ink);font-weight:600;cursor:pointer">查看路径线</button>
+            <button style="flex:1;padding:10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text);cursor:pointer">开始规划周末</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 style="font-size:15px;margin-bottom:6px">二期建设中的地区</h3>
+          <p style="color:var(--text-muted);font-size:14px">台州括苍山 · 深圳梧桐山 · 成都龙泉山 · 昆明西山猫猫箐 · 千岛湖环湖 …数据核实与几何生成进行中，逐步上线。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 我的路线 ===================== -->
+  <section id="sec-mine" class="section">
+    <div class="two-col">
+      <div>
+        <div class="map-wrap">
+          <svg viewBox="0 0 400 240" role="img" aria-label="我的路线地图示意">
+            <rect width="400" height="240" fill="#0e3140"/>
+            <path d="M40 210 C 120 180 150 120 240 130 C 300 138 340 100 370 60"
+                  stroke="#b8e62e" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M50 60 Q 140 90 200 70 T 380 110" stroke="#e8b64c" stroke-width="3" fill="none"/>
+            <path d="M100 220 Q 160 200 220 210" stroke="#5fc9a8" stroke-width="3" fill="none"/>
+          </svg>
+          <div class="map-badge"><span>12 条路线</span><span>选中：通惠河通勤</span></div>
+        </div>
+        <div class="stats num">
+          <div class="stat"><span class="k">路线</span><span class="v">12 条</span></div>
+          <div class="stat"><span class="k">累计骑行</span><span class="v">86 次</span></div>
+          <div class="stat"><span class="k">覆盖里程</span><span class="v">1,240 km</span></div>
+          <div class="stat"><span class="k">当前选中</span><span class="v">全部路线</span></div>
+        </div>
+      </div>
+      <div class="mine-list" id="mine-list">
+        <div class="mine-item selected"><span class="dot" style="background:#b8e62e"></span><span class="n">通惠河通勤线</span><span class="c num">31 次</span></div>
+        <div class="mine-item"><span class="dot" style="background:#e8b64c"></span><span class="n">妙峰山爬坡（我的记录）</span><span class="c num">9 次</span></div>
+        <div class="mine-item"><span class="dot" style="background:#5fc9a8"></span><span class="n">长安街夜骑</span><span class="c num">14 次</span></div>
+        <div class="mine-item"><span class="dot" style="background:#ef9552"></span><span class="n">温榆河绿道</span><span class="c num">7 次</span></div>
+        <div class="mine-item"><span class="dot" style="background:#ef6a5a"></span><span class="n">戒台寺短坡</span><span class="c num">5 次</span></div>
+        <p style="color:var(--text-muted);font-size:13px;margin-top:6px">点击列表项在地图上单独高亮，再次点击恢复全部 —— 交互与现版一致，仅重排布局。</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="proto-note">原型说明：①「我的路线 / 热门路线」由小页签升级为大分区切换，热门路线强调「发现」属性（地区筛选 + 卡片 + 详情侧栏）；②移动端单列、地图在上，桌面双栏；③卡片信息层级：名称 → 类型/难度 → 里程爬升 → 区域卖点；④详情含数据来源与免责声明（诚实性红线）；⑤配色沿用现有深蓝底 + 荧光绿品牌色 token，正式实施时替换为 CSS 变量。本原型为静态示意，地图为 SVG 占位。</p>
+</div>
+
+<script>
+  // 分区切换
+  const tabMine = document.getElementById('tab-mine');
+  const tabHot = document.getElementById('tab-hot');
+  const secMine = document.getElementById('sec-mine');
+  const secHot = document.getElementById('sec-hot');
+  function switchTab(hot) {
+    tabHot.setAttribute('aria-pressed', String(hot));
+    tabMine.setAttribute('aria-pressed', String(!hot));
+    secHot.classList.toggle('active', hot);
+    secMine.classList.toggle('active', !hot);
+  }
+  tabHot.addEventListener('click', () => switchTab(true));
+  tabMine.addEventListener('click', () => switchTab(false));
+
+  // 地区筛选（演示：非北京隐藏卡片）
+  const chips = document.querySelectorAll('#region-chips .chip');
+  const cards = document.querySelectorAll('#route-grid .route-card');
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      chips.forEach((c) => c.setAttribute('aria-pressed', 'false'));
+      chip.setAttribute('aria-pressed', 'true');
+      const region = chip.textContent.trim();
+      cards.forEach((card) => {
+        card.style.display = (region === '全部' || card.dataset.region === region) ? '' : 'none';
+      });
+    });
+  });
+
+  // 卡片选中态（详情面板演示不换内容）
+  cards.forEach((card) => {
+    card.addEventListener('click', () => {
+      cards.forEach((c) => c.classList.remove('selected'));
+      card.classList.add('selected');
+    });
+  });
+
+  // 我的路线列表选中态
+  document.querySelectorAll('#mine-list .mine-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('#mine-list .mine-item').forEach((i) => i.classList.remove('selected'));
+      item.classList.add('selected');
+    });
+  });
+</script>
+</body>
+</html>

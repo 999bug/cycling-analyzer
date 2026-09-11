@@ -14,6 +14,7 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import RoutesMapPage from '@/pages/RoutesMapPage'
+import { ALL_CURATED_ROUTES } from '@/features/curatedRoutes'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -205,5 +206,55 @@ describe('骑行路线图页', () => {
     expect(screen.getByRole('button', { name: '卫星+路网' })).toHaveAttribute('aria-pressed', 'true')
     // 2.62.0 起底图模式不持久化：刷新/换页回到「正常」，不写 localStorage
     expect(localStorage.getItem('cycling-map-mode')).toBeNull()
+  })
+})
+
+describe('骑行路线图页 · 热门路线板块', () => {
+  it('切到热门路线：地区 chips 与卡片渲染，点击卡片显示详情侧栏（来源等级 + 免责声明）', async () => {
+    const user = userEvent.setup()
+
+    render(<RoutesMapPage />)
+
+    // 顶部大分区切换 → 热门路线
+    await user.click(screen.getByRole('button', { name: /热门路线/ }))
+
+    // 地区 chips：全部 + 北京（当前仅北京一个地区，数字 = 精选路线总数）
+    expect(screen.getByRole('button', { name: `全部 · ${ALL_CURATED_ROUTES.length}` }))
+      .toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `北京 · ${ALL_CURATED_ROUTES.length}` }),
+    ).toBeInTheDocument()
+
+    // 卡片列表：一期妙峰山可见，难度标签渲染（前缀匹配，避免命中描述提到妙峰山的其他卡片）
+    const card = screen.getByRole('button', { name: /^妙峰山/ })
+    expect(card).toBeInTheDocument()
+
+    // 点击卡片 → 详情侧栏：描述、来源等级标注与免责声明
+    await user.click(card)
+    expect(screen.getByText(/来源（官方口径）：门头沟区政府/)).toBeInTheDocument()
+    expect(screen.getByText(/路径线为 OSM 简化示意，导航以实际道路为准/)).toBeInTheDocument()
+
+    // 再次点击卡片 → 取消选中，详情回到提示态
+    await user.click(card)
+    expect(screen.getByText(/点击路线卡片在地图上单独高亮并查看详情/)).toBeInTheDocument()
+  })
+
+  it('地区筛选 chips：切换地区清空选中态，卡片仍按地区渲染', async () => {
+    const user = userEvent.setup()
+
+    render(<RoutesMapPage />)
+
+    await user.click(screen.getByRole('button', { name: /热门路线/ }))
+
+    // 先选中一张卡片（详情出现），再切地区 chip → 选中态清空回提示态
+    const card = screen.getByRole('button', { name: /^妙峰山/ })
+    await user.click(card)
+    expect(screen.getByText(/来源（官方口径）：门头沟区政府/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: `北京 · ${ALL_CURATED_ROUTES.length}` }))
+
+    expect(screen.getByText(/点击路线卡片在地图上单独高亮并查看详情/)).toBeInTheDocument()
+    // 卡片仍渲染（北京筛选命中全部路线）
+    expect(screen.getByRole('button', { name: /^妙峰山/ })).toBeInTheDocument()
   })
 })

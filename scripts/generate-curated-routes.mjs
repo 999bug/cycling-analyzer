@@ -1,50 +1,231 @@
 /**
  * 精选路线几何生成器（一次性工具，数据更新时手动运行）。
  *
- * 从 Overpass API 拉取 OSM 路网（WGS-84），按起终点锚点在路网图上跑 Dijkstra
- * 最短路径（排除高速/隧道），Douglas-Peucker 抽稀后产出
- * `src/features/curatedRoutes/beijingTracks.ts`。
+ * 两种选路模式：
+ * - dijkstra（默认）：按起终点锚点（可含中间途经点 waypoints，多段串联）在
+ *   OSM 路网图上跑最短路径（排除高速/隧道/步道）
+ * - named：按道路名拼接（适合环陵路等环线），共享节点串联成链
+ *
+ * 产出 `src/features/curatedRoutes/<region>Tracks.ts`（每地区一个文件）。
+ * 与既有生成物合并：已存在的 key 保留不动，仅新增（保证已上线几何不被重算漂移）。
  *
  * 用法：
  *   1. （可选）先用 curl 把各路线的 `way["highway"](bbox);out geom;` 结果
- *      下载到 tmp-overpass/<id>-all.json（代理不稳定时离线重算）
+ *      下载到 <CACHE_DIR>/<id>-all.json（代理不稳定时离线重算）
  *   2. node scripts/generate-curated-routes.mjs
  * 输出文件为生成物，人工勿改。OSM 数据 © OpenStreetMap 贡献者（ODbL）。
  */
 
-import { writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const OUT_FILE = resolve(ROOT, 'src/features/curatedRoutes/beijingTracks.ts')
-const REPORT_FILE = resolve(ROOT, 'tmp-curated-routes-report.txt')
-const CACHE_DIR = resolve(ROOT, 'tmp-overpass')
+// 缓存目录可用环境变量覆盖；默认走 .tmp（gitignored，仓库约定临时产物必须放这里）
+const CACHE_DIR = resolve(
+  ROOT,
+  process.env.CURATED_CACHE_DIR ?? '.tmp/curated-v2/tmp-overpass',
+)
+const REPORT_DIR = resolve(ROOT, '.tmp/curated-v2')
+
+/** 地区 → 输出文件与导出名（二期新增地区在这里登记） */
+const REGION_META = {
+  beijing: { file: 'src/features/curatedRoutes/beijingTracks.ts', exportName: 'BEIJING_TRACKS' },
+}
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 
 /**
- * 路线配置：bbox = [南, 西, 北, 东]（须覆盖完整路径）；
- * startAnchor / endAnchor 近似起终点坐标（吸附到最近路网节点）。
+ * 路线配置：
+ * - region：输出归属地区
+ * - bbox = [南, 西, 北, 东]（须覆盖完整路径）
+ * - mode：dijkstra（默认）| named
+ * - dijkstra 模式：anchors = 起点、途经点…、终点（≥2 个，逐段最短路径后串联）
+ * - named 模式：names = 参与拼接的道路名
  */
 const ROUTES = [
   {
     id: 'miaofeng',
+    region: 'beijing',
     bbox: [39.9, 115.95, 40.05, 116.15],
-    startAnchor: [39.9883, 116.0482],
-    endAnchor: [40.055, 116.0289],
+    anchors: [
+      [39.9883, 116.0482],
+      [40.055, 116.0289],
+    ],
   },
   {
     id: 'tanwang',
+    region: 'beijing',
     bbox: [39.85, 115.9, 40.0, 116.12],
-    startAnchor: [39.889, 116.054],
-    endAnchor: [39.978, 115.987],
+    anchors: [
+      [39.889, 116.054],
+      [39.978, 115.987],
+    ],
   },
   {
     id: 'jietai',
+    region: 'beijing',
     bbox: [39.865, 116.07, 39.892, 116.098],
-    startAnchor: [39.8831, 116.0726],
-    endAnchor: [39.872, 116.0797],
+    anchors: [
+      [39.8831, 116.0726],
+      [39.872, 116.0797],
+    ],
+  },
+  // ---- 二期北京新增（锚点均经 OSM node/way 探针反查，见 .tmp/curated-v2/probe-report.txt）----
+  {
+    id: 'hjl',
+    bbox: [39.61, 115.55, 39.77, 115.66],
+    anchors: [
+      [39.6454, 115.5885],
+      [39.7376, 115.6242],
+    ],
+  },
+  {
+    id: 'hsl',
+    bbox: [40.18, 116.13, 40.34, 116.32],
+    // 环十三陵全龄友好线：昌平西关环岛→昭陵→泰陵→献陵→长陵→定陵道口→回西关环岛
+    anchors: [
+      [40.222, 116.2077],
+      [40.2884, 116.2147],
+      [40.3209, 116.2175],
+      [40.3029, 116.2358],
+      [40.2967, 116.2409],
+      [40.2875, 116.2362],
+      [40.222, 116.2077],
+    ],
+  },
+  {
+    id: 'jzs',
+    bbox: [40.28, 116.2, 40.41, 116.28],
+    anchors: [
+      [40.2967, 116.2409],
+      [40.3921, 116.2547],
+    ],
+  },
+  {
+    id: 'sh',
+    bbox: [40.35, 116.3, 40.55, 116.43],
+    anchors: [
+      [40.3618, 116.3689],
+      [40.5299, 116.407],
+    ],
+  },
+  {
+    id: 'hsl2',
+    // 环陵进阶线（官方规程 55.4km 线走向）：西关环岛→长陵→泰陵→康陵→泰陵园→昭陵→回西关环岛。
+    // 东侧德陵段 OSM 路网断链，产出为环线核心段（数据侧标 geometryScope core）
+    bbox: [40.18, 116.13, 40.34, 116.32],
+    anchors: [
+      [40.222, 116.2077],
+      [40.2967, 116.2409],
+      [40.3209, 116.2175],
+      [40.3168, 116.2062],
+      [40.2701, 116.2115],
+      [40.2884, 116.2147],
+      [40.222, 116.2077],
+    ],
+  },
+  {
+    id: 'bll',
+    bbox: [40.55, 116.08, 40.71, 116.36],
+    anchors: [
+      [40.5767, 116.1102],
+      [40.6922, 116.3407],
+    ],
+  },
+  {
+    id: 'ms',
+    // 蟒山核心爬坡段：山脚路口 → 蟒山森林公园大门（115km 为往返全程社区口径，core）
+    // 爬坡道在 OSM 与环湖路不直连（仅南向接入），勿改回「大坝→水库东路→公园」组合
+    bbox: [40.23, 116.24, 40.31, 116.32],
+    anchors: [
+      [40.2295, 116.3013],
+      [40.2668, 116.2872],
+    ],
+  },
+  {
+    id: 'hhc',
+    bbox: [40.35, 116.32, 40.44, 116.38],
+    anchors: [
+      [40.3618, 116.3689],
+      [40.4158, 116.339],
+    ],
+  },
+  {
+    id: 'yxh',
+    mode: 'named',
+    names: ['雁栖湖路'],
+    bbox: [40.38, 116.63, 40.42, 116.7],
+  },
+  {
+    id: 'gyk',
+    bbox: [40.12, 115.97, 40.19, 116.06],
+    anchors: [
+      [40.1811, 116.0574],
+      [40.1341, 115.9904],
+    ],
+  },
+  {
+    id: 'dc',
+    bbox: [40.02, 115.84, 40.13, 115.88],
+    anchors: [
+      [40.0379, 115.8711],
+      [40.1187, 115.862],
+    ],
+  },
+  {
+    id: 'cby',
+    bbox: [40.21, 116.33, 40.35, 116.42],
+    anchors: [
+      [40.2233, 116.4094],
+      [40.3387, 116.3429],
+    ],
+  },
+  {
+    id: 'yts',
+    bbox: [40.05, 116.09, 40.08, 116.12],
+    anchors: [
+      [40.0632, 116.114],
+      [40.0668, 116.0993],
+    ],
+  },
+  {
+    id: 'cf',
+    allowTrack: true,
+    bbox: [39.98, 115.97, 40.08, 116.05],
+    // 禅房爬坡：上苇甸北口→禅房村（社区坡度表口径 8.3km/349m）
+    anchors: [
+      [40.0323, 115.9864],
+      [40.0754, 115.9958],
+    ],
+  },
+  {
+    id: 'hcl',
+    bbox: [39.93, 116.1, 39.99, 116.19],
+    anchors: [
+      [39.9588, 116.1374],
+      [39.971, 116.1687],
+    ],
+  },
+  {
+    id: 'dfh',
+    bbox: [39.99, 115.92, 40.02, 116.0],
+    // 过岭隧道在 OSM 中为下安路隧道（东方红隧道），是 G109 唯一通道，须放行
+    allowTunnelNames: ['下安路'],
+    anchors: [
+      [40.0056, 115.9362],
+      [40.0068, 115.9905],
+    ],
+  },
+  {
+    id: 'sb',
+    allowTrack: true,
+    bbox: [40.34, 116.58, 40.47, 116.67],
+    // 山吧爬坡：官地以北至莲花池顶路段 OSM 未收录，先产出雁栖→官地核心段
+    anchors: [
+      [40.3577, 116.6529],
+      [40.4274, 116.6292],
+    ],
   },
 ]
 
@@ -68,6 +249,17 @@ async function fetchWays(bbox) {
   }
   const json = await resp.json()
   return (json.elements ?? []).filter((el) => el.type === 'way')
+}
+
+/** 读取缓存或拉取路网 */
+async function loadWays(route) {
+  const cacheFile = resolve(CACHE_DIR, `${route.id}-all.json`)
+  if (existsSync(cacheFile)) {
+    const ways = JSON.parse(readFileSync(cacheFile, 'utf8')).elements.filter((el) => el.type === 'way')
+    return { ways, fromCache: true }
+  }
+  const ways = await fetchWays(route.bbox)
+  return { ways, fromCache: false }
 }
 
 /** 两点近似距离（米） */
@@ -124,11 +316,10 @@ function lineLength(line) {
   return sum
 }
 
-/**
- * 在路网图上做 Dijkstra：锚点吸附到最近路网节点（800m 内），
- * 返回最短路径折线；不可达返回 null。
- */
-function shortestPath(ways, startAnchor, endAnchor) {
+/** 构建骑行路网图（节点邻接表 + 坐标表），dijkstra/named 两模式共用。
+ * opts.allowTunnelNames：允许骑行的隧道名白名单（如 G109 东方红隧道段在 OSM 中名为下安路隧道）
+ * opts.allowTrack：放行 track（部分实际铺装的乡道/景区路在 OSM 中被标为 track） */
+function buildGraph(ways, opts = {}) {
   const nodeCoord = new Map()
   const adj = new Map()
   const addEdge = (a, b, w) => {
@@ -140,8 +331,10 @@ function shortestPath(ways, startAnchor, endAnchor) {
   for (const way of ways) {
     if (!way.nodes || !way.geometry) continue
     const hw = way.tags?.highway
-    if (!hw || EXCLUDED.has(hw) || !RIDABLE.has(hw)) continue
-    if (way.tags?.tunnel === 'yes') continue
+    if (hw !== 'track' || !opts.allowTrack) {
+      if (!hw || EXCLUDED.has(hw) || !RIDABLE.has(hw)) continue
+    }
+    if (way.tags?.tunnel === 'yes' && !(opts.allowTunnelNames?.has(way.tags?.name ?? ''))) continue
     // 防火道等明确禁行
     if ((way.tags?.name ?? '').includes('禁止')) continue
     const weightFactor = hw === 'service' ? 2 : 1
@@ -153,21 +346,11 @@ function shortestPath(ways, startAnchor, endAnchor) {
       addEdge(a, b, distM(nodeCoord.get(a), nodeCoord.get(b)) * weightFactor)
     }
   }
-  const snap = (anchor) => {
-    let best = -1
-    let bestD = Infinity
-    for (const [id, coord] of nodeCoord) {
-      const d = distM(coord, anchor)
-      if (d < bestD) {
-        bestD = d
-        best = id
-      }
-    }
-    return bestD <= 800 ? best : -1
-  }
-  const start = snap(startAnchor)
-  const end = snap(endAnchor)
-  if (start < 0 || end < 0) return null
+  return { nodeCoord, adj }
+}
+
+/** 图上两点最短路径（节点 ID 序列），不可达返回 null */
+function graphShortestPath(nodeCoord, adj, start, end) {
   const dist = new Map([[start, 0]])
   const prev = new Map()
   const visited = new Set()
@@ -195,50 +378,181 @@ function shortestPath(ways, startAnchor, endAnchor) {
   if (!dist.has(end)) return null
   const path = []
   for (let at = end; at !== undefined; at = prev.get(at)) {
-    path.unshift(nodeCoord.get(at))
+    path.unshift(at)
   }
   return path
 }
 
-const report = []
-const output = {}
-
-for (const route of ROUTES) {
-  const cacheFile = resolve(CACHE_DIR, `${route.id}-all.json`)
-  let ways
-  try {
-    if (existsSync(cacheFile)) {
-      ways = JSON.parse(readFileSync(cacheFile, 'utf8')).elements.filter((el) => el.type === 'way')
-      report.push(`${route.id}: cache → ${ways.length} ways`)
-    } else {
-      ways = await fetchWays(route.bbox)
-      report.push(`${route.id}: fetched → ${ways.length} ways`)
+/** 锚点吸附最近路网节点（半径内），失败返回 -1 */
+function snapNode(nodeCoord, anchor, radiusM = 800) {
+  let best = -1
+  let bestD = Infinity
+  for (const [id, coord] of nodeCoord) {
+    const d = distM(coord, anchor)
+    if (d < bestD) {
+      bestD = d
+      best = id
     }
-  } catch (error) {
-    report.push(`${route.id}: FETCH FAILED — ${error.message}`)
-    continue
   }
-  const path = shortestPath(ways, route.startAnchor, route.endAnchor)
-  if (path === null) {
-    report.push(`${route.id}: NO PATH`)
-    continue
-  }
-  const simplified = simplify(path, 12)
-  report.push(
-    `${route.id}: path=${(lineLength(path) / 1000).toFixed(2)}km simplified=${(lineLength(simplified) / 1000).toFixed(2)}km pts=${simplified.length}`,
-  )
-  output[route.id] = [simplified]
+  return bestD <= radiusM ? best : -1
 }
 
-const tsBody = JSON.stringify(output, null, 0)
-const content = `/**
+/**
+ * dijkstra 模式：anchors 逐段最短路径并串联成完整折线。
+ * 任一段不可达返回 null。
+ */
+function shortestPath(ways, anchors, route) {
+  const { nodeCoord, adj } = buildGraph(ways, {
+    allowTunnelNames: route?.allowTunnelNames ? new Set(route.allowTunnelNames) : undefined,
+    allowTrack: route?.allowTrack === true,
+  })
+  const nodeIds = anchors.map((a) => snapNode(nodeCoord, a))
+  if (nodeIds.some((id) => id < 0)) return null
+  const coords = []
+  for (let i = 1; i < nodeIds.length; i += 1) {
+    const leg = graphShortestPath(nodeCoord, adj, nodeIds[i - 1], nodeIds[i])
+    if (leg === null) return null
+    for (const id of leg) {
+      const coord = nodeCoord.get(id)
+      // 串联点去重（相邻段共享端点）
+      const last = coords[coords.length - 1]
+      if (!last || last[0] !== coord[0] || last[1] !== coord[1]) {
+        coords.push(coord)
+      }
+    }
+  }
+  return coords
+}
+
+/**
+ * named 模式：按道路名筛选 ways，共享节点串联成有序链（适合环线）。
+ * 返回若干条折线（多链时每链一段）。
+ */
+function namedChains(ways, names) {
+  const nameSet = new Set(names)
+  const pool = ways.filter((w) => nameSet.has(w.tags?.name ?? '') && w.nodes && w.geometry)
+  const chains = []
+  const used = new Set()
+  for (const way of pool) {
+    if (used.has(way.id)) continue
+    // 从该 way 向两头延伸：找共享端节点的下一条
+    let head = [...way.nodes]
+    used.add(way.id)
+    for (;;) {
+      const tail = head[head.length - 1]
+      const next = pool.find(
+        (w) => !used.has(w.id) && (w.nodes[0] === tail || w.nodes[w.nodes.length - 1] === tail),
+      )
+      if (!next) break
+      used.add(next.id)
+      const pts = next.nodes[0] === tail ? [...next.nodes] : [...next.nodes].reverse()
+      head = [...head, ...pts.slice(1)]
+    }
+    for (;;) {
+      const top = head[0]
+      const prevWay = pool.find(
+        (w) => !used.has(w.id) && (w.nodes[0] === top || w.nodes[w.nodes.length - 1] === top),
+      )
+      if (!prevWay) break
+      used.add(prevWay.id)
+      const pts = prevWay.nodes[prevWay.nodes.length - 1] === top
+        ? [...prevWay.nodes]
+        : [...prevWay.nodes].reverse()
+      head = [...pts.slice(0, -1), ...head]
+    }
+    // 节点 ID → 坐标（从 ways 的 geometry 取）
+    const coordById = new Map()
+    for (const w of pool) {
+      w.nodes.forEach((id, i) => coordById.set(id, [w.geometry[i].lat, w.geometry[i].lon]))
+    }
+    chains.push(head.map((id) => coordById.get(id)).filter(Boolean))
+  }
+  return chains
+}
+
+/** 解析既有生成文件里的 JSON 数据（合并用），无文件或解析失败返回空 */
+function readExistingOutput(outFile, exportName) {
+  if (!existsSync(outFile)) return {}
+  try {
+    const text = readFileSync(outFile, 'utf8')
+    const marker = `${exportName}: Record<string, [number, number][][]> = `
+    const idx = text.indexOf(marker)
+    if (idx < 0) return {}
+    return JSON.parse(text.slice(idx + marker.length))
+  } catch {
+    return {}
+  }
+}
+
+// 按地区分组处理（未显式标注 region 的视为北京）
+const byRegion = new Map()
+for (const route of ROUTES) {
+  const region = route.region ?? 'beijing'
+  if (!byRegion.has(region)) byRegion.set(region, [])
+  byRegion.get(region).push(route)
+}
+
+mkdirSync(REPORT_DIR, { recursive: true })
+
+for (const [region, routes] of byRegion) {
+  const meta = REGION_META[region]
+  if (!meta) {
+    console.error(`unknown region: ${region}（先在 REGION_META 登记）`)
+    process.exit(1)
+  }
+  const outFile = resolve(ROOT, meta.file)
+  const report = []
+  const output = readExistingOutput(outFile, meta.exportName)
+  let added = 0
+  let skippedExisting = 0
+
+  for (const route of routes) {
+    // CURATED_FORCE_IDS=id1,id2 强制重算指定路线（覆盖既有输出）
+    const force = new Set((process.env.CURATED_FORCE_IDS ?? '').split(',').filter(Boolean))
+    if (output[route.id] !== undefined && !force.has(route.id)) {
+      skippedExisting += 1
+      continue
+    }
+    let ways
+    try {
+      const loaded = await loadWays(route)
+      ways = loaded.ways
+      report.push(`${route.id}: ${loaded.fromCache ? 'cache' : 'fetched'} → ${ways.length} ways`)
+    } catch (error) {
+      report.push(`${route.id}: FETCH FAILED — ${error.message}`)
+      continue
+    }
+    let lines
+    if (route.mode === 'named') {
+      lines = namedChains(ways, route.names)
+    } else {
+      const path = shortestPath(ways, route.anchors, route)
+      lines = path === null ? [] : [path]
+    }
+    if (lines.length === 0) {
+      report.push(`${route.id}: NO PATH`)
+      continue
+    }
+    const simplified = lines.map((line) => simplify(line, 12)).filter((line) => line.length >= 2)
+    const totalKm = simplified.reduce((sum, line) => sum + lineLength(line), 0) / 1000
+    report.push(
+      `${route.id}: chains=${simplified.length} total=${totalKm.toFixed(2)}km pts=${simplified.reduce((s, l) => s + l.length, 0)}`,
+    )
+    output[route.id] = simplified
+    added += 1
+  }
+
+  const tsBody = JSON.stringify(output, null, 0)
+  const content = `/**
  * 精选路线几何数据（WGS-84，[纬度, 经度][] 数组，每条路线可为多段折线）。
  *
  * 本文件为生成物：由 scripts/generate-curated-routes.mjs 从 OSM 路网拉取、
  * Dijkstra 选路 + 抽稀产出，勿手改；数据 © OpenStreetMap 贡献者（ODbL）。
  * 渲染时由调用方经 projectPoint 投影到底图坐标系。
  */
-export const BEIJING_TRACKS: Record<string, [number, number][][]> = ${tsBody}
+export const ${meta.exportName}: Record<string, [number, number][][]> = ${tsBody}
 `
-writeFileSync(OUT_FILE, content, 'utf8')
-writeFileSync(REPORT_FILE, report.join('\n'), 'utf8')
+  writeFileSync(outFile, content, 'utf8')
+  writeFileSync(resolve(REPORT_DIR, `report-${region}.txt`), report.join('\n'), 'utf8')
+  console.log(`${region}: +${added} generated, ${skippedExisting} kept from existing → ${meta.file}`)
+}
