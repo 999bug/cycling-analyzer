@@ -57,12 +57,22 @@ describe('detectTypeSuspects 记为骑行但实际疑似非骑行', () => {
     expect(isGreySuspect(suspects[0])).toBe(false)
   })
 
-  it('城市通勤速度落入灰区：仍列出但标注需确认', () => {
+  it('城市通勤速度落入灰区：仍列出但建议保持骑行、标注需确认', () => {
     const suspects = detectTypeSuspects([makeSummary('a', 'cycling', 12.4, 13.2)])
 
     expect(suspects).toHaveLength(1)
     expect(isGreySuspect(suspects[0])).toBe(true)
+    // 灰区不得把「跑步」当建议——曾把均速 18.9 km/h 的骑行误导成跑步
+    expect(suspects[0].suggestedType).toBe('cycling')
     expect(suspects[0].basis).toContain('重叠区')
+  })
+
+  it('均速 18.9 km/h 的骑行落在灰区：列出但不建议改跑步', () => {
+    const suspects = detectTypeSuspects([makeSummary('a', 'cycling', 15, 18.9)])
+
+    expect(suspects).toHaveLength(1)
+    expect(isGreySuspect(suspects[0])).toBe(true)
+    expect(suspects[0].suggestedType).toBe('cycling')
   })
 
   it('正常骑行速度不产生候选（避免清单被误报淹没）', () => {
@@ -102,7 +112,15 @@ describe('detectTypeSuspects 归入「其他」但明确是骑行', () => {
     expect(detectTypeSuspects([makeSummary('a', 'other', 12.4, 13.2)])).toHaveLength(0)
   })
 
-  it('本身就是非骑行的活动不参与（类型已经正确）', () => {
+  it('此前被误改成跑步的真骑行（高速特征）提示改回骑行', () => {
+    const suspects = detectTypeSuspects([makeSummary('a', 'running', 40, 25.6)])
+
+    expect(suspects).toHaveLength(1)
+    expect(suspects[0].suggestedType).toBe('cycling')
+    expect(suspects[0].confidence).toBe('high')
+  })
+
+  it('正常的跑步/步行记录不受找回检测影响（类型已经正确）', () => {
     expect(detectTypeSuspects([makeSummary('a', 'running', 5.2, 9.8)])).toHaveLength(0)
     expect(detectTypeSuspects([makeSummary('a', 'walking', 2.1, 4.3)])).toHaveLength(0)
   })
@@ -173,5 +191,20 @@ describe('summarizeTypeFixImpact', () => {
     expect(impact.beforeCount).toBe(4)
     expect(impact.afterCount).toBe(5)
     expect(impact.afterDistance - impact.beforeDistance).toBe(40_000)
+  })
+
+  it('手动指定的类型覆盖建议：预览按所选拍板', () => {
+    const suspects = detectTypeSuspects(all)
+    // walk-1 建议步行，用户手动指定为骑行 → 修正后仍留在骑行口径
+    const impact = summarizeTypeFixImpact(
+      all,
+      suspects,
+      new Set(['walk-1']),
+      new Map([['walk-1', 'cycling']]),
+    )
+
+    expect(impact.beforeCount).toBe(4)
+    expect(impact.afterCount).toBe(4)
+    expect(impact.afterDistance).toBe(impact.beforeDistance)
   })
 })

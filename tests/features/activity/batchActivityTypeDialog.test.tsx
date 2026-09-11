@@ -156,11 +156,11 @@ describe('BatchActivityTypeDialog 应用', () => {
     expect(updateActivityType).toHaveBeenCalledWith('walk', 'walking')
     expect(updateActivityType).toHaveBeenCalledWith('run', 'running')
     // 灰区必须由用户主动勾选
-    expect(updateActivityType).not.toHaveBeenCalledWith('grey', 'running')
+    expect(updateActivityType).not.toHaveBeenCalledWith('grey', expect.anything())
     expect(onApplied).toHaveBeenCalledWith(2)
   })
 
-  it('手动勾选灰区后一并写入', async () => {
+  it('手动勾选灰区后一并写入（灰区建议保持骑行）', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeFixtures()
     const updateActivityType = vi.fn().mockResolvedValue(undefined)
@@ -174,9 +174,56 @@ describe('BatchActivityTypeDialog 应用', () => {
       />,
     )
 
-    // 第 3 行是灰区的「城市通勤」
+    // 第 3 行是灰区的「城市通勤」：建议保持骑行，勾选即按骑行落定
     const greyBox = screen.getAllByRole('checkbox')[2]
     await user.click(greyBox)
+    await user.click(screen.getByRole('button', { name: /应用勾选项（3）/ }))
+
+    expect(updateActivityType).toHaveBeenCalledWith('grey', 'cycling')
+    expect(updateActivityType).not.toHaveBeenCalledWith('grey', 'running')
+  })
+
+  it('下拉手动改类型后按所选项写入（不再局限于单一建议）', async () => {
+    const user = userEvent.setup()
+    const { allSummaries, suspects } = makeFixtures()
+    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    render(
+      <BatchActivityTypeDialog
+        suspects={suspects}
+        allSummaries={allSummaries}
+        writeRepository={{ updateActivityType }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />,
+    )
+
+    // 把「早上跑步」（建议跑步）手动改成骑行再应用
+    const runSelect = screen.getByRole('combobox', { name: '修改「早上跑步」的目标类型' })
+    await user.selectOptions(runSelect, 'cycling')
+    await user.click(screen.getByRole('button', { name: /应用勾选项（2）/ }))
+
+    expect(updateActivityType).toHaveBeenCalledWith('run', 'cycling')
+    expect(updateActivityType).toHaveBeenCalledWith('walk', 'walking')
+  })
+
+  it('灰区手动改成跑步后应用，按用户所选拍板', async () => {
+    const user = userEvent.setup()
+    const { allSummaries, suspects } = makeFixtures()
+    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    render(
+      <BatchActivityTypeDialog
+        suspects={suspects}
+        allSummaries={allSummaries}
+        writeRepository={{ updateActivityType }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />,
+    )
+
+    const greyBox = screen.getAllByRole('checkbox')[2]
+    await user.click(greyBox)
+    const greySelect = screen.getByRole('combobox', { name: '修改「城市通勤」的目标类型' })
+    await user.selectOptions(greySelect, 'running')
     await user.click(screen.getByRole('button', { name: /应用勾选项（3）/ }))
 
     expect(updateActivityType).toHaveBeenCalledWith('grey', 'running')

@@ -43,7 +43,10 @@ function makeSeed(): Activity[] {
       elapsedTime: 1800 + n * 60,
       distance: 10000 + n * 1000,
       elevationGain: 100 + n * 10,
-      avgSpeed: 6 + n / 100,
+      // 跑步记录用真实配速（~11.6 km/h）：若给 20 km/h 以上（超过马拉松
+      // 世界纪录），会被类型复核的「找回检测」正确判定为疑似骑行，
+      // 导致批量修正按钮计数断言失败
+      avgSpeed: n <= 22 ? 6 + n / 100 : 3 + n / 100,
       avgHeartRate: n % 3 === 0 ? undefined : 140 + n,
       avgPower: n % 5 === 0 ? undefined : 200 + n,
     }
@@ -403,13 +406,14 @@ describe('骑行记录列表页', () => {
     expect(screen.getByText('距离 大于 20 km 且 平均速度 大于 20 km/h')).toBeInTheDocument()
 
     // 勾选并应用 → 弹窗关闭，列表过滤（距离 ≥ 20km → act-10..25 共 16 条，
-    // 平均速度 > 20km/h 全部满足）且两个 chips 出现
+    // 其中平均速度 > 20km/h 的仅骑行 act-10..22 共 13 条——act-23~25 为
+    // 真实跑步配速 ~11.6km/h 不满足）且两个 chips 出现
     await user.click(screen.getByRole('checkbox', { name: '选择 中长途' }))
     await user.click(screen.getByRole('button', { name: /^应用/ }))
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: '过滤条件' })).not.toBeInTheDocument(),
     )
-    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(17))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(14))
     expect(screen.getByText('距离 大于 20 km')).toBeInTheDocument()
     expect(screen.getByText('平均速度 大于 20 km/h')).toBeInTheDocument()
 
@@ -648,9 +652,9 @@ describe('骑行记录列表页', () => {
     await user.click(screen.getByRole('button', { name: /^爬升/ }))
     await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
 
-    // 平均速度降序 → act-25 最大（6.25 m/s）
+    // 平均速度降序 → act-22 最大（6.22 m/s；act-23~25 为跑步配速 3.2x m/s）
     await user.click(screen.getByRole('button', { name: /^平均速度/ }))
-    await expectFirstRowText(`${formatDate('2026-06-05T10:00:00.000Z')} 跑步`)
+    await expectFirstRowText(`${formatDate('2026-07-08T10:00:00.000Z')} 骑行`)
 
     // 平均心率降序 → act-25 最大（165 bpm，非 3 的倍数不缺失）
     await user.click(screen.getByRole('button', { name: /^平均心率/ }))

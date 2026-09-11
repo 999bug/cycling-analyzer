@@ -11,15 +11,16 @@
  * 1. **当前记为骑行、实际疑似非骑行**（本功能要解决的主问题）：
  *    旧版 GPX 解析对缺失 `<type>` 默认 cycling，导致导入的跑步/散步
  *    被计入骑行口径，表现是「骑行里程虚高」；
- * 2. **当前归入「其他」、特征明确是骑行**（找回）：来源写了本站不认识的
- *    类型时会被归入 other，若该条速度特征明确（均速 ≥20 或距离 ≥50km），
- *    提示用户改回骑行，避免真骑行从统计里消失。
+ * 2. **当前未记为骑行、特征明确是骑行**（找回）：归入「其他」的未知类型，
+ *    或此前被误改成跑步/步行的真骑行——若该条速度特征明确
+ *    （均速 ≥20 或距离 ≥50km，high 置信），提示用户改回骑行，
+ *    避免真骑行从统计里消失。
  *
  * 判定用同一套 `inferActivityType`，与导入期兜底完全一致，
  * 避免「导入时判成 A、复核时判成 B」的口径分裂。
  */
 import { inferActivityType, describeTypeInference, isTypeSuspect, type TypeConfidence } from '@/features/activity/activityTypeInference'
-import { isCyclingType, normalizeActivityType, type ActivityType } from '@/types/activityType'
+import { isCyclingType, type ActivityType } from '@/types/activityType'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 
 /**
@@ -53,25 +54,26 @@ export function detectTypeSuspects(summaries: readonly ActivitySummary[]): TypeS
   for (const summary of summaries) {
     const inference = inferActivityType(summary)
     if (isCyclingType(summary.activityType)) {
-      // 情形 1：记为骑行但推断为非骑行（灰区也列出，由用户拍板）
+      // 情形 1：记为骑行但推断为非骑行（灰区也列出，由用户拍板）。
+      // 灰区建议保持骑行——10~20 km/h 的通勤骑与快跑重叠，「建议跑步」曾把
+      // 均速 18.9 km/h 的真骑行误导成跑步（2026-09-11 用户反馈），改为保守
+      // 建议维持原类型，用户确需修改时用弹窗的类型下拉手动指定。
       if (isTypeSuspect(inference)) {
         suspects.push({
           summary,
           currentType: summary.activityType,
-          suggestedType: inference.type,
+          suggestedType: inference.confidence === 'grey' ? 'cycling' : inference.type,
           confidence: inference.confidence,
           basis: describeTypeInference(inference),
         })
       }
       continue
     }
-    // 情形 2：归入「其他」但特征明确是骑行——只在 high 置信时才提示，
-    // 否则会把「划船」「滑雪」这类无关活动也列进来
-    if (
-      normalizeActivityType(summary.activityType) === 'other' &&
-      inference.type === 'cycling' &&
-      inference.confidence === 'high'
-    ) {
+    // 情形 2：未记为骑行但特征明确是骑行——只在 high 置信时才提示，
+    // 否则会把「划船」「滑雪」这类无关活动也列进来。覆盖两类来源：
+    // 归入「其他」的未知类型，以及此前被误改成跑步/步行的真骑行——
+    // 改错后原检测不再覆盖该条，用户无从在弹窗里改回，故一并纳入
+    if (inference.type === 'cycling' && inference.confidence === 'high') {
       suspects.push({
         summary,
         currentType: summary.activityType,
@@ -108,7 +110,7 @@ export function defaultSelectedIds(suspects: readonly TypeSuspect[]): Set<string
 }
 
 /**
- * 按当前勾选计算修正前后的骑行口径影响（弹窗顶部预览用）。
+ * 按当前勾选与手动指定计算修正前后的骑行口径影响（弹窗顶部预览用）。
  *
  * 骑行总里程/次数只统计「修正后仍为骑行」的活动：
  * 勾选把某条改成非骑行即从骑行口径移出，取消勾选则保留。
@@ -116,12 +118,14 @@ export function defaultSelectedIds(suspects: readonly TypeSuspect[]): Set<string
  * @param allSummaries 全量活动摘要
  * @param suspects 候选列表
  * @param selectedIds 当前勾选的活动 ID
+ * @param overrides 用户手动指定的目标类型（id → 类型）；未指定的用建议类型
  * @returns 修正前后的骑行里程（米）与次数
  */
 export function summarizeTypeFixImpact(
   allSummaries: readonly ActivitySummary[],
   suspects: readonly TypeSuspect[],
   selectedIds: ReadonlySet<string>,
+  overrides: ReadonlyMap<string, ActivityType> = new Map(),
 ): { beforeDistance: number; afterDistance: number; beforeCount: number; afterCount: number } {
   const suggestionById = new Map(suspects.map((item) => [item.summary.id, item.suggestedType]))
   let beforeDistance = 0
@@ -133,8 +137,10 @@ export function summarizeTypeFixImpact(
     const suggestion = suggestionById.get(summary.id)
     const applied = suggestion !== undefined && selectedIds.has(summary.id)
     const wasCycling = isCyclingType(summary.activityType)
-    // 勾选则按建议类型落定，未勾选保持原样
-    const willBeCycling = applied ? suggestion === 'cycling' : wasCycling
+    // 勾选则按「手动指定 ?? 建议」落定，未勾选保持原样
+    const willBeCycling = applied
+      ? (overrides.get(summary.id) ?? suggestion) === 'cycling'
+      : wasCycling
 
     if (wasCycling) {
       beforeDistance += summary.distance

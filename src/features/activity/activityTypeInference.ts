@@ -109,7 +109,11 @@ export function inferActivityType(input: TypeInferenceInput): TypeInference {
   if (avgSpeedKmh >= CYCLING_MIN_SPEED_KMH || distanceKm >= CYCLING_MIN_DISTANCE_KM) {
     return { type: 'cycling', confidence: 'high', evidence }
   }
-  // 10~20 km/h 且不足 50km：城市通勤骑与快跑生理上完全重叠，无法自动判定
+  // 10~20 km/h 且不足 50km：城市通勤骑与快跑生理上完全重叠，无法自动判定。
+  // type 仅表示「若必须二选一时的倾向」，**消费方不得把 grey 的 type 直接写库**：
+  // - 导入链路 resolveActivityType 把 grey 改回 cycling（保守判骑行）；
+  // - 复核链路 detectTypeSuspects 把 grey 的建议保持为当前类型（骑行），
+  //   仅列出请用户拍板。曾把均速 18.9 km/h 的真骑行「建议」成跑步，教训在先
   return { type: 'running', confidence: 'grey', evidence }
 }
 

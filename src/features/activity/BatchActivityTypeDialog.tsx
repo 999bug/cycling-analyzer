@@ -21,7 +21,12 @@ import {
   DexieActivityRepository,
   type ActivitySummary,
 } from '@/storage/repositories/activityRepository'
-import { ACTIVITY_TYPE_LABELS, activityTypeLabel, type ActivityType } from '@/types/activityType'
+import {
+  ACTIVITY_TYPE_LABELS,
+  ACTIVITY_TYPE_OPTIONS,
+  activityTypeLabel,
+  type ActivityType,
+} from '@/types/activityType'
 import {
   defaultSelectedIds,
   isGreySuspect,
@@ -82,15 +87,38 @@ function BatchActivityTypeDialog({
   onApplied,
 }: BatchActivityTypeDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => defaultSelectedIds(suspects))
+  /** 用户手动指定的目标类型（id → 类型），未指定的行用建议类型 */
+  const [overrides, setOverrides] = useState<Record<string, ActivityType>>({})
   const [filter, setFilter] = useState<FilterKey>('all')
   const [applying, setApplying] = useState(false)
   const [result, setResult] = useState<string | null>(null)
 
-  /** 影响预览：勾选变化时实时重算 */
+  /** 影响预览：勾选变化时实时重算（按手动指定 ?? 建议类型落定） */
   const impact = useMemo(
-    () => summarizeTypeFixImpact(allSummaries, suspects, selectedIds),
-    [allSummaries, suspects, selectedIds],
+    () =>
+      summarizeTypeFixImpact(allSummaries, suspects, selectedIds, new Map(Object.entries(overrides))),
+    [allSummaries, suspects, selectedIds, overrides],
   )
+
+  /**
+   * 取某条候选最终生效的目标类型：手动指定优先，未指定用建议。
+   *
+   * @param suspect 待复核记录
+   * @returns 目标类型
+   */
+  function chosenType(suspect: TypeSuspect): ActivityType {
+    return overrides[suspect.summary.id] ?? suspect.suggestedType
+  }
+
+  /**
+   * 手动指定某条的目标类型。
+   *
+   * @param id 活动 ID
+   * @param type 目标类型
+   */
+  function chooseType(id: string, type: ActivityType) {
+    setOverrides((previous) => ({ ...previous, [id]: type }))
+  }
 
   /** 分组统计（chip 计数） */
   const counts = useMemo(() => {
@@ -152,7 +180,7 @@ function BatchActivityTypeDialog({
         if (!selectedIds.has(suspect.summary.id)) {
           continue
         }
-        await writeRepository.updateActivityType(suspect.summary.id, suspect.suggestedType)
+        await writeRepository.updateActivityType(suspect.summary.id, chosenType(suspect))
         done += 1
       }
       setResult(`已修正 ${done} 条活动的运动类型`)
@@ -271,8 +299,10 @@ function BatchActivityTypeDialog({
               key={suspect.summary.id}
               suspect={suspect}
               checked={selectedIds.has(suspect.summary.id)}
+              chosenType={chosenType(suspect)}
               distanceUnit={distanceUnit}
               onToggle={toggle}
+              onChooseType={chooseType}
             />
           ))}
           {visible.length === 0 && <div className="batch-type__empty">该分组下没有记录</div>}
@@ -283,8 +313,8 @@ function BatchActivityTypeDialog({
         <div className="batch-type__actions">
           <p className="batch-type__note">
             {counts.grey > 0
-              ? `灰区 ${counts.grey} 条默认不勾选：10~20 km/h 的城市通勤与快跑速度重叠，需你自行判断`
-              : '逐条依据已列出，请确认后再应用'}
+              ? `灰区 ${counts.grey} 条建议保持骑行：10~20 km/h 的城市通勤与快跑速度重叠，确认是骑行无需改动，也可在「类型变更」下拉中手动指定`
+              : '逐条依据已列出，可在「类型变更」下拉中修改目标类型，请确认后再应用'}
             {selectedVisibleCount > 0 && filter !== 'all' ? `（当前分组已勾选 ${selectedVisibleCount} 条）` : ''}
           </p>
           <div className="batch-type__buttons">
@@ -308,22 +338,31 @@ function BatchActivityTypeDialog({
 
 /**
  * 单条候选行。
+ *
+ * 类型变更列是可编辑下拉：默认取建议类型，用户可手动改成任意规范类型
+ * （如把灰区误标的骑行保留为骑行，或把被误改成跑步的记录改回来），
+ * 应用时按所选项写入而非只接受/拒绝单一建议。
  */
 function SuspectRow({
   suspect,
   checked,
+  chosenType,
   distanceUnit,
   onToggle,
+  onChooseType,
 }: {
   suspect: TypeSuspect
   checked: boolean
+  chosenType: ActivityType
   distanceUnit: DistanceUnit
   onToggle: (id: string, checked: boolean) => void
+  onChooseType: (id: string, type: ActivityType) => void
 }) {
   const { summary } = suspect
   const grey = isGreySuspect(suspect)
   // 归一化后取中文标签：库里可能存有各平台原始写法（road_biking / 骑行）
   const currentLabel = activityTypeLabel(summary.activityType)
+  const name = summary.name ?? summary.fileName
 
   return (
     <label className="batch-type__row">
@@ -332,8 +371,8 @@ function SuspectRow({
         checked={checked}
         onChange={(event) => onToggle(summary.id, event.target.checked)}
       />
-      <span className="batch-type__name" title={summary.name ?? summary.fileName}>
-        {summary.name ?? summary.fileName}
+      <span className="batch-type__name" title={name}>
+        {name}
         <span className="batch-type__date">
           {DATE_FORMATTER.format(new Date(summary.startTime))}
         </span>
@@ -346,14 +385,25 @@ function SuspectRow({
       </span>
       <span className="batch-type__change">
         {currentLabel} →{' '}
-        <span
+        <select
           className={
-            grey ? 'batch-type__badge batch-type__badge--grey' : 'batch-type__badge'
+            grey ? 'batch-type__select batch-type__select--grey' : 'batch-type__select'
           }
+          value={chosenType}
+          aria-label={`修改「${name}」的目标类型`}
+          onClick={(event) => {
+            // 行是 <label> 包裹：不拦截默认行为会把点击转发给勾选框
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onChange={(event) => onChooseType(summary.id, event.target.value as ActivityType)}
         >
-          {ACTIVITY_TYPE_LABELS[suspect.suggestedType]}
-          {grey ? '？' : ''}
-        </span>
+          {ACTIVITY_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </span>
       <span className={grey ? 'batch-type__basis batch-type__basis--grey' : 'batch-type__basis'}>
         {grey ? `灰区，请确认（${suspect.basis}）` : suspect.basis}
