@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.61.2',
+    date: '2026-09-11',
+    features: [
+      '新增架构总览文档 docs/架构总览.md：分层架构图（mermaid）、目录结构与功能域职责、导入数据流、存储模型、双数据源、地图瓦片降级、路由部署与测试架构一览',
+    ],
+  },
+  {
     version: '2.61.1',
     date: '2026-09-10',
     features: [
