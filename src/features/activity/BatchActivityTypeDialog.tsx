@@ -56,8 +56,11 @@ type FilterKey = 'all' | 'grey' | `type:${ActivityType}`
  * 批量修正运动类型弹窗属性。
  */
 interface BatchActivityTypeDialogProps {
-  /** 待复核候选（detectTypeSuspects 输出） */
+  /** 待复核候选（detectTypeSuspects 输出）；手动模式为 toManualSuspects 输出 */
   suspects: TypeSuspect[]
+
+  /** 模式：detect=自动检测的可疑记录复核；manual=列表勾选记录手动改类型 */
+  mode?: 'detect' | 'manual'
 
   /** 全量活动摘要（影响预览需要看到骑行口径总量） */
   allSummaries: ActivitySummary[]
@@ -80,12 +83,14 @@ interface BatchActivityTypeDialogProps {
  */
 function BatchActivityTypeDialog({
   suspects,
+  mode = 'detect',
   allSummaries,
   writeRepository = localRepository,
   distanceUnit = 'km',
   onClose,
   onApplied,
 }: BatchActivityTypeDialogProps) {
+  const manual = mode === 'manual'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => defaultSelectedIds(suspects))
   /** 用户手动指定的目标类型（id → 类型），未指定的行用建议类型 */
   const [overrides, setOverrides] = useState<Record<string, ActivityType>>({})
@@ -207,10 +212,12 @@ function BatchActivityTypeDialog({
         <div className="batch-type__header">
           <div>
             <h2 className="batch-type__title" id="batch-type-title">
-              批量修正运动类型
+              {manual ? '批量修改运动类型' : '批量修正运动类型'}
             </h2>
             <p className="batch-type__subtitle">
-              检测到 {suspects.length} 条活动的运动类型可能不准确，确认后才会写入
+              {manual
+                ? `已选择 ${suspects.length} 条记录，在「类型变更」下拉中修改目标类型，确认后才会写入`
+                : `检测到 ${suspects.length} 条活动的运动类型可能不准确，确认后才会写入`}
             </p>
           </div>
           <button type="button" className="batch-type__close" aria-label="关闭" onClick={onClose}>
@@ -246,44 +253,46 @@ function BatchActivityTypeDialog({
           </div>
         </div>
 
-        <div className="batch-type__chips">
-          <button
-            type="button"
-            className={
-              filter === 'all' ? 'batch-type__chip batch-type__chip--active' : 'batch-type__chip'
-            }
-            onClick={() => setFilter('all')}
-          >
-            全部 {suspects.length}
-          </button>
-          {[...counts.byType.entries()].map(([type, count]) => (
-            <button
-              key={type}
-              type="button"
-              className={
-                filter === `type:${type}`
-                  ? 'batch-type__chip batch-type__chip--active'
-                  : 'batch-type__chip'
-              }
-              onClick={() => setFilter(`type:${type}`)}
-            >
-              建议{ACTIVITY_TYPE_LABELS[type]} {count}
-            </button>
-          ))}
-          {counts.grey > 0 && (
+        {!manual && (
+          <div className="batch-type__chips">
             <button
               type="button"
               className={
-                filter === 'grey'
-                  ? 'batch-type__chip batch-type__chip--active'
-                  : 'batch-type__chip'
+                filter === 'all' ? 'batch-type__chip batch-type__chip--active' : 'batch-type__chip'
               }
-              onClick={() => setFilter('grey')}
+              onClick={() => setFilter('all')}
             >
-              灰区 {counts.grey}
+              全部 {suspects.length}
             </button>
-          )}
-        </div>
+            {[...counts.byType.entries()].map(([type, count]) => (
+              <button
+                key={type}
+                type="button"
+                className={
+                  filter === `type:${type}`
+                    ? 'batch-type__chip batch-type__chip--active'
+                    : 'batch-type__chip'
+                }
+                onClick={() => setFilter(`type:${type}`)}
+              >
+                建议{ACTIVITY_TYPE_LABELS[type]} {count}
+              </button>
+            ))}
+            {counts.grey > 0 && (
+              <button
+                type="button"
+                className={
+                  filter === 'grey'
+                    ? 'batch-type__chip batch-type__chip--active'
+                    : 'batch-type__chip'
+                }
+                onClick={() => setFilter('grey')}
+              >
+                灰区 {counts.grey}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="batch-type__table">
           <div className="batch-type__row batch-type__row--head">
@@ -312,9 +321,11 @@ function BatchActivityTypeDialog({
 
         <div className="batch-type__actions">
           <p className="batch-type__note">
-            {counts.grey > 0
-              ? `灰区 ${counts.grey} 条建议保持骑行：10~20 km/h 的城市通勤与快跑速度重叠，确认是骑行无需改动，也可在「类型变更」下拉中手动指定`
-              : '逐条依据已列出，可在「类型变更」下拉中修改目标类型，请确认后再应用'}
+            {manual
+              ? '勾选 = 按所选类型写入，取消勾选 = 保持原样；可在「类型变更」下拉逐行修改目标类型'
+              : counts.grey > 0
+                ? `灰区 ${counts.grey} 条建议保持骑行：10~20 km/h 的城市通勤与快跑速度重叠，确认是骑行无需改动，也可在「类型变更」下拉中手动指定`
+                : '逐条依据已列出，可在「类型变更」下拉中修改目标类型，请确认后再应用'}
             {selectedVisibleCount > 0 && filter !== 'all' ? `（当前分组已勾选 ${selectedVisibleCount} 条）` : ''}
           </p>
           <div className="batch-type__buttons">

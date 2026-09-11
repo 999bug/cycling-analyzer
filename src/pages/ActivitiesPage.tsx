@@ -20,7 +20,7 @@ import CustomFilterDialog from '@/features/activity/CustomFilterDialog'
 import DeleteActivitiesDialog from '@/features/activity/DeleteActivitiesDialog'
 import BatchFixDialog from '@/features/activity/BatchFixDialog'
 import BatchActivityTypeDialog from '@/features/activity/BatchActivityTypeDialog'
-import { detectTypeSuspects, type TypeSuspect } from '@/features/activity/suspectTypes'
+import { detectTypeSuspects, toManualSuspects, type TypeSuspect } from '@/features/activity/suspectTypes'
 import { conditionsToBounds, describeCondition, type CustomFilterCondition } from '@/features/activity/customFilter'
 import { ACTIVITY_TYPE_OPTIONS } from '@/types/activityType'
 import '@/features/activity/activity-page.css'
@@ -97,6 +97,8 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
   // 勾选批量删除：ID → 摘要（跨翻页保留，删除弹窗需要展示摘要）
   const [selectedItems, setSelectedItems] = useState<Map<string, ActivitySummary>>(new Map())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  // 勾选批量改类型：候选来自用户勾选（与自动检测弹窗互不影响）
+  const [manualTypeSuspects, setManualTypeSuspects] = useState<TypeSuspect[] | null>(null)
   // 距离显示单位（规格 §27）
   const { distance: distanceUnit } = useUnits()
 
@@ -369,6 +371,26 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
     console.info(`Fixed activity type for ${count} activities`)
   }
 
+  /**
+   * 打开手动改类型弹窗：候选 = 当前勾选记录（toManualSuspects 内部按开始时间倒序）。
+   */
+  function openManualTypeFix() {
+    if (selectedItems.size === 0) {
+      return
+    }
+    setManualTypeSuspects(toManualSuspects([...selectedItems.values()]))
+  }
+
+  /**
+   * 手动改类型完成：清勾选并刷新列表（类型写入后检测候选、列表类型列都需重算）。
+   */
+  function handleManualTypeFixed(count: number) {
+    setManualTypeSuspects(null)
+    setSelectedItems(new Map())
+    setReloadKey((k) => k + 1)
+    console.info(`Manually updated activity type for ${count} activities`)
+  }
+
   // 分页：切页 / 翻页（每页条数变更单独处理并回第一页）
   function handlePageChange(page: number) {
     setQuery((prev) => ({ ...prev, offset: (page - 1) * pageSize }))
@@ -478,6 +500,13 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
             </button>
             <button
               type="button"
+              className="activity-selection-bar__button"
+              onClick={openManualTypeFix}
+            >
+              修正类型
+            </button>
+            <button
+              type="button"
               className="activity-selection-bar__button activity-selection-bar__button--danger"
               onClick={() => setDeleteDialogOpen(true)}
             >
@@ -565,6 +594,17 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
           distanceUnit={distanceUnit}
           onClose={() => setTypeFixOpen(false)}
           onApplied={handleTypeFixed}
+        />
+      )}
+      {manualTypeSuspects !== null && (
+        <BatchActivityTypeDialog
+          mode="manual"
+          suspects={manualTypeSuspects}
+          allSummaries={allSummaries}
+          writeRepository={writeRepository}
+          distanceUnit={distanceUnit}
+          onClose={() => setManualTypeSuspects(null)}
+          onApplied={handleManualTypeFixed}
         />
       )}
       {deleteDialogOpen && selectedCount > 0 && (

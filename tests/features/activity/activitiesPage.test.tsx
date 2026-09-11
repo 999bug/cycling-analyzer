@@ -15,6 +15,7 @@ import ActivitiesPage from '@/pages/ActivitiesPage'
 import { CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { DEFAULT_PAGE_SIZE, useActivityFilterStore } from '@/stores/activityFilterStore'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import { formatDate, formatDistance } from '@/utils/format'
 import type { Activity } from '@/types/activity'
 
@@ -83,6 +84,16 @@ describe('骑行记录列表页', () => {
     useActivityFilterStore.getState().resetFilters()
     useActivityFilterStore.getState().resetSort()
     useActivityFilterStore.getState().setPageSize(DEFAULT_PAGE_SIZE)
+    // 数据源 store 同为模块级单例：复位到默认（本地源），避免测试间串扰
+    useDataSourceStore.setState({
+      source: 'author',
+      authorAvailable: false,
+      authorName: null,
+      authorVisibility: 'auto',
+      hasLocalData: false,
+      authorHiddenNoticePending: false,
+      peekAuthorData: false,
+    })
     localStorage.clear()
   })
 
@@ -791,5 +802,77 @@ describe('骑行记录列表页', () => {
     await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
     expect(screen.getByText('骑行记录')).toBeInTheDocument()
     expect(screen.queryByText('详情页 act-01')).not.toBeInTheDocument()
+  })
+
+  it('勾选批量改类型：操作条出现「修正类型」按钮，未勾选时不出现', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(screen.queryByRole('button', { name: '修正类型' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    expect(screen.getByRole('button', { name: '修正类型' })).toBeInTheDocument()
+  })
+
+  it('勾选批量改类型：弹窗列出勾选记录，改类型应用后落库并清空勾选', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    await user.click(screen.getByRole('button', { name: '修正类型' }))
+
+    // 手动模式弹窗：列出勾选记录，下拉默认=当前类型（骑行）
+    expect(await screen.findByRole('heading', { name: '批量修改运动类型' })).toBeInTheDocument()
+    expect(screen.getByText(/已选择 1 条记录/)).toBeInTheDocument()
+    const select = screen.getByRole('combobox', { name: '修改「ride-01.fit」的目标类型' })
+    expect(select).toHaveValue('cycling')
+
+    // 改为跑步并应用
+    await user.selectOptions(select, 'running')
+    await user.click(screen.getByRole('button', { name: /应用勾选项（1）/ }))
+
+    // 弹窗关闭、勾选清空、写库生效
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '批量修改运动类型' })).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByText('已勾选 1 条')).not.toBeInTheDocument()
+    const updated = await repo.getById('act-01')
+    expect(updated?.activityType).toBe('running')
+  })
+
+  it('勾选批量改类型：作者快照源无勾选列，操作条与按钮不出现', async () => {
+    await repo.addActivities(makeSeed())
+    // 强制作者源生效（本地库仍有数据也不可写）
+    useDataSourceStore.setState({ authorAvailable: true, authorVisibility: 'show' })
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    expect(screen.queryByRole('checkbox', { name: '选择 ride-01.fit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '修正类型' })).not.toBeInTheDocument()
+  })
+
+  it('勾选批量改类型：跨页勾选整体进入弹窗，按开始时间倒序排列', async () => {
+    await repo.addActivities(makeSeed())
+    renderPage()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+
+    // 第 1 页勾选 act-01（2026-08-29），翻到第 2 页勾选 act-25（2026-06-05）
+    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
+    await user.click(screen.getByRole('button', { name: '下一页' }))
+    await user.click(await screen.findByRole('checkbox', { name: '选择 ride-25.fit' }))
+    expect(screen.getByText('已勾选 2 条')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '修正类型' }))
+
+    expect(await screen.findByRole('heading', { name: '批量修改运动类型' })).toBeInTheDocument()
+    // 开始时间倒序：act-01（最新）在前（makeSeed 无 name，行显示 fileName）
+    const names = screen.getAllByText(/^ride-(01|25)\.fit$/)
+    expect(names[0]).toHaveTextContent('ride-01.fit')
+    expect(names[1]).toHaveTextContent('ride-25.fit')
   })
 })

@@ -20,7 +20,7 @@
  * 避免「导入时判成 A、复核时判成 B」的口径分裂。
  */
 import { inferActivityType, describeTypeInference, isTypeSuspect, type TypeConfidence } from '@/features/activity/activityTypeInference'
-import { isCyclingType, type ActivityType } from '@/types/activityType'
+import { isCyclingType, normalizeActivityType, type ActivityType } from '@/types/activityType'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 
 /**
@@ -94,6 +94,25 @@ export function detectTypeSuspects(summaries: readonly ActivitySummary[]): TypeS
  */
 export function isGreySuspect(suspect: TypeSuspect): boolean {
   return suspect.confidence === 'grey'
+}
+
+/**
+ * 由列表勾选的记录构造「手动模式」候选：建议类型 = 当前类型归一化，
+ * confidence 固定 high——天然满足「默认全勾、无灰区」，弹窗引擎零分支复用。
+ *
+ * @param items 用户在列表页勾选的活动摘要
+ * @returns 手动模式候选列表
+ */
+export function toManualSuspects(items: readonly ActivitySummary[]): TypeSuspect[] {
+  return [...items]
+    .sort((a, b) => b.startTime.localeCompare(a.startTime))
+    .map((summary) => ({
+      summary,
+      currentType: summary.activityType,
+      suggestedType: normalizeActivityType(summary.activityType),
+      confidence: 'high' as const,
+      basis: '手动指定（列表勾选）',
+    }))
 }
 
 /**
