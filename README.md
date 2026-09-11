@@ -92,6 +92,7 @@
 - **活动对比**：同路线两次骑行轨迹叠加 + 核心指标逐项对比（差值高亮）
 - **在线回放**：轨迹动画复现骑行过程，1x~128x 变速播放，可导出回放视频
 - **赛段**：起终点圆（200m）穿越匹配，成绩榜按用时排名，单活动多次穿越取最佳
+- **热门路线**：精选经典骑行路线（北京/西安/杭州/台州/深圳/成都/昆明），里程爬升带来源等级标注（官方口径/权威媒体/社区码表），几何统一由脚本从 OSM 路网生成
 
 ### 训练分析
 - 标准化功率（NP）、强度因子（IF）、训练压力（TSS）、训练效果（TE）
@@ -134,6 +135,43 @@ node .workbuddy/skills/replay-video-record/scripts/render-video.mjs --take .work
 ```
 
 产物输出在 `.workbuddy/exports/`（gitignored）。录制脚本会临时修改 `src/map/TrackReplay.tsx` 并在结束时自动还原；若进程被硬杀留下补丁，用 `--restore-only` 清理，提交代码前自查口径见 `docs/PROGRESS.md`。
+
+## 热门路线添加工具（开发工具）
+
+站点「热门路线」的几何全部由脚本从 OSM 路网产出（Dijkstra 选路 + 抽稀），路线数据带三级来源标注。添加一条新路线不需要手写坐标，用半自动添加器 `npm run curate` 一张需求单完成：
+
+```bash
+# 1) 写需求单 JSON（字段见 scripts/curate-route.mjs 头部注释）
+# 2) 试运行：只写 .tmp/curate/<id>/，不动网站代码
+npm run curate -- --spec 我的需求单.json --dry
+
+# 3) 打开 .tmp/curate/<id>/preview.html 审核线形
+# 4) 确认后正式入库（自动合并几何 + 追加数据条目 + 登记测试断言）
+npm run curate -- --spec 我的需求单.json
+
+# 5) 验证并提交
+npx tsc -b && npx vitest run tests/features/curatedRoutes/
+```
+
+需求单示例：
+
+```json
+{
+  "id": "wts",
+  "region": "shenzhen",
+  "name": "梧桐山",
+  "area": "罗湖",
+  "via": ["梧桐山北路@深圳", "好汉坡@深圳"],
+  "declaredKm": 6.3,
+  "declaredElevM": 533,
+  "difficulty": 4,
+  "source": { "text": "野途网爬坡赛段", "grade": "B" },
+  "desc": "深圳市区最近的硬核爬坡。",
+  "tips": "夏季高温建议清晨出发。"
+}
+```
+
+脚本内置自动化：地名定位（Nominatim/Photon 双源 + 地区偏置消歧，`via` 也支持 `[lat, lng]` 坐标）、Overpass 路网拉取（缓存优先 + 镜像轮询重试）、隧道/土路/干线例外自动探测、选路失败时输出替代锚点诊断。人工只需把关两件事：**来源等级真实性**（A 官方 / B 权威媒体 / C 社区码表，没有来源的里程不允许上线）和**预览线形审核**。批量添加时把多条需求写入 JSON 数组逐条执行即可。
 
 ## 作者数据与隐私
 
