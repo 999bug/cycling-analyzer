@@ -109,11 +109,14 @@ export class CachingTileLayer extends LeafletTileLayer {
   }
 
   /**
-   * 异步加载瓦片：缓存命中 → 未命中 fetch → 失败回退原生加载。
+   * 异步加载瓦片：本地清单与缓存并行查询 → 命中直出 / 未命中 fetch → 失败回退原生加载。
+   *
+   * 并行的原因：两路检查原本串行 await（清单首次还要先下 28KB manifest），
+   * 会让在线 fetch 比原生 <img> 晚一大截才起步；并行后 fetch 起步延迟显著缩短。
+   * 本地命中时多付一次 IndexedDB 读的代价（仅作者数据区域），可接受。
    *
    * @param tile 瓦片 img 元素
    * @param url 瓦片 URL
-   * @param done 就绪回调
    */
   private async loadTile(tile: HTMLImageElement, url: string): Promise<void> {
     if (!this.cacheEnabled) {
@@ -121,22 +124,24 @@ export class CachingTileLayer extends LeafletTileLayer {
       return
     }
 
+    const amapCoords = resolveLocalTileCoords(url, this.allowLocalTile)
+    const [isLocal, cached] = await Promise.all([
+      amapCoords !== null
+        ? hasLocalTile(amapCoords.z, amapCoords.x, amapCoords.y)
+        : Promise.resolve(false),
+      this.readCachedTile(url),
+    ])
+
     // 预缓存静态瓦片优先（作者数据区域）：同域直读零跨域，命中则完全绕过在线请求。
     // 仅矢量底图模式开放——本地只预缓存了矢量瓦片，卫星/注记层查清单必然错拿矢量图
-    const amapCoords = resolveLocalTileCoords(url, this.allowLocalTile)
-    if (amapCoords !== null && (await hasLocalTile(amapCoords.z, amapCoords.x, amapCoords.y))) {
+    if (isLocal && amapCoords !== null) {
       tile.src = localTileUrl(amapCoords.z, amapCoords.x, amapCoords.y)
       return
     }
 
-    try {
-      const cached = await getCachedTile(db, url)
-      if (cached !== undefined) {
-        this.setTileSource(tile, url, cached)
-        return
-      }
-    } catch (error) {
-      console.error('Failed to read tile cache', error)
+    if (cached !== undefined) {
+      this.setTileSource(tile, url, cached)
+      return
     }
 
     try {
@@ -156,6 +161,20 @@ export class CachingTileLayer extends LeafletTileLayer {
       // fetch 失败（CORS/网络）：回退原生加载（不缓存），tileerror 触发降级
       console.warn('Tile fetch failed, falling back to native loading', url, error)
       tile.src = url
+    }
+  }
+
+  /**
+   * 读取 IndexedDB 瓦片缓存（失败视为未命中，不阻断在线加载）。
+   *
+   * @param url 瓦片 URL
+   */
+  private async readCachedTile(url: string): Promise<Blob | undefined> {
+    try {
+      return await getCachedTile(db, url)
+    } catch (error) {
+      console.error('Failed to read tile cache', error)
+      return undefined
     }
   }
 

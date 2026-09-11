@@ -15,6 +15,7 @@ import {
   getCachedTile,
   getTileCacheStats,
   putCachedTile,
+  TILE_CACHE_ACCESS_REFRESH_MS,
   tileCacheKey,
 } from '@/storage/tileCache'
 
@@ -81,15 +82,30 @@ describe('瓦片缓存读写', () => {
     expect(await db.tile_cache.count()).toBe(1)
   })
 
-  it('命中刷新 lastAccess', async () => {
+  it('lastAccess 超过刷新间隔的命中会刷新 lastAccess', async () => {
     const url = 'https://tile.openstreetmap.org/10/1/1.png'
     const base = Date.now()
-    await db.tile_cache.put({ url, blob: new Blob(['tile']), size: 4, lastAccess: base - 1000 })
+    await db.tile_cache.put({
+      url,
+      blob: new Blob(['tile']),
+      size: 4,
+      lastAccess: base - 2 * TILE_CACHE_ACCESS_REFRESH_MS,
+    })
 
     await getCachedTile(db, url)
     const entry = await db.tile_cache.get(url)
     expect(entry).toBeDefined()
     expect((entry?.lastAccess ?? 0)).toBeGreaterThan(base - 1)
+  })
+
+  it('刷新间隔内的重复命中不重写 lastAccess（省一个写事务）', async () => {
+    const url = 'https://tile.openstreetmap.org/10/1/1.png'
+    const recent = Date.now() - 1000
+    await db.tile_cache.put({ url, blob: new Blob(['tile']), size: 4, lastAccess: recent })
+
+    await getCachedTile(db, url)
+    const entry = await db.tile_cache.get(url)
+    expect(entry?.lastAccess).toBe(recent)
   })
 
   it('clearTileCache 清空全部缓存', async () => {

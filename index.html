@@ -9,6 +9,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="骑了么" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- 预热高德矢量底图 4 个负载均衡子域（DNS+TLS 握手提前完成）。
+         瓦片经 fetch(cors) 加载，crossorigin 必须带上才能复用同一条连接；
+         否则首批瓦片每个子域都要各付 100~300ms 握手，首屏灰块时间被拉长。 -->
+    <link rel="preconnect" href="https://webrd01.is.autonavi.com" crossorigin />
+    <link rel="preconnect" href="https://webrd02.is.autonavi.com" crossorigin />
+    <link rel="preconnect" href="https://webrd03.is.autonavi.com" crossorigin />
+    <link rel="preconnect" href="https://webrd04.is.autonavi.com" crossorigin />
+    <!-- 卫星底图子域仅在切到卫星模式时使用，DNS 预解析即可（不提前占 TLS 连接） -->
+    <link rel="dns-prefetch" href="https://webst01.is.autonavi.com" />
+    <link rel="dns-prefetch" href="https://webst02.is.autonavi.com" />
+    <link rel="dns-prefetch" href="https://webst03.is.autonavi.com" />
+    <link rel="dns-prefetch" href="https://webst04.is.autonavi.com" />
     <title>骑了么 · 看懂你的每一次骑行</title>
     <!-- Single Page Apps for GitHub Pages（配合 public/404.html）
          检测 404.html 重定向带来的查询串，用 replaceState 还原真实 URL，

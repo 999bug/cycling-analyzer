@@ -16,6 +16,9 @@ import {
   type MapMode,
 } from '@/map/tileSources'
 
+/** 预缓冲圈数（Leaflet 默认 2）：平移时视口外多保留几圈旧瓦片，边缘更少露白 */
+const TILE_KEEP_BUFFER = 4
+
 /**
  * 降级瓦片层 props。
  */
@@ -88,6 +91,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
             // 署名只挂底图：叠加层重复署名会让版权控件出现两遍
             attribution={index === 0 ? source.attribution : ''}
             opacity={layer.opacity ?? 1}
+            keepBuffer={TILE_KEEP_BUFFER}
             cacheEnabled={tileCacheEnabled}
             allowLocalTile={allowLocalTile}
           />
@@ -101,6 +105,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
       url={source.url}
       subdomains={source.subdomains}
       attribution={source.attribution}
+      keepBuffer={TILE_KEEP_BUFFER}
       cacheEnabled={tileCacheEnabled}
     />
   )
