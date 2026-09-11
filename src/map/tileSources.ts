@@ -127,11 +127,14 @@ export const MAP_MODES: readonly MapModeDefinition[] = [
   },
 ]
 
-/** 地图模式持久化 key（localStorage：与地图高度同为用户偏好，跨会话保留） */
-export const MAP_MODE_STORAGE_KEY = 'cycling-map-mode'
-
-/** 默认地图模式（无记忆/记忆无效时使用） */
-const DEFAULT_MAP_MODE: MapMode = 'normal'
+/**
+ * 默认地图模式（即「正常」）。
+ *
+ * 底图模式**不做持久化**（用户 2026-09-11 指定）：默认恒为正常，用户手动切换卫星图
+ * 只在当前页面生效，刷新或换页回到正常——卫星影像上轨迹常看不清，
+ * 不该被记住后带到每一个地图页面。导出视频的「跟随当前」同理，未切换即取正常。
+ */
+export const DEFAULT_MAP_MODE: MapMode = 'normal'
 
 /**
  * 取地图模式定义（未知值回退默认模式）。
@@ -142,28 +145,20 @@ export function mapModeOf(mode: MapMode): MapModeDefinition {
   return MAP_MODES.find((definition) => definition.id === mode) ?? MAP_MODES[0]!
 }
 
-/**
- * 从 localStorage 读取记忆的地图模式（无记忆/无效值/存储不可用均回退默认）。
- */
-export function loadStoredMapMode(): MapMode {
-  try {
-    const raw = localStorage.getItem(MAP_MODE_STORAGE_KEY)
-    return MAP_MODES.some((definition) => definition.id === raw) ? (raw as MapMode) : DEFAULT_MAP_MODE
-  } catch {
-    return DEFAULT_MAP_MODE
-  }
-}
+/** 历史地图模式持久化 key（仅用于清理残留，不再读写） */
+const LEGACY_MAP_MODE_STORAGE_KEY = 'cycling-map-mode'
 
 /**
- * 记忆地图模式到 localStorage（存储不可用时静默忽略，不影响切换本身）。
+ * 清除历史版本写入的地图模式记忆键（一次性）。
  *
- * @param mode 模式标识
+ * 2.62.0 前底图模式存 localStorage（键 cycling-map-mode），改为页面内生效后该键
+ * 不再被读取；这里顺手清掉，避免用户的浏览器里长期留着无用偏好。
  */
-export function storeMapMode(mode: MapMode): void {
+export function clearLegacyMapModeMemory(): void {
   try {
-    localStorage.setItem(MAP_MODE_STORAGE_KEY, mode)
+    localStorage.removeItem(LEGACY_MAP_MODE_STORAGE_KEY)
   } catch {
-    // 隐私模式等场景下写入失败：仅失去记忆能力，本次切换仍然生效
+    // 隐私模式等场景下不可用：仅清不掉残留键，不影响功能
   }
 }
 

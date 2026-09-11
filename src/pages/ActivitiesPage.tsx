@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ActivityEmptyState from '@/features/activity/ActivityEmptyState'
 import ActivityFilters from '@/features/activity/ActivityFilters'
 import ActivityListTable, { type SortField } from '@/features/activity/ActivityListTable'
 import ActivityPagination from '@/features/activity/ActivityPagination'
@@ -21,6 +22,7 @@ import BatchFixDialog from '@/features/activity/BatchFixDialog'
 import BatchActivityTypeDialog from '@/features/activity/BatchActivityTypeDialog'
 import { detectTypeSuspects, type TypeSuspect } from '@/features/activity/suspectTypes'
 import { conditionsToBounds, describeCondition, type CustomFilterCondition } from '@/features/activity/customFilter'
+import { ACTIVITY_TYPE_OPTIONS } from '@/types/activityType'
 import '@/features/activity/activity-page.css'
 import { useUnits } from '@/hooks/useUnits'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -378,11 +380,29 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
 
   const page = Math.floor(query.offset / pageSize) + 1
   const totalPages = Math.max(1, Math.ceil(result.total / pageSize))
-  const hasFilter =
-    filters.search.trim() !== '' ||
-    filters.year !== '' ||
-    filters.month !== '' ||
-    filters.customFilters.length > 0
+  // 当前生效条件（空态展示用：说清是哪条把结果筛没了；非空即处于筛选态）
+  const activeConditions = useMemo(() => {
+    const labels: string[] = []
+    const keyword = filters.search.trim()
+    if (keyword !== '') {
+      labels.push(`搜索「${keyword}」`)
+    }
+    if (filters.year !== '') {
+      labels.push(`${filters.year} 年`)
+    }
+    if (filters.month !== '') {
+      labels.push(filters.month)
+    }
+    if (filters.activityType !== '') {
+      const label = ACTIVITY_TYPE_OPTIONS.find((option) => option.value === filters.activityType)?.label
+      labels.push(label ?? filters.activityType)
+    }
+    for (const condition of filters.customFilters) {
+      labels.push(describeCondition(condition))
+    }
+    return labels
+  }, [filters.search, filters.year, filters.month, filters.activityType, filters.customFilters])
+
   // 排序偏离默认（日期降序）时才显示「重置排序」按钮（2026-09 用户指定：去掉状态文案仅留按钮）
   const sortNotDefault =
     filters.sortField !== DEFAULT_SORT_FIELD || filters.sortOrder !== DEFAULT_SORT_ORDER
@@ -476,9 +496,12 @@ function ActivitiesPage({ repository, writeRepository }: ActivitiesPageProps) {
       ) : loading && result.items.length === 0 ? (
         <p className="activity-page__loading">加载中…</p>
       ) : result.items.length === 0 ? (
-        <p className="activity-page__empty">
-          {hasFilter ? '没有符合筛选条件的记录' : '还没有骑行记录，点击左侧同步骑行数据'}
-        </p>
+        <ActivityEmptyState
+          filtered={activeConditions.length > 0}
+          totalCount={allSummaries.length}
+          conditions={activeConditions}
+          onReset={handleResetFilters}
+        />
       ) : (
         <>
           <ActivityListTable

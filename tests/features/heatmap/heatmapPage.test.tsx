@@ -13,10 +13,7 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import HeatmapPage from '@/pages/HeatmapPage'
-import {
-  MAP_MODE_STORAGE_KEY,
-  TILE_FALLBACK_STORAGE_KEY,
-} from '@/map/tileSources'
+import { TILE_FALLBACK_STORAGE_KEY } from '@/map/tileSources'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -181,7 +178,7 @@ describe('骑行热力图页', () => {
     expect(await screen.findByText(/共 2 条轨迹/)).toBeInTheDocument()
   })
 
-  it('右下角底图模式控件：切换卫星写入记忆，热力线换亮紫加浓', async () => {
+  it('右下角底图模式控件：切换卫星仅本页生效（不写记忆），热力线换亮紫加浓', async () => {
     const repo = new DexieActivityRepository(testDb)
     // 轨迹扫描缓存以「数量|总距离|开始时间|名称」为键（不含活动 ID）：换个开始时间，
     // 避免命中同文件其它用例写入的空轨迹缓存
@@ -201,8 +198,8 @@ describe('骑行热力图页', () => {
     await userEvent.click(screen.getByRole('button', { name: '卫星' }))
 
     expect(screen.getByRole('button', { name: '卫星' })).toHaveAttribute('aria-pressed', 'true')
-    // 记忆与详情页共用：切换后写入同一键
-    expect(localStorage.getItem(MAP_MODE_STORAGE_KEY)).toBe('satellite')
+    // 2.62.0 起底图模式不持久化：切换只改本页状态，刷新回到「正常」
+    expect(localStorage.getItem('cycling-map-mode')).toBeNull()
     // 卫星底图是暗色影像：热力线换亮紫并提高不透明度（0.45 → 0.7）
     expect(container.querySelector('path[stroke="#c084fc"]')).not.toBeNull()
     expect(container.querySelector('path[stroke-opacity="0.7"]')).not.toBeNull()

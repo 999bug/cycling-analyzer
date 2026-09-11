@@ -354,13 +354,21 @@ describe('骑行记录列表页', () => {
     expect(await screen.findByText('还没有骑行记录，点击左侧同步骑行数据')).toBeInTheDocument()
   })
 
-  it('筛选无结果时显示空结果文案', async () => {
+  it('筛选无结果时显示空结果卡片：说清剩余条数 + 生效条件 + 重置入口', async () => {
     await repo.addActivities(makeSeed())
     renderPage()
 
     const searchBox = screen.getByLabelText('搜索')
     await user.type(searchBox, '不存在的关键词')
-    expect(await screen.findByText('没有符合筛选条件的记录')).toBeInTheDocument()
+    expect(await screen.findByText('没有符合当前筛选条件的记录')).toBeInTheDocument()
+    // 库里总数与当前条件一并给出，避免「不知道还剩多少、哪条条件卡住」
+    expect(screen.getByText('当前条件下共 0 条，库里有 25 条记录')).toBeInTheDocument()
+    expect(screen.getByText('搜索「不存在的关键词」')).toBeInTheDocument()
+
+    // 点重置即回到全部记录
+    await user.click(screen.getByRole('button', { name: '重置筛选，查看全部 25 条' }))
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    expect(screen.getByLabelText('搜索')).toHaveValue('')
   })
 
   it('点击行跳转详情页', async () => {

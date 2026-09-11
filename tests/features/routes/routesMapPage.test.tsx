@@ -4,7 +4,7 @@
  * 通过 vi.mock 注入独立数据库实例 + fake-indexeddb：
  * 空库 → 引导文案；不同路线 → 列表与地图轨迹渲染；
  * 相同路线聚类合并（次数累加）；点击列表选中/取消高亮；仓库异常 → 错误文案；
- * 右下角底图模式切换 → 记忆写入（与热力图、详情页共用同一键）。
+ * 右下角底图模式切换 → 仅当前页生效（不写 localStorage，刷新回到「正常」）。
  */
 import 'fake-indexeddb/auto'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -14,7 +14,6 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import RoutesMapPage from '@/pages/RoutesMapPage'
-import { MAP_MODE_STORAGE_KEY } from '@/map/tileSources'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -156,6 +155,28 @@ describe('骑行路线图页', () => {
     expect(item.className).not.toContain('--active')
   })
 
+  it('底部信息区展示路线总览，选中后显示当前路线名', async () => {
+    await seedActivities([
+      makeActivity('a1', '机场东路', 31.2, 121.5, 31.3, 121.6, 20000),
+      makeActivity('b1', '顺义潮白河', 40.1, 116.3, 40.2, 116.4, 30000),
+    ])
+    const user = userEvent.setup()
+
+    render(<RoutesMapPage />)
+
+    // 路线数 / 累计次数 / 覆盖里程（两条轨迹各约 14km 与 14km）
+    await screen.findByRole('button', { name: /机场东路/ })
+    expect(screen.getByText('2 条')).toBeInTheDocument()
+    expect(screen.getByText('2 次')).toBeInTheDocument()
+    expect(screen.getByText(/^\d+(\.\d+)? km$/)).toBeInTheDocument()
+    // 「当前选中」这一项（列表里也有同名路线名，故按标签定位到统计项）
+    const currentStat = screen.getByText('当前选中').parentElement
+    expect(currentStat).toHaveTextContent('全部路线')
+
+    await user.click(screen.getByRole('button', { name: /机场东路/ }))
+    expect(currentStat).toHaveTextContent('机场东路')
+  })
+
   it('仓库异常显示错误文案', async () => {
     // 注入一个永远 reject 的仓库
     vi.spyOn(DexieActivityRepository.prototype, 'listAllSummaries').mockRejectedValue(
@@ -167,7 +188,7 @@ describe('骑行路线图页', () => {
     expect(await screen.findByText(/路线加载失败/)).toBeInTheDocument()
   })
 
-  it('右下角底图模式控件：默认正常，切换卫星+路网并写入记忆', async () => {
+  it('右下角底图模式控件：默认正常，切换卫星+路网只在当前页生效（不写记忆）', async () => {
     // 开始时间与本文件其它用例区分：路线扫描缓存键含开始时间，换值可避免命中上一个用例的缓存
     await seedActivities([
       makeActivity('sat-1', '滨江夜骑', 31.2, 121.5, 31.3, 121.6, 20000, '2026-08-05T08:00:00.000Z'),
@@ -182,6 +203,7 @@ describe('骑行路线图页', () => {
     await user.click(screen.getByRole('button', { name: '卫星+路网' }))
 
     expect(screen.getByRole('button', { name: '卫星+路网' })).toHaveAttribute('aria-pressed', 'true')
-    expect(localStorage.getItem(MAP_MODE_STORAGE_KEY)).toBe('satelliteRoads')
+    // 2.62.0 起底图模式不持久化：刷新/换页回到「正常」，不写 localStorage
+    expect(localStorage.getItem('cycling-map-mode')).toBeNull()
   })
 })

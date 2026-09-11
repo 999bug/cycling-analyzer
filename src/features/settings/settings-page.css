@@ -4,13 +4,12 @@
  * 深色基调与全局一致；危险操作按钮使用红色强调（规格 §32）。
  */
 
-/* 页面布局：作为容器查询的容器（container-type），双栏/单栏由 @container 按实际内容区宽度决定 */
+/* 页面布局：左侧区块目录 + 右侧当前区块（一次只渲染一个区块） */
 .settings-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 1280px;
-  container-type: inline-size;
+  max-width: 960px;
 }
 
 /* 目录 + 内容区横向骨架：左侧 sticky 目录 + 右侧栅格 */
@@ -21,7 +20,7 @@
   align-items: start;
 }
 
-/* 左侧锚点目录（桌面端 sticky，随滚动固定在视口顶部） */
+/* 左侧区块目录（桌面端 sticky；点击只切换右侧区块，不再滚动定位） */
 .settings-toc {
   position: sticky;
   top: 16px;
@@ -31,11 +30,17 @@
 }
 
 .settings-toc__item {
+  /* button 元素：抹掉默认外观，保留与原先链接一致的排版 */
+  width: 100%;
   padding: 8px 12px;
+  border: none;
   border-radius: 6px;
+  background: none;
+  font: inherit;
   font-size: 14px;
+  text-align: left;
   color: var(--text-secondary);
-  text-decoration: none;
+  cursor: pointer;
   transition:
     color 0.15s ease,
     background-color 0.15s ease;
@@ -56,16 +61,16 @@
   background-color: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-/* 内容区栅格：默认单栏，@container 命中后双栏 */
+/* 内容区：单栏（一次只渲染一个区块，双栏栅格已无意义） */
 .settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
 }
 
-/* 左/右栏与通栏：纵向堆叠各自的区块 */
+/* 区块容器：纵向堆叠 */
 .settings-column {
   display: flex;
   flex-direction: column;
@@ -73,12 +78,7 @@
   min-width: 0;
 }
 
-/* 通栏（数据管理/安装应用/关于/操作提示）：跨满两栏 */
-.settings-column--wide {
-  grid-column: 1 / -1;
-}
-
-/* 表单本体作为左栏，纵向堆叠区块，保持原保存按钮紧随表单 */
+/* 表单本体作为容器，纵向堆叠区块，保持保存按钮紧随区块 */
 .settings-form.settings-column {
   gap: 16px;
 }
@@ -312,29 +312,31 @@
   color: var(--text-secondary);
 }
 
-/* 「去设置」提示条跳入时的目标区块高亮（2s 后由组件移除） */
-.settings-section--highlight {
-  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
-}
-
-/* ---- 容器查询：按设置页自身（内容区）真实宽度切换布局 ----
- * 目录占 160px + 16px 间距，双栏需内容区 ≥ 900px 才有足够列宽；
- * 阈值以下退回单栏（目录列保留，右侧内容单列排布）。
- * 侧边栏「自动收回」时内容区变宽，容器查询能正确响应（media query 做不到）。 */
-@container (min-width: 900px) {
-  .settings-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* 移动端（≤768px）：目录隐藏，退化为纯单列（与改造前一致） */
+/* 移动端（≤768px）：目录由左侧竖列改为顶部横向滚动胶囊，
+ * 否则窄屏下目录一旦隐藏就没有入口切换区块了 */
 @media (max-width: 768px) {
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .settings-toc {
-    display: none;
+    position: static;
+    flex-direction: row;
+    gap: 8px;
+    /* 横向滚动：区块较多时不换行挤压，溢出部分可滑动 */
+    overflow-x: auto;
+    padding-bottom: 4px;
+    overscroll-behavior-x: contain;
+  }
+
+  .settings-toc__item {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+  }
+
+  .settings-toc__item--active {
+    border-color: color-mix(in srgb, var(--primary) 50%, transparent);
   }
 }

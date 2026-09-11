@@ -6,6 +6,7 @@ import { initTheme } from '@/features/settings/theme'
 import { initSidebarMode } from '@/features/settings/sidebar'
 import { initCyclingScope } from '@/features/activity/cyclingScope'
 import { initDataSource } from '@/stores/dataSourceStore'
+import { clearLegacyMapModeMemory } from '@/map/tileSources'
 import '@/index.css'
 
 // GitHub Pages 部署在子路径（仓库名）下，路由需带前缀；
@@ -35,6 +36,10 @@ void initTheme()
 
 // 启动时恢复侧边栏行为偏好（默认固定常驻；自动收回时延迟收起）
 void initSidebarMode()
+
+// 清掉历史版本留下的底图模式记忆：2.62.0 起底图模式改为页面内生效，
+// 旧键 cycling-map-mode 不再被读取（不清理会一直留在用户浏览器里）
+clearLegacyMapModeMemory()
 
 // 启动时恢复统计口径偏好：默认只统计骑行，非骑行活动（跑步/散步等）
 // 不进统计页、仪表盘、热力图等骑行语义页面（列表页始终可见可按类型筛选）

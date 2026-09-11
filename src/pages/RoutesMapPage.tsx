@@ -12,6 +12,7 @@ import 'leaflet/dist/leaflet.css'
 import {
   buildRouteGroups,
   extractEndpoints,
+  haversineMeters,
   type RouteActivityInput,
 } from '@/features/routes/routeGrouping'
 import { buildRouteMapRoutes, routeColor, type RouteMapRoute } from '@/features/routes/routeMap'
@@ -40,6 +41,7 @@ import {
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { formatDistance } from '@/utils/format'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
@@ -248,6 +250,28 @@ function RoutesMapPage() {
     [displayRoutes, selected],
   )
 
+  // 底部汇总：路线数 / 累计骑行次数 / 覆盖里程（里程按抽稀后的轨迹累加，与地图所见一致）
+  const summary = useMemo(() => {
+    let totalMeters = 0
+    for (const route of routes) {
+      for (const track of route.tracks) {
+        for (let i = 1; i < track.length; i += 1) {
+          const previous = track[i - 1]!
+          const current = track[i]!
+          totalMeters += haversineMeters(
+            { latitude: previous[0], longitude: previous[1] },
+            { latitude: current[0], longitude: current[1] },
+          )
+        }
+      }
+    }
+    return {
+      routeCount: routes.length,
+      totalRides: routes.reduce((sum, route) => sum + route.count, 0),
+      totalMeters,
+    }
+  }, [routes])
+
   return (
     <div className="routes-map-page">
       <h1>骑行路线图</h1>
@@ -284,6 +308,7 @@ function RoutesMapPage() {
               </li>
             ))}
           </ul>
+          <div className="routes-map-page__main">
           <div className="routes-map-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
             <MapContainer
               className="routes-map-page__map"
@@ -337,6 +362,35 @@ function RoutesMapPage() {
               onChange={setMapMode}
               enabled={isGcjSource(sourceIndex)}
             />
+          </div>
+          {/* 底部信息区：地图不再铺满整屏，这里放路线总览与操作提示 */}
+          <div className="routes-map-page__summary">
+            <div className="routes-map-page__stats">
+              <span className="routes-map-page__stat">
+                <span className="routes-map-page__stat-label">路线</span>
+                <span className="routes-map-page__stat-value">{summary.routeCount} 条</span>
+              </span>
+              <span className="routes-map-page__stat">
+                <span className="routes-map-page__stat-label">累计骑行</span>
+                <span className="routes-map-page__stat-value">{summary.totalRides} 次</span>
+              </span>
+              <span className="routes-map-page__stat">
+                <span className="routes-map-page__stat-label">覆盖里程</span>
+                <span className="routes-map-page__stat-value">
+                  {formatDistance(summary.totalMeters)}
+                </span>
+              </span>
+              <span className="routes-map-page__stat">
+                <span className="routes-map-page__stat-label">当前选中</span>
+                <span className="routes-map-page__stat-value">
+                  {selected === null ? '全部路线' : (routes[selected]?.name ?? '全部路线')}
+                </span>
+              </span>
+            </div>
+            <p className="routes-map-page__tip">
+              点击左侧路线单独高亮，再次点击恢复全部
+            </p>
+          </div>
           </div>
         </div>
       )}

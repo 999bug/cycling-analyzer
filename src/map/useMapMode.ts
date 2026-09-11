@@ -1,28 +1,22 @@
 /**
- * 地图模式状态钩子（详情页 / 热力图 / 路线图共用的同一份偏好）。
+ * 地图模式状态钩子（详情页 / 热力图 / 路线图共用同一套控件与默认值）。
  *
- * 初值取 localStorage 记忆（loadStoredMapMode），切换时同步写回。三处共用同一个存储键，
- * 因此任一处切换后，其余地图立即沿用；详情页的「导出视频 → 跟随当前底图」也读同一份记忆。
+ * **不持久化**（用户 2026-09-11 指定）：初值恒为「正常」，切换只改本页状态，
+ * 刷新或换页即回到正常。此前三处共用 localStorage 记忆，结果是一次切卫星图、
+ * 之后每个地图页面都是卫星图——而卫星影像上轨迹常看不清，属于「被记住的坏默认」。
  */
-import { useCallback, useState } from 'react'
-import { loadStoredMapMode, storeMapMode, type MapMode } from '@/map/tileSources'
+import { useState } from 'react'
+import { DEFAULT_MAP_MODE, type MapMode } from '@/map/tileSources'
 
 /** 地图模式状态：[当前模式, 切换回调] */
 export type MapModeState = readonly [MapMode, (mode: MapMode) => void]
 
 /**
- * 读取并持久化地图模式。
+ * 页面内的地图模式状态（默认「正常」，不写 localStorage）。
  *
  * @returns [当前模式, 切换回调]
  */
 export function useMapMode(): MapModeState {
-  const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
-
-  // 切换即写记忆：与地图高度同为跨会话保留的显示偏好
-  const changeMapMode = useCallback((mode: MapMode) => {
-    setMapMode(mode)
-    storeMapMode(mode)
-  }, [])
-
-  return [mapMode, changeMapMode]
+  const [mapMode, setMapMode] = useState<MapMode>(DEFAULT_MAP_MODE)
+  return [mapMode, setMapMode]
 }

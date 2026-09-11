@@ -88,7 +88,7 @@ describe('设置页', () => {
     vi.restoreAllMocks()
   })
 
-  it('空库渲染默认公制表单（距离公里、时间 24 小时制）', async () => {
+  it('空库渲染默认空表单（默认选中「个人信息」区块）', async () => {
     render(
       <MemoryRouter>
         <SettingsPage />
@@ -97,18 +97,37 @@ describe('设置页', () => {
 
     expect(await screen.findByLabelText('昵称')).toHaveValue('')
     expect(screen.getByLabelText('体重')).toHaveValue(null)
-    expect(screen.getByLabelText('距离')).toHaveValue('km')
-    expect(screen.getByLabelText('时间格式')).toHaveValue('24h')
     expect(screen.getByRole('button', { name: '保存设置' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '导出数据' })).toBeInTheDocument()
+  })
+
+  it('「单位」区块默认公制（距离公里、时间 24 小时制）', async () => {
+    render(
+      <MemoryRouter initialEntries={['/settings#settings-units']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByLabelText('距离')).toHaveValue('km')
+    expect(screen.getByLabelText('时间格式')).toHaveValue('24h')
+  })
+
+  it('「数据管理」区块提供导出/导入/清空', async () => {
+    render(
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('button', { name: '导出数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '导入数据' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '清空全部本地数据' })).toBeInTheDocument()
+    expect(screen.getByText(/导出\/清空仅作用于「我的数据」/)).toBeInTheDocument()
   })
 
   it('「关于」区块说明作者数据与本地隐私（含作者名）', async () => {
     useDataSourceStore.setState({ authorName: 'Saul' })
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-about']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -117,9 +136,6 @@ describe('设置页', () => {
     expect(about).toHaveTextContent('Saul')
     expect(about).toHaveTextContent('只读')
     expect(about).toHaveTextContent('不会上传')
-    // 两处数据源提示文案
-    expect(screen.getByText(/训练配置仅作用于「我的数据」/)).toBeInTheDocument()
-    expect(screen.getByText(/导出\/清空仅作用于「我的数据」/)).toBeInTheDocument()
   })
 
   it('预置设置后渲染回填（昵称/体重/英里/12 小时制）', async () => {
@@ -144,7 +160,10 @@ describe('设置页', () => {
     })
     expect(screen.getByLabelText('体重')).toHaveValue(70.5)
     expect(screen.getByLabelText('FTP')).toHaveValue(250)
-    expect(screen.getByLabelText('距离')).toHaveValue('mi')
+
+    // 单位在独立区块：切过去校验同样回填
+    await user.click(screen.getByRole('button', { name: '单位' }))
+    expect(await screen.findByLabelText('距离')).toHaveValue('mi')
     expect(screen.getByLabelText('时间格式')).toHaveValue('12h')
   })
 
@@ -166,7 +185,9 @@ describe('设置页', () => {
     await user.type(nickname, '晨骑爱好者')
     await user.type(screen.getByLabelText('体重'), '70')
     await user.type(screen.getByLabelText('FTP'), '250')
-    await user.selectOptions(screen.getByLabelText('距离'), 'mi')
+    // 距离在「单位」区块：切过去改完就地保存（单位区块自带保存按钮，与个人信息同一份设置）
+    await user.click(screen.getByRole('button', { name: '单位' }))
+    await user.selectOptions(await screen.findByLabelText('距离'), 'mi')
     await user.click(screen.getByRole('button', { name: '保存设置' }))
 
     expect(await screen.findByText('设置已保存')).toBeInTheDocument()
@@ -180,7 +201,7 @@ describe('设置页', () => {
     await activityRepo.addActivity(makeActivity('act-1', 'fp-1'))
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -208,7 +229,7 @@ describe('设置页', () => {
     const file = new File([JSON.stringify(bundle)], 'backup.json', { type: 'application/json' })
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -227,7 +248,7 @@ describe('设置页', () => {
     const file = new File(['not-json'], 'backup.json', { type: 'application/json' })
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -245,7 +266,7 @@ describe('设置页', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -264,7 +285,9 @@ describe('设置页', () => {
     const settings = await getSettings(settingsRepo)
     expect(settings.profile).toEqual({})
     expect(settings.units).toEqual({ distance: 'km', timeFormat: '24h' })
-    expect(screen.getByLabelText('距离')).toHaveValue('km')
+    // 单位区块同步复位（清空后表单回默认公制）
+    await user.click(screen.getByRole('button', { name: '单位' }))
+    expect(await screen.findByLabelText('距离')).toHaveValue('km')
   })
 
   it('清空取消确认时不执行任何操作', async () => {
@@ -273,7 +296,7 @@ describe('设置页', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -315,7 +338,7 @@ describe('设置页主题切换（规格 §36）', () => {
 
   it('默认渲染深色主题选项', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-appearance']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -325,7 +348,7 @@ describe('设置页主题切换（规格 §36）', () => {
 
   it('切换浅色主题：立即应用并持久化', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-appearance']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -345,7 +368,7 @@ describe('设置页主题切换（规格 §36）', () => {
   it('预置浅色主题后渲染回填', async () => {
     await saveSettings({ appearance: { theme: 'light' } })
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-appearance']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -361,7 +384,7 @@ describe('设置页原始 FIT 文件开关（规格 §19）', () => {
 
   it('默认未勾选，开启后立即持久化', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-import']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -387,7 +410,7 @@ describe('设置页数据口径（统计包含其他运动）', () => {
 
   it('默认关闭：统计仅包含骑行', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-scope']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -401,7 +424,7 @@ describe('设置页数据口径（统计包含其他运动）', () => {
 
   it('开启后立即持久化并整页刷新（各页取数口径同步）', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-scope']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -428,7 +451,7 @@ describe('设置页离线地图（瓦片缓存）', () => {
 
   it('默认开启瓦片缓存，可关闭并立即持久化', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-offline']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -445,7 +468,7 @@ describe('设置页离线地图（瓦片缓存）', () => {
 
   it('开启瓦片缓存时展示清空按钮，点击后统计归零', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-offline']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -476,7 +499,7 @@ describe('设置页安装应用区块（PWA）', () => {
 
   it('默认环境（jsdom 不支持安装）展示替代浏览器说明', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-install']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -493,7 +516,7 @@ describe('设置页安装应用区块（PWA）', () => {
     event.userChoice = Promise.resolve({ outcome: 'accepted' as const, platform: 'web' })
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#settings-install']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -504,6 +527,47 @@ describe('设置页安装应用区块（PWA）', () => {
     const installButton = await screen.findByRole('button', { name: '安装到桌面' })
     await user.click(installButton)
     expect(event.prompt).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('设置页区块目录（一次只显示一个区块）', () => {
+  const user = userEvent.setup()
+
+  it('默认只渲染「个人信息」，其余区块不在页面上', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('region', { name: '个人信息' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '数据管理' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '关于' })).not.toBeInTheDocument()
+  })
+
+  it('点击目录项切换到对应区块并替换原有内容', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+    await screen.findByRole('region', { name: '个人信息' })
+
+    await user.click(screen.getByRole('button', { name: '数据管理' }))
+
+    expect(await screen.findByRole('region', { name: '数据管理' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '个人信息' })).not.toBeInTheDocument()
+  })
+
+  it('hash 深链进入时直接选中对应区块（/settings#author-data）', async () => {
+    render(
+      <MemoryRouter initialEntries={['/settings#author-data']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('region', { name: '作者数据' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '个人信息' })).not.toBeInTheDocument()
   })
 })
 
@@ -525,12 +589,13 @@ describe('设置页「作者数据」可见性区块', () => {
 
   it('渲染三选一策略，默认选中「自动」', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#author-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
 
     const section = await screen.findByRole('region', { name: '作者数据' })
+    expect(section).toHaveTextContent('有本地数据时隐藏（默认）')
     expect(section).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /自动/ })).toBeChecked()
     expect(screen.getByRole('radio', { name: /始终显示/ })).not.toBeChecked()
@@ -539,7 +604,7 @@ describe('设置页「作者数据」可见性区块', () => {
 
   it('选择「始终显示」：立即写入数据源 store 并提示成功', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#author-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )
@@ -551,7 +616,7 @@ describe('设置页「作者数据」可见性区块', () => {
 
   it('选择「始终隐藏」：立即写入数据源 store', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings#author-data']}>
         <SettingsPage />
       </MemoryRouter>,
     )

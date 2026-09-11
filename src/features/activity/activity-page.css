@@ -380,6 +380,91 @@
   color: var(--primary);
 }
 
+/* 筛选无结果空态卡片：主文案 + 剩余条数 + 生效条件 chips + 重置按钮 */
+.activity-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 24px 0;
+  padding: 36px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
+  text-align: center;
+}
+
+/* 空心圆 + 竖线的「无结果」图标（纯 CSS，避免引入图标依赖） */
+.activity-empty__icon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  position: relative;
+}
+
+.activity-empty__icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background-color: var(--text-secondary);
+  transform: translateX(-50%);
+}
+
+.activity-empty__icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: var(--text-secondary);
+  transform: translateX(-50%);
+}
+
+.activity-empty__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.activity-empty__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.activity-empty__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-empty__reset {
+  padding: 8px 18px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.activity-empty__reset:hover {
+  opacity: 0.9;
+}
+
 /* 标题列链接（a11y 真实链接入口）：继承表格文字色，hover 提示可点 */
 .activity-table__title-link {
   color: var(--text);

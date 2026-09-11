@@ -9,7 +9,7 @@
  * 依赖可注入（测试传独立仓库/数据库实例），缺省使用全局数据库单例。
  */
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { db, type CyclingDatabase } from '@/storage/db'
 import { reloadPage } from '@/utils/navigation'
 import { switchIncludeOtherSports } from '@/features/activity/cyclingScope'
@@ -65,7 +65,7 @@ const AUTHOR_VISIBILITY_OPTIONS: Array<{
   label: string
   hint: string
 }> = [
-  { value: 'auto', label: '自动', hint: '有本地数据时隐藏（推荐）' },
+  { value: 'auto', label: '自动', hint: '有本地数据时隐藏（默认）' },
   { value: 'show', label: '始终显示', hint: '侧边栏保留两档切换' },
   { value: 'hide', label: '始终隐藏', hint: '没有本地数据时也只显示空态' },
 ]
@@ -73,7 +73,13 @@ const AUTHOR_VISIBILITY_OPTIONS: Array<{
 /** 一天的毫秒数（估算窗口换算） */
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
-/** 设置页区块目录（锚点 id + 显示名，顺序即页面展示顺序，供左侧目录与 hash 跳转复用） */
+/**
+ * 设置页区块目录（id + 显示名）。
+ *
+ * 左侧目录为**分区切换**：任一时刻右侧只渲染当前选中区块，避免九个区块全堆出来
+ * （2026-09-11 用户反馈「点开设置后每个标题右侧都应该只展示对应的」）。
+ * id 同时作为 hash 深链的锚点（提示条「去设置」跳 /settings#author-data）。
+ */
 const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'settings-profile', label: '个人信息' },
   { id: 'settings-units', label: '单位' },
@@ -84,7 +90,20 @@ const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'author-data', label: '作者数据' },
   { id: 'settings-data', label: '数据管理' },
   { id: 'settings-install', label: '安装应用' },
+  { id: 'settings-about', label: '关于' },
 ]
+
+/** 目录默认选中项（无 hash 深链时） */
+const DEFAULT_SECTION_ID = SETTINGS_SECTIONS[0].id
+
+/**
+ * 判断 id 是否为合法区块（hash 深链可能来自旧链接或手输）。
+ *
+ * @param id 候选区块 id
+ */
+function isKnownSection(id: string): boolean {
+  return SETTINGS_SECTIONS.some((section) => section.id === id)
+}
 
 /** FTP/VO2Max 估算状态（loading=扫描中，noPower=近 90 天无功率数据） */
 type EstimateStatus = 'loading' | 'noPower' | 'ready' | 'error'
@@ -119,6 +138,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   const setAuthorVisibility = useDataSourceStore((s) => s.setAuthorVisibility)
   // 「作者数据」区块锚点（提示条「去设置」跳转 /settings#author-data）
   const location = useLocation()
+  const navigate = useNavigate()
 
   // 页面依赖上下文：优先注入值，缺省使用全局数据库单例
   const context = useMemo(
@@ -497,24 +517,21 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     }
   }
 
-  // 提示条「去设置」/ 目录点击跳入：滚动到对应区块并高亮一次
-  useEffect(() => {
-    const id = location.hash.startsWith('#') ? location.hash.slice(1) : ''
-    if (id === '' || !SETTINGS_SECTIONS.some((section) => section.id === id)) {
-      return
-    }
-    const section = document.getElementById(id)
-    if (section === null) {
-      return
-    }
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    section.classList.add('settings-section--highlight')
-    const timer = window.setTimeout(() => section.classList.remove('settings-section--highlight'), 2000)
-    return () => {
-      window.clearTimeout(timer)
-      section.classList.remove('settings-section--highlight')
-    }
-  }, [location.hash])
+  // 当前选中区块直接由 URL hash 派生（单一数据源）：
+  // 提示条「去设置」带 hash 跳入即选中对应区块，点击目录只改 hash 不额外存 state，
+  // 也就不存在「state 与 URL 不同步」的问题
+  const hashSectionId = location.hash.startsWith('#') ? location.hash.slice(1) : ''
+  const activeSectionId = isKnownSection(hashSectionId) ? hashSectionId : DEFAULT_SECTION_ID
+
+  /**
+   * 目录点击：切换区块并同步 hash（保持深链可复制、浏览器可回退）。
+   *
+   * @param id 目标区块 id
+   */
+  function handleSelectSection(id: string) {
+    // 只改 hash 不动 pathname：路由前缀（GitHub Pages 子路径）由 basename 维护
+    navigate({ hash: id }, { replace: true })
+  }
 
   /**
    * 切换作者数据可见性策略：写入 dataSourceStore（localStorage）立即生效。
@@ -621,9 +638,6 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
     setTileCacheStats({ count: 0, bytes: 0 })
   }
 
-  // 目录当前选中项：由 location.hash 派生（无 hash 时默认第一个区块）
-  const activeSectionId = location.hash.startsWith('#') ? location.hash.slice(1) : SETTINGS_SECTIONS[0].id
-
   return (
     <div className="settings-page">
       <h1>设置</h1>
@@ -631,22 +645,38 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       <div className="settings-layout">
         <nav className="settings-toc" aria-label="设置区块">
           {SETTINGS_SECTIONS.map((section) => (
-            <a
+            <button
               key={section.id}
-              href={`#${section.id}`}
+              type="button"
+              aria-current={section.id === activeSectionId ? 'true' : undefined}
               className={
                 section.id === activeSectionId
                   ? 'settings-toc__item settings-toc__item--active'
                   : 'settings-toc__item'
               }
+              onClick={() => handleSelectSection(section.id)}
             >
               {section.label}
-            </a>
+            </button>
           ))}
         </nav>
 
         <div className="settings-grid">
+          {/* 操作提示常驻内容区顶部：切换区块后上一动作的结果仍可见 */}
+          {message !== null && (
+            <p
+              role="status"
+              className={
+                message.type === 'success'
+                  ? 'settings-message settings-message--success'
+                  : 'settings-message settings-message--error'
+              }
+            >
+              {message.text}
+            </p>
+          )}
           <form className="settings-form settings-column" onSubmit={handleSubmit}>
+            {activeSectionId === 'settings-profile' && (
             <section className="settings-section" aria-label="个人信息" id="settings-profile">
               <h2 className="settings-section__title">个人信息</h2>
               <p className="settings-section__hint">
@@ -769,8 +799,15 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                   <span className="settings-field__unit">bpm</span>
                 </div>
               </div>
+              <div className="settings-form__actions">
+                <button type="submit" className="settings-button settings-button--primary" disabled={saving}>
+                  {saving ? '保存中…' : '保存设置'}
+                </button>
+              </div>
             </section>
+            )}
 
+            {activeSectionId === 'settings-units' && (
             <section className="settings-section" aria-label="单位" id="settings-units">
               <h2 className="settings-section__title">单位</h2>
               <div className="settings-fields">
@@ -803,16 +840,17 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                   </select>
                 </div>
               </div>
+              {/* 单位与个人信息同属一份设置，任一处保存都会一起写入 */}
+              <div className="settings-form__actions">
+                <button type="submit" className="settings-button settings-button--primary" disabled={saving}>
+                  {saving ? '保存中…' : '保存设置'}
+                </button>
+              </div>
             </section>
-
-            <div className="settings-form__actions">
-              <button type="submit" className="settings-button settings-button--primary" disabled={saving}>
-                {saving ? '保存中…' : '保存设置'}
-              </button>
-            </div>
+            )}
           </form>
 
-          <div className="settings-column">
+          {activeSectionId === 'settings-appearance' && (
             <section className="settings-section" aria-label="外观" id="settings-appearance">
               <h2 className="settings-section__title">外观</h2>
               <p className="settings-section__hint">
@@ -851,7 +889,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 </div>
               </div>
             </section>
+            )}
 
+            {activeSectionId === 'settings-scope' && (
             <section className="settings-section" aria-label="数据口径" id="settings-scope">
               <h2 className="settings-section__title">数据口径</h2>
               <p className="settings-section__hint">
@@ -877,7 +917,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 </div>
               </div>
             </section>
+            )}
 
+            {activeSectionId === 'settings-offline' && (
             <section className="settings-section" aria-label="离线地图" id="settings-offline">
               <h2 className="settings-section__title">离线地图</h2>
               <p className="settings-section__hint">
@@ -913,7 +955,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 )}
               </div>
             </section>
+            )}
 
+            {activeSectionId === 'settings-import' && (
             <section className="settings-section" aria-label="导入" id="settings-import">
               <h2 className="settings-section__title">导入</h2>
               <p className="settings-section__hint">
@@ -933,7 +977,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 </div>
               </div>
             </section>
+            )}
 
+            {activeSectionId === 'author-data' && (
             <section id="author-data" className="settings-section" aria-label="作者数据">
               <h2 className="settings-section__title">作者数据</h2>
               <p className="settings-section__hint">
@@ -962,9 +1008,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 </div>
               </div>
             </section>
-          </div>
+            )}
 
-          <div className="settings-column settings-column--wide">
+            {activeSectionId === 'settings-data' && (
             <section className="settings-section" aria-label="数据管理" id="settings-data">
               <h2 className="settings-section__title">数据管理</h2>
               <p className="settings-section__hint">
@@ -1004,22 +1050,11 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 </button>
               </div>
             </section>
-
-            <InstallSection id="settings-install" />
-
-            {message !== null && (
-              <p
-                role="status"
-                className={
-                  message.type === 'success'
-                    ? 'settings-message settings-message--success'
-                    : 'settings-message settings-message--error'
-                }
-              >
-                {message.text}
-              </p>
             )}
 
+            {activeSectionId === 'settings-install' && <InstallSection id="settings-install" />}
+
+            {activeSectionId === 'settings-about' && (
             <section className="settings-section" aria-label="关于" id="settings-about">
               <h2 className="settings-section__title">关于</h2>
               <p className="settings-section__hint">
@@ -1028,7 +1063,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                 你的数据仅保存在当前浏览器本地（IndexedDB），不会上传。
               </p>
             </section>
-          </div>
+            )}
         </div>
       </div>
     </div>

@@ -84,7 +84,7 @@ import {
 } from '@/features/analysis/zones'
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
-import { loadStoredMapMode, storeMapMode, type MapMode } from '@/map/tileSources'
+import { DEFAULT_MAP_MODE, type MapMode } from '@/map/tileSources'
 import { routePointAtTimestamp } from '@/charts/timeline'
 import ActivityMap from '@/map/ActivityMap'
 import ColoringLegend from '@/map/ColoringLegend'
@@ -277,9 +277,11 @@ function ActivityDetailPage() {
   const [exportGuideOpen, setExportGuideOpen] = useState(false)
   /** 导出面板上次结果提示（如「录制已中断，已生成前 x 秒」） */
   const [videoExportNotice, setVideoExportNotice] = useState<string>()
-  // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网，记忆到 localStorage）
+  // 在线轨迹回放模式开关 + 地图显示模式（正常/卫星/卫星+路网）
+  // 底图模式仅本页生效：初值恒为「正常」，切换不写入 localStorage（用户 2026-09-11 指定：
+  // 卫星图容易看不清轨迹，不该被记住带到别的页面）
   const [replayMode, setReplayMode] = useState(false)
-  const [mapMode, setMapMode] = useState<MapMode>(loadStoredMapMode)
+  const [mapMode, setMapMode] = useState<MapMode>(DEFAULT_MAP_MODE)
   // 轨迹纠偏：面板开关 + 预览参数（undefined = 无未保存的预览改动，地图按已保存标记渲染）
   const [fixPanelOpen, setFixPanelOpen] = useState(false)
   const [fixPreview, setFixPreview] = useState<TrackFixPreview>()
@@ -686,7 +688,9 @@ function ActivityDetailPage() {
     // 真正进入录制后收起引导层，让录制舞台露出来（进度改由舞台顶部状态条展示）
     setExportGuideOpen(false)
     try {
-      const trackName = activity.name || `${formatDate(activity.startTime)} 骑行`
+      // 标题缺失时的备用名（成片文件名与字幕共用）
+      const fallbackTitle = `${formatDate(activity.startTime)} 骑行`
+      const trackName = activity.name || fallbackTitle
       const durationSeconds = resolveVideoDuration(settings.duration, activity.distance)
       const captionData: VideoCaptionData = {
         distanceMeters: activity.distance,
@@ -702,6 +706,8 @@ function ActivityDetailPage() {
           durationSeconds,
           aspectRatio: settings.aspectRatio,
           mapMode: settings.mapMode,
+          // 「跟随当前」= 本页正在显示的底图（底图模式不再记忆，故显式传入）
+          currentMapMode: mapMode,
           coordinateSystem: activity.coordinateSystem,
           trackOffset: activity.trackOffset,
           captions: {
@@ -715,7 +721,8 @@ function ActivityDetailPage() {
         }))
 
       if (result !== undefined) {
-        downloadVideo(buildVideoFileName(activity.fileName, result.extension), result.blob)
+        // 文件名直接用骑行记录标题（分享时一眼看出是哪次骑行），标题缺失回退「日期 + 骑行」
+        downloadVideo(buildVideoFileName(trackName, result.extension, fallbackTitle), result.blob)
         setVideoDialogOpen(false)
         setExportGuideOpen(false)
       }
@@ -810,10 +817,9 @@ function ActivityDetailPage() {
     setFixPreview(preview)
   }, [])
 
-  // 地图模式切换：同步写入 localStorage（与地图高度同为跨会话保留的显示偏好）
+  // 地图模式切换：只改本页状态，不写入 localStorage（刷新/换页回到「正常」）
   const handleMapModeChange = useCallback((mode: MapMode) => {
     setMapMode(mode)
-    storeMapMode(mode)
   }, [])
 
   /**

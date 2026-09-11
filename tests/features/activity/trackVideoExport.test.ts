@@ -166,10 +166,24 @@ describe('字幕文案', () => {
 })
 
 describe('导出文件名', () => {
-  it('去掉 .fit / .fit.gz 后缀并追加 -replay', () => {
-    expect(buildVideoFileName('ride.fit', 'mp4')).toBe('ride-replay.mp4')
-    expect(buildVideoFileName('ride.fit.gz', 'webm')).toBe('ride-replay.webm')
-    expect(buildVideoFileName('北京骑行.fit', 'mp4')).toBe('北京骑行-replay.mp4')
+  it('直接取活动标题作为文件名', () => {
+    expect(buildVideoFileName('环湖骑行', 'mp4', '2026-03-08 骑行')).toBe('环湖骑行.mp4')
+    expect(buildVideoFileName('早班车队拉练', 'webm', '2026-03-08 骑行')).toBe('早班车队拉练.webm')
+  })
+
+  it('过滤文件名非法字符，连续空白压缩为一个空格', () => {
+    expect(buildVideoFileName('环湖 / 拉练: 第2圈', 'mp4', '备用名')).toBe('环湖 拉练 第2圈.mp4')
+    expect(buildVideoFileName('a\\b*c?d"e<f>g|h', 'mp4', '备用名')).toBe('a b c d e f g h.mp4')
+  })
+
+  it('标题缺失或清洗后为空时回退备用名', () => {
+    expect(buildVideoFileName('', 'mp4', '2026-03-08 骑行')).toBe('2026-03-08 骑行.mp4')
+    expect(buildVideoFileName('///', 'mp4', '2026-03-08 骑行')).toBe('2026-03-08 骑行.mp4')
+  })
+
+  it('超长标题截断到 60 字符', () => {
+    const long = '骑'.repeat(100)
+    expect(buildVideoFileName(long, 'mp4', '备用名')).toBe(`${'骑'.repeat(60)}.mp4`)
   })
 })
 

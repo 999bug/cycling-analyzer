@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>UI 优化原型 · 2026-09-11 评审稿</title>
+<style>
+  :root {
+    --primary: #0d3b4c;
+    --primary-soft: rgba(13, 59, 76, 0.08);
+    --accent: #7cc02e;
+    --bg: #f4f6f7;
+    --surface: #ffffff;
+    --text: #16242b;
+    --text-secondary: #5b6b73;
+    --border: #dde3e6;
+    --danger: #c0392b;
+    --success: #1d9e75;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 64px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .lede { color: var(--text-secondary); margin: 0 0 28px; }
+  .proto {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+  .proto__head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .proto__no {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--primary); color: #fff; font-size: 12px; flex: 0 0 auto;
+  }
+  .proto__title { font-size: 16px; font-weight: 600; margin: 0; }
+  .proto__desc { color: var(--text-secondary); margin: 0 0 16px 32px; font-size: 13px; }
+  .stage {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: #fbfcfc;
+    padding: 16px;
+    margin-left: 32px;
+  }
+  .notes { margin: 14px 0 0 32px; font-size: 13px; color: var(--text-secondary); }
+  .notes li { margin-bottom: 4px; }
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    background: var(--primary-soft); color: var(--primary); font-size: 12px; margin-right: 6px;
+  }
+
+  /* ---------- 通用控件 ---------- */
+  .btn {
+    padding: 7px 14px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--primary); }
+  .btn--primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn--danger { color: var(--danger); border-color: var(--danger); }
+  .field {
+    padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); font: inherit; min-width: 120px;
+  }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 13px;
+  }
+  .chip__x { border: 0; background: none; cursor: pointer; color: var(--text-secondary); font-size: 14px; }
+
+  /* ---------- 1 空态 ---------- */
+  .empty {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    padding: 32px 24px; text-align: center;
+  }
+  .empty__icon {
+    width: 40px; height: 40px; margin: 0 auto 12px; border-radius: 50%;
+    border: 2px solid var(--border); position: relative;
+  }
+  .empty__icon::after {
+    content: ''; position: absolute; left: 50%; top: 9px; width: 2px; height: 13px;
+    background: var(--text-secondary); transform: translateX(-50%); border-radius: 2px;
+  }
+  .empty__icon::before {
+    content: ''; position: absolute; left: 50%; bottom: 8px; width: 2px; height: 2px;
+    background: var(--text-secondary); transform: translateX(-50%); border-radius: 50%;
+  }
+  .empty__title { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  .empty__hint { color: var(--text-secondary); margin: 0 0 14px; font-size: 13px; }
+  .empty__conds { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 18px; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.grid th, table.grid td {
+    text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.grid th { color: var(--text-secondary); font-weight: 500; }
+  table.grid tbody tr:hover { background: var(--primary-soft); cursor: pointer; }
+
+  /* ---------- 2 设置页 ---------- */
+  .settings { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .toc { display: flex; flex-direction: column; gap: 2px; }
+  .toc__item {
+    padding: 8px 12px; border: 0; border-radius: 6px; background: none; color: var(--text-secondary);
+    font: inherit; text-align: left; cursor: pointer;
+  }
+  .toc__item:hover { background: rgba(13, 59, 76, 0.06); color: var(--text); }
+  .toc__item--active { color: var(--primary); background: var(--primary-soft); font-weight: 500; }
+  .pane { min-width: 0; }
+  .card {
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 16px;
+  }
+  .card + .card { margin-top: 14px; }
+  .card__title { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+  .card__hint { color: var(--text-secondary); font-size: 13px; margin: 0 0 12px; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .row__label { width: 110px; color: var(--text-secondary); font-size: 13px; flex: 0 0 auto; }
+  .radio-list { display: flex; flex-direction: column; gap: 8px; }
+  .radio {
+    display: flex; align-items: center; gap: 8px; padding: 9px 11px;
+    border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+  .radio--on { border-color: rgba(13, 59, 76, 0.5); background: var(--primary-soft); }
+  .radio__hint { color: var(--text-secondary); }
+
+  /* ---------- 3 路线图 ---------- */
+  .routes { display: flex; gap: 16px; }
+  .routes__list {
+    width: 220px; flex: 0 0 auto; list-style: none; margin: 0; padding: 4px;
+    display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto;
+  }
+  .routes__item {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px;
+    border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text);
+    font: inherit; text-align: left; cursor: pointer;
+  }
+  .routes__item:hover { background: rgba(13, 59, 76, 0.05); }
+  .routes__item--on { border-color: rgba(13, 59, 76, 0.5); background: var(--primary-soft); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .routes__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .routes__count { color: var(--text-secondary); font-size: 12px; }
+  .routes__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .map {
+    position: relative; height: 300px; border: 1px solid var(--border); border-radius: 10px;
+    background: #eceff1; overflow: hidden;
+  }
+  .map svg { width: 100%; height: 100%; display: block; }
+  .mapctl {
+    position: absolute; right: 10px; bottom: 10px; display: flex; gap: 2px;
+    background: rgba(22, 36, 43, 0.82); border-radius: 8px; padding: 3px;
+  }
+  .mapctl button {
+    border: 0; background: none; color: #eaf0f2; font: inherit; font-size: 12px;
+    padding: 5px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .mapctl button.on { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  .maphint {
+    position: absolute; left: 10px; top: 10px; background: rgba(22, 36, 43, 0.82); color: #eaf0f2;
+    font-size: 12px; padding: 5px 9px; border-radius: 6px;
+  }
+  .bottom {
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap;
+  }
+  .stat { display: flex; gap: 22px; flex-wrap: wrap; }
+  .stat__k { color: var(--text-secondary); font-size: 12px; }
+  .stat__v { font-size: 15px; font-weight: 600; }
+  .legend { display: flex; gap: 12px; color: var(--text-secondary); font-size: 12px; flex-wrap: wrap; }
+
+  /* ---------- 4 小改动 ---------- */
+  .mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-left: 32px; }
+  .mini__card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: #fbfcfc; }
+  .mini__t { font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+  .mini__b { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  .code {
+    display: inline-block; background: #eef2f3; border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; font-family: ui-monospace, monospace; font-size: 12px;
+  }
+  .strike { text-decoration: line-through; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>UI 优化评审原型 · 2026-09-11</h1>
+  <p class="lede">以下为 6 项优化的可交互示意稿（浅色主题、示意尺寸，非最终像素）。请逐项确认或提出修改。</p>
+
+  <!-- 1 -->
+  <section class="proto">
+    <div class="proto__head"><span class="proto__no">1</span><h2 class="proto__title">骑行记录页 · 筛选无结果</h2></div>
+    <p class="proto__desc">筛选后一条都不剩时，给出「为什么空 + 当前条件 + 一键重置」，而不是一句干巴巴的「没有符合筛选条件的记录」。点下方按钮可看重置后的效果。</p>
+    <div class="stage">
+      <div class="toolbar">
+        <select class="field"><option>2026 年</option></select>
+        <select class="field"><option>3 月</option></select>
+        <input class="field" value="环湖" />
+        <span class="chip">距离 ≥ 80 km <button class="chip__x">×</button></span>
+        <span class="chip">平均功率 ≥ 200 W <button class="chip__x">×</button></span>
+        <button class="btn">重置</button>
+      </div>
+      <div id="empty-demo">
+        <div class="empty" id="empty-box">
+          <div class="empty__icon"></div>
+          <p class="empty__title">没有符合当前筛选条件的记录</p>
+          <p class="empty__hint">当前条件下共 0 条，库里有 128 条骑行记录</p>
+          <div class="empty__conds">
+            <span class="chip">2026 年</span>
+            <span class="chip">3 月</span>
+            <span class="chip">搜索「环湖」</span>
+            <span class="chip">距离 ≥ 80 km</span>
+            <span class="chip">平均功率 ≥ 200 W</span>
+          </div>
+          <button class="btn btn--primary" id="reset-btn">重置筛选，查看全部 128 条</button>
+        </div>
+        <div id="list-box" style="display: none;">
+          <table class="grid">
+            <thead><tr><th>日期</th><th>标题</th><th>距离</th><th>时长</th><th>均速</th></tr></thead>
+            <tbody>
+              <tr><td>2026-03-08</td><td>环湖骑行</td><td>62.4 km</td><td>2:24:10</td><td>26.0 km/h</td></tr>
+              <tr><td>2026-03-02</td><td>早班车队拉练</td><td>48.1 km</td><td>1:52:33</td><td>25.6 km/h</td></tr>
+              <tr><td>2026-02-27</td><td>山路爬坡</td><td>35.7 km</td><td>1:48:02</td><td>19.8 km/h</td></tr>
+            </tbody>
+          </table>
+          <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 0;">共 128 条 · 第 1 / 13 页</p>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><span class="tag">新增</span>空态卡片：图标 + 主文案 + 「当前条件下 0 条，库里共 N 条」+ 当前生效条件 chips（可直接看是哪条卡住了）+ 主按钮。</li>
+      <li><span class="tag">行为</span>按钮 = 与工具栏「重置」完全一致（清空搜索/年份/月份/类型/自定义条件，回第一页）；排序不动。</li>
+      <li><span class="tag">保留</span>本来一条记录都没有（非筛选导致）时，仍显示原来的「还没有骑行记录，点击左侧同步骑行数据」，不放重置按钮。</li>
+    </ul>
+  </section>
+
+  <!-- 2/3 -->
+  <section class="proto">
+    <div class="proto__head"><span class="proto__no">2</span><h2 class="proto__title">设置页 · 左侧标题决定右侧内容</h2></div>
+    <p class="proto__desc">点左侧任一标题，右侧只渲染对应那一块（不再九块全堆出来滚半天）。试试点左边。</p>
+    <div class="stage">
+      <div class="settings">
+        <nav class="toc" id="toc">
+          <button class="toc__item" data-pane="profile">个人信息</button>
+          <button class="toc__item" data-pane="units">单位</button>
+          <button class="toc__item" data-pane="appearance">外观</button>
+          <button class="toc__item" data-pane="scope">数据口径</button>
+          <button class="toc__item" data-pane="offline">离线地图</button>
+          <button class="toc__item" data-pane="import">导入</button>
+          <button class="toc__item toc__item--active" data-pane="author">作者数据</button>
+          <button class="toc__item" data-pane="data">数据管理</button>
+          <button class="toc__item" data-pane="install">安装应用</button>
+          <button class="toc__item" data-pane="about">关于</button>
+        </nav>
+        <div class="pane" id="pane">
+          <!-- 作者数据 -->
+          <div class="card" data-pane="author">
+            <h3 class="card__title">作者数据</h3>
+            <p class="card__hint">作者发布的公开数据仅作为空状态示例，让你在导入前先看到站点的样子。导入你自己的数据后默认隐藏，可在此重新打开。</p>
+            <div class="radio-list">
+              <label class="radio radio--on"><input type="radio" name="vis" checked /><span>自动 <span class="radio__hint">· 有本地数据时隐藏（<strong>默认</strong>）</span></span></label>
+              <label class="radio"><input type="radio" name="vis" /><span>始终显示 <span class="radio__hint">· 侧边栏保留两档切换</span></span></label>
+              <label class="radio"><input type="radio" name="vis" /><span>始终隐藏 <span class="radio__hint">· 没有本地数据时也只显示空态</span></span></label>
+            </div>
+          </div>
+          <!-- 个人信息 -->
+          <div class="card" data-pane="profile" hidden>
+            <h3 class="card__title">个人信息</h3>
+            <p class="card__hint">训练配置仅作用于「我的数据」；查看作者数据时使用作者发布的配置。</p>
+            <div class="row"><span class="row__label">昵称</span><input class="field" placeholder="如：晨骑爱好者" /></div>
+            <div class="row"><span class="row__label">体重</span><input class="field" style="max-width:140px" /><span style="color:var(--text-secondary)">kg</span></div>
+            <div class="row"><span class="row__label">身高</span><input class="field" style="max-width:140px" /><span style="color:var(--text-secondary)">cm</span></div>
+            <div class="row"><span class="row__label">FTP</span><input class="field" style="max-width:140px" /><span style="color:var(--text-secondary)">W</span></div>
+            <div class="row"><span class="row__label">最大心率</span><input class="field" style="max-width:140px" /><span style="color:var(--text-secondary)">bpm</span></div>
+            <div class="row"><span class="row__label">静息心率</span><input class="field" style="max-width:140px" /><span style="color:var(--text-secondary)">bpm</span></div>
+            <div style="text-align:right; margin-top:14px;"><button class="btn btn--primary">保存设置</button></div>
+          </div>
+          <!-- 单位 -->
+          <div class="card" data-pane="units" hidden>
+            <h3 class="card__title">单位</h3>
+            <div class="row"><span class="row__label">距离</span><select class="field"><option>公里（km）</option><option>英里（mi）</option></select></div>
+            <div class="row"><span class="row__label">时间格式</span><select class="field"><option>24 小时制</option><option>12 小时制</option></select></div>
+            <div style="text-align:right; margin-top:14px;"><button class="btn btn--primary">保存设置</button></div>
+          </div>
+          <!-- 外观 -->
+          <div class="card" data-pane="appearance" hidden>
+            <h3 class="card__title">外观</h3>
+            <p class="card__hint">主题与侧边栏设置切换后立即生效并自动保存。</p>
+            <div class="row"><span class="row__label">主题</span><select class="field"><option>深色</option><option>浅色</option><option>跟随系统</option></select></div>
+            <div class="row"><span class="row__label">侧边栏</span><select class="field"><option>固定（默认）</option><option>自动收回</option></select></div>
+          </div>
+          <!-- 数据口径 -->
+          <div class="card" data-pane="scope" hidden>
+            <h3 class="card__title">数据口径</h3>
+            <p class="card__hint">默认只统计骑行；开启后统计页、仪表盘、年度回顾、热力图等会一并计入全部运动。切换后页面自动刷新一次。</p>
+            <label class="radio" style="max-width:420px"><input type="checkbox" /><span>统计仅包含骑行（默认）</span></label>
+          </div>
+          <!-- 离线地图 -->
+          <div class="card" data-pane="offline" hidden>
+            <h3 class="card__title">离线地图</h3>
+            <p class="card__hint">开启后地图瓦片会缓存到浏览器本地（IndexedDB），离线或弱网时底图仍可显示。</p>
+            <label class="radio" style="max-width:420px"><input type="checkbox" checked /><span>缓存地图瓦片（离线可用）</span></label>
+            <div class="row" style="margin-top:12px"><span class="row__label">当前缓存</span><span>12.4 MB / 842 张</span><button class="btn btn--danger">清空瓦片缓存</button></div>
+          </div>
+          <!-- 导入 -->
+          <div class="card" data-pane="import" hidden>
+            <h3 class="card__title">导入</h3>
+            <p class="card__hint">开启后导入的原始 FIT 字节会保存在浏览器本地（占用存储空间），默认不保存。</p>
+            <label class="radio" style="max-width:420px"><input type="checkbox" /><span>保存原始 FIT 文件</span></label>
+          </div>
+          <!-- 数据管理 -->
+          <div class="card" data-pane="data" hidden>
+            <h3 class="card__title">数据管理</h3>
+            <p class="card__hint">你的数据全部保存在本浏览器的 IndexedDB 中——解析与统计均在本地完成，不上传任何服务器。</p>
+            <div class="toolbar" style="margin:0">
+              <button class="btn">导出数据</button><button class="btn">导入数据</button>
+              <button class="btn btn--danger">清空全部本地数据</button>
+            </div>
+          </div>
+          <!-- 安装 -->
+          <div class="card" data-pane="install" hidden>
+            <h3 class="card__title">安装应用</h3>
+            <p class="card__hint">把站点装到桌面/主屏，离线也能打开。</p>
+            <button class="btn btn--primary">安装到本机</button>
+          </div>
+          <!-- 关于 -->
+          <div class="card" data-pane="about" hidden>
+            <h3 class="card__title">关于</h3>
+            <p class="card__hint" style="margin:0">本站为作者的公开骑行数据站点：默认展示作者发布的数据（只读快照）。你可以通过左侧「同步骑行数据」导入自己的 FIT 文件——你的数据仅保存在当前浏览器本地（IndexedDB），不会上传。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><span class="tag">结构</span>左侧目录由「滚动锚点」改为「分区切换」：右侧单栏只渲染当前区块，页面不再长滚动。</li>
+      <li><span class="tag">补充</span>「关于」此前不在目录里（只能滚到底才看到），本次一并纳入目录，共 10 项。</li>
+      <li><span class="tag">深链</span><code class="code">/settings#author-data</code> 仍然可用：带 hash 进入时直接选中对应区块（提示条「去设置」依赖它）；点击目录同步更新 hash，方便复制/回退。</li>
+      <li><span class="tag">移动端</span>≤768px 时目录改为顶部横向滚动的胶囊条，右侧保持单栏。</li>
+    </ul>
+  </section>
+
+  <!-- 4 -->
+  <section class="proto">
+    <div class="proto__head"><span class="proto__no">4</span><h2 class="proto__title">路线图页 · 地图不再铺满，底部留区域</h2></div>
+    <p class="proto__desc">去掉贴边铺满：地图四周恢复留白与圆角，高度不再吃掉整屏；下方新增一条信息区（路线统计 + 选中信息 + 图例）。左侧路线列表保持独立滚动。点列表可看选中效果。</p>
+    <div class="stage">
+      <div class="routes">
+        <ul class="routes__list" id="route-list">
+          <li><button class="routes__item"><span class="dot" style="background:#7f77dd"></span><span class="routes__name">环湖常规线</span><span class="routes__count">18 次</span></button></li>
+          <li><button class="routes__item"><span class="dot" style="background:#1d9e75"></span><span class="routes__name">西山爬坡</span><span class="routes__count">11 次</span></button></li>
+          <li><button class="routes__item"><span class="dot" style="background:#d85a30"></span><span class="routes__name">滨江通勤</span><span class="routes__count">9 次</span></button></li>
+          <li><button class="routes__item"><span class="dot" style="background:#378add"></span><span class="routes__name">北山绕圈</span><span class="routes__count">6 次</span></button></li>
+          <li><button class="routes__item"><span class="dot" style="background:#d4537e"></span><span class="routes__name">机场东路有氧</span><span class="routes__count">4 次</span></button></li>
+          <li><button class="routes__item"><span class="dot" style="background:#ba7517"></span><span class="routes__name">周末长途</span><span class="routes__count">3 次</span></button></li>
+        </ul>
+        <div class="routes__main">
+          <div class="map">
+            <svg viewBox="0 0 600 300" preserveAspectRatio="none">
+              <path d="M40 210 C 140 160, 190 90, 300 110 S 470 170, 560 90" fill="none" stroke="#ffffff" stroke-width="8" stroke-opacity="0.45" stroke-linecap="round"/>
+              <path d="M40 210 C 140 160, 190 90, 300 110 S 470 170, 560 90" fill="none" stroke="#7f77dd" stroke-width="5" stroke-linecap="round"/>
+              <path d="M60 250 C 160 250, 220 190, 330 220 S 480 250, 540 200" fill="none" stroke="#ffffff" stroke-width="8" stroke-opacity="0.45" stroke-linecap="round"/>
+              <path d="M60 250 C 160 250, 220 190, 330 220 S 480 250, 540 200" fill="none" stroke="#1d9e75" stroke-width="5" stroke-linecap="round"/>
+            </svg>
+            <div class="maphint">底图切换仅在当前页面生效</div>
+            <div class="mapctl">
+              <button class="on">正常</button><button>卫星</button><button>卫星+路网</button>
+            </div>
+          </div>
+          <div class="bottom" id="route-bottom">
+            <div class="stat">
+              <div><div class="stat__k">路线</div><div class="stat__v">6 条</div></div>
+              <div><div class="stat__k">覆盖里程</div><div class="stat__v">486 km</div></div>
+              <div><div class="stat__k">累计骑行</div><div class="stat__v">51 次</div></div>
+              <div><div class="stat__k">当前选中</div><div class="stat__v" id="sel-name">全部路线</div></div>
+            </div>
+            <div class="legend"><span>点击左侧路线可单独高亮</span><span>·</span><span>再次点击恢复全部</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><span class="tag">布局</span>移除 <code class="code">margin: -24px</code> 贴边：地图恢复 10px 圆角、四周 24px 留白，高度按视口自适应但不吃满屏（示意 300px，实际约为内容区 55%~65%）。</li>
+      <li><span class="tag">底部区</span>常驻信息条：路线数 / 覆盖里程 / 累计次数 / 当前选中路线；右侧放操作提示或图例。<strong>这块放什么可换</strong>（见文末待确认）。</li>
+      <li><span class="tag">列表</span>左侧列表与地图同高、独立滚动；移动端仍上下堆叠。</li>
+    </ul>
+  </section>
+
+  <!-- 5/6 -->
+  <section class="proto">
+    <div class="proto__head"><span class="proto__no">5</span><h2 class="proto__title">其余三项 · 文案与命名</h2></div>
+    <p class="proto__desc">改动较小，直接给规则，无需单独看界面。</p>
+    <div class="mini">
+      <div class="mini__card">
+        <p class="mini__t">② 作者数据选项文案</p>
+        <p class="mini__b"><span class="strike">自动 · 有本地数据时隐藏（推荐）</span><br />→ <strong>自动 · 有本地数据时隐藏（默认）</strong></p>
+      </div>
+      <div class="mini__card">
+        <p class="mini__t">⑤ 底图模式不再记忆</p>
+        <p class="mini__b">默认恒为「正常」；手动切换只作用于<strong>当前页面</strong>，不写入 localStorage，刷新/换页回到正常。导出视频的「跟随当前」跟随当前页面所选，未切换即取正常。</p>
+      </div>
+      <div class="mini__card">
+        <p class="mini__t">⑥ 导出视频文件名</p>
+        <p class="mini__b"><span class="strike">ride-2026-03-08-replay.webm</span><br />→ <strong>环湖骑行.mp4</strong><br />标题为空时回退 <code class="code">2026-03-08 骑行.mp4</code>；自动过滤 <code class="code">/ \ : * ? " &lt; &gt; |</code> 等非法字符。</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  var resetBtn = document.getElementById('reset-btn')
+  var emptyBox = document.getElementById('empty-box')
+  var listBox = document.getElementById('list-box')
+  resetBtn.addEventListener('click', function () {
+    emptyBox.style.display = 'none'
+    listBox.style.display = 'block'
+  })
+
+  var tocItems = document.querySelectorAll('#toc .toc__item')
+  var panes = document.querySelectorAll('#pane .card')
+  tocItems.forEach(function (item) {
+    item.addEventListener('click', function () {
+      tocItems.forEach(function (i) { i.classList.remove('toc__item--active') })
+      item.classList.add('toc__item--active')
+      var key = item.dataset.pane
+      panes.forEach(function (p) { p.hidden = p.dataset.pane !== key })
+    })
+  })
+
+  var routeItems = document.querySelectorAll('#route-list .routes__item')
+  var selName = document.getElementById('sel-name')
+  routeItems.forEach(function (item) {
+    item.addEventListener('click', function () {
+      var on = item.classList.contains('routes__item--on')
+      routeItems.forEach(function (i) { i.classList.remove('routes__item--on') })
+      if (!on) {
+        item.classList.add('routes__item--on')
+        selName.textContent = item.querySelector('.routes__name').textContent
+      } else {
+        selName.textContent = '全部路线'
+      }
+    })
+  })
+</script>
+</body>
+</html>

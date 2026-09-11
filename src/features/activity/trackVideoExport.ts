@@ -23,7 +23,7 @@ import type { ActivityRecord, TrackOffset } from '@/types/activity'
 import type { CoordinateSystem } from '@/geo/coordinateSystem'
 import { projectPoint, type ProjectOptions } from '@/geo/projection'
 import { buildMovingTimeline, formatCursorTipItems } from '@/map/replayCore'
-import { loadStoredMapMode, mapModeOf, TILE_SOURCES, type MapMode, type MapModeLayer } from '@/map/tileSources'
+import { DEFAULT_MAP_MODE, mapModeOf, TILE_SOURCES, type MapMode, type MapModeLayer } from '@/map/tileSources'
 
 /** 视频帧率（fps）：MediaRecorder 时间片对齐用 */
 const VIDEO_FPS = 30
@@ -341,8 +341,16 @@ export interface TrackVideoExportOptions {
   /** 画布比例（缺省 9:16 竖屏） */
   aspectRatio?: VideoAspectRatio
 
-  /** 底图（缺省「跟随当前」= 用户记忆的地图模式） */
+  /** 底图（缺省「跟随当前」） */
   mapMode?: VideoMapModeChoice
+
+  /**
+   * 当前页面正在显示的底图模式（「跟随当前」取它；缺省「正常」）。
+   *
+   * 底图模式已改为页面内生效、不持久化（2.62.0），本函数无从读取页面状态，
+   * 故由调用方（详情页）把当前模式传进来。
+   */
+  currentMapMode?: MapMode
 
   /** 字幕开关与数据（缺省两者都开） */
   captions?: TrackVideoCaptionOptions
@@ -426,16 +434,32 @@ interface FontSizes {
   dataLine: number
 }
 
+/** 文件名非法字符（Windows/macOS 均不允��；替换为空格避免单词粘连） */
+const ILLEGAL_FILE_NAME_CHARS = /[\\/:*?"<>|]/g
+
+/** 文件名标题最大字符数（留出扩展名与文件系统上限余量） */
+const MAX_FILE_NAME_CHARS = 60
+
 /**
- * 从源 FIT 文件名派生回放视频文件名：去掉 .fit / .fit.gz 后缀追加 -replay.mp4。
+ * 生成回放视频文件名：直接取活动标题（成片分享时一眼看出是哪次骑行）。
  *
- * @param fileName 源 FIT 文件名（如 ride.fit.gz）
+ * 标题可能含文件名非法字符（Strava 标题里常见 "、"、"：" 之外的冒号、斜杠等），
+ * 逐个替换为空格再压缩空白；清洗后为空（标题缺失或全是非法字符）时回退备用名。
+ *
+ * @param title 活动标题（如「环湖骑行」）
  * @param extension 扩展名（mp4/webm）
- * @returns 视频文件名（如 ride-replay.mp4）
+ * @param fallbackTitle 标题不可用时的备用名（调用方传「日期 + 骑行」）
+ * @returns 视频文件名（如 环湖骑行.mp4）
  */
-export function buildVideoFileName(fileName: string, extension: string): string {
-  const base = fileName.replace(/\.fit(\.gz)?$/i, '')
-  return `${base}-replay.${extension}`
+export function buildVideoFileName(title: string, extension: string, fallbackTitle: string): string {
+  const cleaned = title
+    .replace(ILLEGAL_FILE_NAME_CHARS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_FILE_NAME_CHARS)
+    .trim()
+  const base = cleaned === '' ? fallbackTitle : cleaned
+  return `${base}.${extension}`
 }
 
 /**
@@ -556,12 +580,16 @@ export function expandTileUrl(
 }
 
 /**
- * 解析面板的底图选择：「跟随当前」读用户记忆的地图模式，否则用所选模式。
+ * 解析面板的底图选择：「跟随当前」取调用方传入的当前页面模式，否则用所选模式。
  *
  * @param choice 底图选择
+ * @param currentMode 当前页面显示的地图模式（缺省「正常」）
  */
-export function resolveVideoMapMode(choice: VideoMapModeChoice): MapMode {
-  return choice === 'follow' ? loadStoredMapMode() : choice
+export function resolveVideoMapMode(
+  choice: VideoMapModeChoice,
+  currentMode: MapMode = DEFAULT_MAP_MODE,
+): MapMode {
+  return choice === 'follow' ? currentMode : choice
 }
 
 /* --------------------------- 地图底图加载 --------------------------- */
@@ -1311,7 +1339,7 @@ export async function exportTrackReplayVideo(
   const originY =
     (latToWorldPx(bounds.minLat, zoom) + latToWorldPx(bounds.maxLat, zoom)) / 2 -
     layout.height / 2
-  const mapMode = resolveVideoMapMode(options?.mapMode ?? 'follow')
+  const mapMode = resolveVideoMapMode(options?.mapMode ?? 'follow', options?.currentMapMode)
   const backdrop = await loadMapBackdrop(zoom, originX, originY, layout, mapMode)
 
   const points = buildFramePoints(projected, backdrop !== undefined ? zoom : undefined, layout)

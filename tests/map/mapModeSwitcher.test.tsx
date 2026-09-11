@@ -4,14 +4,14 @@
  * - 三段按钮（正常 / 卫星 / 卫星+路网）按 MAP_MODES 渲染，当前值高亮 aria-pressed；
  * - 点击回传所选模式；
  * - enabled=false（底图降级为 OSM）时三段整体禁用并给出原因提示；
- * - useMapMode：初值取记忆，切换写回记忆（详情页 / 热力图 / 路线图共用同一键）。
+ * - useMapMode：初值恒为「正常」，切换只改状态、不写 localStorage（页面内生效）。
  */
 import { act, render, renderHook, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MapModeSwitcher from '@/map/MapModeSwitcher'
 import { useMapMode } from '@/map/useMapMode'
-import { MAP_MODE_STORAGE_KEY, MAP_MODES } from '@/map/tileSources'
+import { MAP_MODES } from '@/map/tileSources'
 
 beforeEach(() => {
   localStorage.clear()
@@ -55,15 +55,15 @@ describe('MapModeSwitcher', () => {
 })
 
 describe('useMapMode', () => {
-  it('初值取 localStorage 记忆', () => {
-    localStorage.setItem(MAP_MODE_STORAGE_KEY, 'satellite')
+  it('初值恒为「正常」（不读任何记忆）', () => {
+    localStorage.setItem('cycling-map-mode', 'satellite')
 
     const { result } = renderHook(() => useMapMode())
 
-    expect(result.current[0]).toBe('satellite')
+    expect(result.current[0]).toBe('normal')
   })
 
-  it('切换后写回 localStorage 记忆', () => {
+  it('切换只改状态，不写 localStorage', () => {
     const { result } = renderHook(() => useMapMode())
     expect(result.current[0]).toBe('normal')
 
@@ -72,6 +72,6 @@ describe('useMapMode', () => {
     })
 
     expect(result.current[0]).toBe('satelliteRoads')
-    expect(localStorage.getItem(MAP_MODE_STORAGE_KEY)).toBe('satelliteRoads')
+    expect(localStorage.getItem('cycling-map-mode')).toBeNull()
   })
 })

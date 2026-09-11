@@ -4,17 +4,17 @@
  * - TILE_SOURCES：默认高德、降级 OSM（境内访问稳定快速）；
  * - 语义化辅助函数：isGcjSource 纠偏判定 / loadStoredSourceIndex 与
  *   storeSourceIndex 会话记忆（语义字符串存储，调换顺序互不干扰）；
+ * - 地图模式：默认「正常」且不持久化（页面内生效），clearLegacyMapModeMemory 清理旧键；
  * - wgs84ToGcj02：境内点向东北偏移数百米、境外点原样返回、转换确定性。
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  clearLegacyMapModeMemory,
+  DEFAULT_MAP_MODE,
   isGcjSource,
-  loadStoredMapMode,
   loadStoredSourceIndex,
-  MAP_MODE_STORAGE_KEY,
   MAP_MODES,
   mapModeOf,
-  storeMapMode,
   storeSourceIndex,
   TILE_SOURCES,
   wgs84ToGcj02,
@@ -122,13 +122,16 @@ describe('地图显示模式', () => {
     expect(mapModeOf('bogus' as MapMode).id).toBe('normal')
   })
 
-  it('模式记忆：默认正常，写入后读回，无效值回退正常', () => {
-    expect(loadStoredMapMode()).toBe('normal')
+  it('默认模式即「正常」，且模式不写入 localStorage（页面内生效）', () => {
+    expect(DEFAULT_MAP_MODE).toBe('normal')
+    expect(mapModeOf(DEFAULT_MAP_MODE).id).toBe('normal')
+  })
 
-    storeMapMode('satelliteRoads')
-    expect(loadStoredMapMode()).toBe('satelliteRoads')
+  it('清理历史模式记忆：移除旧键 cycling-map-mode', () => {
+    localStorage.setItem('cycling-map-mode', 'satellite')
 
-    localStorage.setItem(MAP_MODE_STORAGE_KEY, 'bogus')
-    expect(loadStoredMapMode()).toBe('normal')
+    clearLegacyMapModeMemory()
+
+    expect(localStorage.getItem('cycling-map-mode')).toBeNull()
   })
 })
