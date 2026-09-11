@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.64.1',
+    date: '2026-09-11',
+    features: [
+      '开发流程提速（维护者向）：新增 npm run check 提交前快速验证（并行执行类型检查、改动文件 lint 与受影响测试，约半分钟），全量测试与构建交给 CI 兜底，常规提交到上线的验证开销从数分钟压缩到半分钟内',
+    ],
+  },
+  {
     version: '2.64.0',
     date: '2026-09-11',
     features: [

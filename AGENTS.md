@@ -12,15 +12,21 @@
 
 ```bash
 npm run dev                 # 本地开发
-npx vitest run <file>       # 单文件测试（全量 631+ 用例约 40s）
-npm run test                # 全量测试
-npm run lint               # 静态检查
-npx tsc -b                 # 类型检查
+npm run check               # 提交前快速验证（并行：tsc -b + 改动文件 eslint + vitest related，约 30s）
+npm run check -- --full     # 全量版（大改动/排查时用：全仓库 lint + 全量测试）
+npx vitest run <file>       # 单文件测试
+npm run test                # 全量测试（常规提交不用，CI 兜底）
 npm run build              # vite build（本地通常不需要跑，见下方说明）
 npm run build:author-data   # 快照构建（tsx 脚本，全量重建，fail-fast 解析失败即报错）
 npm run test:e2e            # Playwright（本地跑，不进 CI；首次需 npx playwright install chromium）
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 ```
+
+## 提交与发布流程（提速约定，2026-09-11）
+
+- **提交前只跑 `npm run check`**（半分钟内），不跑全量测试、不跑 vite build——CI（`deploy.yml`）在 push 后自动 lint + 全量测试 + build 并发布 Pages，失败时线上保持旧版
+- **push 后必须盯 CI**（`gh run watch` 或 Actions 页）：失败立即修复补提交，保证「发布成功」闭环；改动 tsconfig/vite.config/tests setup 等全局文件时本地改用 `npm run check -- --full`
+- 大改动/大规模重构在推送前额外跑一次 `npm run check -- --full`，把失败发现提前到本地
 
 ## 架构硬边界
 
