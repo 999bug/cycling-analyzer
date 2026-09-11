@@ -67,7 +67,7 @@ function makeActivity(
 }
 
 describe('骑行日历页面', () => {
-  it('展示当年日历网格：格子数量、颜色档位、工具提示', async () => {
+  it('展示当年日历网格：格子数量、颜色档位、悬浮详情卡', async () => {
     const repo = new DexieActivityRepository(testDb)
     const today = new Date()
     // 今天两次骑行：50000 + 77400 m → 4 档（127.40 km）
@@ -91,14 +91,18 @@ describe('骑行日历页面', () => {
     const expectedCount = buildYearGrid(today.getFullYear(), new Map()).flat().length
     expect(cells).toHaveLength(expectedCount)
 
-    // 今日格子：最高档 + 完整工具提示（可点击格子追加操作提示后缀）
+    // 今日格子：最高档 + 悬浮显示详情卡（标题 + 指标行 + 操作提示）
     const dateKey = formatDate(startTimes[0])
     const cell = container.querySelector(`[data-date="${dateKey}"]`)
     expect(cell).toHaveAttribute('data-level', '4')
-    expect(cell).toHaveAttribute(
-      'title',
-      `${dateKey} / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m（点击查看当日骑行）`,
-    )
+    const user = userEvent.setup()
+    await user.hover(cell as HTMLElement)
+    const tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveTextContent(`${dateKey} · 2 次骑行`)
+    expect(tooltip).toHaveTextContent('127.40 km')
+    expect(tooltip).toHaveTextContent('04:32:00')
+    expect(tooltip).toHaveTextContent('+1245 m')
+    expect(tooltip).toHaveTextContent('点击查看当日骑行')
   })
 
   it('展示年度汇总统计卡片（总距离/骑行天数/次数等）', async () => {

@@ -10,10 +10,10 @@ import { describe, expect, it } from 'vitest'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import {
   buildCalendarData,
+  buildDayTooltipRows,
   buildMonthLabels,
   buildYearGrid,
   buildYearSummary,
-  formatDayTooltip,
   intensityLevel,
 } from '@/features/calendar/calendarData'
 
@@ -63,6 +63,7 @@ function localKeyOf(date: Date): string {
  * @param distance 距离（米）
  * @param duration 时长（秒）
  * @param elevationGain 爬升（米）
+ * @param extra 附加字段（avgSpeed/avgHeartRate/avgPower 等，后展开覆盖）
  */
 function summary(
   id: string,
@@ -70,6 +71,7 @@ function summary(
   distance = 10000,
   duration = 3600,
   elevationGain = 100,
+  extra: Partial<ActivitySummary> = {},
 ): ActivitySummary {
   return {
     id,
@@ -83,6 +85,7 @@ function summary(
     elapsedTime: duration,
     distance,
     elevationGain,
+    ...extra,
   }
 }
 
@@ -209,16 +212,90 @@ describe('intensityLevel 颜色档位', () => {
   })
 })
 
-describe('formatDayTooltip 工具提示', () => {
-  it('拼接日期/次数/距离/时长/爬升（复用 utils/format 格式化）', () => {
-    const text = formatDayTooltip('2026-08-16', {
-      count: 2,
-      distance: 127_400,
-      duration: 16_320,
-      elevationGain: 1_245,
+describe('buildCalendarData 速度/心率/功率加权聚合', () => {
+  it('当日多活动按时长加权平均，缺功率时 avgPower 为 undefined', () => {
+    const data = buildCalendarData(
+      [
+        // a1：2h 均速 5 m/s、功率 200 W；a2：1h 均速 8 m/s、功率 260 W、心率 150 bpm
+        // （a2 须早于 NOW 12:00，否则被未来活动过滤排除）
+        summary('a1', iso(2026, 8, 17, 8), 36000, 7200, 100, { avgSpeed: 5, avgPower: 200 }),
+        summary('a2', iso(2026, 8, 17, 10), 28800, 3600, 100, {
+          avgSpeed: 8,
+          avgPower: 260,
+          avgHeartRate: 150,
+        }),
+      ],
+      NOW,
+    )
+
+    const day = data.get(key(2026, 8, 17))
+    expect(day?.avgSpeed).toBeCloseTo((5 * 7200 + 8 * 3600) / 10800, 9)
+    expect(day?.avgPower).toBeCloseTo((200 * 7200 + 260 * 3600) / 10800, 9)
+    // 心率只有一条活动带 → 无需加权混合，直接取该值
+    expect(day?.avgHeartRate).toBe(150)
+  })
+
+  it('当日全部活动缺海拔/速度/功率/心率时对应字段为 undefined（缺失≠0）', () => {
+    // elevationGain 显式置 undefined 覆盖默认值，模拟无海拔数据源（如行者 GPX）
+    const bare: ActivitySummary = { ...summary('bare', iso(2026, 8, 17, 8)), elevationGain: undefined }
+    const data = buildCalendarData([bare], NOW)
+
+    expect(data.get(key(2026, 8, 17))).toEqual({
+      count: 1,
+      distance: 10000,
+      duration: 3600,
+    })
+  })
+
+  it('混合：部分活动带海拔时爬升只累加有值的活动', () => {
+    const withoutElevation: ActivitySummary = {
+      ...summary('a2', iso(2026, 8, 17, 18)),
+      elevationGain: undefined,
+    }
+    const data = buildCalendarData([summary('a1', iso(2026, 8, 17, 8), 10000, 3600, 200), withoutElevation], NOW)
+
+    expect(data.get(key(2026, 8, 17))?.elevationGain).toBe(200)
+  })
+})
+
+describe('buildDayTooltipRows 工具提示行', () => {
+  it('标题为日期 + 次数，行按 距离/时长/爬升/均速/心率/功率 排列', () => {
+    const { title, rows } = buildDayTooltipRows(
+      '2026-08-16',
+      {
+        count: 2,
+        distance: 127_400,
+        duration: 16_320,
+        elevationGain: 1_245,
+        avgSpeed: 7.7778,
+        avgHeartRate: 145.4,
+        avgPower: 210.6,
+      },
+      'km',
+    )
+
+    expect(title).toBe('2026-08-16 · 2 次骑行')
+    expect(rows).toEqual([
+      { label: '距离', value: '127.40 km' },
+      { label: '时长', value: '04:32:00' },
+      { label: '爬升', value: '+1245 m' },
+      { label: '均速', value: '28.0 km/h' },
+      { label: '心率', value: '145 bpm' },
+      { label: '功率', value: '211 W' },
+    ])
+  })
+
+  it('缺失的指标不出行（undefined 不显示 —）', () => {
+    const { rows } = buildDayTooltipRows('2026-08-16', {
+      count: 1,
+      distance: 10_000,
+      duration: 1_800,
     })
 
-    expect(text).toBe('2026-08-16 / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m')
+    expect(rows).toEqual([
+      { label: '距离', value: '10.00 km' },
+      { label: '时长', value: '00:30:00' },
+    ])
   })
 })
 

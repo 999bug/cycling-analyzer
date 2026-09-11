@@ -2,7 +2,8 @@
  * 骑行日历热力组件渲染测试（规格 §29）。
  *
  * 直接构造聚合数据渲染组件（不依赖 IndexedDB），断言格子数量、
- * 颜色档位（data-level）、工具提示（title）、跨年边缘淡化、年份切换回调。
+ * 颜色档位（data-level）、悬浮详情卡（tooltip 行式展示、缺失指标隐藏）、
+ * 跨年边缘淡化、年份切换回调。
  */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -37,6 +38,7 @@ function iso(year: number, month: number, day: number, hour = 8): string {
  * @param distance 距离（米）
  * @param duration 时长（秒）
  * @param elevationGain 爬升（米）
+ * @param extra 附加字段（avgSpeed/avgHeartRate/avgPower 等，后展开覆盖）
  */
 function summary(
   id: string,
@@ -44,6 +46,7 @@ function summary(
   distance = 10000,
   duration = 3600,
   elevationGain = 100,
+  extra: Partial<ActivitySummary> = {},
 ): ActivitySummary {
   return {
     id,
@@ -57,6 +60,7 @@ function summary(
     elapsedTime: duration,
     distance,
     elevationGain,
+    ...extra,
   }
 }
 
@@ -78,7 +82,8 @@ describe('骑行日历热力组件', () => {
     expect(cells).toHaveLength(buildYearGrid(YEAR, data).flat().length)
   })
 
-  it('颜色档位与工具提示：按当日总距离分档，title 含聚合详情', () => {
+  it('颜色档位与悬浮详情卡：按当日总距离分档，悬浮即时显示聚合详情', async () => {
+    const user = userEvent.setup()
     const data = buildCalendarData(
       [
         // 当日 127400 m → 4 档；10000 m → 1 档；30000 m → 2 档
@@ -95,22 +100,70 @@ describe('骑行日历热力组件', () => {
 
     const cell16 = container.querySelector('[data-date="2026-08-16"]')
     expect(cell16).toHaveAttribute('data-level', '4')
-    expect(cell16).toHaveAttribute(
-      'title',
-      '2026-08-16 / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m',
-    )
 
     const cell15 = container.querySelector('[data-date="2026-08-15"]')
     expect(cell15).toHaveAttribute('data-level', '1')
-    expect(cell15).toHaveAttribute('title', '2026-08-15 / 1 次骑行 / 10.00 km / 00:30:00 / +50 m')
 
     const cell14 = container.querySelector('[data-date="2026-08-14"]')
     expect(cell14).toHaveAttribute('data-level', '2')
 
-    // 无活动日：level 0 且无 title
-    const cell13 = container.querySelector('[data-date="2026-08-13"]')
-    expect(cell13).toHaveAttribute('data-level', '0')
-    expect(cell13).not.toHaveAttribute('title')
+    // 悬浮前无详情卡
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+    // 悬浮有骑行格子：即时显示标题 + 指标行
+    await user.hover(container.querySelector('[data-date="2026-08-16"]') as HTMLElement)
+    const tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveTextContent('2026-08-16 · 2 次骑行')
+    expect(tooltip).toHaveTextContent('127.40 km')
+    expect(tooltip).toHaveTextContent('04:32:00')
+    expect(tooltip).toHaveTextContent('+1245 m')
+
+    // 移出后详情卡消失
+    await user.unhover(container.querySelector('[data-date="2026-08-16"]') as HTMLElement)
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+
+  it('悬浮无骑行格子不显示详情卡', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <CalendarHeatmap data={new Map()} year={YEAR} onYearChange={() => {}} />,
+    )
+
+    await user.hover(container.querySelector('[data-date="2026-08-13"]') as HTMLElement)
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+  })
+
+  it('详情卡展示均速/功率/心率行；活动缺失这些字段时不显示对应行', async () => {
+    const user = userEvent.setup()
+    const withMetrics = buildCalendarData(
+      [
+        summary('full', iso(2026, 8, 16, 8), 50000, 5400, 300, {
+          avgSpeed: 9.2593,
+          avgPower: 218,
+          avgHeartRate: 152,
+        }),
+        summary('bare', iso(2026, 8, 15, 8), 10000, 1800, 50),
+      ],
+      NOW,
+    )
+    const { container } = render(
+      <CalendarHeatmap data={withMetrics} year={YEAR} onYearChange={() => {}} />,
+    )
+
+    // 有速度/功率/心率的数据：对应行显示
+    await user.hover(container.querySelector('[data-date="2026-08-16"]') as HTMLElement)
+    let tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveTextContent('33.3 km/h')
+    expect(tooltip).toHaveTextContent('218 W')
+    expect(tooltip).toHaveTextContent('152 bpm')
+    await user.unhover(container.querySelector('[data-date="2026-08-16"]') as HTMLElement)
+
+    // 无功率/心率的数据：对应行不出现
+    await user.hover(container.querySelector('[data-date="2026-08-15"]') as HTMLElement)
+    tooltip = screen.getByRole('tooltip')
+    expect(tooltip).toHaveTextContent('10.00 km')
+    expect(tooltip).not.toHaveTextContent('功率')
+    expect(tooltip).not.toHaveTextContent('心率')
   })
 
   it('跨年边缘格子带淡化标记（inYear=false → outside 类）', () => {

@@ -3,16 +3,18 @@
  *
  * GitHub Contribution Graph 风格横排布局：每周一列（周日起始）、每天一行，
  * 月份标签对齐每月 1 日所在列，星期标签隔行显示（一/三/五），
- * 颜色按当日总距离分 5 档；鼠标移入格子显示原生 title 聚合详情，
+ * 颜色按当日总距离分 5 档；鼠标移入格子即时显示浮动详情卡
+ * （跟随光标、贴近视口边缘自动翻转），缺失的指标行不显示；
  * 点击有骑行的格子通过 onDaySelect 上报日期（页面展示当日活动面板）。
  * 年份切换为受控模式（页面持有年份状态）。
  */
+import { useCallback, useState } from 'react'
 import type { DistanceUnit } from '@/features/settings/settings'
-import type { CalendarData } from './calendarData'
+import type { CalendarData, DayActivitySummary } from './calendarData'
 import {
+  buildDayTooltipRows,
   buildMonthLabels,
   buildYearGrid,
-  formatDayTooltip,
   intensityLevel,
   localDateKey,
   type IntensityLevel,
@@ -48,6 +50,20 @@ const LEGEND_LEVELS: IntensityLevel[] = [0, 1, 2, 3, 4]
 /** 星期标签（周日起始；奇数行显示文字，偶数行留空对齐 GitHub 风格） */
 const WEEKDAY_LABELS = ['', '一', '', '三', '', '五', '']
 
+/** 浮动详情卡与光标的间距（px） */
+const TOOLTIP_OFFSET = 14
+
+/** 浮动详情卡的估算最大宽度（px），用于视口右缘翻转判断 */
+const TOOLTIP_MAX_WIDTH = 240
+
+/** 悬浮状态：当前格子的聚合数据与光标视口坐标 */
+interface HoverState {
+  dateKey: string
+  summary: DayActivitySummary
+  x: number
+  y: number
+}
+
 /**
  * 日历热力组件。
  */
@@ -63,6 +79,27 @@ function CalendarHeatmap({
   const monthLabels = buildMonthLabels(grid)
   const todayKey = localDateKey(new Date())
   const currentYear = new Date().getFullYear()
+  const [hover, setHover] = useState<HoverState | null>(null)
+
+  const handleCellEnter = useCallback(
+    (dateKey: string, summary: DayActivitySummary, event: React.MouseEvent) => {
+      setHover({ dateKey, summary, x: event.clientX, y: event.clientY })
+    },
+    [],
+  )
+
+  const handleCellMove = useCallback((event: React.MouseEvent) => {
+    // 光标在格子内移动时详情卡跟随，位置取最新坐标
+    setHover((prev) => (prev === null ? prev : { ...prev, x: event.clientX, y: event.clientY }))
+  }, [])
+
+  const handleCellLeave = useCallback(() => {
+    setHover(null)
+  }, [])
+
+  // 详情卡定位：默认在光标右下；贴近视口右缘/下缘时翻到左/上侧
+  const flipX = hover !== null && hover.x + TOOLTIP_OFFSET + TOOLTIP_MAX_WIDTH > window.innerWidth
+  const flipY = hover !== null && hover.y + TOOLTIP_OFFSET + 220 > window.innerHeight
 
   return (
     <div className="calendar-heatmap">
@@ -142,19 +179,22 @@ function CalendarHeatmap({
               ]
                 .filter(Boolean)
                 .join(' ')
+              const hoverProps =
+                cell.summary === null
+                  ? {}
+                  : {
+                      onMouseEnter: (event: React.MouseEvent) =>
+                        handleCellEnter(cell.dateKey, cell.summary as DayActivitySummary, event),
+                      onMouseMove: handleCellMove,
+                      onMouseLeave: handleCellLeave,
+                    }
               return (
                 <div
                   key={cell.dateKey}
                   className={className}
                   data-date={cell.dateKey}
                   data-level={level}
-                  title={
-                    cell.summary === null
-                      ? undefined
-                      : // 可点击的格子追加操作提示（静态无暗示的补足，评审 §6.3 问题 5）
-                        formatDayTooltip(cell.dateKey, cell.summary, distanceUnit) +
-                        (clickable ? '（点击查看当日骑行）' : '')
-                  }
+                  {...hoverProps}
                   {...(clickable
                     ? {
                         role: 'button',
@@ -175,6 +215,58 @@ function CalendarHeatmap({
           </div>
         </div>
       </div>
+
+      {/* 悬浮详情卡：fixed 定位跟随光标（不受横向滚动容器裁剪），无数据不渲染 */}
+      {hover !== null && (
+        <DayTooltip
+          hover={hover}
+          distanceUnit={distanceUnit}
+          clickable={onDaySelect !== undefined}
+          flipX={flipX}
+          flipY={flipY}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * 悬浮详情卡（规格 §29）：标题日期 + 次数，行式展示距离/时长/爬升/均速/心率/功率，
+ * 缺失指标不出行；可点击的格子末尾附操作提示。
+ */
+function DayTooltip({
+  hover,
+  distanceUnit,
+  clickable,
+  flipX,
+  flipY,
+}: {
+  hover: HoverState
+  distanceUnit: DistanceUnit
+  clickable: boolean
+  flipX: boolean
+  flipY: boolean
+}) {
+  const { title, rows } = buildDayTooltipRows(hover.dateKey, hover.summary, distanceUnit)
+  const style: React.CSSProperties = {
+    left: hover.x + TOOLTIP_OFFSET,
+    top: hover.y + TOOLTIP_OFFSET,
+    transform: `${flipX ? 'translateX(calc(-100% - 28px))' : ''} ${
+      flipY ? 'translateY(calc(-100% - 28px))' : ''
+    }`.trim(),
+  }
+  return (
+    <div className="calendar-heatmap__tooltip" role="tooltip" style={style}>
+      <div className="calendar-heatmap__tooltip-title">{title}</div>
+      <div className="calendar-heatmap__tooltip-rows">
+        {rows.map((row) => (
+          <div key={row.label} className="calendar-heatmap__tooltip-row">
+            <span className="calendar-heatmap__tooltip-label">{row.label}</span>
+            <span className="calendar-heatmap__tooltip-value">{row.value}</span>
+          </div>
+        ))}
+      </div>
+      {clickable && <div className="calendar-heatmap__tooltip-hint">点击查看当日骑行</div>}
     </div>
   )
 }

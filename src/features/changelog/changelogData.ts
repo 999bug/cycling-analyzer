@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.65.0',
+    date: '2026-09-11',
+    features: [
+      '日历悬浮详情卡升级：鼠标移入格子即时显示浮动详情（不再依赖浏览器原生 title 的延迟），并跟随光标、贴近视口边缘自动翻转',
+      '悬浮详情新增指标：均速、平均心率、平均功率（多活动按时长加权平均）；没有对应数据的活动/日期不显示该行，爬升同理',
+    ],
+  },
+  {
     version: '2.64.1',
     date: '2026-09-11',
     features: [

@@ -215,6 +215,59 @@
   outline-offset: 1px;
 }
 
+/* 悬浮详情卡：fixed 定位跟随光标（不随横向滚动容器裁剪），深色卡片 */
+.calendar-heatmap__tooltip {
+  position: fixed;
+  z-index: 1000;
+  min-width: 168px;
+  max-width: 240px;
+  padding: 10px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.calendar-heatmap__tooltip-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.calendar-heatmap__tooltip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-heatmap__tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.calendar-heatmap__tooltip-label {
+  color: var(--text-secondary);
+}
+
+.calendar-heatmap__tooltip-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-heatmap__tooltip-hint {
+  color: var(--primary);
+  font-size: 11px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
 /* 当日活动面板（点击格子展开） */
 .calendar-day-panel {
   background: var(--bg-surface);

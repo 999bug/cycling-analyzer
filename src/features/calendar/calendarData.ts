@@ -12,7 +12,11 @@
  */
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 import { formatDuration, formatElevation, localDateKey } from '@/utils/format'
-import { formatDistanceByUnit, type DistanceUnit } from '@/features/settings/settings'
+import {
+  formatDistanceByUnit,
+  formatSpeedByUnit,
+  type DistanceUnit,
+} from '@/features/settings/settings'
 
 /** 档位 2 距离阈值：20 km（米） */
 export const LEVEL_2_DISTANCE = 20_000
@@ -30,6 +34,9 @@ export type IntensityLevel = 0 | 1 | 2 | 3 | 4
 
 /**
  * 单日聚合结果。
+ *
+ * 可选字段遵循「缺失 = undefined ≠ 0」口径（规格 §25）：
+ * 当日所有活动均无该项数据时为 undefined，工具提示中对应行不显示。
  */
 export interface DayActivitySummary {
   /** 当日骑行次数 */
@@ -41,8 +48,32 @@ export interface DayActivitySummary {
   /** 当日总骑行时长（秒） */
   duration: number
 
-  /** 当日总累计爬升（米） */
+  /** 当日总累计爬升（米）；当日全部活动无海拔数据时为 undefined */
+  elevationGain?: number
+
+  /** 当日均速（m/s，按活动时长加权）；当日无任何速度数据时为 undefined */
+  avgSpeed?: number
+
+  /** 当日平均心率（bpm，按活动时长加权）；当日无任何心率数据时为 undefined */
+  avgHeartRate?: number
+
+  /** 当日平均功率（W，按活动时长加权）；当日无任何功率数据时为 undefined */
+  avgPower?: number
+}
+
+/** buildCalendarData 内部累加器：在 DayActivitySummary 基础上追踪加权求和与样本权重 */
+interface DayAccumulator {
+  count: number
+  distance: number
+  duration: number
   elevationGain: number
+  elevationDays: number
+  speedWeightedSum: number
+  speedWeight: number
+  heartRateWeightedSum: number
+  heartRateWeight: number
+  powerWeightedSum: number
+  powerWeight: number
 }
 
 /**
@@ -76,7 +107,7 @@ export function buildCalendarData(
   summaries: ActivitySummary[],
   now: Date = new Date(),
 ): CalendarData {
-  const data = new Map<string, DayActivitySummary>()
+  const data = new Map<string, DayAccumulator>()
   const nowMs = now.getTime()
 
   for (const activity of summaries) {
@@ -85,24 +116,62 @@ export function buildCalendarData(
       continue
     }
     const dateKey = localDateKey(new Date(activity.startTime))
-    const entry = data.get(dateKey)
+    let entry = data.get(dateKey)
     if (entry === undefined) {
-      data.set(dateKey, {
-        count: 1,
-        distance: activity.distance,
-        duration: activity.duration,
-        // 无海拔数据源（行者 GPX）爬升为 undefined：日聚合按 0 参与
-        // （有海拔活动混合时总数仍正确；规格 §25 缺失≠0 只约束单活动展示）
-        elevationGain: activity.elevationGain ?? 0,
-      })
-    } else {
-      entry.count += 1
-      entry.distance += activity.distance
-      entry.duration += activity.duration
-      entry.elevationGain += activity.elevationGain ?? 0
+      entry = {
+        count: 0,
+        distance: 0,
+        duration: 0,
+        elevationGain: 0,
+        elevationDays: 0,
+        speedWeightedSum: 0,
+        speedWeight: 0,
+        heartRateWeightedSum: 0,
+        heartRateWeight: 0,
+        powerWeightedSum: 0,
+        powerWeight: 0,
+      }
+      data.set(dateKey, entry)
+    }
+    entry.count += 1
+    entry.distance += activity.distance
+    entry.duration += activity.duration
+    // 无海拔数据源（行者 GPX）爬升为 undefined：任一活动带爬升即有值，
+    // 全部缺失则最终 undefined（tooltip 隐藏爬升行）
+    if (activity.elevationGain !== undefined) {
+      entry.elevationGain += activity.elevationGain
+      entry.elevationDays += 1
+    }
+    // 均速/心率/功率按活动时长加权平均：时长长的活动对当日均值贡献更大
+    if (activity.avgSpeed !== undefined && activity.duration > 0) {
+      entry.speedWeightedSum += activity.avgSpeed * activity.duration
+      entry.speedWeight += activity.duration
+    }
+    if (activity.avgHeartRate !== undefined && activity.duration > 0) {
+      entry.heartRateWeightedSum += activity.avgHeartRate * activity.duration
+      entry.heartRateWeight += activity.duration
+    }
+    if (activity.avgPower !== undefined && activity.duration > 0) {
+      entry.powerWeightedSum += activity.avgPower * activity.duration
+      entry.powerWeight += activity.duration
     }
   }
-  return data
+
+  // 累加器 → 对外聚合：加权均值样本权重为 0（当日无数据）时输出 undefined
+  const result = new Map<string, DayActivitySummary>()
+  for (const [dateKey, acc] of data) {
+    result.set(dateKey, {
+      count: acc.count,
+      distance: acc.distance,
+      duration: acc.duration,
+      elevationGain: acc.elevationDays > 0 ? acc.elevationGain : undefined,
+      avgSpeed: acc.speedWeight > 0 ? acc.speedWeightedSum / acc.speedWeight : undefined,
+      avgHeartRate:
+        acc.heartRateWeight > 0 ? acc.heartRateWeightedSum / acc.heartRateWeight : undefined,
+      avgPower: acc.powerWeight > 0 ? acc.powerWeightedSum / acc.powerWeight : undefined,
+    })
+  }
+  return result
 }
 
 /**
@@ -165,20 +234,48 @@ export function intensityLevel(distanceMeters: number): IntensityLevel {
 }
 
 /**
- * 生成格子工具提示文本（规格 §29）：
- * 日期 / 次数 / 距离 / 时长 / 爬升，数值复用统一格式化（距离按显示单位换算）。
+ * 工具提示行（label + value 成对展示）。
+ */
+export interface DayTooltipRow {
+  /** 指标名（如 "距离"） */
+  label: string
+
+  /** 格式化后的值（如 "127.40 km"） */
+  value: string
+}
+
+/**
+ * 工具提示内容（规格 §29 悬浮详情）：
+ * 标题为日期 + 骑行次数，行按 距离/时长/爬升/均速/心率/功率 顺序排列；
+ * 缺失的指标（undefined）不生成对应行（规格 §25 缺失≠0，不显示 —）。
  *
  * @param dateKey 本地日期键（YYYY-MM-DD）
  * @param summary 当日聚合
- * @param distanceUnit 距离显示单位（缺省公里）
- * @returns 如 "2026-08-16 / 2 次骑行 / 127.40 km / 04:32:00 / +1245 m"
+ * @param distanceUnit 距离/速度显示单位（缺省公里）
+ * @returns 标题与指标行列表
  */
-export function formatDayTooltip(
+export function buildDayTooltipRows(
   dateKey: string,
   summary: DayActivitySummary,
   distanceUnit: DistanceUnit = 'km',
-): string {
-  return `${dateKey} / ${summary.count} 次骑行 / ${formatDistanceByUnit(summary.distance, distanceUnit)} / ${formatDuration(summary.duration)} / ${formatElevation(summary.elevationGain)}`
+): { title: string; rows: DayTooltipRow[] } {
+  const rows: DayTooltipRow[] = [
+    { label: '距离', value: formatDistanceByUnit(summary.distance, distanceUnit) },
+    { label: '时长', value: formatDuration(summary.duration) },
+  ]
+  if (summary.elevationGain !== undefined) {
+    rows.push({ label: '爬升', value: formatElevation(summary.elevationGain) })
+  }
+  if (summary.avgSpeed !== undefined) {
+    rows.push({ label: '均速', value: formatSpeedByUnit(summary.avgSpeed, distanceUnit) })
+  }
+  if (summary.avgHeartRate !== undefined) {
+    rows.push({ label: '心率', value: `${Math.round(summary.avgHeartRate)} bpm` })
+  }
+  if (summary.avgPower !== undefined) {
+    rows.push({ label: '功率', value: `${Math.round(summary.avgPower)} W` })
+  }
+  return { title: `${dateKey} · ${summary.count} 次骑行`, rows }
 }
 
 /**
@@ -256,7 +353,7 @@ export function buildYearSummary(year: number, data: CalendarData): YearSummary 
     summary.count += day.count
     summary.distance += day.distance
     summary.duration += day.duration
-    summary.elevationGain += day.elevationGain
+    summary.elevationGain += day.elevationGain ?? 0
     if (day.distance > summary.longestDayDistance) {
       summary.longestDayDistance = day.distance
     }
