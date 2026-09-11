@@ -16,6 +16,13 @@
   display: none;
 }
 
+/* 底部 TabBar：仅移动端显示（≤768px 媒体查询内改为 flex）；
+   桌面端必须显式隐藏——否则无样式的 nav 会作为 .app-layout 行 flex 的子元素
+   挤在主内容右侧（2026-09-11 线上问题：TabBar 出现在桌面右上角） */
+.app-layout__tabbar {
+  display: none;
+}
+
 /* 桌面端无顶栏，内容区即右侧。
    纵向 flex（2026-09-11）：顶部提示条（AuthorBanner 等）占自然高度，
    地图类页面（热力图/路线图）以 flex:1 撑满其下剩余高度——

@@ -32,8 +32,11 @@ describe('App 根组件', () => {
 describe('AppLayout 移动端导航', () => {
   const user = userEvent.setup()
 
-  /** 查询 TabBar「更多」按钮（打开抽屉） */
-  const queryMoreButton = () => screen.getByRole('button', { name: '更多' })
+  /** 查询 TabBar「更多」按钮（打开抽屉）。
+   * 桌面端基础样式 display:none（仅 ≤768px 显示），vitest 会处理 CSS，
+   * jsdom 中该按钮对默认 getByRole 不可见，需 hidden:true（与旧汉堡按钮同因） */
+  const queryMoreButton = () =>
+    screen.getByRole('button', { name: '更多', hidden: true })
 
   it('「更多」默认收起（aria-expanded=false），点击展开抽屉并出现遮罩', async () => {
     render(
@@ -111,10 +114,15 @@ describe('AppLayout 移动端导航', () => {
       </MemoryRouter>,
     )
 
-    const tabbar = screen.getByRole('navigation', { name: '移动端主导航' })
-    expect(tabbar).toBeInTheDocument()
+    // TabBar 桌面端 display:none：vitest 处理 CSS，jsdom 中 dom-accessibility-api
+    // 对隐藏元素的 accessible name 计算为空串，role+name 查不到 → 用 class 定位 + aria-label 断言
+    const tabbar = document.querySelector('.app-layout__tabbar')
+    expect(tabbar).not.toBeNull()
+    expect(tabbar).toHaveAttribute('aria-label', '移动端主导航')
     for (const label of ['仪表盘', '记录', '统计', '路线']) {
-      expect(within(tabbar).getByRole('link', { name: label })).toBeInTheDocument()
+      expect(
+        within(tabbar as HTMLElement).getByRole('link', { name: label, hidden: true }),
+      ).toBeInTheDocument()
     }
   })
 })

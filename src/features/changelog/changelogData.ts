@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.68.1',
+    date: '2026-09-11',
+    features: [
+      '修复电脑端右上角误显示移动端底部导航栏的问题（桌面端未显式隐藏该导航，现已与顶栏同样默认隐藏、仅移动端显示）',
+    ],
+  },
+  {
     version: '2.68.0',
     date: '2026-09-11',
     features: [
