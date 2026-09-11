@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.69.1',
+    date: '2026-09-11',
+    features: [
+      '修复安装为应用（PWA 独立窗口）后地图点全屏整页卡死的问题：Android 独立窗口不再调用原生全屏 API（Chromium 已知 bug 族），改用覆盖层伪全屏，返回手势可退出；浏览器标签页内仍为原生全屏，iPhone 等不支持原生全屏的环境自动降级',
+    ],
+  },
+  {
     version: '2.69.0',
     date: '2026-09-11',
     features: [

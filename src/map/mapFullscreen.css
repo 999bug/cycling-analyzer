@@ -13,6 +13,21 @@
 }
 
 /*
+ * 伪全屏（PWA 独立窗口降级方案，逻辑见 mapFullscreen.tsx）：
+ * Android Chromium 独立窗口下运行时 requestFullscreen 存在整页卡死的已知
+ * bug 族，改为 fixed 顶置铺满视口模拟全屏。z-index 对齐导出录制舞台（3000），
+ * 压过底部 TabBar 等一切页面级悬浮层。
+ */
+.map-fullscreen-pseudo {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  /* !important 压掉地图高度拖拽留下的内联 height */
+  height: 100% !important;
+  background-color: var(--bg);
+}
+
+/*
  * 全屏按钮：右上角悬浮。底色与字色都写死为「深色半透明底 + 浅色字」，
  * 不随主题变量翻转——此前用 var(--text)/var(--border) 在浅色主题下是深字压深底，几乎看不见。
  * 与右下角地图模式控件、回放控制栏保持同款观感。

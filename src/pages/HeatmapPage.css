@@ -39,8 +39,9 @@
   border: 1px solid var(--border);
 }
 
-/* 全屏查看时去掉圆角与描边 */
-.map-fullscreen-wrapper:fullscreen .heatmap-page__map {
+/* 全屏查看时去掉圆角与描边（:fullscreen 原生全屏 / map-fullscreen-pseudo 伪全屏两路生效） */
+.map-fullscreen-wrapper:fullscreen .heatmap-page__map,
+.map-fullscreen-wrapper.map-fullscreen-pseudo .heatmap-page__map {
   border: none;
   border-radius: 0;
 }
