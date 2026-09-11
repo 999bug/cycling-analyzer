@@ -132,6 +132,40 @@
   overflow: auto;
 }
 
+/* ---------- 预览：真实界面舞台 ---------- */
+
+/* 画框：与 canvas 预览同尺寸（3:4），舞台按实测宽度缩放后正好填满 */
+.share-studio__stage-frame {
+  position: relative;
+  width: min(100%, calc((100vh - 300px) * 0.75));
+  max-width: 480px;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-md, 0 12px 40px rgb(0 0 0 / 40%));
+}
+
+/* 舞台插槽：布局尺寸恒为 1080×1440（Leaflet 需要真实布局尺寸才取对瓦片层级），
+   视觉缩放由内联 transform 完成，出图时由快照参数清掉 */
+.share-studio__stage-slot {
+  width: 1080px;
+  height: 1440px;
+  transform-origin: top left;
+}
+
+.share-studio__preview-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- 弹窗底部提示（降级/失败） ---------- */
+
+.share-studio__notice {
+  font-size: 12px;
+  color: var(--warning);
+}
+
 /* ---------- 平台选择 ---------- */
 
 .share-studio__platforms {

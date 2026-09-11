@@ -1,14 +1,20 @@
 /**
- * 社媒分享素材弹窗（Share Studio v1）。
+ * 社媒分享素材弹窗（Share Studio）。
  *
- * 从详情页一键打开：选平台（朋友圈/小红书）→ 翻页预览 Canvas 真实出图 →
- * 改模板文案 → 下载 PNG。纯前端绘制，无任何网络请求（隐私承诺）。
+ * 两条出图链路：
+ * - **真实界面**（v2 一期，仅朋友圈单图）：弹窗里挂一棵真实界面舞台（`ShareStageCard`：
+ *   真实底图地图 + 真实指标卡 + 图上文字），下载时用 DOM 快照导出 2 倍图 PNG——
+ *   成片观感与站内页面一致，图上文字在侧栏直接改、预览即所得；
+ *   快照不可用时自动降级到极简手绘，用户仍能拿到图。
+ * - **极简手绘**（v1，两平台通用）：Canvas 本地绘制（`shareCanvas`），无底图也就无网络请求。
+ *
+ * 文案分两层：**图上文字**（印进图片）与**发布文案**（复制到平台，不进图）。
  * Esc / 遮罩点击 / 关闭按钮退出。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Activity, ActivityRecord } from '@/types/activity'
 import type { DistanceUnit } from '@/features/settings/settings'
-import { buildShareData, type ShareCaptions } from '@/features/share/shareData'
+import { buildShareData, type ShareCaptions, type ShareData } from '@/features/share/shareData'
 import {
   drawShareCard,
   downloadSharePng,
@@ -16,6 +22,14 @@ import {
   XHS_PAGE_LABELS,
   type SharePlatform,
 } from '@/features/share/shareCanvas'
+import ShareStageCard from '@/features/share/ShareStageCard'
+import {
+  captureShareStagePng,
+  downloadShareStagePng,
+  SHARE_STAGE_WIDTH,
+  waitForStageTiles,
+} from '@/features/share/shareStageCapture'
+import { simplifyRoute } from '@/map/simplify'
 import { formatDate } from '@/utils/format'
 import '@/features/share/shareStudio.css'
 
@@ -46,9 +60,40 @@ const PLATFORMS: Array<{ id: SharePlatform; label: string; hint: string }> = [
   { id: 'xhs', label: '小红书', hint: '4 页套图：封面 + 路线 + 洞察 + 图表' },
 ]
 
+/** 卡片样式：真实界面（DOM 快照）/ 极简手绘（Canvas） */
+type ShareStyle = 'stage' | 'canvas'
+
+/** 样式选项（顺序即默认，首个为默认样式） */
+const STYLES: Array<{ id: ShareStyle; label: string; hint: string }> = [
+  { id: 'stage', label: '真实界面', hint: '真实地图 + 真实指标卡，图上可写字' },
+  { id: 'canvas', label: '极简手绘', hint: '纯色卡片无底图，离线也能出图' },
+]
+
+/**
+ * 轨迹抽稀容差（米）：与详情页 `SIMPLIFY_TOLERANCE_METERS` 同值——
+ * 分享舞台展示与详情页地图出自同一条抽稀轨迹，观感一致。
+ */
+const ROUTE_SIMPLIFY_TOLERANCE_METERS = 5
+
+/** 预览初始缩放（首帧 ResizeObserver 回报前的兜底，避免 1080px 舞台撑爆弹窗） */
+const DEFAULT_STAGE_SCALE = 0.34
+
+/** 导出流程状态：idle 正常 / busy 生成中 / fallback 已降级出图 / fail 未出图 */
+type ExportState = 'idle' | 'busy' | 'fallback' | 'fail'
+
 /** jsdom / 异常环境下 canvas 不可用时的降级标记（模块级探测一次，避免 effect 内 setState） */
 const CANVAS_AVAILABLE =
   typeof document !== 'undefined' && document.createElement('canvas').getContext('2d') !== null
+
+/**
+ * 图上文案默认值：朋友圈文案首行（真实数据拼装，可编辑）。
+ *
+ * @param data 分享素材数据
+ */
+function defaultStageScript(data: ShareData): string {
+  const firstLine = data.captions.moments.split('\n').find((line) => line.trim().length > 0)
+  return firstLine ?? ''
+}
 
 /**
  * 社媒分享素材弹窗。
@@ -64,18 +109,35 @@ function ShareStudioModal({
   onClose,
 }: ShareStudioModalProps) {
   const [platform, setPlatform] = useState<SharePlatform>('moments')
+  const [style, setStyle] = useState<ShareStyle>('stage')
   const [page, setPage] = useState(0)
   // 文案编辑态：与模板分离存储，「恢复默认」时重置回模板值
   const [captions, setCaptions] = useState<Record<string, string>>(() => ({}))
+  // 图上文字编辑态（键缺省 = 用默认值）
+  const [stageText, setStageText] = useState<{ title?: string; script?: string }>(() => ({}))
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
+  const [exportState, setExportState] = useState<ExportState>('idle')
+  const [stageScale, setStageScale] = useState(DEFAULT_STAGE_SCALE)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+
   const data = useMemo(
     () => buildShareData(activity, records, { distanceUnit, ftp, maxHeartRate }),
     [activity, records, distanceUnit, ftp, maxHeartRate],
   )
+  // 与详情页同源的抽稀轨迹（真实界面舞台里的地图用）
+  const routePoints = useMemo(
+    () => simplifyRoute(records, ROUTE_SIMPLIFY_TOLERANCE_METERS),
+    [records],
+  )
   const pageCount = sharePageCount(platform)
   const dateKey = formatDate(activity.startTime)
+  // 真实界面一期只做朋友圈单图：小红书套图沿用极简手绘（二期接入）
+  const stageActive = style === 'stage' && platform === 'moments'
+  const stageTitle = stageText.title ?? data.title
+  const stageScript = stageText.script ?? defaultStageScript(data)
 
   // 当前平台的文案值：编辑过用编辑值，否则用模板默认
   const captionValue = (key: keyof ShareCaptions) => captions[key] ?? data.captions[key]
@@ -86,6 +148,23 @@ function ShareStudioModal({
       drawShareCard(canvasRef.current, data, platform, page)
     }
   }, [data, platform, page])
+
+  // 真实界面预览缩放：舞台恒 1080×1440（Leaflet 按布局尺寸取瓦片，不能靠 zoom 缩小布局），
+  // 视觉上由插槽 transform 缩进弹窗，比例按画框实测宽度换算
+  useEffect(() => {
+    const frame = frameRef.current
+    if (frame === null || typeof ResizeObserver === 'undefined') {
+      return undefined
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      if (width > 0) {
+        setStageScale(width / SHARE_STAGE_WIDTH)
+      }
+    })
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [stageActive])
 
   // Esc 关闭
   useEffect(() => {
@@ -102,11 +181,47 @@ function ShareStudioModal({
   function handlePlatformChange(next: SharePlatform) {
     setPlatform(next)
     setPage(0)
+    setExportState('idle')
+  }
+
+  /** 切卡片样式 */
+  function handleStyleChange(next: ShareStyle) {
+    setStyle(next)
+    setExportState('idle')
+  }
+
+  /** 改图上文字（顺手清掉上一次的导出提示，避免提示与当前内容对不上） */
+  function updateStageText(patch: { title?: string; script?: string }) {
+    setStageText((current) => ({ ...current, ...patch }))
+    setExportState('idle')
+  }
+
+  /** 真实界面出图不可用：降级为极简手绘（v1 链路），用户仍能拿到图 */
+  function handleStageFallback() {
+    setExportState(downloadSharePng(data, 'moments', 0, dateKey) ? 'fallback' : 'fail')
   }
 
   /** 下载当前预览页 */
-  function handleDownload() {
-    downloadSharePng(data, platform, page, dateKey)
+  async function handleDownload() {
+    if (!stageActive) {
+      downloadSharePng(data, platform, page, dateKey)
+      return
+    }
+    const stage = stageRef.current
+    if (stage === null) {
+      handleStageFallback()
+      return
+    }
+    setExportState('busy')
+    // 先等真实底图瓦片落位，否则成片是一张空底图
+    await waitForStageTiles(stage)
+    const blob = await captureShareStagePng(stage)
+    if (blob === undefined) {
+      handleStageFallback()
+      return
+    }
+    downloadShareStagePng(blob, dateKey)
+    setExportState('idle')
   }
 
   /** 小红书：依次下载全部 4 页 */
@@ -162,7 +277,29 @@ function ShareStudioModal({
 
         <div className="share-studio__body">
           <section className="share-studio__preview" aria-label="卡片预览">
-            {CANVAS_AVAILABLE ? (
+            {stageActive ? (
+              <>
+                <div className="share-studio__stage-frame" ref={frameRef}>
+                  {/* 快照目标就是本插槽：预览缩放挂在这里，出图时由快照参数清掉（见 shareStageCapture） */}
+                  <div
+                    className="share-studio__stage-slot"
+                    ref={stageRef}
+                    style={{ transform: `scale(${stageScale})` }}
+                  >
+                    <ShareStageCard
+                      activity={activity}
+                      data={data}
+                      routePoints={routePoints}
+                      titleText={stageTitle}
+                      scriptText={stageScript}
+                    />
+                  </div>
+                </div>
+                <p className="share-studio__preview-note">
+                  成图 1080×1440 的 2 倍图 · 底图为真实地图
+                </p>
+              </>
+            ) : CANVAS_AVAILABLE ? (
               <div className="share-studio__canvas-frame">
                 <canvas ref={canvasRef} className="share-studio__canvas" />
               </div>
@@ -213,9 +350,75 @@ function ShareStudioModal({
               ))}
             </div>
 
+            {/* 卡片样式：真实界面走 DOM 快照（一期仅朋友圈），极简手绘走 Canvas 绘制 */}
             <div className="share-studio__caption">
               <div className="share-studio__caption-head">
-                <span className="share-studio__caption-title">分享文案</span>
+                <span className="share-studio__caption-title">卡片样式</span>
+              </div>
+              <div className="share-studio__platforms" role="group" aria-label="卡片样式">
+                {STYLES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={
+                      item.id === style
+                        ? 'share-studio__platform share-studio__platform--active'
+                        : 'share-studio__platform'
+                    }
+                    aria-pressed={item.id === style}
+                    onClick={() => handleStyleChange(item.id)}
+                  >
+                    <span className="share-studio__platform-label">{item.label}</span>
+                    <span className="share-studio__platform-hint">{item.hint}</span>
+                  </button>
+                ))}
+              </div>
+              {platform === 'xhs' && style === 'stage' && (
+                <span className="share-studio__caption-note">
+                  小红书套图的真实界面样式在二期接入，当前导出用极简手绘
+                </span>
+              )}
+            </div>
+
+            {/* 图上文字：直接印在成片上，改完预览即所得 */}
+            {stageActive && (
+              <div className="share-studio__caption">
+                <div className="share-studio__caption-head">
+                  <span className="share-studio__caption-title">图上文字</span>
+                  <span className="share-studio__caption-note">印在图片上</span>
+                </div>
+                <input
+                  className="share-studio__caption-input"
+                  value={stageTitle}
+                  maxLength={24}
+                  aria-label="图上标题"
+                  onChange={(event) => updateStageText({ title: event.target.value })}
+                />
+                <textarea
+                  className="share-studio__caption-text"
+                  value={stageScript}
+                  aria-label="图上文案"
+                  rows={3}
+                  onChange={(event) => updateStageText({ script: event.target.value })}
+                />
+                <div className="share-studio__caption-actions">
+                  <button
+                    type="button"
+                    className="share-studio__btn share-studio__btn--ghost"
+                    onClick={() => {
+                      setStageText({})
+                      setExportState('idle')
+                    }}
+                  >
+                    恢复默认文字
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="share-studio__caption">
+              <div className="share-studio__caption-head">
+                <span className="share-studio__caption-title">发布文案</span>
                 <span className="share-studio__caption-note">文案不进图，发布时粘贴使用</span>
               </div>
               {platform === 'xhs' && (
@@ -254,7 +457,7 @@ function ShareStudioModal({
                     }))
                   }
                 >
-                  恢复默认
+                  恢复默认文案
                 </button>
                 <button
                   type="button"
@@ -269,7 +472,17 @@ function ShareStudioModal({
         </div>
 
         <footer className="share-studio__footer">
-          <span className="share-studio__privacy">图片在本浏览器内绘制，不会上传到任何服务器</span>
+          <span className="share-studio__privacy">
+            {stageActive
+              ? '图片在本机合成；底图瓦片来自地图服务，骑行数据不会上传'
+              : '图片在本浏览器内绘制，不会上传到任何服务器'}
+          </span>
+          {exportState === 'fallback' && (
+            <span className="share-studio__notice">真实界面出图不可用，已改用极简手绘导出</span>
+          )}
+          {exportState === 'fail' && (
+            <span className="share-studio__notice">出图失败，请重试或改用极简手绘</span>
+          )}
           <div className="share-studio__footer-actions">
             {platform === 'xhs' && (
               <button
@@ -283,10 +496,10 @@ function ShareStudioModal({
             <button
               type="button"
               className="share-studio__btn share-studio__btn--primary"
-              onClick={handleDownload}
-              disabled={!CANVAS_AVAILABLE}
+              onClick={() => void handleDownload()}
+              disabled={exportState === 'busy' || (!stageActive && !CANVAS_AVAILABLE)}
             >
-              下载图片
+              {exportState === 'busy' ? '生成中…' : '下载图片'}
             </button>
           </div>
         </footer>

@@ -88,6 +88,14 @@ export class CachingTileLayer extends LeafletTileLayer {
     const tile = document.createElement('img')
     tile.alt = ''
     tile.setAttribute('role', 'presentation')
+    // 跨域属性必须落在 img 上（Leaflet 的 options.crossOrigin 只在自己创建瓦片时生效，
+    // 本类自己建 img，需显式同步）：Blob URL 用不到它，原生兜底加载则靠它保住画布不污染
+    const crossOrigin = this.options.crossOrigin
+    if (typeof crossOrigin === 'string') {
+      tile.crossOrigin = crossOrigin
+    } else if (crossOrigin === true) {
+      tile.crossOrigin = 'anonymous'
+    }
     tile.addEventListener('load', () => done(undefined, tile))
     tile.addEventListener('error', () => done(new Error('tile load failed'), tile))
     const url = this.getTileUrl(coords)

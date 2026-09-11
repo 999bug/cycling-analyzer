@@ -34,6 +34,15 @@ export interface FallbackTileLayerProps {
 
   /** 连续失败达阈值时触发的降级回调（单向，仅触发一次） */
   onFallback: () => void
+
+  /**
+   * 瓦片是否带 `crossOrigin=anonymous` 加载（默认 false）。
+   *
+   * 需要把底图整屏画进 canvas 的场景（分享卡 DOM 快照出图、导出视频）必须为 true：
+   * 未带该属性的跨域 img 一旦被 drawImage，画布即被污染，toBlob/toDataURL 直接抛错。
+   * 高德与 OSM 均返回 `Access-Control-Allow-Origin: *`，带 CORS 不影响正常加载。
+   */
+  crossOrigin?: boolean
 }
 
 /**
@@ -41,7 +50,7 @@ export interface FallbackTileLayerProps {
  *
  * @param props 组件参数
  */
-export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback }: FallbackTileLayerProps) {
+export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback, crossOrigin = false }: FallbackTileLayerProps) {
   const map = useMap()
   const { tileCacheEnabled } = useOfflinePreferences()
   // 连续失败计数（任一瓦片成功加载后清零，避免网络抖动误判）
@@ -94,6 +103,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
             keepBuffer={TILE_KEEP_BUFFER}
             cacheEnabled={tileCacheEnabled}
             allowLocalTile={allowLocalTile}
+            crossOrigin={crossOrigin ? 'anonymous' : undefined}
           />
         ))}
       </>
@@ -107,6 +117,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback 
       attribution={source.attribution}
       keepBuffer={TILE_KEEP_BUFFER}
       cacheEnabled={tileCacheEnabled}
+      crossOrigin={crossOrigin ? 'anonymous' : undefined}
     />
   )
 }

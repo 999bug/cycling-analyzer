@@ -113,3 +113,29 @@ describe('缓存瓦片层本地预缓存优先', () => {
     expect(fetchMock).toHaveBeenCalledWith(AMAP_URL, { mode: 'cors' })
   })
 })
+
+describe('缓存瓦片层 crossOrigin 透传', () => {
+  /**
+   * 用指定 crossOrigin 选项创建瓦片元素。
+   *
+   * @param crossOrigin Leaflet TileLayer 的 crossOrigin 选项
+   */
+  function createTileWithCrossOrigin(crossOrigin?: boolean | string): HTMLImageElement {
+    const layer = new CachingTileLayer(AMAP_TEMPLATE, { crossOrigin }, true, true)
+    layer.getTileUrl = () => AMAP_URL
+    return layer.createTile(COORDS, vi.fn()) as HTMLImageElement
+  }
+
+  it('crossOrigin: anonymous 时落在 img 上（底图画进 canvas 不被污染）', () => {
+    expect(createTileWithCrossOrigin('anonymous').crossOrigin).toBe('anonymous')
+  })
+
+  it('crossOrigin: true 归一化为 anonymous', () => {
+    expect(createTileWithCrossOrigin(true).crossOrigin).toBe('anonymous')
+  })
+
+  it('未开启时不加属性（保持既有行为）', () => {
+    expect(createTileWithCrossOrigin().crossOrigin).toBeNull()
+    expect(createTileWithCrossOrigin(false).crossOrigin).toBeNull()
+  })
+})

@@ -47,11 +47,13 @@ vi.mock('@/map/CachingTileLayer', () => ({
     attribution,
     cacheEnabled,
     allowLocalTile,
+    crossOrigin,
   }: {
     url: string
     attribution: string
     cacheEnabled: boolean
     allowLocalTile?: boolean
+    crossOrigin?: string
   }) => (
     <div
       data-testid="tile-layer"
@@ -59,6 +61,7 @@ vi.mock('@/map/CachingTileLayer', () => ({
       data-attribution={attribution}
       data-cache-enabled={cacheEnabled}
       data-allow-local-tile={String(allowLocalTile)}
+      data-cross-origin={String(crossOrigin)}
     />
   ),
 }))
@@ -167,6 +170,15 @@ describe('降级瓦片层', () => {
     const layers = screen.getAllByTestId('tile-layer')
     expect(layers).toHaveLength(1)
     expect(layers[0]).toHaveAttribute('data-url', TILE_SOURCES[1].url)
+  })
+
+  it('crossOrigin 开关透传给瓦片层（分享卡出图要把底图画进 canvas）', () => {
+    const plain = render(<FallbackTileLayer sourceIndex={0} onFallback={vi.fn()} />)
+    expect(screen.getAllByTestId('tile-layer')[0]).toHaveAttribute('data-cross-origin', 'undefined')
+    plain.unmount()
+
+    render(<FallbackTileLayer sourceIndex={0} onFallback={vi.fn()} crossOrigin />)
+    expect(screen.getAllByTestId('tile-layer')[0]).toHaveAttribute('data-cross-origin', 'anonymous')
   })
 
   it('仅「正常」模式开放本地预缓存（作者数据区域卫星不再错拿矢量瓦片）', () => {

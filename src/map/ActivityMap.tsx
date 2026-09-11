@@ -64,6 +64,23 @@ const MAX_DETAILED_SEGMENTS = 500
 const HOVER_COLOR = '#4f8cff'
 
 /**
+ * 静态视图下的地图交互选项（覆盖 MapContainer 默认值）：
+ * 全部关掉——静态视图里地图只是一张「真实截图」，且 zoomControl 必须关闭，
+ * 否则 ZoomControlBottomRight 的 `map.zoomControl.setPosition` 会因控件不存在而报错。
+ */
+const STATIC_VIEW_MAP_OPTIONS = {
+  dragging: false,
+  scrollWheelZoom: false,
+  doubleClickZoom: false,
+  touchZoom: false,
+  boxZoom: false,
+  keyboard: false,
+  zoomControl: false,
+  // 拖拽把手不渲染时也固定住光标样式，避免静态视图里出现可交互的暗示
+  cursor: false,
+} as const
+
+/**
  * 地图组件 props。
  */
 export interface ActivityMapProps {
@@ -132,6 +149,15 @@ export interface ActivityMapProps {
     coordinateSystem?: CoordinateSystem
     trackOffset?: TrackOffset
   }
+
+  /**
+   * 静态视图（分享卡出图等）：隐藏全部交互控件（高度拖拽把手 / 全屏按钮 /
+   * 底图模式角标 / 缩放控件）、禁用地图交互、高度撑满容器（忽略拖拽记忆高度）。
+   *
+   * 用途是把地图作为「一张真实截图」嵌进别处（如分享舞台），出图不含任何控件；
+   * 底图版权署名照常显示（合规要求，不随视图模式隐藏）。
+   */
+  staticView?: boolean
 }
 
 /**
@@ -288,7 +314,7 @@ function ExportFrameSync({ enabled }: { enabled: boolean }) {
  *
  * @param props 组件参数
  */
-function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, replayExportSession, exportStage = false, exportProgressLabel, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare }: ActivityMapProps) {
+function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEnabled = false, replayMotionSource, replayExportSession, exportStage = false, exportProgressLabel, mapMode = 'normal', onMapModeChange, distanceUnit = 'km', coordinateSystem, trackOffset, compare, staticView = false }: ActivityMapProps) {
   // 全屏包裹层引用：全屏按钮对包裹层调用 Fullscreen API
   const wrapperRef = useRef<HTMLDivElement>(null)
 
@@ -430,10 +456,13 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
       className={
         exportStage
           ? 'map-fullscreen-wrapper activity-map-wrapper map-export-stage'
-          : 'map-fullscreen-wrapper activity-map-wrapper'
+          : staticView
+            ? 'map-fullscreen-wrapper activity-map-wrapper activity-map-wrapper--static'
+            : 'map-fullscreen-wrapper activity-map-wrapper'
       }
       ref={wrapperRef}
-      style={mapHeight !== null ? { height: mapHeight } : undefined}
+      // 静态视图高度由外层区块决定（撑满），不受拖拽记忆高度影响
+      style={!staticView && mapHeight !== null ? { height: mapHeight } : undefined}
     >
       {/* 录制状态条：位于画框外的顶部黑边区，不进成片（cropSourceOf 只裁画框） */}
       {exportStage && (
@@ -444,25 +473,34 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         </div>
       )}
       {/* 高度拖拽把手：置于地图顶缘中央，上下拖动调整地图高度（松手持久化） */}
-      <div
-        className="map-resize-handle"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="拖动调整地图高度"
-        title="上下拖动调整地图高度"
-        onPointerDown={handleResizeStart}
-        onPointerMove={handleResizeMove}
-        onPointerUp={handleResizeEnd}
-        onPointerCancel={handleResizeEnd}
-      />
+      {!staticView && (
+        <div
+          className="map-resize-handle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="拖动调整地图高度"
+          title="上下拖动调整地图高度"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+        />
+      )}
       <MapContainer
         className="activity-map"
         center={start}
         zoom={14}
         bounds={latLngs}
         scrollWheelZoom
+        {...(staticView ? STATIC_VIEW_MAP_OPTIONS : {})}
       >
-        <FallbackTileLayer sourceIndex={sourceIndex} mapMode={mapMode} onFallback={handleFallback} />
+        <FallbackTileLayer
+          sourceIndex={sourceIndex}
+          mapMode={mapMode}
+          onFallback={handleFallback}
+          // 静态视图要整屏画进 canvas（分享卡出图）：瓦片带 crossOrigin 加载，画布不被污染
+          crossOrigin={staticView}
+        />
         {compareLatLngs.length >= MIN_POINTS && (
           <Polyline
             positions={compareLatLngs}
@@ -508,12 +546,13 @@ function ActivityMap({ points, coloring = 'none', hoverPoint, onHover, replayEna
         <FullscreenSync />
         <ExportFrameSync enabled={exportStage} />
         <AutoInvalidate />
-        <ZoomControlBottomRight />
+        {/* 缩放控件在静态视图里不挂载：zoomControl 已关，setPosition 会踩空 */}
+        {!staticView && <ZoomControlBottomRight />}
       </MapContainer>
-      <MapFullscreenButton targetRef={wrapperRef} />
+      {!staticView && <MapFullscreenButton targetRef={wrapperRef} />}
       {/* 底图模式切换（非回放态入口）。回放态由控制条内的紧凑版负责——
           两者同时出现会重复，且角标贴右下角会与通栏控制栏堆在一起 */}
-      {!replayEnabled && (
+      {!staticView && !replayEnabled && (
         <MapModeSwitcher
           value={mapMode}
           onChange={onMapModeChange ?? (() => {})}

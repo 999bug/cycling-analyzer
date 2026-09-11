@@ -1,0 +1,138 @@
+/**
+ * 真实界面分享舞台样式（分享素材 v2）。
+ *
+ * 固定 1080×1440 —— 出图与预览是同一棵 DOM，因此这里的每个尺寸都直接决定成片。
+ * 颜色一律取 index.css 语义令牌：卡片观感跟随站点当前主题（深浅两主题都是「真实界面」）。
+ * 预览缩放由弹窗侧的舞台插槽挂 transform（不写在 .share-stage 上），
+ * 保证快照目标节点自身没有缩放残留。
+ */
+
+.share-stage {
+  display: flex;
+  flex-direction: column;
+  width: 1080px;
+  height: 1440px;
+  padding: 64px;
+  background-color: var(--bg);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 顶部：品牌 + 骑行类型 + 日期 ---------- */
+
+.share-stage__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.share-stage__brand {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+
+.share-stage__logo {
+  display: block;
+  height: 56px;
+  width: auto;
+}
+
+/* 骑行类型徽标：与详情页 .activity-detail__type 同款（主题主色 15% 底 + 主色文字） */
+.share-stage__kicker {
+  padding: 6px 18px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+  font-size: 24px;
+  white-space: nowrap;
+}
+
+.share-stage__date {
+  font-size: 26px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ---------- 标题与副标题 ---------- */
+
+.share-stage__title {
+  margin-top: 28px;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+}
+
+.share-stage__sub {
+  margin-top: 12px;
+  font-size: 32px;
+  color: var(--text-secondary);
+}
+
+/* ---------- 真实地图（真实底图 + 真实轨迹） ---------- */
+
+/* 地图吃掉标题/文案之外的剩余高度：卡片永远严丝合缝，长标题换行也不会留空洞 */
+.share-stage__map {
+  flex: 1 1 auto;
+  min-height: 480px;
+  margin-top: 36px;
+}
+
+/* ---------- 真实指标卡 ---------- */
+
+.share-stage__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.share-stage__stat {
+  padding: 22px 24px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.share-stage__stat-value {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.share-stage__stat-unit {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.share-stage__stat-label {
+  margin-top: 6px;
+  font-size: 22px;
+  color: var(--text-secondary);
+}
+
+/* ---------- 图上文案（主题色引线，视觉上「人话」与数据分层） ---------- */
+
+.share-stage__script {
+  margin-top: 36px;
+  padding-left: 24px;
+  border-left: 6px solid var(--primary);
+  font-size: 34px;
+  line-height: 1.5;
+}
+
+/* ---------- 页脚 ---------- */
+
+.share-stage__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 36px;
+  font-size: 24px;
+  color: var(--text-secondary);
+}

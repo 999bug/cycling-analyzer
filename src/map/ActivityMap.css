@@ -7,6 +7,11 @@
   height: 340px;
 }
 
+/* 静态视图（分享卡出图等）：高度交给外层区块（撑满），不参与高度拖拽记忆 */
+.activity-map-wrapper--static {
+  height: 100%;
+}
+
 .activity-map {
   height: 100%;
   border-radius: 12px;

@@ -1,12 +1,32 @@
 /**
  * 分享素材弹窗测试（ShareStudioModal）。
- * jsdom 无 2d canvas：组件走「画布不可用」降级分支，断言不崩溃 + 控件齐全；
+ * jsdom 无 2d canvas：Canvas 链路走「画布不可用」降级分支，断言不崩溃 + 控件齐全；
  * 文案编辑/恢复默认/平台切换/Esc 关闭为纯 UI 逻辑，可完整断言。
+ *
+ * 真实界面链路（v2 一期）的出图由 shareStageCapture 承担，这里把它整体 mock：
+ * 只验证弹窗的编排——默认样式、图上文字与预览同步、出图成功/降级两条分支。
  */
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ShareStudioModal from '@/features/share/ShareStudioModal'
+import { captureShareStagePng, downloadShareStagePng } from '@/features/share/shareStageCapture'
+import { downloadSharePng } from '@/features/share/shareCanvas'
 import type { Activity } from '@/types/activity'
+
+vi.mock('@/features/share/shareStageCapture', () => ({
+  SHARE_STAGE_WIDTH: 1080,
+  SHARE_STAGE_HEIGHT: 1440,
+  waitForStageTiles: vi.fn(async () => {}),
+  captureShareStagePng: vi.fn(),
+  downloadShareStagePng: vi.fn(),
+  shareStageFileName: vi.fn(() => '骑了么-2026-09-06-真实界面.png'),
+}))
+
+// 只替换下载动作：绘制与分页等真实实现保留（极简手绘链路的断言依赖它们）
+vi.mock('@/features/share/shareCanvas', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/share/shareCanvas')>()
+  return { ...actual, downloadSharePng: vi.fn(() => true) }
+})
 
 function makeActivity(overrides: Partial<Activity> = {}): Activity {
   return {
@@ -39,7 +59,10 @@ describe('ShareStudioModal 分享弹窗', () => {
     expect(screen.getByRole('button', { name: /朋友圈/ })).toBeDefined()
     expect(screen.getByRole('button', { name: /小红书/ })).toBeDefined()
     expect(screen.getByText('文案不进图，发布时粘贴使用')).toBeDefined()
-    expect(screen.getByText('图片在本浏览器内绘制，不会上传到任何服务器')).toBeDefined()
+    // 隐私承诺：默认真实界面样式直说底图来源（有底图就有瓦片请求，不能沿用「无网络请求」口径）
+    expect(
+      screen.getByText('图片在本机合成；底图瓦片来自地图服务，骑行数据不会上传'),
+    ).toBeDefined()
     expect(screen.getByRole('button', { name: '下载图片' })).toBeDefined()
   })
 
@@ -58,7 +81,7 @@ describe('ShareStudioModal 分享弹窗', () => {
     fireEvent.change(textarea, { target: { value: '自定义文案' } })
     expect(textarea.value).toBe('自定义文案')
 
-    fireEvent.click(screen.getByRole('button', { name: '恢复默认' }))
+    fireEvent.click(screen.getByRole('button', { name: '恢复默认文案' }))
     expect((screen.getByLabelText('朋友圈文案') as HTMLTextAreaElement).value).toContain('骑了 108.4')
   })
 
@@ -109,5 +132,82 @@ describe('ShareStudioModal 分享弹窗', () => {
 
     fireEvent.click(screen.getByRole('dialog', { name: '分享素材创作' }))
     expect(onClose).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('ShareStudioModal 真实界面样式（v2 一期）', () => {
+  it('默认样式为真实界面：出图说明 + 图上文字区，且隐私说明改为底图口径', () => {
+    renderModal()
+
+    expect(screen.getByRole('group', { name: '卡片样式' })).toBeDefined()
+    expect(screen.getByRole('button', { name: /真实界面/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('成图 1080×1440 的 2 倍图 · 底图为真实地图')).toBeDefined()
+    expect(screen.getByLabelText('图上标题')).toBeDefined()
+    expect(screen.getByLabelText('图上文案')).toBeDefined()
+    expect(screen.getByText(/底图瓦片来自地图服务/)).toBeDefined()
+  })
+
+  it('图上标题/文案默认取真实数据，可编辑并同步到预览', () => {
+    const { container } = renderModal()
+
+    const title = screen.getByLabelText('图上标题') as HTMLInputElement
+    const script = screen.getByLabelText('图上文案') as HTMLTextAreaElement
+    expect(title.value).toBe('周末长距离')
+    expect(script.value).toContain('骑了 108.4 公里')
+
+    fireEvent.change(title, { target: { value: '自定义标题' } })
+    fireEvent.change(script, { target: { value: '今天风很大' } })
+
+    // 预览就是成片：舞台上出现编辑后的文字
+    expect(container.querySelector('.share-stage__title')?.textContent).toBe('自定义标题')
+    expect(container.querySelector('.share-stage__script')?.textContent).toBe('今天风很大')
+
+    // 恢复默认回到真实数据
+    fireEvent.click(screen.getByRole('button', { name: '恢复默认文字' }))
+    expect((screen.getByLabelText('图上标题') as HTMLInputElement).value).toBe('周末长距离')
+    expect((screen.getByLabelText('图上文案') as HTMLTextAreaElement).value).toContain('108.4')
+  })
+
+  it('切到极简手绘：图上文字区收起，canvas 不可用时给出降级提示', () => {
+    renderModal()
+
+    fireEvent.click(screen.getByRole('button', { name: /极简手绘/ }))
+
+    expect(screen.queryByLabelText('图上标题')).toBeNull()
+    expect(screen.getByText('当前环境不支持画布预览，下载功能不可用')).toBeDefined()
+    expect(screen.getByText('图片在本浏览器内绘制，不会上传到任何服务器')).toBeDefined()
+  })
+
+  it('下载成功：走真实界面快照链路，不落降级提示', async () => {
+    vi.mocked(captureShareStagePng).mockResolvedValueOnce(new Blob(['png']))
+    renderModal()
+
+    fireEvent.click(screen.getByRole('button', { name: '下载图片' }))
+
+    await waitFor(() => expect(downloadShareStagePng).toHaveBeenCalledTimes(1))
+    expect(downloadSharePng).not.toHaveBeenCalled()
+    expect(screen.queryByText(/已改用极简手绘导出/)).toBeNull()
+  })
+
+  it('快照不可用：自动降级为极简手绘并提示用户', async () => {
+    vi.mocked(captureShareStagePng).mockResolvedValueOnce(undefined)
+    renderModal()
+
+    fireEvent.click(screen.getByRole('button', { name: '下载图片' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('真实界面出图不可用，已改用极简手绘导出')).toBeDefined(),
+    )
+    expect(downloadSharePng).toHaveBeenCalledWith(expect.anything(), 'moments', 0, '2026-09-06')
+  })
+
+  it('切到小红书：提示真实界面样式二期接入，导出仍用极简手绘', () => {
+    renderModal()
+
+    fireEvent.click(screen.getByRole('button', { name: /小红书/ }))
+
+    expect(screen.getByText('小红书套图的真实界面样式在二期接入，当前导出用极简手绘')).toBeDefined()
+    expect(screen.queryByLabelText('图上标题')).toBeNull()
+    expect(screen.getByText('1/4 · 封面')).toBeDefined()
   })
 })
