@@ -18,7 +18,7 @@
 
 import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // 缓存目录可用环境变量覆盖；默认走 .tmp（gitignored，仓库约定临时产物必须放这里）
@@ -28,8 +28,8 @@ const CACHE_DIR = resolve(
 )
 const REPORT_DIR = resolve(ROOT, '.tmp/curated-v2')
 
-/** 地区 → 输出文件与导出名（二期新增地区在这里登记；全国 6 地区共用 nationalTracks.ts，按序合并） */
-const REGION_META = {
+/** 地区 → 输出文件与导出名（二期新增地区在这里登记；全国新地区共用 nationalTracks.ts，按序合并） */
+export const REGION_META = {
   beijing: { file: 'src/features/curatedRoutes/beijingTracks.ts', exportName: 'BEIJING_TRACKS' },
   xian: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   hangzhou: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
@@ -299,14 +299,14 @@ const ROUTES = [
 ]
 
 /** 可骑行道路类型（排除步道/高速；隧道在下方按 tag 排除） */
-const RIDABLE = new Set([
+export const RIDABLE = new Set([
   'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'service', 'trunk',
 ])
 /** 骑行不可入的道路类型 */
-const EXCLUDED = new Set(['motorway', 'motorway_link', 'trunk_link', 'footway', 'path', 'steps', 'track', 'construction'])
+export const EXCLUDED = new Set(['motorway', 'motorway_link', 'trunk_link', 'footway', 'path', 'steps', 'track', 'construction'])
 
-/** 拉取一个 bbox 的全部道路方式 */
-async function fetchWays(bbox) {
+/** 拉取一个 bbox 的全部道路方式（镜像重试由调用方负责；此处走主站） */
+export async function fetchWaysMain(bbox) {
   const q = `[out:json][timeout:90];way["highway"](${bbox.join(',')});out geom;`
   const resp = await fetch(OVERPASS_URL, {
     method: 'POST',
@@ -321,18 +321,18 @@ async function fetchWays(bbox) {
 }
 
 /** 读取缓存或拉取路网 */
-async function loadWays(route) {
+export async function loadWays(route) {
   const cacheFile = resolve(CACHE_DIR, `${route.id}-all.json`)
   if (existsSync(cacheFile)) {
     const ways = JSON.parse(readFileSync(cacheFile, 'utf8')).elements.filter((el) => el.type === 'way')
     return { ways, fromCache: true }
   }
-  const ways = await fetchWays(route.bbox)
+  const ways = await fetchWaysMain(route.bbox)
   return { ways, fromCache: false }
 }
 
 /** 两点近似距离（米） */
-function distM(a, b) {
+export function distM(a, b) {
   const cosLat = Math.cos(((a[0] + b[0]) / 2) * Math.PI / 180)
   const dLat = (a[0] - b[0]) * 110540
   const dLng = (a[1] - b[1]) * 111320 * cosLat
@@ -340,7 +340,7 @@ function distM(a, b) {
 }
 
 /** Douglas-Peucker 抽稀 */
-function simplify(points, toleranceMeters) {
+export function simplify(points, toleranceMeters) {
   if (points.length <= 2) return points
   const cosLat = Math.cos(((points[0][0] + points[points.length - 1][0]) / 2) * Math.PI / 180)
   const toXY = ([lat, lng]) => [lng * 111320 * cosLat, lat * 110540]
@@ -379,7 +379,7 @@ function simplify(points, toleranceMeters) {
 }
 
 /** 折线长度（米） */
-function lineLength(line) {
+export function lineLength(line) {
   let sum = 0
   for (let i = 1; i < line.length; i += 1) sum += distM(line[i - 1], line[i])
   return sum
@@ -389,7 +389,7 @@ function lineLength(line) {
  * opts.allowTunnelNames：允许骑行的隧道名白名单（如 G109 东方红隧道段在 OSM 中名为下安路隧道）
  * opts.allowTrack：放行 track（部分实际铺装的乡道/景区路在 OSM 中被标为 track）
  * opts.allowTrunk：放行 trunk（如 G210 满防线/G318 沪聂线在 OSM 中为 trunk，实为干线铺装公路） */
-function buildGraph(ways, opts = {}) {
+export function buildGraph(ways, opts = {}) {
   const nodeCoord = new Map()
   const adj = new Map()
   const addEdge = (a, b, w) => {
@@ -422,7 +422,7 @@ function buildGraph(ways, opts = {}) {
 }
 
 /** 图上两点最短路径（节点 ID 序列），不可达返回 null */
-function graphShortestPath(nodeCoord, adj, start, end) {
+export function graphShortestPath(nodeCoord, adj, start, end) {
   const dist = new Map([[start, 0]])
   const prev = new Map()
   const visited = new Set()
@@ -456,7 +456,7 @@ function graphShortestPath(nodeCoord, adj, start, end) {
 }
 
 /** 锚点吸附最近路网节点（半径内），失败返回 -1 */
-function snapNode(nodeCoord, anchor, radiusM = 800) {
+export function snapNode(nodeCoord, anchor, radiusM = 800) {
   let best = -1
   let bestD = Infinity
   for (const [id, coord] of nodeCoord) {
@@ -544,7 +544,7 @@ function namedChains(ways, names) {
 }
 
 /** 解析既有生成文件里的 JSON 数据（合并用），无文件或解析失败返回空 */
-function readExistingOutput(outFile, exportName) {
+export function readExistingOutput(outFile, exportName) {
   if (!existsSync(outFile)) return {}
   try {
     const text = readFileSync(outFile, 'utf8')
@@ -557,75 +557,88 @@ function readExistingOutput(outFile, exportName) {
   }
 }
 
-// 按地区分组处理（未显式标注 region 的视为北京）
-const byRegion = new Map()
-for (const route of ROUTES) {
-  const region = route.region ?? 'beijing'
-  if (!byRegion.has(region)) byRegion.set(region, [])
-  byRegion.get(region).push(route)
-}
-
-mkdirSync(REPORT_DIR, { recursive: true })
-
-for (const [region, routes] of byRegion) {
-  const meta = REGION_META[region]
-  if (!meta) {
-    console.error(`unknown region: ${region}（先在 REGION_META 登记）`)
-    process.exit(1)
-  }
-  const outFile = resolve(ROOT, meta.file)
-  const report = []
-  const output = readExistingOutput(outFile, meta.exportName)
-  let added = 0
-  let skippedExisting = 0
-
-  for (const route of routes) {
-    // CURATED_FORCE_IDS=id1,id2 强制重算指定路线（覆盖既有输出）
-    const force = new Set((process.env.CURATED_FORCE_IDS ?? '').split(',').filter(Boolean))
-    if (output[route.id] !== undefined && !force.has(route.id)) {
-      skippedExisting += 1
-      continue
-    }
-    let ways
-    try {
-      const loaded = await loadWays(route)
-      ways = loaded.ways
-      report.push(`${route.id}: ${loaded.fromCache ? 'cache' : 'fetched'} → ${ways.length} ways`)
-    } catch (error) {
-      report.push(`${route.id}: FETCH FAILED — ${error.message}`)
-      continue
-    }
-    let lines
-    if (route.mode === 'named') {
-      lines = namedChains(ways, route.names)
-    } else {
-      const path = shortestPath(ways, route.anchors, route)
-      lines = path === null ? [] : [path]
-    }
-    if (lines.length === 0) {
-      report.push(`${route.id}: NO PATH`)
-      continue
-    }
-    const simplified = lines.map((line) => simplify(line, 12)).filter((line) => line.length >= 2)
-    const totalKm = simplified.reduce((sum, line) => sum + lineLength(line), 0) / 1000
-    report.push(
-      `${route.id}: chains=${simplified.length} total=${totalKm.toFixed(2)}km pts=${simplified.reduce((s, l) => s + l.length, 0)}`,
-    )
-    output[route.id] = simplified
-    added += 1
-  }
-
+/** 生成 tracks 数据文件内容（curate-route.mjs 复用同一模板，保证两脚本产出一致） */
+export function renderTracksFile(exportName, output) {
   const tsBody = JSON.stringify(output, null, 0)
-  const content = `/**
+  return `/**
  * 精选路线几何数据（WGS-84，[纬度, 经度][] 数组，每条路线可为多段折线）。
  *
  * 本文件为生成物：由 scripts/generate-curated-routes.mjs 从 OSM 路网拉取、
  * Dijkstra 选路 + 抽稀产出，勿手改；数据 © OpenStreetMap 贡献者（ODbL）。
  * 渲染时由调用方经 projectPoint 投影到底图坐标系。
  */
-export const ${meta.exportName}: Record<string, [number, number][][]> = ${tsBody}
+export const ${exportName}: Record<string, [number, number][][]> = ${tsBody}
 `
-  writeFileSync(outFile, content, 'utf8')
-  writeFileSync(resolve(REPORT_DIR, `report-${region}.txt`), report.join('\n'), 'utf8')
-  console.log(`${region}: +${added} generated, ${skippedExisting} kept from existing → ${meta.file}`)
+}
+
+// ---- 主流程（仅直接运行本文件时执行；被 curate-route.mjs import 时跳过）----
+
+async function main() {
+  // 按地区分组处理（未显式标注 region 的视为北京）
+  const byRegion = new Map()
+  for (const route of ROUTES) {
+    const region = route.region ?? 'beijing'
+    if (!byRegion.has(region)) byRegion.set(region, [])
+    byRegion.get(region).push(route)
+  }
+
+  mkdirSync(REPORT_DIR, { recursive: true })
+
+  for (const [region, routes] of byRegion) {
+    const meta = REGION_META[region]
+    if (!meta) {
+      console.error(`unknown region: ${region}（先在 REGION_META 登记）`)
+      process.exit(1)
+    }
+    const outFile = resolve(ROOT, meta.file)
+    const report = []
+    const output = readExistingOutput(outFile, meta.exportName)
+    let added = 0
+    let skippedExisting = 0
+
+    for (const route of routes) {
+      // CURATED_FORCE_IDS=id1,id2 强制重算指定路线（覆盖既有输出）
+      const force = new Set((process.env.CURATED_FORCE_IDS ?? '').split(',').filter(Boolean))
+      if (output[route.id] !== undefined && !force.has(route.id)) {
+        skippedExisting += 1
+        continue
+      }
+      let ways
+      try {
+        const loaded = await loadWays(route)
+        ways = loaded.ways
+        report.push(`${route.id}: ${loaded.fromCache ? 'cache' : 'fetched'} → ${ways.length} ways`)
+      } catch (error) {
+        report.push(`${route.id}: FETCH FAILED — ${error.message}`)
+        continue
+      }
+      let lines
+      if (route.mode === 'named') {
+        lines = namedChains(ways, route.names)
+      } else {
+        const path = shortestPath(ways, route.anchors, route)
+        lines = path === null ? [] : [path]
+      }
+      if (lines.length === 0) {
+        report.push(`${route.id}: NO PATH`)
+        continue
+      }
+      const simplified = lines.map((line) => simplify(line, 12)).filter((line) => line.length >= 2)
+      const totalKm = simplified.reduce((sum, line) => sum + lineLength(line), 0) / 1000
+      report.push(
+        `${route.id}: chains=${simplified.length} total=${totalKm.toFixed(2)}km pts=${simplified.reduce((s, l) => s + l.length, 0)}`,
+      )
+      output[route.id] = simplified
+      added += 1
+    }
+
+    writeFileSync(outFile, renderTracksFile(meta.exportName, output), 'utf8')
+    writeFileSync(resolve(REPORT_DIR, `report-${region}.txt`), report.join('\n'), 'utf8')
+    console.log(`${region}: +${added} generated, ${skippedExisting} kept from existing → ${meta.file}`)
+  }
+}
+
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isDirectRun) {
+  await main()
 }

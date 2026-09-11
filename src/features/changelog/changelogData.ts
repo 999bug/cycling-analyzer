@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.72.1',
+    date: '2026-09-11',
+    features: [
+      '开发工具：新增 npm run curate 精选路线半自动添加器——一张路线需求单（地名/坐标起终点 + 申报里程爬升 + 来源等级）自动完成几何生成、数据条目与测试断言登记、几何预览出图，--dry 试运行不落盘',
+      '添加器内置自动化：地名定位双源兜底（Nominatim/Photon，带地区偏置防同名歧义）、Overpass 缓存优先 + 镜像轮询 + curl 兜底、隧道/track/trunk 例外自动探测、选路失败时输出替代锚点诊断建议',
+    ],
+  },
+  {
     version: '2.72.0',
     date: '2026-09-11',
     features: [

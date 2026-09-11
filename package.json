@@ -1,7 +1,7 @@
 {
   "name": "cycling-analyzer",
   "private": true,
-  "version": "2.72.0",
+  "version": "2.72.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\"",
     "preview": "vite preview",
+    "curate": "node scripts/curate-route.mjs --spec",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
