@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.67.1',
+    date: '2026-09-11',
+    features: [
+      '修复 CI lint 报错：分享图片绘制中正则的多余转义字符',
+    ],
+  },
+  {
     version: '2.67.0',
     date: '2026-09-11',
     features: [

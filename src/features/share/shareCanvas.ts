@@ -810,7 +810,7 @@ function wrapCjk(
     latinRun = ''
   }
   for (const char of text) {
-    if (/[\w.,:%\-]/.test(char)) {
+    if (/[\w.,:%-]/.test(char)) {
       latinRun += char
       continue
     }
