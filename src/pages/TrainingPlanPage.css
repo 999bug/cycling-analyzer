@@ -138,3 +138,15 @@
   font-size: 12px;
   color: var(--text);
 }
+
+/* 移动端（≤768px）：输入 16px 防 iOS 自动放大，提交按钮热区 44px */
+@media (max-width: 768px) {
+  .training-plan__input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .training-plan__submit {
+    min-height: 44px;
+  }
+}

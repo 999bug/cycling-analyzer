@@ -171,3 +171,27 @@
 .segments-page__gpx-label input[type='file'] {
   display: none;
 }
+
+/* ---- 移动端（≤768px）：工具条换行 + 触控目标 44px ---- */
+@media (max-width: 768px) {
+  .segments-page__toolbar {
+    justify-content: flex-start;
+  }
+
+  .segments-page__strava-row {
+    flex-wrap: wrap;
+  }
+
+  .segments-page__strava-row input {
+    flex: 1 1 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .segments-page__strava-actions button,
+  .segments-page__export,
+  .segments-page__gpx-label,
+  .segments-page__strava-actions select {
+    min-height: 44px;
+  }
+}

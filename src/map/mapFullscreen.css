@@ -41,3 +41,11 @@
   color: #34d9ff;
   border-color: #34d9ff;
 }
+
+/* 移动端（≤768px）：触控热区 44px */
+@media (max-width: 768px) {
+  .map-fullscreen-button {
+    width: 44px;
+    height: 44px;
+  }
+}

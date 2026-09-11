@@ -9,10 +9,10 @@
   --bg-surface: #1b1e23;
   --bg-elevated: #232830;
 
-  /* 文字层级 */
+  /* 文字层级（2026-09-11 无障碍修正：tertiary 原值深色 3.4:1 / 浅色 2.5:1 不达 AA 4.5:1） */
   --text: #e8eaed;
   --text-secondary: #9aa0a6;
-  --text-tertiary: #6b7178;
+  --text-tertiary: #7d838a;
 
   /* 品牌 */
   --primary: #b8e62e;
@@ -44,6 +44,9 @@
   /* 阴影 */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
+
+  /* 图表高度（移动优先响应式：手机 180px，桌面 220px；图表卡容器取用） */
+  --chart-height: 220px;
 }
 
 /* 浅色主题（规格 §36）：覆盖 CSS 变量，组件无需改动；荧光绿在白底对比度不足，主色换深蓝 */
@@ -54,7 +57,7 @@
 
   --text: #1a1d21;
   --text-secondary: #5f6368;
-  --text-tertiary: #9aa0a6;
+  --text-tertiary: #8a8f96;
 
   --primary: #0d3b4c;
   --on-primary: #ffffff;
@@ -102,6 +105,8 @@ body {
     sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  /* 等宽数字位：全站指标数字列对齐不抖动（数据密集型站点的排版基础） */
+  font-variant-numeric: tabular-nums;
 }
 
 h1 {
@@ -118,4 +123,11 @@ p {
   background: var(--bg-hover, rgba(255, 255, 255, 0.04));
   border: 1px dashed var(--border);
   box-sizing: border-box;
+}
+
+/* ---- 移动端（≤768px）全局响应式基线：桌面端不受以下任何规则影响 ---- */
+@media (max-width: 768px) {
+  :root {
+    --chart-height: 180px;
+  }
 }

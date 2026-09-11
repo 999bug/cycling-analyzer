@@ -64,3 +64,10 @@
   justify-content: flex-end;
   margin-top: 4px;
 }
+
+/* 移动端（≤576px）：三值卡降列自适应，28px 数值不再互相挤压 */
+@media (max-width: 576px) {
+  .training-status__cards {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}

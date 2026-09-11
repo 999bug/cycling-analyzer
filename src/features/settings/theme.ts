@@ -16,6 +16,19 @@ let systemThemeListener: ((event: MediaQueryListEvent) => void) | null = null
 /** 系统浅色偏好媒体查询 */
 const LIGHT_MEDIA = '(prefers-color-scheme: light)'
 
+/** 各主题的浏览器状态栏/标题栏颜色（PWA 安装态视觉一致；index.html 默认值为深色） */
+const META_THEME_COLORS: Record<'dark' | 'light', string> = {
+  dark: '#121417',
+  light: '#f5f6f8',
+}
+
+/** 把主题色写入 <meta name="theme-color">（移动端状态栏跟随主题） */
+function applyMetaThemeColor(theme: 'dark' | 'light'): void {
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', META_THEME_COLORS[theme])
+}
+
 /**
  * 应用主题到文档根元素（data-theme 属性驱动 CSS 变量切换）。
  * system 模式解析系统偏好并挂载监听自动跟随。
@@ -30,14 +43,18 @@ export function applyTheme(theme: Theme): void {
       systemThemeListener = null
     }
     document.documentElement.dataset.theme = theme
+    applyMetaThemeColor(theme)
     return
   }
 
   const media = window.matchMedia(LIGHT_MEDIA)
   document.documentElement.dataset.theme = media.matches ? 'light' : 'dark'
+  applyMetaThemeColor(media.matches ? 'light' : 'dark')
   if (systemThemeListener === null) {
     systemThemeListener = (event) => {
-      document.documentElement.dataset.theme = event.matches ? 'light' : 'dark'
+      const next = event.matches ? 'light' : 'dark'
+      document.documentElement.dataset.theme = next
+      applyMetaThemeColor(next)
     }
     media.addEventListener('change', systemThemeListener)
   }

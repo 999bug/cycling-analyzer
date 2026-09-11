@@ -39,6 +39,14 @@
   }
 }
 
+/* 移动端（≤768px）：抬到底部 TabBar 之上，避免遮挡与误触 */
+@media (max-width: 768px) {
+  .feedback-fab {
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* 遮罩层 */
 .feedback-overlay {
   position: fixed;

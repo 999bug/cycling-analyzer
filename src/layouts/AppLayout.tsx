@@ -40,6 +40,63 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings', label: '更多' },
 ]
 
+/**
+ * 移动端底部 TabBar 的高频页（2026-09-11 手机端体验优化）：
+ * 4 个高频页 1 击直达，次级页全部收进「更多」（点击打开抽屉）。
+ * 桌面端不渲染该导航（CSS ≤768px 显示），侧边栏行为完全不变。
+ */
+const TAB_ITEMS: NavItem[] = [
+  { to: '/', label: '仪表盘', end: true },
+  { to: '/activities', label: '记录' },
+  { to: '/statistics', label: '统计' },
+  { to: '/routes-map', label: '路线' },
+]
+
+/** TabBar 页签图标（线性风格统一描边，颜色跟随 currentColor） */
+function TabIcon({ name }: { name: string }) {
+  const commonProps = {
+    width: 22,
+    height: 22,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.8,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+  switch (name) {
+    case '/':
+      return (
+        <svg {...commonProps}>
+          <path d="M12 4a8 8 0 0 1 8 8h-3.5" />
+          <path d="M12 4a8 8 0 0 0-8 8h3.5" />
+          <path d="M12 12l4-3" />
+        </svg>
+      )
+    case '/activities':
+      return (
+        <svg {...commonProps}>
+          <path d="M5 6h14M5 12h14M5 18h9" />
+        </svg>
+      )
+    case '/statistics':
+      return (
+        <svg {...commonProps}>
+          <path d="M6 20V10M12 20V4M18 20v-7" />
+        </svg>
+      )
+    default:
+      return (
+        <svg {...commonProps}>
+          <path d="M5 19c3-1 2-5 5-6s5 1 7-2" />
+          <circle cx="5" cy="19" r="1.6" />
+          <circle cx="18" cy="10" r="1.6" />
+        </svg>
+      )
+  }
+}
+
 /** 自动收回：鼠标移出侧边栏后的收起延迟（毫秒），缓冲贴边划过与移向内容区的手抖 */
 const SIDEBAR_COLLAPSE_DELAY_MS = 300
 
@@ -155,18 +212,8 @@ function AppLayout() {
         跳转到主内容
       </a>
 
-      {/* 顶栏（移动端可见）：汉堡按钮 + 品牌 */}
+      {/* 顶栏（移动端可见）：品牌 logo（2026-09-11 起汉堡按钮移除，抽屉改由底部 TabBar「更多」打开） */}
       <header className="app-layout__topbar">
-        <button
-          type="button"
-          className="app-layout__menu-button"
-          aria-label="打开菜单"
-          aria-expanded={drawerOpen}
-          aria-controls="app-nav"
-          onClick={() => setDrawerOpen((open) => !open)}
-        >
-          <span className="app-layout__menu-icon" aria-hidden="true" />
-        </button>
         <Link className="app-layout__topbar-brand" to="/" title="回到仪表盘首页">
           <img
             className="app-layout__topbar-logo"
@@ -303,6 +350,40 @@ function AppLayout() {
         <AuthorHiddenNotice />
         <Outlet />
       </main>
+
+      {/* 移动端底部 TabBar（≤768px 显示）：高频页直达，「更多」打开抽屉收纳全部页面 */}
+      <nav className="app-layout__tabbar" aria-label="移动端主导航">
+        {TAB_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              isActive
+                ? 'app-layout__tab app-layout__tab--active'
+                : 'app-layout__tab'
+            }
+          >
+            <TabIcon name={item.to} />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+        <button
+          type="button"
+          className="app-layout__tab"
+          aria-expanded={drawerOpen}
+          aria-controls="app-nav"
+          onClick={() => setDrawerOpen(true)}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="6" cy="12" r="1.4" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+            <circle cx="18" cy="12" r="1.4" fill="currentColor" />
+          </svg>
+          <span>更多</span>
+        </button>
+      </nav>
+
       {/* PWA 安装引导横幅（可安装且非冷却期时展示；fixed 定位不受内容区影响） */}
       <InstallBanner />
       {/* 本地数据迁移进度条（v5 存储升级，后台分批执行，完成后自动刷新） */}

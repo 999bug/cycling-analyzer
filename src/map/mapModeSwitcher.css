@@ -56,3 +56,15 @@
 .map-fullscreen-wrapper:has(.map-mode-switcher) .leaflet-bottom.leaflet-right {
   margin-bottom: 56px;
 }
+
+/* 移动端（≤768px）：模式按钮触控热区增大；同步上抬 Leaflet 右下角控件
+   （高度 ≈43px → ≈61px，margin 由 56px 同步放大到 74px，口径见上方注释） */
+@media (max-width: 768px) {
+  .map-mode-switcher__mode {
+    padding: 11px 14px;
+  }
+
+  .map-fullscreen-wrapper:has(.map-mode-switcher) .leaflet-bottom.leaflet-right {
+    margin-bottom: 74px;
+  }
+}

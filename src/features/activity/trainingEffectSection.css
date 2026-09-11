@@ -47,3 +47,11 @@
   height: 100%;
   border-radius: 4px;
 }
+
+/* 移动端（≤576px）：三列（标签/数值/进度条）压缩列宽，窄屏不换行不溢出 */
+@media (max-width: 576px) {
+  .training-effect__row {
+    grid-template-columns: 44px minmax(90px, 110px) 1fr;
+    gap: 8px;
+  }
+}

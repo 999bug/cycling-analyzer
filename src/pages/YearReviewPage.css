@@ -61,3 +61,15 @@
   font-weight: 500;
   margin-bottom: 12px;
 }
+
+/* 移动端（≤768px）：年份选项与分享按钮热区 44px，卡片内边距收紧 */
+@media (max-width: 768px) {
+  .year-review__year,
+  .year-review__share {
+    min-height: 44px;
+  }
+
+  .year-review__monthly {
+    padding: 12px 14px;
+  }
+}

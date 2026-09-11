@@ -269,7 +269,12 @@ function ActivityListTable({
               </td>
             )}
             {columns.map((col) => (
-              <td key={col.key} className={col.align === 'right' ? 'activity-table__num' : undefined}>
+              <td
+                key={col.key}
+                data-col={col.key}
+                data-label={col.label}
+                className={col.align === 'right' ? 'activity-table__num' : undefined}
+              >
                 {col.key === 'title' ? (
                   // 标题列渲染为真实链接（a11y）；stopPropagation 避免触发行点击重复导航
                   <Link

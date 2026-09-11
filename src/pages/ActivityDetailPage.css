@@ -552,3 +552,45 @@
     margin-left: 0;
   }
 }
+
+/* ---- 移动端（≤768px）：详情页手机端适配（2026-09-11 原型已审批）----
+   导出/删除操作固定底部（叠在 TabBar 之上），指标大数字，控件热区 44px */
+@media (max-width: 768px) {
+  /* 内容 clearance：操作条（~64px）+ 安全区 + 间距；叠加在 AppLayout 内容区
+     预留的 TabBar 留白之上 */
+  .activity-detail {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 标题区操作按钮组 → 固定底部操作条（分享/导出/删除随时可达） */
+  .activity-detail__actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    gap: 10px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background-color: var(--bg-surface);
+    border-top: 1px solid var(--border);
+  }
+
+  .activity-detail__actions > * {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  /* 核心指标：大数字更突出 */
+  .activity-detail__stat-value {
+    font-size: 24px;
+  }
+
+  .activity-detail__stat-card {
+    padding: 12px 14px;
+  }
+
+  /* 地图着色/回放等小按钮：热区补足 44px（视觉尺寸不变） */
+  .activity-detail__coloring-btn {
+    min-height: 44px;
+  }
+}

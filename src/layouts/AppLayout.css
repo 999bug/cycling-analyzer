@@ -275,11 +275,10 @@
     flex-direction: column;
   }
 
-  /* 顶栏：汉堡按钮 + 品牌，固定顶部不随内容滚动 */
+  /* 顶栏：品牌 logo（汉堡按钮已移除，抽屉由底部 TabBar「更多」页签打开） */
   .app-layout__topbar {
     display: flex;
     align-items: center;
-    gap: 12px;
     flex-shrink: 0;
     padding: 10px 16px;
     background-color: var(--bg-surface);
@@ -289,71 +288,6 @@
     z-index: 20;
   }
 
-  .app-layout__menu-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text);
-    cursor: pointer;
-  }
-
-  .app-layout__menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-
-  :root[data-theme='light'] .app-layout__menu-button:hover {
-    background-color: rgba(13, 59, 76, 0.06);
-  }
-
-  /* 汉堡图标：三条横线；展开时显示 × 形 */
-  .app-layout__menu-icon,
-  .app-layout__menu-icon::before,
-  .app-layout__menu-icon::after {
-    display: block;
-    width: 20px;
-    height: 2px;
-    border-radius: 2px;
-    background-color: currentColor;
-    transition: transform 0.2s ease;
-  }
-
-  .app-layout__menu-icon {
-    position: relative;
-  }
-
-  .app-layout__menu-icon::before,
-  .app-layout__menu-icon::after {
-    content: '';
-    position: absolute;
-    left: 0;
-  }
-
-  .app-layout__menu-icon::before {
-    top: -6px;
-  }
-
-  .app-layout__menu-icon::after {
-    top: 6px;
-  }
-
-  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon {
-    background-color: transparent;
-  }
-
-  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon::before {
-    transform: translateY(6px) rotate(45deg);
-  }
-
-  .app-layout__menu-button[aria-expanded='true'] .app-layout__menu-icon::after {
-    transform: translateY(-6px) rotate(-45deg);
-  }
-
-  /* 顶栏品牌（移动端：小 logo，可点击回首页） */
   .app-layout__topbar-brand {
     display: block;
     text-decoration: none;
@@ -422,9 +356,59 @@
     display: flex;
   }
 
-  /* 内容区：移动端减边距，给图表/表格更多横向空间 */
+  /* 内容区：移动端减边距，给图表/表格更多横向空间；
+     底部加 TabBar 高度留白（含安全区），避免末尾内容被固定底栏遮挡 */
   .app-layout__content {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
-  }}
+    padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ---- 移动端底部 TabBar（2026-09-11 手机端体验优化）----
+     高频页 1 击直达，次级页收进「更多」（打开抽屉）；桌面端不渲染此导航 */
+  .app-layout__tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    gap: 2px;
+    padding: 4px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+    background-color: var(--bg-surface);
+    border-top: 1px solid var(--border);
+  }
+
+  .app-layout__tab {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    padding: 4px 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  .app-layout__tab:hover {
+    color: var(--text);
+  }
+
+  .app-layout__tab--active {
+    color: var(--primary);
+  }
+
+  .app-layout__tab--active:hover {
+    color: var(--primary);
+  }
+}

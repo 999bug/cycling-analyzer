@@ -88,6 +88,14 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* 移动端（≤768px）：回放控制按钮触控热区 44px */
+@media (max-width: 768px) {
+  .track-replay__btn {
+    min-height: 44px;
+    padding: 8px 14px;
+  }
+}
+
 .track-replay__btn--primary {
   font-size: 16px;
   min-width: 36px;

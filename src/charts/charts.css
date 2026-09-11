@@ -25,14 +25,15 @@
 
 .chart-card__body {
   width: 100%;
-  height: 220px;
+  /* 高度走全局 --chart-height（index.css：桌面 220px / ≤768px 180px） */
+  height: var(--chart-height, 220px);
 }
 
 .chart-card__empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 220px;
+  height: var(--chart-height, 220px);
   color: var(--text-secondary);
   font-size: 14px;
 }
