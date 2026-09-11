@@ -47,25 +47,31 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * 下载文件名（含日期与样式标识，多次导出不覆盖）。
+ * 下载文件名（含日期与页标签，多次导出不覆盖）。
  *
  * @param dateKey 日期键（如 '2026-09-06'）
+ * @param pageLabel 页标签（套图用，如「封面」；单图不传）
  */
-export function shareStageFileName(dateKey: string): string {
-  return `骑了么-${dateKey}-真实界面.png`
+export function shareStageFileName(dateKey: string, pageLabel?: string): string {
+  const suffix = pageLabel === undefined ? '' : `-${pageLabel}`
+  return `骑了么-${dateKey}-真实界面${suffix}.png`
 }
 
 /**
  * 等舞台内的底图瓦片加载稳定。
  *
  * 不看「是否有瓦片」，而看「瓦片数是否不再变化」：长距离轨迹缩放级别大、瓦片多，
- * 固定 sleep 要么不够要么白等。一张都没加载出来时（离线、瓦片源不可用）
- * 只兜底等一小段就放行——底图缺失不阻断出图，轨迹与文字仍然有效。
+ * 固定 sleep 要么不够要么白等。**不含地图的页（封面/洞察/图表）直接放行**——
+ * 套图逐页出图时不必为没地图的页白等一轮兜底。一张瓦片都没加载出来（离线、
+ * 瓦片源不可用）只兜底等一小段就放行——底图缺失不阻断出图，轨迹与文字仍然有效。
  *
  * @param stage 分享舞台根节点
  * @param maxMs 最长等待（毫秒）
  */
 export async function waitForStageTiles(stage: HTMLElement, maxMs = TILE_WAIT_MAX_MS): Promise<void> {
+  if (stage.querySelector('.leaflet-tile') === null) {
+    return
+  }
   const deadline = Date.now() + maxMs
   let previous = -1
   let stableHits = 0
@@ -123,12 +129,13 @@ export async function captureShareStagePng(stage: HTMLElement): Promise<Blob | u
  *
  * @param blob 成片
  * @param dateKey 日期键（文件名用）
+ * @param pageLabel 页标签（套图用，如「封面」；单图不传）
  */
-export function downloadShareStagePng(blob: Blob, dateKey: string): void {
+export function downloadShareStagePng(blob: Blob, dateKey: string, pageLabel?: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = shareStageFileName(dateKey)
+  anchor.download = shareStageFileName(dateKey, pageLabel)
   anchor.click()
   URL.revokeObjectURL(url)
 }

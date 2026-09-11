@@ -146,8 +146,9 @@
 }
 
 /* 舞台插槽：布局尺寸恒为 1080×1440（Leaflet 需要真实布局尺寸才取对瓦片层级），
-   视觉缩放由内联 transform 完成，出图时由快照参数清掉 */
+   视觉缩放由内联 transform 完成，出图时由快照参数清掉；页面绝对定位锚在这里 */
 .share-studio__stage-slot {
+  position: relative;
   width: 1080px;
   height: 1440px;
   transform-origin: top left;
@@ -157,6 +158,24 @@
   margin: 0;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+/*
+ * 舞台页容器：套图的每一页常驻挂载并保留布局（非当前页移到画框外），
+ * 好处是——出图按页取节点，不依赖「切页 → 等 React 渲染 → 抢时序」；
+ * 且地图/图表只在挂载时初始化一次，翻页不会重载瓦片。
+ * 出图时快照的是页节点本身，祖先的位置对它没有影响。
+ */
+.share-studio__stage-page {
+  position: absolute;
+  top: 0;
+  left: -20000px;
+  width: 1080px;
+  height: 1440px;
+}
+
+.share-studio__stage-page[data-active='true'] {
+  left: 0;
 }
 
 /* ---------- 弹窗底部提示（降级/失败） ---------- */

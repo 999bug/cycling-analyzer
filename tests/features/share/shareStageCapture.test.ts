@@ -40,6 +40,15 @@ function makeStage(loadedTiles: number): HTMLElement {
   return stage
 }
 
+/** 造一个「有地图但瓦片一张都没加载出来」的舞台节点（离线场景） */
+function makeStageWithPendingTiles(): HTMLElement {
+  const stage = document.createElement('div')
+  const tile = document.createElement('img')
+  tile.className = 'leaflet-tile'
+  stage.appendChild(tile)
+  return stage
+}
+
 describe('shareStageCapture 真实界面出图', () => {
   beforeEach(() => {
     domToBlobMock.mockReset()
@@ -49,8 +58,16 @@ describe('shareStageCapture 真实界面出图', () => {
     vi.useRealTimers()
   })
 
-  it('文件名含日期与样式标识', () => {
+  it('文件名含日期；套图页另带页标签', () => {
     expect(shareStageFileName('2026-09-06')).toBe('骑了么-2026-09-06-真实界面.png')
+    expect(shareStageFileName('2026-09-06', '封面')).toBe('骑了么-2026-09-06-真实界面-封面.png')
+  })
+
+  it('没有地图的页立即放行（套图逐页出图不为无地图的页白等）', async () => {
+    const stage = makeStage(0)
+
+    // 不放行的话这里会等到兜底等待（>1s）；立即 resolve 说明短路生效
+    await expect(waitForStageTiles(stage, 5000)).resolves.toBeUndefined()
   })
 
   it('瓦片计数稳定即放行（不等满上限）', async () => {
@@ -63,9 +80,9 @@ describe('shareStageCapture 真实界面出图', () => {
     await expect(waiting).resolves.toBeUndefined()
   })
 
-  it('一张瓦片都没有时走到兜底等待后放行（离线不阻断出图）', async () => {
+  it('有地图但瓦片始终加载不出时，走到兜底等待后放行（离线不阻断出图）', async () => {
     vi.useFakeTimers()
-    const stage = makeStage(0)
+    const stage = makeStageWithPendingTiles()
 
     const waiting = waitForStageTiles(stage, 400)
     await vi.advanceTimersByTimeAsync(3000)
@@ -104,7 +121,7 @@ describe('shareStageCapture 真实界面出图', () => {
     await expect(captureShareStagePng(makeStage(1))).resolves.toBeUndefined()
   })
 
-  it('下载走 Blob URL 且文件名正确', () => {
+  it('下载走 Blob URL 且文件名正确（套图带页标签）', () => {
     const revokeObjectURL = vi.fn()
     URL.createObjectURL = vi.fn(() => 'blob:mock') as unknown as typeof URL.createObjectURL
     URL.revokeObjectURL = revokeObjectURL
@@ -116,8 +133,10 @@ describe('shareStageCapture 真实界面出图', () => {
     })
 
     downloadShareStagePng(new Blob(['x']), '2026-09-06')
-
     expect(downloaded).toBe('骑了么-2026-09-06-真实界面.png')
+
+    downloadShareStagePng(new Blob(['x']), '2026-09-06', '洞察')
+    expect(downloaded).toBe('骑了么-2026-09-06-真实界面-洞察.png')
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
     click.mockRestore()
   })

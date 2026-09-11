@@ -18,6 +18,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 页面主体：占头部与页脚之间的全部空间，页面内再自行分配 */
+.share-stage__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* ---------- 顶部：品牌 + 骑行类型 + 日期 ---------- */
 
 .share-stage__head {
@@ -85,9 +93,21 @@
 
 .share-stage__stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-top: 36px;
+}
+
+/* 列数：朋友圈 4 / 小红书路线 2×2 / 小红书封面 3 */
+.share-stage__stats--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.share-stage__stats--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.share-stage__stats--2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .share-stage__stat {
@@ -134,5 +154,160 @@
   gap: 24px;
   margin-top: 36px;
   font-size: 24px;
+  color: var(--text-secondary);
+}
+
+/* ---------- 小红书封面：结论句 + 钩子数字 ---------- */
+
+/* 封面块（海报式构图）：结论句在顶、钩子数字与指标压在下半部分，
+   块之间等分剩余高度——标题一行还是两行都不会在底部留一片空 */
+.share-stage__cover {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+}
+
+.share-stage__headline {
+  margin-top: 32px;
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+}
+
+/* 钩子数字块：上分隔线 + 标签 + 荧光绿巨数字（第一落点是结论，数字是第二落点） */
+.share-stage__hook {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+
+.share-stage__hook-label {
+  font-size: 26px;
+  color: var(--text-secondary);
+}
+
+.share-stage__hook-value {
+  font-family: 'SF Mono', 'JetBrains Mono', 'Roboto Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 168px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--primary);
+}
+
+.share-stage__hook-unit {
+  margin-left: 16px;
+  font-family: inherit;
+  font-size: 52px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* ---------- 小红书洞察页：复用站内「骑行洞察」区块，仅等比放大字号 ---------- */
+
+.share-stage__insights {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 36px;
+}
+
+/* 区块卡片撑满页面剩余高度，列表在卡片内垂直居中——1~3 条洞察都不会留下大片空洞 */
+.share-stage__insights .insights-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 32px;
+  border-radius: 16px;
+}
+
+.share-stage__insights .insights-section__title {
+  font-size: 36px;
+  margin-bottom: 24px;
+}
+
+.share-stage__insights .insights-section__list {
+  flex: 1 1 auto;
+  justify-content: center;
+  gap: 40px;
+}
+
+.share-stage__insights .insights-item {
+  gap: 20px;
+  padding: 40px;
+  border-left-width: 8px;
+  border-radius: 14px;
+}
+
+.share-stage__insights .insights-item__icon {
+  font-size: 30px;
+}
+
+.share-stage__insights .insights-item__body {
+  gap: 10px;
+}
+
+.share-stage__insights .insights-item__title {
+  font-size: 34px;
+}
+
+.share-stage__insights .insights-item__text {
+  font-size: 26px;
+  line-height: 1.6;
+}
+
+/* ---------- 小红书图表页：复用站内「数据曲线」卡片，仅放大字号与高度 ---------- */
+
+.share-stage__chart {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 36px;
+  /* 站内图表高度走这个变量（chars.css）：画布上放大到卡片高度的量级 */
+  --chart-height: 620px;
+}
+
+.share-stage__chart .chart-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 28px;
+  border-radius: 16px;
+}
+
+.share-stage__chart .chart-card__title {
+  font-size: 32px;
+}
+
+.share-stage__chart .chart-card__header {
+  margin-bottom: 24px;
+}
+
+/* 曲线区吃掉卡片剩余高度（ResponsiveContainer 按父级实测尺寸渲染） */
+.share-stage__chart .chart-card__body {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* 轴刻度：站内按卡片尺寸给 11px，画布上等比放大（SVG 属性可被 CSS 覆盖） */
+.share-stage .recharts-cartesian-axis-tick text {
+  font-size: 24px;
+}
+
+/* ---------- 诚实空态 ---------- */
+
+.share-stage__empty {
+  margin-top: 36px;
+  font-size: 28px;
   color: var(--text-secondary);
 }

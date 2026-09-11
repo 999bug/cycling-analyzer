@@ -61,6 +61,13 @@ export interface MultiMetricChartProps {
 
   /** 共享时间轴：上报本图悬停时间戳（移出传 undefined） */
   onHover?: (timestamp: number | undefined) => void
+
+  /**
+   * 静态视图（分享卡出图等）：隐藏「横轴切换」与「指标开关」等交互控件，
+   * 只保留卡片标题与曲线本体——交互按钮印进静态图片只会让人以为能点。
+   * 默认（false）保持站内完整交互不变。
+   */
+  staticView?: boolean
 }
 
 /** 坐标轴文字颜色 */
@@ -257,7 +264,7 @@ const MetricCurveChart = memo(function MetricCurveChart({
  *
  * @param props 组件参数
  */
-function MultiMetricChart({ records, hoverTimestamp, onHover }: MultiMetricChartProps) {
+function MultiMetricChart({ records, hoverTimestamp, onHover, staticView = false }: MultiMetricChartProps) {
   // X 轴模式：默认距离，与原单指标图表一致
   const [axisMode, setAxisMode] = useState<XAxisMode>('distance')
   // 用户显式开关状态（undefined = 尚未操作，用默认：海拔或首个有数据指标）
@@ -342,27 +349,29 @@ function MultiMetricChart({ records, hoverTimestamp, onHover }: MultiMetricChart
     <section className="chart-card multi-metric" aria-label="数据曲线">
       <header className="chart-card__header">
         <h3 className="chart-card__title">数据曲线</h3>
-        <div className="chart-card__toggle" role="group" aria-label="横轴切换">
-          <button
-            type="button"
-            className={axisMode === 'distance' ? 'chart-card__toggle--active' : undefined}
-            aria-pressed={axisMode === 'distance'}
-            onClick={() => setAxisMode('distance')}
-          >
-            距离
-          </button>
-          <button
-            type="button"
-            className={axisMode === 'time' ? 'chart-card__toggle--active' : undefined}
-            aria-pressed={axisMode === 'time'}
-            onClick={() => setAxisMode('time')}
-          >
-            时间
-          </button>
-        </div>
+        {!staticView && (
+          <div className="chart-card__toggle" role="group" aria-label="横轴切换">
+            <button
+              type="button"
+              className={axisMode === 'distance' ? 'chart-card__toggle--active' : undefined}
+              aria-pressed={axisMode === 'distance'}
+              onClick={() => setAxisMode('distance')}
+            >
+              距离
+            </button>
+            <button
+              type="button"
+              className={axisMode === 'time' ? 'chart-card__toggle--active' : undefined}
+              aria-pressed={axisMode === 'time'}
+              onClick={() => setAxisMode('time')}
+            >
+              时间
+            </button>
+          </div>
+        )}
       </header>
 
-      {availableMeta.length > 0 && (
+      {!staticView && availableMeta.length > 0 && (
         <div className="multi-metric__toggles" role="group" aria-label="指标开关">
           {availableMeta.map((meta) => {
             const active = enabled.includes(meta.field)

@@ -6,7 +6,7 @@
  * 真实界面链路（v2 一期）的出图由 shareStageCapture 承担，这里把它整体 mock：
  * 只验证弹窗的编排——默认样式、图上文字与预览同步、出图成功/降级两条分支。
  */
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import ShareStudioModal from '@/features/share/ShareStudioModal'
 import { captureShareStagePng, downloadShareStagePng } from '@/features/share/shareStageCapture'
@@ -50,6 +50,12 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
 function renderModal(overrides: Partial<Activity> = {}) {
   return render(<ShareStudioModal activity={makeActivity(overrides)} records={[]} distanceUnit="km" onClose={() => {}} />)
 }
+
+// 每个用例干净起步：出图/下载是跨用例累计的 spy，残留调用会让「调用次数」断言失准
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(captureShareStagePng).mockReset()
+})
 
 describe('ShareStudioModal 分享弹窗', () => {
   it('渲染弹窗骨架：平台选项、文案区、隐私说明与下载按钮', () => {
@@ -201,13 +207,53 @@ describe('ShareStudioModal 真实界面样式（v2 一期）', () => {
     expect(downloadSharePng).toHaveBeenCalledWith(expect.anything(), 'moments', 0, '2026-09-06')
   })
 
-  it('切到小红书：提示真实界面样式二期接入，导出仍用极简手绘', () => {
-    renderModal()
+  it('切到小红书：真实界面挂出 4 页套图，分页器与「下载全部」就位', () => {
+    const { container } = renderModal()
 
     fireEvent.click(screen.getByRole('button', { name: /小红书/ }))
 
-    expect(screen.getByText('小红书套图的真实界面样式在二期接入，当前导出用极简手绘')).toBeDefined()
-    expect(screen.queryByLabelText('图上标题')).toBeNull()
+    // 四页常驻挂载（非当前页移出视口，出图按节点取），当前页是封面
+    const pages = Array.from(container.querySelectorAll('.share-studio__stage-page'))
+    expect(pages.map((node) => node.getAttribute('data-active'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+    ])
+    expect(container.querySelectorAll('[data-page="cover"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-page="charts"]')).toHaveLength(1)
     expect(screen.getByText('1/4 · 封面')).toBeDefined()
+    expect(screen.getByText('第 1/4 页 · 共 4 页套图，成图 1080×1440 的 2 倍图')).toBeDefined()
+    // 小红书没有「图上标题」输入（封面大字来自真实数据），图上文案仍在
+    expect(screen.queryByLabelText('图上标题')).toBeNull()
+    expect(screen.getByLabelText('图上文案')).toBeDefined()
+    expect(screen.getByRole('button', { name: '下载全部 4 张' })).toBeDefined()
+  })
+
+  it('小红书翻页切换预览页，且四页都能各自出图', async () => {
+    vi.mocked(captureShareStagePng).mockResolvedValue(new Blob(['png']))
+    const { container } = renderModal()
+
+    fireEvent.click(screen.getByRole('button', { name: /小红书/ }))
+    fireEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+    expect(screen.getByText('2/4 · 路线')).toBeDefined()
+    expect(
+      Array.from(container.querySelectorAll('.share-studio__stage-page')).map((node) =>
+        node.getAttribute('data-active'),
+      ),
+    ).toEqual(['false', 'true', 'false', 'false'])
+
+    fireEvent.click(screen.getByRole('button', { name: '下载全部 4 张' }))
+
+    // 逐页出图：4 次快照 + 4 次下载，文件名带页标签（封面/路线/洞察/图表）
+    await waitFor(() => expect(downloadShareStagePng).toHaveBeenCalledTimes(4))
+    expect(vi.mocked(captureShareStagePng).mock.calls.map((call) => call[0])).toHaveLength(4)
+    expect(vi.mocked(downloadShareStagePng).mock.calls.map((call) => call[2])).toEqual([
+      '封面',
+      '路线',
+      '洞察',
+      '图表',
+    ])
   })
 })
