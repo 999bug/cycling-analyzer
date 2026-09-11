@@ -71,3 +71,12 @@
 - 控件贴地图右下角时，要按控件自身高度抬升 Leaflet 右下角控件（缩放 + 署名）：
   `.leaflet-container .leaflet-control-attribution{margin:0}` 使署名位于最底，故不能只留一条细缝。
   参考 `mapModeSwitcher.css`（静态 56px）与 `ActivityMap.css` 的 `--replay-bar-height`（动态）。
+
+## 加热门路线的标准流程（2026-09-11 用户定：脚本优先，省积分）
+
+1. **先跑 `npm run curate -- --spec <需求单.json> --dry`**（需求单字段见 `scripts/curate-route.mjs` 头部注释）：
+   geocode/路网/例外探测/自诊断/数据条目/测试断言/预览全自动，只写 `.tmp/curate/<id>/`。
+2. 人工只做两件事：① 来源 A/B/C 定级（需求单里给）② 打开预览审核线形。
+3. dry 通过 → 去掉 `--dry` 正式入库 → `tsc -b` + 相关 vitest → 版本号/changelog/PROGRESS → 提交。
+4. 只有当 curate 报「无法生成」（OSM 缺路）或比例异常时，才回退到人工探针调试；把新踩的坑回写进脚本规则。
+5. 需求单来源必须真实可溯（A 官方/B 权威媒体/C 社区码表），没有来源的里程不许上线（测试把关）。
