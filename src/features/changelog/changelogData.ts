@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.71.0',
+    date: '2026-09-11',
+    features: [
+      '热门路线二期里程碑 2：全国首批 6 条经典爬坡上线——西安秦岭分水岭（34.3km/1595m）、杭州龙井北坡（2.6km/130m）、台州括苍山（26.3km/1490m）、深圳梧桐山（6.3km/533m）、成都龙泉山 A 面（7.7km/370m）、昆明西山猫猫箐（约 6km/436m）',
+      '热门路线地区筛选 chips 扩展为 7 个地区（北京/西安/杭州/台州/深圳/成都/昆明），点击即筛选该地区路线与地图高亮',
+      '生成脚本支持放行 OSM 中标为 trunk 的干线铺装公路（G210/G318）与命名隧道白名单，几何统一从 OSM 路网产出',
+    ],
+  },
+  {
     version: '2.70.0',
     date: '2026-09-11',
     features: [

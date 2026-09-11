@@ -1,9 +1,10 @@
 /**
  * 精选热门路线注册表：按地区聚合，UI 层从这里取数。
- * 二期扩展全国时新增数据文件并在 REGIONS 登记（routeIds 必须与数据文件一致，测试把关）。
+ * 扩展地区时：新增数据文件 + 在 REGIONS 登记（routeIds 必须与数据文件一致，测试把关）。
  */
 import type { CuratedRegionId, CuratedRoute } from '@/features/curatedRoutes/types'
 import { BEIJING_CURATED_ROUTES } from '@/features/curatedRoutes/beijing'
+import { NATIONAL_CURATED_ROUTES } from '@/features/curatedRoutes/national'
 
 /** 一个地区的精选路线集合 */
 export interface CuratedRegion {
@@ -12,9 +13,20 @@ export interface CuratedRegion {
   routes: CuratedRoute[]
 }
 
+/** 按地区 ID 过滤全国路线集合 */
+function nationalRoutesOf(region: CuratedRegionId): CuratedRoute[] {
+  return NATIONAL_CURATED_ROUTES.filter((route) => route.region === region)
+}
+
 /** 地区注册表（按展示顺序） */
 export const CURATED_REGIONS: CuratedRegion[] = [
   { id: 'beijing', label: '北京', routes: BEIJING_CURATED_ROUTES },
+  { id: 'xian', label: '西安', routes: nationalRoutesOf('xian') },
+  { id: 'hangzhou', label: '杭州', routes: nationalRoutesOf('hangzhou') },
+  { id: 'taizhou', label: '台州', routes: nationalRoutesOf('taizhou') },
+  { id: 'shenzhen', label: '深圳', routes: nationalRoutesOf('shenzhen') },
+  { id: 'chengdu', label: '成都', routes: nationalRoutesOf('chengdu') },
+  { id: 'kunming', label: '昆明', routes: nationalRoutesOf('kunming') },
 ]
 
 /** 全部精选路线（地区顺序拼接） */

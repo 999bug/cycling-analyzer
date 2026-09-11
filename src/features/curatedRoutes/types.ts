@@ -71,8 +71,15 @@ export function sourceGradeLabel(grade: NonNullable<CuratedRoute['sourceGrade']>
   }
 }
 
-/** 精选路线地区 ID（二期新增地区即扩展此联合类型并加数据文件） */
-export type CuratedRegionId = 'beijing'
+/** 精选路线地区 ID（扩展地区 = 加 ID + 数据文件 + index.ts 登记） */
+export type CuratedRegionId =
+  | 'beijing'
+  | 'xian'
+  | 'hangzhou'
+  | 'taizhou'
+  | 'shenzhen'
+  | 'chengdu'
+  | 'kunming'
 
 /** 难度文案（展示用，避免 UI 层散落映射） */
 export function difficultyLabel(difficulty: CuratedRoute['difficulty']): string {

@@ -14,7 +14,7 @@ import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { useDataSourceStore } from '@/stores/dataSourceStore'
 import RoutesMapPage from '@/pages/RoutesMapPage'
-import { ALL_CURATED_ROUTES } from '@/features/curatedRoutes'
+import { ALL_CURATED_ROUTES, CURATED_REGIONS } from '@/features/curatedRoutes'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 // 页面使用全局 db 单例：mock 模块导出独立的测试数据库实例（文件内共享）
@@ -218,12 +218,12 @@ describe('骑行路线图页 · 热门路线板块', () => {
     // 顶部大分区切换 → 热门路线
     await user.click(screen.getByRole('button', { name: /热门路线/ }))
 
-    // 地区 chips：全部 + 北京（当前仅北京一个地区，数字 = 精选路线总数）
+    // 地区 chips：全部 + 各地区（北京 22 条 + 全国 6 条）
     expect(screen.getByRole('button', { name: `全部 · ${ALL_CURATED_ROUTES.length}` }))
       .toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: `北京 · ${ALL_CURATED_ROUTES.length}` }),
-    ).toBeInTheDocument()
+    const beijingCount = CURATED_REGIONS.find((region) => region.id === 'beijing')!.routes.length
+    expect(screen.getByRole('button', { name: `北京 · ${beijingCount}` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '西安 · 1' })).toBeInTheDocument()
 
     // 卡片列表：一期妙峰山可见，难度标签渲染（前缀匹配，避免命中描述提到妙峰山的其他卡片）
     const card = screen.getByRole('button', { name: /^妙峰山/ })
@@ -241,6 +241,7 @@ describe('骑行路线图页 · 热门路线板块', () => {
 
   it('地区筛选 chips：切换地区清空选中态，卡片仍按地区渲染', async () => {
     const user = userEvent.setup()
+    const beijingCount = CURATED_REGIONS.find((region) => region.id === 'beijing')!.routes.length
 
     render(<RoutesMapPage />)
 
@@ -251,10 +252,14 @@ describe('骑行路线图页 · 热门路线板块', () => {
     await user.click(card)
     expect(screen.getByText(/来源（官方口径）：门头沟区政府/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: `北京 · ${ALL_CURATED_ROUTES.length}` }))
+    await user.click(screen.getByRole('button', { name: `北京 · ${beijingCount}` }))
 
     expect(screen.getByText(/点击路线卡片在地图上单独高亮并查看详情/)).toBeInTheDocument()
-    // 卡片仍渲染（北京筛选命中全部路线）
+    // 卡片仍渲染（北京筛选命中妙峰山）
     expect(screen.getByRole('button', { name: /^妙峰山/ })).toBeInTheDocument()
+    // 西安 chip 筛选后只剩秦岭分水岭一张卡，妙峰山不再显示
+    await user.click(screen.getByRole('button', { name: '西安 · 1' }))
+    expect(screen.getByRole('button', { name: /^秦岭分水岭/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^妙峰山/ })).not.toBeInTheDocument()
   })
 })

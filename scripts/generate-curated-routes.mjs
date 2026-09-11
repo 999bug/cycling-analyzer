@@ -28,9 +28,15 @@ const CACHE_DIR = resolve(
 )
 const REPORT_DIR = resolve(ROOT, '.tmp/curated-v2')
 
-/** 地区 → 输出文件与导出名（二期新增地区在这里登记） */
+/** 地区 → 输出文件与导出名（二期新增地区在这里登记；全国 6 地区共用 nationalTracks.ts，按序合并） */
 const REGION_META = {
   beijing: { file: 'src/features/curatedRoutes/beijingTracks.ts', exportName: 'BEIJING_TRACKS' },
+  xian: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  hangzhou: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  taizhou: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  shenzhen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  chengdu: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  kunming: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
 }
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
@@ -227,6 +233,69 @@ const ROUTES = [
       [40.4274, 116.6292],
     ],
   },
+  {
+    id: 'fxl',
+    region: 'xian',
+    // 秦岭分水岭：沣峪口转盘 → 长江黄河分水岭垭口（G210/满防线在 OSM 为 trunk + 松树嘴隧道，须放行）
+    allowTrunk: true,
+    allowTunnelNames: ['松树嘴隧道'],
+    bbox: [33.81, 108.74, 34.09, 108.88],
+    anchors: [
+      [34.0354, 108.8092],
+      [33.8381, 108.8033],
+    ],
+  },
+  {
+    id: 'lj',
+    region: 'hangzhou',
+    // 龙井北坡：龙井路口（洪春桥）→ 龙井村（龙井路北段爬坡）
+    bbox: [30.21, 120.09, 30.27, 120.17],
+    anchors: [
+      [30.2495, 120.1178],
+      [30.231, 120.1155],
+    ],
+  },
+  {
+    id: 'kcs',
+    region: 'taizhou',
+    // 括苍山：屿洋线尤溪镇 → 临海/仙居交界山顶方向（风电公路爬坡）
+    bbox: [28.62, 120.88, 28.9, 121.05],
+    anchors: [
+      [28.6361, 121.0127],
+      [28.7043, 120.9184],
+    ],
+  },
+  {
+    id: 'wts',
+    region: 'shenzhen',
+    // 梧桐山：梧桐山北路（大望 → 好汉坡底，野途 6.28km/533m 口径）
+    bbox: [22.55, 114.13, 22.62, 114.22],
+    anchors: [
+      [22.5925, 114.1909],
+      [22.5757, 114.2032],
+    ],
+  },
+  {
+    id: 'lqs',
+    region: 'chengdu',
+    // 龙泉山 A 面：龙泉驿城区 → 山泉镇（桃花故里），G318/沪聂线为 trunk 须放行
+    allowTrunk: true,
+    bbox: [30.5, 104.25, 30.62, 104.38],
+    anchors: [
+      [30.5552, 104.2796],
+      [30.555, 104.3129],
+    ],
+  },
+  {
+    id: 'mmq',
+    region: 'kunming',
+    // 西山猫猫箐：碧鸡关村 → 猫猫箐（西山前山公路盘山段）
+    bbox: [24.93, 102.58, 25.02, 102.7],
+    anchors: [
+      [24.9768, 102.6248],
+      [24.9537, 102.6381],
+    ],
+  },
 ]
 
 /** 可骑行道路类型（排除步道/高速；隧道在下方按 tag 排除） */
@@ -318,7 +387,8 @@ function lineLength(line) {
 
 /** 构建骑行路网图（节点邻接表 + 坐标表），dijkstra/named 两模式共用。
  * opts.allowTunnelNames：允许骑行的隧道名白名单（如 G109 东方红隧道段在 OSM 中名为下安路隧道）
- * opts.allowTrack：放行 track（部分实际铺装的乡道/景区路在 OSM 中被标为 track） */
+ * opts.allowTrack：放行 track（部分实际铺装的乡道/景区路在 OSM 中被标为 track）
+ * opts.allowTrunk：放行 trunk（如 G210 满防线/G318 沪聂线在 OSM 中为 trunk，实为干线铺装公路） */
 function buildGraph(ways, opts = {}) {
   const nodeCoord = new Map()
   const adj = new Map()
@@ -332,7 +402,9 @@ function buildGraph(ways, opts = {}) {
     if (!way.nodes || !way.geometry) continue
     const hw = way.tags?.highway
     if (hw !== 'track' || !opts.allowTrack) {
-      if (!hw || EXCLUDED.has(hw) || !RIDABLE.has(hw)) continue
+      if (hw !== 'trunk' || !opts.allowTrunk) {
+        if (!hw || EXCLUDED.has(hw) || !RIDABLE.has(hw)) continue
+      }
     }
     if (way.tags?.tunnel === 'yes' && !(opts.allowTunnelNames?.has(way.tags?.name ?? ''))) continue
     // 防火道等明确禁行
@@ -405,6 +477,7 @@ function shortestPath(ways, anchors, route) {
   const { nodeCoord, adj } = buildGraph(ways, {
     allowTunnelNames: route?.allowTunnelNames ? new Set(route.allowTunnelNames) : undefined,
     allowTrack: route?.allowTrack === true,
+    allowTrunk: route?.allowTrunk === true,
   })
   const nodeIds = anchors.map((a) => snapNode(nodeCoord, a))
   if (nodeIds.some((id) => id < 0)) return null

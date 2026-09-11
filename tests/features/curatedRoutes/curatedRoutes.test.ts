@@ -11,6 +11,7 @@ import {
   curatedRoutesOf,
 } from '@/features/curatedRoutes'
 import { BEIJING_TRACKS } from '@/features/curatedRoutes/beijingTracks'
+import { NATIONAL_TRACKS } from '@/features/curatedRoutes/nationalTracks'
 import { sourceGradeLabel } from '@/features/curatedRoutes/types'
 import { haversineMeters } from '@/features/routes/routeGrouping'
 
@@ -82,10 +83,22 @@ describe('curatedRoutes 数据完整性', () => {
   })
 
   it('几何起终点与路线地理常识一致（按地区粗界框，防锚点错位类错误）', () => {
-    // 每个地区一个粗界框：二期扩全国时在此登记新地区界框
+    // 每个地区一个粗界框：新增地区时在此登记（含全国各路线的实际范围 + 余量）
     const REGION_BBOX: Record<string, { lat: [number, number]; lng: [number, number] }> = {
       // 北京全域（房山十渡 → 延庆官厅、昌平 → 门头沟）
       beijing: { lat: [39.5, 40.8], lng: [115.4, 116.8] },
+      // 西安：沣峪口 → 秦岭分水岭垭口（G210）
+      xian: { lat: [33.8, 34.06], lng: [108.78, 108.87] },
+      // 杭州：西湖景区龙井路一带
+      hangzhou: { lat: [30.21, 30.27], lng: [120.1, 120.14] },
+      // 台州：括苍山（尤溪镇 → 山顶方向）
+      taizhou: { lat: [28.6, 28.72], lng: [120.9, 121.03] },
+      // 深圳：梧桐山北路一带
+      shenzhen: { lat: [22.55, 22.62], lng: [114.18, 114.21] },
+      // 成都：龙泉驿 G318 上山段
+      chengdu: { lat: [30.53, 30.57], lng: [104.26, 104.33] },
+      // 昆明：西山前山公路（碧鸡关 → 猫猫箐）
+      kunming: { lat: [24.94, 24.99], lng: [102.61, 102.65] },
     }
     for (const route of ALL_CURATED_ROUTES) {
       const bbox = REGION_BBOX[route.region]
@@ -101,8 +114,19 @@ describe('curatedRoutes 数据完整性', () => {
   })
 
   it('注册表与数据文件互相一致', () => {
-    expect(CURATED_REGIONS.map((region) => region.id)).toEqual(['beijing'])
-    expect(curatedRoutesOf('beijing')).toEqual(ALL_CURATED_ROUTES)
+    expect(CURATED_REGIONS.map((region) => region.id)).toEqual([
+      'beijing',
+      'xian',
+      'hangzhou',
+      'taizhou',
+      'shenzhen',
+      'chengdu',
+      'kunming',
+    ])
+    // 每个地区的路线集合 = 数据文件全集（无遗漏、无重复收录）
+    for (const region of CURATED_REGIONS) {
+      expect(curatedRoutesOf(region.id)).toEqual(region.routes)
+    }
     // 北京路线的 tracks 引用必须指向生成数据里真实存在的 key（bj-<id> → 生成脚本短名）
     expect(Object.keys(BEIJING_TRACKS).sort()).toEqual([
       'bll',
@@ -126,7 +150,9 @@ describe('curatedRoutes 数据完整性', () => {
       'yts',
       'yxh',
     ])
-    for (const route of curatedRoutesOf('beijing')) {
+    // 全国路线的生成 key（fxl/lj/kcs/wts/lqs/mmq）
+    expect(Object.keys(NATIONAL_TRACKS).sort()).toEqual(['fxl', 'kcs', 'lj', 'lqs', 'mmq', 'wts'])
+    for (const route of ALL_CURATED_ROUTES) {
       expect(route.tracks.length).toBeGreaterThan(0)
     }
   })
