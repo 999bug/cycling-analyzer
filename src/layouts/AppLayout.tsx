@@ -35,8 +35,9 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/segments', label: '赛段' },
   { to: '/training-plan', label: '训练计划' },
   { to: '/performance', label: '表现趋势' },
-  { to: '/settings', label: '设置' },
-  { to: '/changelog', label: '更新日志' },
+  // 2.64.0 起「更多」= 原设置页：更新日志与鸣谢移入其中（/changelog、
+  // /acknowledgments 路由保留兼容旧链接）
+  { to: '/settings', label: '更多' },
 ]
 
 /** 自动收回：鼠标移出侧边栏后的收起延迟（毫秒），缓冲贴边划过与移向内容区的手抖 */
@@ -290,11 +291,9 @@ function AppLayout() {
           </nav>
           <div className="app-layout__sidebar-footer">
             <ImportPanel />
+            {/* 版本号可点击：直达「更多」页的更新日志区块（2.64.0 起更新日志/鸣谢移入设置页） */}
             <div className="app-layout__footer-row">
-              <Link className="app-layout__version" to="/changelog" title="查看更新日志">v{__APP_VERSION__}</Link>
-              <Link className="app-layout__credits-link" to="/acknowledgments" title="感谢参与测试与使用的骑友">
-                鸣谢
-              </Link>
+              <Link className="app-layout__version" to="/settings#changelog" title="查看更新日志">v{__APP_VERSION__}</Link>
             </div>
           </div>
         </div>

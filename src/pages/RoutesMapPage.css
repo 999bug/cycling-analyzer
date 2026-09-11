@@ -1,15 +1,18 @@
 /**
  * 骑行路线图页样式：左列表 + 右地图布局。
  *
- * 常规文档流（2026-09-11 改）：不再用负 margin 贴边铺满整屏——地图保留四周留白与
- * 完整圆角，高度按视口自适应（不占满屏），下方留出一条信息区放路线总览与操作提示。
- * 列表列与地图同高、独立滚动。
- * 颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深浅主题一致。
+ * 自适应撑满（2026-09-11 二次调整）：页面作为主内容区 flex 子项撑满剩余高度，
+ * 地图列 flex:1 吃掉全部可用高度，底部只留一条信息区（路线总览 + 操作提示）；
+ * 列表列与右侧主区同高、独立滚动，不再出现大块空白。
+ * 地图保留四周留白与完整圆角；颜色取自全局 CSS 变量（--bg-surface/--text/--border/--primary），深浅主题一致。
  */
 .routes-map-page {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 16px;
+  /* flex-basis 取 0：高度由视口明确分配，Leaflet 内部内容不再把页面撑出异常高度 */
+  min-height: 0;
 }
 
 .routes-map-page h1 {
@@ -23,8 +26,10 @@
 
 .routes-map-page__layout {
   display: flex;
+  flex: 1;
   gap: 16px;
   align-items: stretch;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -34,6 +39,7 @@
   flex-direction: column;
   gap: 12px;
   flex: 1;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -46,8 +52,9 @@
   gap: 4px;
   width: 260px;
   flex-shrink: 0;
-  /* 与地图同高独立滚动；overscroll 隔离防止滚到底带崩页面 */
-  max-height: 620px;
+  /* 与右侧主区（地图 + 信息区）同高独立滚动：align-items: stretch 拉齐；
+     overscroll 隔离防止滚到底带崩页面 */
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -112,14 +119,19 @@
 
 .routes-map-page__map-wrapper {
   position: relative;
-  /* 吃掉列表以外全部宽度；高度按视口自适应（不铺满整屏，下方留给信息区） */
+  /* 吃掉列表以外全部宽度；高度自适应撑满主区剩余空间（底部只留信息区一条）。
+     与热力图同款 flex 结构：包裹层纵向 flex、地图 flex:1——
+     地图以 flex 子项参与高度分配（不用 height:100%），
+     避免百分比高度在自动高度链上循环解析把地图撑出异常高度 */
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  min-height: 320px;
   min-width: 0;
-  height: clamp(320px, 56vh, 620px);
 }
 
 .routes-map-page__map {
-  height: 100%;
+  flex: 1;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg-surface);
@@ -167,8 +179,15 @@
   color: var(--text-secondary);
 }
 
-/* ---- 移动端（≤768px）：常规文档流，地图与列表上下堆叠 ---- */
+/* ---- 移动端（≤768px）：常规文档流，地图与列表上下堆叠 ----
+   移动端退出「撑满剩余高度」模式：页面自然高度随内容滚动 */
 @media (max-width: 768px) {
+  .routes-map-page,
+  .routes-map-page__layout {
+    flex: none;
+    min-height: 0;
+  }
+
   .routes-map-page__layout {
     flex-direction: column;
     gap: 12px;
@@ -180,6 +199,7 @@
   }
 
   .routes-map-page__map-wrapper {
+    flex: none;
     height: 55vh;
   }
 

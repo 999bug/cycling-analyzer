@@ -14,7 +14,9 @@
 npm run dev                 # 本地开发
 npx vitest run <file>       # 单文件测试（全量 631+ 用例约 40s）
 npm run test                # 全量测试
-npm run lint && npm run build   # 静态检查 + tsc -b + vite build
+npm run lint               # 静态检查
+npx tsc -b                 # 类型检查
+npm run build              # vite build（本地通常不需要跑，见下方说明）
 npm run build:author-data   # 快照构建（tsx 脚本，全量重建，fail-fast 解析失败即报错）
 npm run test:e2e            # Playwright（本地跑，不进 CI；首次需 npx playwright install chromium）
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
@@ -40,6 +42,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 测试：Vitest + jsdom；`tests/setup.ts` 全局注册 fake-indexeddb，DB 测试用真 Dexie 实例注入；FIT 样例在 `tests/fixtures/`；**`private-fixtures/` 用户真实数据 gitignored，严禁提交**
 - 组件渲染测试用 MemoryRouter；页面数据加载支持注入；mock `getBoundingClientRect` 让 Recharts 正常渲染
 - 构建产物 `public/author-data/`、`dist/` gitignored，CI 重建；快照任一 FIT 解析失败 CI 即失败
+- **本地验证不要跑 `vite build`**（2026-09-11 用户确认：本地 dist 根本不用）：提交前的验证标准是 `npm run lint` + `npx tsc -b` + `npm run test` 全绿，构建由 CI 兜底；确需本地构建时（排查构建本身的问题）先把旧 dist 挪走再 build（见项目记忆 build-env.md）
 
 ## 提交规范
 

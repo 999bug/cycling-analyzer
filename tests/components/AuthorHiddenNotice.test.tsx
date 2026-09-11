@@ -1,7 +1,7 @@
 /**
  * 「作者数据已隐藏」提示条组件测试。
  *
- * 仅 authorHiddenNoticePending 时显示；「去设置」跳转 /settings#author-data
+ * 仅 authorHiddenNoticePending 时显示；「去更多」跳转 /settings#author-data
  * 并清除标记；关闭仅清除标记。
  */
 import { render, screen } from '@testing-library/react'
@@ -31,19 +31,19 @@ describe('AuthorHiddenNotice', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('标记置位时显示提示与「去设置」按钮', () => {
+  it('标记置位时显示提示与「去更多」按钮', () => {
     useDataSourceStore.setState({ authorHiddenNoticePending: true })
     renderNotice()
     const notice = screen.getByRole('status')
     expect(notice).toHaveTextContent('作者的示例数据已默认隐藏')
-    expect(screen.getByRole('button', { name: '去设置' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '去更多' })).toBeInTheDocument()
   })
 
-  it('点「去设置」清除标记（导航交给外层 Router）', async () => {
+  it('点「去更多」清除标记（导航交给外层 Router）', async () => {
     const user = userEvent.setup()
     useDataSourceStore.setState({ authorHiddenNoticePending: true })
     renderNotice()
-    await user.click(screen.getByRole('button', { name: '去设置' }))
+    await user.click(screen.getByRole('button', { name: '去更多' }))
     expect(useDataSourceStore.getState().authorHiddenNoticePending).toBe(false)
   })
 

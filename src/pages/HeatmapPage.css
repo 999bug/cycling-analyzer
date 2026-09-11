@@ -1,12 +1,16 @@
 /**
  * 骑行热力图页样式（规格 §39）。
- * 地图占满主内容区剩余高度，颜色取自全局 CSS 变量。
+ * 地图自适应撑满主内容区剩余高度（完整落在可视区内，不溢出、不滚动），
+ * 颜色取自全局 CSS 变量。
  */
 .heatmap-page {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  height: 100%;
+  /* 主内容区为纵向 flex（AppLayout）：撑满顶部提示条以下的剩余高度。
+     flex-basis 取 0：高度由视口明确分配，Leaflet 内部内容不参与高度解析 */
+  flex: 1;
+  min-height: 0;
 }
 
 .heatmap-page__notice {
@@ -19,12 +23,13 @@
   font-size: 13px;
 }
 
-/* 地图全屏包裹层：作为 flex 子项占满剩余高度（原地图的 flex 布局上移一层） */
+/* 地图全屏包裹层：作为 flex 子项占满剩余高度（原地图的 flex 布局上移一层）。
+   min-height 取 320px 兜底：过矮的窗口里保证地图仍可用，此时页面回退为滚动 */
 .heatmap-page__map-wrapper {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 480px;
+  min-height: 320px;
 }
 
 /* 地图容器：填满包裹层，圆角与卡片风格一致 */

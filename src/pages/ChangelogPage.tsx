@@ -4,13 +4,27 @@
  * 时间线展示各版本新增功能（倒序，最新在前）；
  * 当前运行版本（__APP_VERSION__）高亮「当前版本」徽章，
  * 帮助用户快速了解每次更新了什么（用户需求：一目了然）。
- * 致谢名单已独立成页（/acknowledgments，侧边栏底部「致谢」链接直达）。
+ * 时间线本体抽为 ChangelogTimeline 供设置页「更新日志」区块复用
+ * （2.64.0 起更新日志移入设置页，独立路由保留兼容旧链接）。
  */
 import { CHANGELOG, type ChangelogEntry } from '@/features/changelog/changelogData'
 import '@/pages/ChangelogPage.css'
 
 /** 当前应用版本（vite define 注入 package.json version）。 */
 const CURRENT_VERSION = __APP_VERSION__
+
+/**
+ * 版本更新时间线：倒序渲染全部版本条目（设置页「更新日志」区块复用）。
+ */
+export function ChangelogTimeline() {
+  return (
+    <ol className="changelog-timeline" aria-label="版本更新时间线">
+      {CHANGELOG.map((entry) => (
+        <ChangelogItem key={entry.version} entry={entry} />
+      ))}
+    </ol>
+  )
+}
 
 /**
  * 版本更新日志页面。
@@ -20,13 +34,9 @@ function ChangelogPage() {
     <>
       <h1>更新日志</h1>
       <p className="changelog-page__intro">
-        每个版本新增了什么功能，按时间从近到远排列；侧边栏底部的版本号也可点击直达本页。
+        每个版本新增了什么功能，按时间从近到远排列；也可在「更多」页的更新日志区块查看。
       </p>
-      <ol className="changelog-timeline" aria-label="版本更新时间线">
-        {CHANGELOG.map((entry) => (
-          <ChangelogItem key={entry.version} entry={entry} />
-        ))}
-      </ol>
+      <ChangelogTimeline />
     </>
   )
 }

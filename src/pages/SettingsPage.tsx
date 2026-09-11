@@ -1,10 +1,11 @@
 /**
- * 设置页（规格 §27/§32/§33）。
+ * 设置页（规格 §27/§32/§33；2.64.0 起入口更名「更多」）。
  *
  * 个人信息表单（昵称/体重/身高/FTP/最大心率/静息心率）+ 单位偏好
  * （距离 km/mi、时间 24h/12h，默认公制）统一由「保存设置」按钮提交；
  * 数据管理区提供导出 JSON 备份、导入 JSON（fingerprint 去重合并）、
  * 清空全部本地数据（二次确认，规格 §32）。
+ * 「更新日志」「鸣谢」自 2.64.0 起移入本页（原侧边栏独立入口移除）。
  *
  * 依赖可注入（测试传独立仓库/数据库实例），缺省使用全局数据库单例。
  */
@@ -53,6 +54,8 @@ import {
   estimateVo2max,
 } from '@/features/analysis/ftpEstimate'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
+import { ChangelogTimeline } from '@/pages/ChangelogPage'
+import { AcknowledgmentList } from '@/pages/AcknowledgmentsPage'
 import '@/features/settings/settings-page.css'
 
 /** 清空确认文案（规格 §32 二次确认；含影响范围提示） */
@@ -90,6 +93,8 @@ const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'author-data', label: '作者数据' },
   { id: 'settings-data', label: '数据管理' },
   { id: 'settings-install', label: '安装应用' },
+  { id: 'changelog', label: '更新日志' },
+  { id: 'acknowledgments', label: '鸣谢' },
   { id: 'settings-about', label: '关于' },
 ]
 
@@ -640,7 +645,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
 
   return (
     <div className="settings-page">
-      <h1>设置</h1>
+      <h1>更多</h1>
 
       <div className="settings-layout">
         <nav className="settings-toc" aria-label="设置区块">
@@ -1053,6 +1058,26 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
             )}
 
             {activeSectionId === 'settings-install' && <InstallSection id="settings-install" />}
+
+            {activeSectionId === 'changelog' && (
+            <section className="settings-section" aria-label="更新日志" id="changelog">
+              <h2 className="settings-section__title">更新日志</h2>
+              <p className="settings-section__hint">
+                每个版本新增了什么功能，按时间从近到远排列；侧边栏底部的版本号也可点击直达本区块。
+              </p>
+              <ChangelogTimeline />
+            </section>
+            )}
+
+            {activeSectionId === 'acknowledgments' && (
+            <section className="settings-section" aria-label="鸣谢" id="acknowledgments">
+              <h2 className="settings-section__title">鸣谢</h2>
+              <p className="settings-section__hint">
+                感谢每一位参与「骑了么」测试的骑友——每一次反馈、建议和 Bug 都让站点变得更好。
+              </p>
+              <AcknowledgmentList />
+            </section>
+            )}
 
             {activeSectionId === 'settings-about' && (
             <section className="settings-section" aria-label="关于" id="settings-about">

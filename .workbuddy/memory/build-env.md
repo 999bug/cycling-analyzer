@@ -1,5 +1,11 @@
 # 构建与环境坑（cycling-analyzer）
 
+## 本地验证不要跑 vite build（2026-09-11 用户确认）
+
+- **本地 dist 用户根本不用**（GitHub Pages 产物由 CI 重建），提交前验证标准 =
+  `npm run lint` + `npx tsc -b` + `npm run test` 全绿即可，`vite build` 留给 CI 兜底。
+- 确需本地构建（排查构建本身的问题）时，先按下节把旧 dist 挪走再 build。
+
 ## 构建前清 dist：不能 `rm -rf`（2026-09-10）
 
 - `rm -rf dist` 会命中 safe-delete 批量确认钩子（1740 个文件触发
