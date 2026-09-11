@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.67.2',
+    date: '2026-09-11',
+    features: [
+      '修复 CI 测试：分享素材无名活动标题回退用例改为按本地时区动态推导期望值，不再因服务器时区不同而跨天失败',
+    ],
+  },
+  {
     version: '2.67.1',
     date: '2026-09-11',
     features: [

@@ -80,7 +80,9 @@ describe('buildShareData 指标与降级', () => {
   it('无名称活动标题回退「M 月 D 日 骑行」；bikeName 透传', () => {
     const data = buildShareData(makeActivity({ name: undefined, bikeName: '测试单车' }), [])
 
-    expect(data.title).toBe('9 月 6 日 骑行')
+    // 回退标题按查看者本地时区格式化：期望值动态推导，避免 CI（UTC）与本机（UTC+8）日期跨天差异
+    const local = new Date('2026-09-06T07:30:00+08:00')
+    expect(data.title).toBe(`${local.getMonth() + 1} 月 ${local.getDate()} 日 骑行`)
     expect(data.bikeName).toBe('测试单车')
   })
 
