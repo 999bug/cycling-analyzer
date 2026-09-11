@@ -34,6 +34,9 @@ public/author-data/*
 test-results/
 playwright-report/
 
+# 会话临时目录（每个任务/会话自己的中间产物，见 AGENTS.md「并行会话临时文件约定」）
+.tmp/
+
 # CodeGraph �ػ������ļ�
 .codegraph/daemon.pid
 

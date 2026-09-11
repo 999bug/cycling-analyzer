@@ -28,6 +28,16 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 - **push 后必须盯 CI**（`gh run watch` 或 Actions 页）：失败立即修复补提交，保证「发布成功」闭环；改动 tsconfig/vite.config/tests setup 等全局文件时本地改用 `npm run check -- --full`
 - 大改动/大规模重构在推送前额外跑一次 `npm run check -- --full`，把失败发现提前到本地
 
+## 并行会话临时文件约定（2026-09-11，用户指定）
+
+多个会话并行开发同一仓库，共享文件（`docs/PROGRESS.md`、`changelogData.ts`、`AGENTS.md`、`.workbuddy/memory/` 日志）同时被多方写入极易冲突。约定：
+
+- **每个任务/会话在 `.tmp/<任务标识>/` 下建自己的临时目录**（如 `.tmp/share-studio/`），会话过程中的中间产物**只写进这里**：工作笔记、git 查询输出、调试脚本与日志、待合并的文档草稿等，**不直接写共享文件**
+- **提交代码前才合并**：把临时目录内容一次性并入共享文件（§0 登记与移出、changelog 条目、memory 日志追加），合并完**立即删除自己的 `.tmp/<任务标识>/`**
+- **只清理自己的临时目录**；别人的 `.tmp/*` 哪怕看起来过期也不碰（对方任务可能还在跑）
+- `.tmp/` 已整体 gitignore；任何临时文件严禁 `git add` 进提交
+- 根目录与 docs/ 等处**不得新增散装临时文件**（`xxx-tmp.txt`、`tmp-*.log` 之类）；发现他人遗留的散装临时文件时，先看修改时间判断所属会话是否还在活动，活跃的不动，沉睡的方可清理
+
 ## 架构硬边界
 
 ```

@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.66.1',
+    date: '2026-09-11',
+    features: [
+      '开发流程约定（维护者向）：并行会话的中间产物统一写入 .tmp/<任务标识>/ 临时目录（已 gitignore），提交前才合并进共享文档并清理，降低多会话同时改 docs/PROGRESS.md 等共享文件的冲突；根目录历史散落的临时文件已清理',
+    ],
+  },
+  {
     version: '2.66.0',
     date: '2026-09-11',
     features: [
