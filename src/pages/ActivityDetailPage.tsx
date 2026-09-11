@@ -70,6 +70,7 @@ import { computeQualityScore } from '@/features/analysis/qualityScore'
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
+import ShareStudioModal from '@/features/share/ShareStudioModal'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
@@ -267,6 +268,8 @@ function ActivityDetailPage() {
   const [exportingVideo, setExportingVideo] = useState(false)
   /** 导出选项面板开关（方案 B：先出面板再按参数生成） */
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
+  /** 社媒分享素材弹窗（Share Studio：朋友圈/小红书出图） */
+  const [shareOpen, setShareOpen] = useState(false)
   /** 录制进度文案（「录制中 x/y 秒」，录制中在面板底部展示） */
   const [videoProgressLabel, setVideoProgressLabel] = useState<string>()
   /** 导出录制态：地图切成「黑底 + 居中竖屏画框」，供真实页面录制裁出成片 */
@@ -967,6 +970,14 @@ function ActivityDetailPage() {
           >
             生成竖屏视频
           </button>
+          <button
+            type="button"
+            className="activity-detail__export"
+            onClick={() => setShareOpen(true)}
+            title="生成朋友圈/小红书分享图文（本浏览器内绘制，不上传）"
+          >
+            分享
+          </button>
           {/* 设为赛段 / 删除活动：作者源只读时保留可见但禁用（提示切源），不再凭空隐藏 */}
           <button
             type="button"
@@ -1172,6 +1183,18 @@ function ActivityDetailPage() {
         minHeartRate={minHeartRate}
         heartRateRecords={chartRecords}
       />
+
+      {/* 社媒分享素材弹窗：Canvas 本地出图，无网络请求（规格外延伸功能） */}
+      {shareOpen && activity !== undefined && (
+        <ShareStudioModal
+          activity={activity}
+          records={cleanedRecords.cleaned}
+          distanceUnit={distanceUnit}
+          ftp={ftp}
+          maxHeartRate={maxHeartRate}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
 
       {/* 导出选项面板（方案 B）：录制期间保持打开并展示进度，禁止重复触发 */}
       {videoDialogOpen && (

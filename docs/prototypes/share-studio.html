@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>分享创作 · cycling-analyzer（原型）</title>
+<!--
+  ============================================================================
+  cycling-analyzer · 分享创作 Modal 原型（Share Studio）
+  ----------------------------------------------------------------------------
+  设计系统：Phase 2 设计令牌（深色底 + 荧光绿）— 见 JS 顶部 const T
+  模板类型：web-prototype（单页）+ dashboard-modal（双栏创作器）
+  依赖：零。不联网、无 CDN、无外链字体，断网双击可运行。
+  卡片预览：真实 Canvas 2D 绘制，内部分辨率 = 逻辑尺寸 × exportScale(2)。
+  数据：页内写死的样例骑行（未接 IndexedDB）。
+  ============================================================================
+-->
+<style>
+/* ==========================================================================
+   1. 设计令牌 → CSS 变量（站内 UI 用；Canvas 内直接用 JS 的 T，不能用变量）
+   ========================================================================== */
+:root{
+  --bg:#121417;
+  --bg-surface:#1b1e23;
+  --bg-elevated:#232830;
+  --bg-plate:#22262c;
+
+  --border:#2a2e35;
+  --grid-minor:#2a2f37;
+  --grid-major:#343b45;
+
+  --text:#e8eaed;
+  --text-secondary:#9aa0a6;
+  --text-tertiary:#6b7178;
+
+  --primary:#b8e62e;
+  /* 色板白名单豁免：--on-primary (#0d3b4c) 不是装饰性强调色，
+     它是荧光绿主按钮上的前景色，去掉会破坏主按钮的 AA 对比度。 */
+  --on-primary:#0d3b4c;
+  --info:#4f8cff;
+  --success:#34c759;
+  --warning:#ff9f0a;
+  --danger:#ff453a;
+
+  --font-sans:system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:"SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+
+  --space-xs:4px;
+  --space-sm:8px;
+  --space-md:12px;
+  --space-lg:20px;
+  --space-xl:28px;
+
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:16px;
+
+  --shadow-md:0 12px 40px rgba(0,0,0,.5);
+}
+
+/* ==========================================================================
+   2. 基础
+   ========================================================================== */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-sans);
+  font-size:14px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+::selection{background:rgba(184,230,46,.28)}
+
+/* ==========================================================================
+   3. 背景：模拟「骑行详情页」（仅用于承载入口，非本轮交付重点）
+   ========================================================================== */
+.page{max-width:960px;margin:0 auto;padding:32px 24px 96px}
+.page-top{display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);
+  padding-bottom:20px;border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:.2px}
+.brand .mark{width:22px;height:22px;border-radius:6px;border:1px solid var(--primary);
+  display:grid;place-items:center;color:var(--primary);font-size:11px;font-weight:700}
+.privacy{font-size:12px;color:var(--text-tertiary)}
+.page h1{font-size:26px;line-height:1.35;margin:28px 0 6px;font-weight:700}
+.page .sub{font-size:13px;color:var(--text-secondary);margin:0 0 24px}
+.chips{display:flex;flex-wrap:wrap;gap:var(--space-sm);margin-bottom:28px}
+.chip{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:10px 14px;min-width:132px}
+.chip .k{font-size:12px;color:var(--text-secondary)}
+.chip .v{font-family:var(--font-mono);font-size:19px;font-weight:600;color:var(--text)}
+.chip .v em{font-style:normal;font-size:12px;font-family:var(--font-sans);color:var(--text-secondary);margin-left:4px}
+.page-note{font-size:12px;color:var(--text-tertiary);border-top:1px solid var(--border);padding-top:16px;margin-top:28px}
+
+/* ==========================================================================
+   4. 遮罩 + Modal 容器
+   ========================================================================== */
+.overlay{
+  position:fixed;inset:0;z-index:60;
+  background:rgba(8,9,11,.74);
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.overlay[hidden]{display:none}
+.modal{
+  max-width:1120px;width:calc(100vw - 48px);max-height:calc(100vh - 64px);
+  background:var(--bg-surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-md);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* --- 顶部：样例数据说明条 + 关闭 --- */
+.modal-head{
+  display:flex;align-items:flex-start;gap:var(--space-md);
+  padding:10px var(--space-lg);
+  background:rgba(79,140,255,.07);
+  border-bottom:1px solid var(--border);
+  flex:none;
+}
+.modal-head .tag{
+  flex:none;font-size:11px;font-weight:600;letter-spacing:.4px;
+  color:var(--info);border:1px solid rgba(79,140,255,.4);
+  border-radius:var(--radius-sm);padding:1px 6px;margin-top:2px;
+}
+.modal-head p{margin:0;font-size:12px;line-height:1.55;color:var(--text-secondary)}
+.modal-head p b{color:var(--text);font-weight:600}
+.x-btn{
+  flex:none;margin-left:auto;width:28px;height:28px;border-radius:var(--radius-sm);
+  background:transparent;border:1px solid transparent;color:var(--text-tertiary);
+  display:grid;place-items:center;padding:0;
+}
+.x-btn:hover{background:var(--bg-elevated);color:var(--text);border-color:var(--border)}
+
+/* --- 步骤条 --- */
+.stepbar{
+  height:56px;flex:none;list-style:none;margin:0;padding:0 var(--space-lg);
+  display:flex;align-items:center;gap:var(--space-sm);
+  border-bottom:1px solid var(--border);
+}
+.stepbar .mini{display:none;font-size:13px;color:var(--text-secondary)}
+.step{display:flex;align-items:center;gap:8px}
+.step .dot{
+  width:24px;height:24px;border-radius:50%;flex:none;
+  display:grid;place-items:center;font-size:12px;font-weight:600;
+  background:transparent;border:1px solid var(--border);color:var(--text-tertiary);
+}
+.step.active .dot{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.step.done .dot{background:transparent;border:1px solid var(--info);color:var(--info)}
+.step .name{font-size:13px;color:var(--text-tertiary)}
+.step.active .name{color:var(--text);font-weight:600}
+.step.done .name{color:var(--text-secondary)}
+.stepbar .conn{flex:1;min-width:16px;height:1px;background:var(--border)}
+.stepbar .conn.done{background:var(--info)}
+
+/* --- 主体双栏 --- */
+.modal-body{flex:1;min-height:0;display:flex;overflow:hidden}
+.preview-pane{
+  flex:1;min-width:420px;background:var(--bg);padding:var(--space-lg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-md);
+  min-height:0;overflow:auto;
+}
+.control-pane{
+  width:420px;flex:none;border-left:1px solid var(--border);
+  padding:var(--space-lg);overflow-y:auto;min-height:0;
+}
+
+/* --- 预览舞台 --- */
+.stage{
+  width:min(100%, calc((100vh - 220px) * 0.75));
+  aspect-ratio:3/4;max-height:calc(100vh - 220px);
+  display:flex;flex:none;
+}
+.stage.is-9x16{width:min(100%, calc((100vh - 220px) * 0.5625));aspect-ratio:9/16}
+#preview{width:100%;height:100%;display:block;
+  border-radius:var(--radius-md);box-shadow:var(--shadow-md);background:var(--bg)}
+.stage-cap{font-size:12px;color:var(--text-secondary);text-align:center;flex:none}
+.pager{display:flex;gap:var(--space-sm);flex:none}
+.pager button{
+  background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-secondary);
+  border-radius:999px;padding:5px 12px;font-size:12px;
+}
+.pager button.on{border-color:var(--primary);color:var(--primary)}
+.preview-foot{font-size:12px;color:var(--text-secondary);text-align:center;flex:none}
+
+/* ==========================================================================
+   5. 控制区内容
+   ========================================================================== */
+.panel h2{font-size:16px;margin:0 0 4px;font-weight:600;color:var(--text)}
+.panel .hint{font-size:13px;color:var(--text-secondary);margin:0 0 var(--space-lg)}
+
+/* 平台卡 */
+.opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-md)}
+.opt-card{
+  text-align:left;padding:var(--space-lg);border-radius:var(--radius-md);
+  background:var(--bg-elevated);border:1px solid var(--border);
+  display:flex;flex-direction:column;gap:6px;transition:border-color .15s, box-shadow .15s;
+}
+.opt-card:hover{border-color:var(--text-tertiary)}
+.opt-card.on{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+.opt-card .t{font-size:16px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.opt-card .t small{font-size:11px;font-weight:400;color:var(--text-tertiary);font-family:var(--font-mono)}
+.opt-card .d{font-size:13px;color:var(--text-secondary);line-height:1.6}
+.opt-card .m{font-size:12px;color:var(--text-tertiary);margin-top:2px}
+
+/* 模板卡 */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:var(--space-md)}
+.tpl-card{
+  padding:10px;border-radius:var(--radius-md);background:var(--bg-elevated);
+  border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;text-align:left;
+}
+.tpl-card:hover{border-color:var(--text-tertiary)}
+.tpl-card.on{border-color:var(--primary);outline:2px solid var(--primary);outline-offset:2px}
+.tpl-card canvas{width:100%;aspect-ratio:3/4;display:block;border-radius:var(--radius-sm);background:var(--bg)}
+.tpl-card .t{font-size:14px;font-weight:600;color:var(--text)}
+.tpl-card .d{font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+/* 文案区 */
+.field{margin-bottom:var(--space-md)}
+.field label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.field label .n{font-family:var(--font-mono);color:var(--text-tertiary)}
+.field textarea{
+  width:100%;min-height:120px;padding:var(--space-md);
+  background:var(--bg);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  font-family:var(--font-sans);font-size:15px;line-height:1.7;resize:vertical;
+}
+.field textarea:focus{outline:none;border-color:var(--info)}
+.field textarea.short{min-height:64px}
+/* 字段说明：明确告知「哪些内容会进图、哪些不会」，避免改了看不到反馈 */
+.field-note{font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5}
+.count{font-size:12px;color:var(--text-tertiary);margin-top:6px;text-align:right}
+.count.over{color:var(--warning)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 var(--space-md)}
+.tags span{font-size:12px;color:var(--text-secondary);background:var(--bg);
+  border:1px solid var(--border);border-radius:999px;padding:3px 9px}
+
+/* 导出信息 */
+.kv{display:flex;justify-content:space-between;gap:var(--space-md);
+  font-size:13px;padding:9px 0;border-bottom:1px solid var(--border)}
+.kv:last-of-type{border-bottom:none}
+.kv .k{color:var(--text-secondary)}
+.kv .v{font-family:var(--font-mono);color:var(--text)}
+.warn-box{
+  margin-top:var(--space-md);padding:var(--space-md);border-radius:var(--radius-md);
+  background:rgba(255,159,10,.08);border:1px solid rgba(255,159,10,.28);
+  font-size:12px;color:var(--text-secondary);line-height:1.6;
+}
+
+/* 按钮组 */
+.btn-row{display:flex;gap:var(--space-sm);flex-wrap:wrap}
+.btn{
+  height:40px;padding:0 var(--space-lg);border-radius:var(--radius-md);
+  font-size:14px;font-weight:600;border:1px solid transparent;display:inline-flex;
+  align-items:center;justify-content:center;gap:6px;
+}
+.btn-ghost{background:transparent;border-color:var(--border);color:var(--text-secondary)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text-tertiary)}
+.btn-ghost:disabled{opacity:.35;cursor:not-allowed}
+.btn-neutral{background:var(--bg-elevated);border-color:var(--border);color:var(--text)}
+.btn-neutral:hover{border-color:var(--text-tertiary)}
+.btn-primary{background:var(--primary);color:var(--on-primary)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-link{height:32px;padding:0 4px;background:transparent;border:none;font-size:13px;font-weight:600}
+.btn-link.info{color:var(--info)}
+.btn-link.warn{color:var(--warning)}
+.btn-link:hover{text-decoration:underline}
+
+/* Modal 底部 */
+.modal-foot{
+  height:64px;flex:none;border-top:1px solid var(--border);
+  padding:0 var(--space-lg);display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);
+}
+.foot-left,.foot-right{display:flex;align-items:center;gap:var(--space-sm)}
+
+/* Toast */
+.toast{
+  position:fixed;left:50%;bottom:36px;transform:translate(-50%,12px);
+  background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius-md);padding:11px 18px;font-size:13px;
+  box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.2s;z-index:90;
+  display:flex;align-items:center;gap:8px;max-width:calc(100vw - 40px);
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast .i{width:8px;height:8px;border-radius:50%;background:var(--success);flex:none}
+.toast.warn .i{background:var(--warning)}
+.toast.info .i{background:var(--info)}
+
+/* ==========================================================================
+   6. 响应式
+   ========================================================================== */
+@media (max-width:900px){
+  .modal-body{flex-direction:column;overflow-y:auto}
+  .preview-pane{min-width:0;max-height:56vh;flex:none;border-bottom:1px solid var(--border)}
+  .stage{width:min(100%, calc((56vh - 110px) * 0.75));max-height:calc(56vh - 110px)}
+  .stage.is-9x16{width:min(100%, calc((56vh - 110px) * 0.5625));max-height:calc(56vh - 110px)}
+  .control-pane{width:100%;border-left:none;overflow:visible}
+}
+@media (max-width:480px){
+  .overlay{padding:0}
+  .modal{width:100vw;max-width:none;height:100vh;height:100dvh;max-height:100dvh;border-radius:0;border:none}
+  .stepbar{padding:0 var(--space-md)}
+  .stepbar .step,.stepbar .conn{display:none}
+  .stepbar .mini{display:block}
+  .preview-pane,.control-pane{padding:var(--space-md)}
+  .modal-foot{
+    height:auto;flex-direction:column-reverse;padding:var(--space-md);
+    gap:var(--space-sm);align-items:stretch;
+  }
+  .foot-left,.foot-right{flex-direction:column;align-items:stretch}
+  .foot-left .btn,.foot-right .btn{width:100%;height:56px}
+  .tpl-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+    scrollbar-width:none;padding-bottom:4px;margin:0 calc(-1 * var(--space-md));padding-left:var(--space-md);padding-right:var(--space-md)}
+  .tpl-grid::-webkit-scrollbar{display:none}
+  .tpl-card{flex:0 0 62vw;scroll-snap-align:start}
+  .btn-row{flex-direction:column}
+  .btn-row .btn{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== 背景页：骑行详情页（示意） ===================== -->
+<div class="page">
+  <div class="page-top">
+    <div class="brand"><span class="mark">ca</span> cycling-analyzer</div>
+    <div class="privacy">本地解析 · 数据不出浏览器</div>
+  </div>
+
+  <h1>翠湖环线 · 长距离爬坡</h1>
+  <p class="sub">2026-09-06 · Trek Émonda · 样例活动（页内写死，未读取你的 IndexedDB）</p>
+
+  <div class="chips">
+    <div class="chip"><div class="k">距离</div><div class="v">108.4<em>km</em></div></div>
+    <div class="chip"><div class="k">运动时长</div><div class="v">4:12:33</div></div>
+    <div class="chip"><div class="k">累计爬升</div><div class="v">1,268<em>m</em></div></div>
+    <div class="chip"><div class="k">平均速度</div><div class="v">25.8<em>km/h</em></div></div>
+    <div class="chip"><div class="k">平均心率</div><div class="v">142<em>bpm</em></div></div>
+    <div class="chip"><div class="k">平均功率</div><div class="v">168<em>W</em></div></div>
+    <div class="chip"><div class="k">标准化功率</div><div class="v">181<em>W</em></div></div>
+    <div class="chip"><div class="k">平均踏频</div><div class="v">—</div></div>
+  </div>
+
+  <button class="btn btn-primary" id="openShare">分享这次骑行</button>
+
+  <p class="page-note">
+    原型说明：点击上方按钮打开「分享创作」弹窗。所有内容在本页生成，不发起任何网络请求。<br>
+    平均踏频显示 <code>—</code> 而非 0：项目规范 §25 要求缺失字段一律显示占位符。
+  </p>
+</div>
+
+<!-- ===================== 分享创作 Modal ===================== -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="分享创作">
+  <div class="modal">
+
+    <!-- 顶部：样例数据说明条 + 关闭 -->
+    <div class="modal-head">
+      <span class="tag">样例数据</span>
+      <p>本次预览使用<b>页内写死的示例骑行</b>（2026-09-06 · 环翠湖 · Trek Émonda），
+         轨迹为确定性函数生成的示意环路，<b>不代表任何真实活动</b>。正式版本会从本地 IndexedDB 读取当前活动。</p>
+      <!-- 关闭图标用 inline SVG（U+2715 属 dingbat，会被 emoji 扫描误报），零外部请求 -->
+      <button class="x-btn" id="closeBtn" title="关闭（Esc）" aria-label="关闭">
+        <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true" focusable="false">
+          <path d="M2.6 2.6 L10.4 10.4 M10.4 2.6 L2.6 10.4"
+                fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- 步骤条 -->
+    <ol class="stepbar" id="stepbar"></ol>
+
+    <!-- 双栏主体 -->
+    <div class="modal-body">
+      <section class="preview-pane">
+        <div class="stage" id="stage"><canvas id="preview"></canvas></div>
+        <div class="pager" id="pager"></div>
+        <div class="stage-cap" id="stageCap">—</div>
+        <div class="preview-foot">本地解析 · 数据不出浏览器</div>
+      </section>
+
+      <aside class="control-pane" id="panel"></aside>
+    </div>
+
+    <!-- 底部 -->
+    <div class="modal-foot">
+      <div class="foot-left">
+        <button class="btn btn-ghost" id="prevBtn">上一步</button>
+      </div>
+      <div class="foot-right">
+        <button class="btn btn-neutral" id="nextBtn">下一步</button>
+        <button class="btn btn-primary" id="mainBtn" hidden>下载图片</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="i"></span><span id="toastMsg"></span></div>
+
+<script>
+/* ==========================================================================
+   1. 设计令牌（Canvas 内不能使用 CSS 变量，故在此复刻一份）
+   ========================================================================== */
+const T = {
+  color:{
+    bg:'#121417', surface:'#1b1e23', elevated:'#232830',
+    // plate / grid 经过提色：#171a1e 与卡片底色 #121417 只有 1.06:1，
+    // 坐标纸几乎不可见，会被读成「图没加载出来」。
+    plate:'#22262c', gridMinor:'#2a2f37', gridMajor:'#343b45',
+    border:'#2a2e35',
+    text:'#e8eaed', textSecondary:'#9aa0a6', textTertiary:'#6b7178',
+    // onPrimary (#0d3b4c) 为色板白名单豁免：它是荧光绿主按钮上的前景色，不是装饰强调色。
+    primary:'#b8e62e', onPrimary:'#0d3b4c',
+    info:'#4f8cff', success:'#34c759', warning:'#ff9f0a', danger:'#ff453a',
+    trackCasing:'#121417', track:'#b8e62e', bar:'#3d4759',
+  },
+  font:{
+    sans:'system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif',
+    mono:'"SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace',
+  },
+  exportScale:2,
+};
+/* 预览态分辨率倍率：编辑时用 1×，导出时才用 T.exportScale（2×） */
+const DISPLAY_SCALE = 1;
+
+/* ==========================================================================
+   2. 样例数据（写死；正式版本来自 IndexedDB）
+   ========================================================================== */
+const RIDE = {
+  date:'2026-09-06',
+  routeName:'翠湖环线',
+  bike:'Trek Émonda',
+  kind:'长距离爬坡',
+  insights:[
+    '后半程功率衰减 8.3%，配速前紧后松，前半程压 5% 会更稳。',
+    // 口径自查：1,267.73 m ÷ 108.4 km = 11.69 m/km → 11.7。四处在用，改请一起改。
+    '累计爬升 1,268 m，平均每公里爬 11.7 m，属于典型爬坡日。',
+    '心率漂移 4.1%，有氧基础扎实；平均踏频本次未记录。',
+  ],
+};
+
+// 指标表：value 为字符串，保证「数字一律 mono 栈」且缺失字段渲染为 —
+// 规格 §25：缺失字段显示「—」而不是 0 —— 这里用「平均踏频」演示一次。
+const METRICS = {
+  distance :{label:'距离 (km)',      value:'108.4'},
+  duration :{label:'时长 (h:min)',   value:'4:12'},          // 朋友圈单列宽 216，64px mono 最多约 5.6 字符，故用 时:分
+  // 完整时长，用于列宽足够的版式。compact 是溢出退化写法：10:12:33 撞列时退到 10:12
+  durationF:{label:'运动时长', value:'4:12:33',
+             compact:function(v){ return v.split(':').slice(0, 2).join(':'); }},
+  elevation:{label:'累计爬升 (m)',   value:'1,268'},
+  avgSpeed :{label:'平均速度 (km/h)',value:'25.8'},
+  avgHr    :{label:'平均心率 (bpm)', value:'142'},
+  avgPower :{label:'平均功率 (W)',   value:'168'},
+  np       :{label:'标准化功率 (W)', value:'181'},
+  cadence  :{label:'平均踏频 (rpm)', value:'—'},              // ← 规格 §25 演示位
+};
+
+/* -------- 样例轨迹：确定性函数生成的闭合环路（可复现，无 Math.random） -------- */
+/* 虚构城市「翠湖市」，中心经纬度 (113.952, 22.572)。
+   半径由多个正弦叠加 → 起伏自然的环路；角度区间留 ~6% 缺口，
+   好让起点/终点标记不重叠（真实骑行本就很少首尾完全重合）。      */
+function makeTrack(){
+  const n = 176, pts = [];
+  const cx = 113.952, cy = 22.572;
+  for (let i = 0; i < n; i++){
+    const t = 0.35 + (i / (n - 1)) * Math.PI * 2 * 0.94;
+    const r = 1
+      + 0.20 * Math.sin(3 * t + 0.6)
+      + 0.11 * Math.cos(5 * t - 1.1)
+      + 0.05 * Math.sin(11 * t + 2.3)
+      + 0.02 * Math.cos(17 * t);
+    pts.push({ lon: cx + Math.cos(t) * r * 0.086, lat: cy + Math.sin(t) * r * 0.064 });
+  }
+  return pts;
+}
+const TRACK = makeTrack();
+
+/* ------------ 海拔序列（确定性，无 Math.random） ------------
+   主爬坡 t≈0.58~0.78、次爬坡 t≈0.85、中段另有一个小爬坡，爬坡集中在后半程，
+   与现有洞察「后半程功率衰减 8.3%」「坡都在后半程」自洽。
+   主峰振幅 690.4 是标定值：使全段累加正坡差 = 1,268 m，与 METRICS.elevation 一致。 */
+const RIDE_KM = 108.4;
+function makeElevation(){
+  const n = 120, pts = [], A = 690.4;
+  for (let i = 0; i < n; i++){
+    const t = i / (n - 1);
+    const e = 40 + 45 * t
+      + A   * Math.exp(-Math.pow((t - 0.68) / 0.06, 2))
+      + 380 * Math.exp(-Math.pow((t - 0.85) / 0.045, 2))
+      + 250 * Math.exp(-Math.pow((t - 0.38) / 0.05, 2))
+      + 11 * Math.sin(t * 9.5) + 6 * Math.sin(t * 23 + 1.3);
+    pts.push({ km: t * RIDE_KM, e: e });
+  }
+  return pts;
+}
+const ELEV = makeElevation();
+const ELEV_GAIN = (function(){                     // 累计爬升 = 全段正坡差之和
+  let g = 0, prev = null;
+  ELEV.forEach(function(p){ if (prev !== null && p.e > prev) g += p.e - prev; prev = p.e; });
+  return g;
+})();
+const ELEV_PEAK = (function(){                     // 最高海拔（供剖面标注）
+  let i = 0;
+  ELEV.forEach(function(p, k){ if (p.e > ELEV[i].e) i = k; });
+  return { i:i, e:ELEV[i].e, km:ELEV[i].km };
+})();
+
+/* ------------ 每 5 km 分段配速（22 段 = 21×5 + 3.4） ------------
+   等距分段的「全程均速」应是距离加权的调和平均（总里程/总时间），
+   不是 22 段速度的算术平均 —— 这里用二分标定加性偏移，使调和平均恰好 = 25.8，
+   与 METRICS.avgSpeed、卡片指标一致。 */
+const SPLITS_LENS = (function(){
+  const a = [];
+  for (let i = 0; i < 21; i++) a.push(5);
+  a.push(3.4);
+  return a;
+})();
+const SPLITS = (function(){
+  const n = 22, raw = [];
+  for (let i = 0; i < n; i++){
+    const t = i / (n - 1);
+    raw.push(26.2 - 4.3 * t                                   // 全程线性衰减
+      + 1.3 * Math.exp(-Math.pow((t - 0.19) / 0.045, 2))      // 18~22 km 局部峰
+      + 0.3 * Math.sin(t * 9.7 + 0.6));                       // 小起伏
+  }
+  const targetT = RIDE_KM / 25.8;                             // 目标总用时（小时）
+  function totalTime(off){
+    let t = 0;
+    for (let i = 0; i < n; i++) t += SPLITS_LENS[i] / (raw[i] + off);
+    return t;
+  }
+  let lo = -5, hi = 5;                                        // totalTime 随 off 单调递减
+  for (let k = 0; k < 60; k++){
+    const mid = (lo + hi) / 2;
+    if (totalTime(mid) > targetT) lo = mid; else hi = mid;
+  }
+  const off = (lo + hi) / 2;
+  return raw.map(function(v){ return v + off; });
+})();
+const SPLITS_AVG = 25.8;                                      // 调和平均（全程均速）
+
+/* ------------ 心率区间 Z1~Z5（合计 100%） ------------
+   配色说明：与站内「训练区间」页的 5 色方案不同 —— 卡片 Anti-Slop 红线要求
+   非中性饱和色相 ≤3 种，故改为强度递进映射：中性 → 暗绿 → 亮绿 → 琥珀 → 红
+   （绿 / 琥珀 / 红共 3 种色相，达标）。不要当成配色 bug 改回站内 5 色。 */
+const HR_ZONES = [
+  { name:'恢复区', pct:18, color:'#3d4759' },
+  { name:'耐力区', pct:34, color:'#7d9a28' },
+  { name:'有氧区', pct:31, color:'#b8e62e' },
+  { name:'阈值区', pct:12, color:'#ff9f0a' },
+  { name:'无氧区', pct:5,  color:'#ff453a' },
+];
+
+/* ==========================================================================
+   3. 版式 / 平台 / 变体 配置
+   ========================================================================== */
+const PLATFORMS = [
+  { id:'moments', name:'朋友圈', size:'1080 × 1440',
+    desc:'熟人看你的路：一张图讲清骑了多远、爬了多少、花了多久。',
+    meta:'单图 · 1 张' },
+  { id:'xhs', name:'小红书', size:'1080 × 1440',
+    desc:'陌生人搜索：封面必须是结论句，路线和数据放内页。',
+    meta:'封面 + 内页 ×3' },
+  { id:'douyin', name:'抖音', size:'1080 × 1920',
+    desc:'前 2 秒钩子：封面只留一句悬念加一个关键数字。',
+    meta:'封面帧 · 1 张' },
+];
+
+const PAGES = { moments:1, xhs:4, douyin:1 };
+const PAGE_NAMES = { xhs:['封面', '内页 1 · 路线', '内页 2 · 洞察', '内页 3 · 数据图表'] };
+
+// 每个平台 2 个版式变体（封面侧重 vs 数据侧重）
+const VARIANTS = {
+  moments:[
+    { id:'data',  name:'数据侧重', desc:'四项指标横排，信息最全，适合直接发群聊。',
+      metrics:['distance','duration','elevation','avgSpeed'], hook:'distance',
+      headline:'4 小时 12 分\n把坡骑完了' },
+    { id:'route', name:'路线侧重', desc:'指标收敛为三项，画面留白更多，路线更抢眼。',
+      metrics:['distance','elevation','avgSpeed'], hook:'distance',
+      headline:'坡都在后半程\n下次补给得提前' },
+    { id:'profile', name:'剖面侧重', desc:'地图收紧，海拔剖面入卡：一眼看出坡在哪里。',
+      metrics:['distance','duration','elevation'], hook:'distance',
+      headline:'1,268 米爬升\n都堆在后半程' },
+  ],
+  xhs:[
+    { id:'conclusion', name:'结论封面 · 路线内页', desc:'封面讲结论，内页 1 放路线图，内页 2 放洞察。',
+      hook:{label:'总距离', value:'108.4', unit:'km'},
+      mini:['durationF','elevation','avgSpeed'],
+      p1:['distance','durationF','elevation','avgSpeed'],
+      headline:'坡都在后半程\n功率掉了 8.3%' },
+    { id:'data', name:'数据封面 · 硬核内页', desc:'封面钩子换成爬升，内页 1 换成心率 / 功率口径。',
+      hook:{label:'累计爬升', value:'1,268', unit:'m'},
+      mini:['distance','durationF','avgSpeed'],
+      p1:['distance','elevation','avgHr','cadence'],
+      headline:'每公里爬 11.7 m\n体力得这样分' },
+  ],
+  douyin:[
+    { id:'hook', name:'钩子版', desc:'大字悬念 + 距离，先留住前 2 秒。',
+      metrics:['distance','durationF','elevation','avgSpeed'],
+      headline:'108 公里\n坡都在后半程' },
+    { id:'data', name:'数据版', desc:'封面换成时间口径，指标换成功率口径。',
+      metrics:['distance','elevation','avgPower','np'],
+      headline:'4 小时 12 分\n爬升 1268 米' },
+  ],
+};
+
+/* -------- 文案模板（每平台 2 套，自动生成 + 可手改） -------- */
+const COPY = {
+  moments:[
+    // P1-3：默认标题不再复述数据，而是给一个有观点的结论
+    { fields:{
+        headline:'4 小时 12 分\n把坡骑完了',
+        body:'周末把环翠湖这条线骑完了，108 公里，爬了 1268 米。\n前半程还算压得住，后半程掉速有点明显。\n下次补给点得提前一点。',
+      }, tags:[] },
+    { fields:{
+        headline:'坡都在后半程\n下次补给得提前',
+        body:'周六长距离，翠湖环线 108 公里。\n爬升 1268 米，平均心率 142。\n坡基本集中在中段，骑完腿还有余量。',
+      }, tags:[] },
+    { fields:{
+        headline:'1,268 米爬升\n都堆在后半程',
+        body:'108 公里，爬升基本都堆在 60 公里以后。\n前面平路省着骑，最后 20 公里连着爬。\n心率漂移 4.1%，体力分配还行。',
+      }, tags:[] },
+  ],
+  xhs:[
+    // P1-1：封面第一落点是结论句（由 insights 提炼），不是大数字
+    { fields:{
+        headline:'坡都在后半程\n功率掉了 8.3%',
+        body:'周末长距离骑了翠湖环线：108 公里 / 爬升 1268 米 / 4 小时 12 分。\n\n'
+           + '路线前半段是缓坡热身，中段连续两个爬坡，后半程沿湖平路收尾。平均心率 142，平均功率 168W，NP 181W，'
+           + '后半程功率衰减 8.3%，配速属于前紧后松。\n\n'
+           + '如果只骑半圈，补给建议放在 62 公里处的小卖部，之后连续 18 公里没有商店。',
+      },
+      tags:['#骑行','#公路车','#长距离骑行','#爬坡训练','#功率训练','#骑行数据','#翠湖环线','#南方骑行','#周末骑行','#骑行装备'] },
+    { fields:{
+        headline:'每公里爬 11.7 m\n体力得这样分',
+        body:'同样 108 公里，这次把体力分配记了下来：爬升 1,268 米，平均每公里爬 11.7 米。\n\n'
+           + '心率漂移 4.1%，有氧基础还算扎实；平均功率 168W，NP 181W，说明起伏段拉高了整体强度。'
+           + '前半程功率压在 175W 左右，后半程掉到 160W 出头。\n\n'
+           + '下次目标：前 60 公里再收 5%，把最后的爬坡留足。',
+      },
+      tags:['#骑行','#爬坡','#功率训练','#FTP','#骑行数据','#长距离','#翠湖环线','#骑行日常','#周末去哪儿','#有氧基础'] },
+  ],
+  douyin:[
+    { fields:{
+        headline:'108 公里\n坡都在后半程',
+        body:'4 小时 12 分，爬升 1268 米。后半程功率掉了 8.3%，前面骑太猛了。',
+      }, tags:[] },
+    { fields:{
+        headline:'4 小时 12 分\n爬升 1268 米',
+        body:'平均功率 168W，NP 181W。数据全部在本地算完，不上传。',
+      }, tags:[] },
+  ],
+};
+
+/* P1-5：note 明确标注哪些内容会进图、哪些不会——编辑 body 时卡片本就不变 */
+const FIELD_LABEL = {
+  moments:[
+    {key:'headline', label:'卡片大标题（建议 ≤24 字）', short:true,
+     note:'会画进卡片，改完左侧预览立刻跟着变。'},
+    {key:'body',     label:'朋友圈正文（建议 ≤3 行口语）',
+     note:'正文不进图，只用于复制发布时粘贴。'},
+  ],
+  xhs:[
+    {key:'headline', label:'标题（≤20 字，必含数字）', short:true,
+     note:'会画进封面，改完左侧预览立刻跟着变。'},
+    {key:'body',     label:'正文',
+     note:'正文不进图，只用于复制发布时粘贴。'},
+  ],
+  douyin:[
+    {key:'headline', label:'封面标题（建议 ≤12 字）', short:true,
+     note:'会画进封面，改完左侧预览立刻跟着变。'},
+    {key:'body',     label:'字幕钩子（前 2 秒）',
+     note:'字幕钩子不进封面图，只用于复制发布时粘贴。'},
+  ],
+};
+
+/* ==========================================================================
+   4. Canvas 绘制工具
+   ========================================================================== */
+/** 字体串：mono 用于任何数字，sans 用于中文 */
+function f(size, opt){
+  opt = opt || {};
+  return (opt.weight || 400) + ' ' + size + 'px ' + (opt.mono ? T.font.mono : T.font.sans);
+}
+
+/** 单行文本（baseline = 基线 y） */
+function txt(ctx, s, x, baseline, o){
+  o = o || {};
+  ctx.font = f(o.size || 24, o);
+  ctx.fillStyle = o.color || T.color.text;
+  ctx.textAlign = o.align || 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(s, x, baseline);
+  ctx.textAlign = 'left';
+}
+
+/** 右对齐单行文本 */
+function txtR(ctx, s, xRight, baseline, o){
+  o = o || {};
+  ctx.font = f(o.size || 24, o);
+  ctx.fillStyle = o.color || T.color.text;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(s, xRight, baseline);
+  ctx.textAlign = 'left';
+}
+
+/** 千分位 */
+function fmtNum(n){
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/** 中英混排：中文走 sans、数字走 mono（同一基线一次画完），支持 align */
+function txtMixed(ctx, parts, x, baseline, o){
+  o = o || {};
+  const size = o.size || 24, weight = o.weight || 400;
+  let w = 0;
+  const segs = parts.map(function(p){
+    ctx.font = f(size, { mono:p.mono, weight:weight });
+    const mw = ctx.measureText(p.t).width;
+    w += mw;
+    return { t:p.t, mono:!!p.mono, w:mw };
+  });
+  let sx = x;
+  if (o.align === 'right') sx = x - w;
+  else if (o.align === 'center') sx = x - w / 2;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  segs.forEach(function(s){
+    ctx.font = f(size, { mono:s.mono, weight:weight });
+    ctx.fillStyle = o.color || T.color.text;
+    ctx.fillText(s.t, sx, baseline);
+    sx += s.w;
+  });
+  return w;
+}
+
+/** 数据面板框：与地图区同源的 plate + border + radius 16 */
+function drawPanelFrame(ctx, r){
+  rrect(ctx, r.x, r.y, r.w, r.h, 16);
+  ctx.fillStyle = T.color.plate; ctx.fill();
+  ctx.strokeStyle = T.color.border; ctx.lineWidth = 1; ctx.stroke();
+}
+
+/** 圆角矩形路径 */
+function rrect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+/** 1px 实线（0.5 偏移保证清晰） */
+function hline(ctx, x1, x2, y, color){
+  const yy = Math.round(y) + 0.5;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x1, yy); ctx.lineTo(x2, yy); ctx.stroke();
+}
+function vline(ctx, x, y1, y2, color){
+  const xx = Math.round(x) + 0.5;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(xx, y1); ctx.lineTo(xx, y2); ctx.stroke();
+}
+
+/** 分词：CJK / 标点可断，拉丁数字串（108.4、km/h）整体不断，空格为断点 */
+function tokenize(s){
+  const out = []; let buf = '';
+  for (const ch of s){
+    if (/[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/.test(ch)){
+      if (buf){ out.push(buf); buf = ''; }
+      out.push(ch);
+    } else if (ch === ' '){
+      if (buf){ out.push(buf); buf = ''; }
+      out.push(' ');
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
+/** 折行 + 超长截断（只加 …，绝不缩字号） */
+function wrap(ctx, s, maxW, maxLines){
+  const out = []; let cur = '';
+  s.split('\n').forEach(function(para, pi){
+    tokenize(para).forEach(function(tk){
+      if (cur === '' || ctx.measureText(cur + tk).width <= maxW) cur += tk;
+      else { out.push(cur.replace(/\s+$/, '')); cur = (tk === ' ' ? '' : tk); }
+    });
+    if (pi < s.split('\n').length - 1){ out.push(cur.replace(/\s+$/, '')); cur = ''; }
+  });
+  if (cur !== '') out.push(cur.replace(/\s+$/, ''));
+  if (out.length <= maxLines) return out;
+  const kept = out.slice(0, maxLines);
+  let last = kept[maxLines - 1];
+  while (last.length > 0 && ctx.measureText(last + '…').width > maxW) last = last.slice(0, -1);
+  kept[maxLines - 1] = last + '…';
+  return kept;
+}
+
+/** 多行段落 */
+function para(ctx, s, x, baseline0, o){
+  o = o || {};
+  const size = o.size || 36, lh = o.lh || 58, maxLines = o.maxLines || 3, maxW = o.width || 800;
+  ctx.font = f(size, o);
+  const lines = wrap(ctx, s, maxW, maxLines);
+  ctx.fillStyle = o.color || T.color.text;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  lines.forEach(function(ln, i){ ctx.fillText(ln, x, baseline0 + i * lh); });
+  return lines.length;
+}
+
+/** 求轨迹的包围盒（供 fit 与比例尺换算共用） */
+function trackBounds(pts){
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const p of pts){
+    if (p.lon < minLon) minLon = p.lon;
+    if (p.lon > maxLon) maxLon = p.lon;
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+  }
+  return { minLon:minLon, maxLon:maxLon, minLat:minLat, maxLat:maxLat };
+}
+
+/** 等距抽样（v1 性能保护：点数 >1500 时抽稀） */
+function samplePoints(pts){
+  if (pts.length <= 1500) return pts;
+  const step = Math.ceil(pts.length / 1500), sub = [];
+  for (let i = 0; i < pts.length; i += step) sub.push(pts[i]);
+  if (sub[sub.length - 1] !== pts[pts.length - 1]) sub.push(pts[pts.length - 1]);
+  return sub;
+}
+
+/** fit 变换：等比缩放 + 居中。s = 每纬度对应的像素数（比例尺换算要用） */
+function fitTransform(r, pad){
+  const b = trackBounds(TRACK);
+  const bw = b.maxLon - b.minLon || 1, bh = b.maxLat - b.minLat || 1;
+  const s = Math.min((r.w - 2 * pad) / bw, (r.h - 2 * pad) / bh);
+  return {
+    s:s,
+    ox:r.x + pad + (r.w - 2 * pad - bw * s) / 2,
+    oy:r.y + pad + (r.h - 2 * pad - bh * s) / 2,
+    bounds:b,
+  };
+}
+
+/** 把轨迹点等比 fit 进矩形（居中） */
+function fitPoints(pts, r, pad){
+  const t = fitTransform(r, pad);
+  return samplePoints(pts).map(function(p){
+    return { x: t.ox + (p.lon - t.bounds.minLon) * t.s,
+             y: t.oy + (t.bounds.maxLat - p.lat) * t.s };
+  });
+}
+
+/** 经纬度 → 公里：1° 纬度 ≈ 111.32 km，1° 经度还要乘 cos(纬度) */
+function kmPerPixel(s, latDeg){
+  return 111.32 * Math.cos(latDeg * Math.PI / 180) / s;
+}
+
+/**
+ * 比例尺（左下角）：刻度线 + 端点 + 「N km」标签
+ * 长度由 fit 出来的像素比例反算真实距离，不写死。
+ */
+function drawScaleBar(ctx, r, s, latDeg){
+  const kpp = kmPerPixel(s, latDeg);
+  const targetKm = 160 * kpp;                       // 目标长度约 160px
+  const nice = [0.5, 1, 2, 5, 10, 20, 50, 100, 200];
+  let km = nice[0], best = Infinity;
+  for (const v of nice){                            // 取对数距离最近的「整数档」
+    const d = Math.abs(Math.log(v / targetKm));
+    if (d < best){ best = d; km = v; }
+  }
+  const px = Math.min(km / kpp, r.w - 160);
+
+  const x0 = r.x + 32, y0 = r.y + r.h - 40;
+  ctx.strokeStyle = T.color.textSecondary;
+  ctx.fillStyle = T.color.textSecondary;
+  ctx.lineWidth = 2; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + px, y0); ctx.stroke();  // 主线
+  ctx.beginPath();                                                             // 两端端点
+  ctx.moveTo(x0, y0 - 6); ctx.lineTo(x0, y0 + 6);
+  ctx.moveTo(x0 + px, y0 - 6); ctx.lineTo(x0 + px, y0 + 6);
+  ctx.stroke();
+  txt(ctx, (km < 1 ? (km * 1000) + ' m' : km + ' km'), x0, y0 - 16,
+      { size:24, color:T.color.textSecondary });
+  ctx.lineCap = 'round';
+}
+
+/** 极简指北针（右上角）：纯几何三角 + 字母 N，不用 emoji */
+function drawCompass(ctx, r){
+  const cx = r.x + r.w - 44, top = r.y + 30;
+  ctx.font = f(22); ctx.fillStyle = T.color.textSecondary;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('N', cx, top + 16);
+  ctx.textAlign = 'left';
+  ctx.beginPath();
+  ctx.moveTo(cx, top + 26); ctx.lineTo(cx - 9, top + 50); ctx.lineTo(cx + 9, top + 50);
+  ctx.closePath();
+  ctx.fillStyle = T.color.textSecondary; ctx.fill();
+}
+
+/** 四角 L 形裁切角标：让地图被读作「按比例绘制的图」，而不是空底 */
+function drawCropMarks(ctx, r){
+  const inset = 14, arm = 22;
+  ctx.strokeStyle = T.color.textSecondary;
+  ctx.lineWidth = 2; ctx.lineCap = 'butt';
+  const corners = [
+    [r.x + inset, r.y + inset, 1, 1],
+    [r.x + r.w - inset, r.y + inset, -1, 1],
+    [r.x + inset, r.y + r.h - inset, 1, -1],
+    [r.x + r.w - inset, r.y + r.h - inset, -1, -1],
+  ];
+  corners.forEach(function(c){
+    ctx.beginPath();
+    ctx.moveTo(c[0], c[1] + c[3] * arm); ctx.lineTo(c[0], c[1]);
+    ctx.lineTo(c[0] + c[2] * arm, c[1]);
+    ctx.stroke();
+  });
+  ctx.lineCap = 'round';
+}
+
+/**
+ * 地图区：深色「坐标纸」背板 + 等距细网格 + 双描边荧光绿轨迹
+ * v1 纯路径线，不加载任何瓦片；禁止 shadowBlur 发光
+ */
+function drawMap(ctx, r, innerPad){
+  // 背板
+  rrect(ctx, r.x, r.y, r.w, r.h, 16);
+  ctx.fillStyle = T.color.plate; ctx.fill();
+
+  ctx.save();
+  rrect(ctx, r.x, r.y, r.w, r.h, 16); ctx.clip();
+
+  // 网格：72px 细线，每 4 格（288px）一条主线。
+  // 从 plate 中心向四周展开，保证左右/上下死区对称（原来从左上角起算，右边死区 72、下边 54）。
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  const nx = Math.ceil((r.w / 2) / 72) + 1;
+  for (let k = -nx; k <= nx; k++){
+    const x = cx + k * 72;
+    if (x <= r.x + 1 || x >= r.x + r.w - 1) continue;
+    vline(ctx, x, r.y, r.y + r.h, (k % 4 === 0) ? T.color.gridMajor : T.color.gridMinor);
+  }
+  const ny = Math.ceil((r.h / 2) / 72) + 1;
+  for (let k = -ny; k <= ny; k++){
+    const y = cy + k * 72;
+    if (y <= r.y + 1 || y >= r.y + r.h - 1) continue;
+    hline(ctx, r.x, r.x + r.w, y, (k % 4 === 0) ? T.color.gridMajor : T.color.gridMinor);
+  }
+
+  // 三样「这是一张按比例绘制的图」的证据：比例尺 / 指北针 / 四角裁切角标
+  const t = fitTransform(r, innerPad);
+  const midLat = (t.bounds.minLat + t.bounds.maxLat) / 2;
+  drawScaleBar(ctx, r, t.s, midLat);
+  drawCompass(ctx, r);
+  drawCropMarks(ctx, r);
+
+  // 轨迹
+  const p = fitPoints(TRACK, r, innerPad);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p[0].x, p[0].y);
+  for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+  ctx.strokeStyle = T.color.trackCasing; ctx.lineWidth = 14; ctx.stroke();  // casing
+  ctx.strokeStyle = T.color.track;       ctx.lineWidth = 6;  ctx.stroke();  // 主线
+
+  // 起点：灰实心 + 深色描边
+  ctx.beginPath(); ctx.arc(p[0].x, p[0].y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = T.color.textSecondary; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = T.color.trackCasing; ctx.stroke();
+
+  // 终点：荧光绿实心 + 外环
+  const e = p[p.length - 1];
+  ctx.beginPath(); ctx.arc(e.x, e.y, 7, 0, Math.PI * 2);
+  ctx.fillStyle = T.color.primary; ctx.fill();
+  ctx.beginPath(); ctx.arc(e.x, e.y, 14, 0, Math.PI * 2);
+  ctx.lineWidth = 4; ctx.strokeStyle = T.color.primary; ctx.stroke();
+
+  // 右下角说明（同样提到 textSecondary：#6b7178 在新 plate 上只有 3.0:1）
+  txtR(ctx, '本地绘制 · 数据不出浏览器', r.x + r.w - 28, r.y + r.h - 30,
+       { size:24, color:T.color.textSecondary });
+
+  ctx.restore();
+
+  // 背板描边（在 clip 外画，避免被裁掉一半）
+  rrect(ctx, r.x, r.y, r.w, r.h, 16);
+  ctx.strokeStyle = T.color.border; ctx.lineWidth = 1; ctx.stroke();
+}
+
+/* ==========================================================================
+   5.4 数据图表面板（海拔剖面 / 分段配速 / 心率区间）
+   均与地图区同源：plate 底 + border 描边 + radius 16；面积用纯色低透明，
+   不用 createLinearGradient，不加 shadowBlur。
+   ========================================================================== */
+
+/** 爬坡段检测：相邻采样坡度 >3% 记为爬坡并合并相邻；等级按爬升+平均坡度简化分级 */
+function climbLevel(g, avg){
+  if (g >= 700 || (g >= 500 && avg >= 8)) return 'HC';
+  if (g >= 400 || (g >= 250 && avg >= 6)) return '1级';
+  if (g >= 180 || avg >= 5) return '2级';
+  return '3级';
+}
+function findClimbs(){
+  const segs = []; let cur = null;
+  for (let i = 0; i < ELEV.length - 1; i++){
+    const grade = (ELEV[i+1].e - ELEV[i].e) / (ELEV[i+1].km - ELEV[i].km) / 10; // m/km → %
+    if (grade > 3){ if (!cur) cur = { i0:i, i1:i+1 }; else cur.i1 = i + 1; }
+    else if (cur){ segs.push(cur); cur = null; }
+  }
+  if (cur) segs.push(cur);
+  return segs.map(function(s){
+    let lo = Infinity, hi = -Infinity, iPeak = s.i0;
+    for (let i = s.i0; i <= s.i1; i++){
+      if (ELEV[i].e < lo) lo = ELEV[i].e;
+      if (ELEV[i].e > hi){ hi = ELEV[i].e; iPeak = i; }
+    }
+    const kmA = ELEV[s.i0].km, kmB = ELEV[s.i1].km, gain = hi - lo;
+    return { kmA:kmA, kmB:kmB, kmPeak:ELEV[iPeak].km, ePeak:hi, gain:gain,
+             level: climbLevel(gain, gain / (kmB - kmA) / 10) };
+  });
+}
+
+/**
+ * 海拔剖面：面积图 + 爬坡段加深 + 站内同款等级标注
+ * o.compact = true 时用于朋友圈 196px 窄条：省略右侧注记与 x 轴刻度，字号缩小
+ */
+function drawElevationProfile(ctx, r, o){
+  o = o || {};
+  const compact = !!o.compact;
+  const padX = 32, top = compact ? 18 : 58, bottom = compact ? 14 : 44;
+  const px = r.x + padX, pw = r.w - padX * 2;
+  const py = r.y + top, ph = r.y + r.h - bottom - py;
+
+  drawPanelFrame(ctx, r);
+
+  let emin = Infinity, emax = -Infinity;
+  ELEV.forEach(function(p){
+    if (p.e < emin) emin = p.e;
+    if (p.e > emax) emax = p.e;
+  });
+  const ymin = emin - 14, ymax = emax + 16;
+  const xOf = function(km){ return px + (km / RIDE_KM) * pw; };
+  const yOf = function(e){ return py + (ymax - e) / (ymax - ymin) * ph; };
+
+  ctx.save();
+  rrect(ctx, r.x, r.y, r.w, r.h, 16); ctx.clip();
+
+  // 横向参考线
+  [0.25, 0.5, 0.75].forEach(function(k){
+    hline(ctx, px, px + pw, py + ph * k, T.color.gridMinor);
+  });
+
+  // 面积（纯色低透明，禁止渐变）
+  const area = function(){
+    ctx.beginPath();
+    ctx.moveTo(xOf(ELEV[0].km), yOf(ELEV[0].e));
+    ELEV.forEach(function(p){ ctx.lineTo(xOf(p.km), yOf(p.e)); });
+    ctx.lineTo(xOf(ELEV[ELEV.length - 1].km), py + ph);
+    ctx.lineTo(xOf(ELEV[0].km), py + ph);
+    ctx.closePath();
+  };
+  ctx.fillStyle = 'rgba(184,230,46,0.14)';
+  area(); ctx.fill();
+
+  // 爬坡段加深
+  const segs = findClimbs();
+  segs.forEach(function(s){
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(xOf(s.kmA) - 0.5, py, xOf(s.kmB) - xOf(s.kmA) + 1, ph);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(184,230,46,0.22)';
+    area(); ctx.fill();
+    ctx.restore();
+  });
+
+  // 剖面线（压在填充之上）
+  ctx.beginPath();
+  ctx.moveTo(xOf(ELEV[0].km), yOf(ELEV[0].e));
+  ELEV.forEach(function(p){ ctx.lineTo(xOf(p.km), yOf(p.e)); });
+  ctx.strokeStyle = T.color.track; ctx.lineWidth = 3;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+
+  /* 标注摆放：包围盒相交检测（P1 方案 A），只有真的重叠才抑制。
+     与全程最高点几乎同顶的段，等级并入峰值标注（P1 方案 B），
+     避免「1级」永远不出现，也不与「最高 757 m」叠字。 */
+  const boxes = [];
+  function measureParts(parts, size, monoFlags){
+    let w = 0;
+    parts.forEach(function(p, i){
+      ctx.font = f(size, { mono:monoFlags[i] });
+      w += ctx.measureText(p).width;
+    });
+    return w;
+  }
+  function place(cx, baseline, size, parts, monoFlags, color){
+    const w = measureParts(parts, size, monoFlags);
+    const box = { x:cx - w / 2 - 10, y:baseline - size - 4, w:w + 20, h:size + 10 };
+    for (let i = 0; i < boxes.length; i++){
+      const b = boxes[i];
+      if (box.x < b.x + b.w && box.x + box.w > b.x &&
+          box.y < b.y + b.h && box.y + box.h > b.y) return false;
+    }
+    boxes.push(box);
+    txtMixed(ctx,
+      parts.map(function(p, i){ return { t:p, mono:monoFlags[i] }; }),
+      cx, baseline, { size:size, color:color, align:'center' });
+    return true;
+  }
+
+  const peakX = xOf(ELEV_PEAK.km);
+  let mergedLevel = '', mergedIdx = -1;
+  segs.forEach(function(s, i){
+    if (Math.abs(xOf(s.kmPeak) - peakX) < 60){ mergedLevel = s.level; mergedIdx = i; }
+  });
+
+  // 峰值标注（非窄条时）：优先占位，随后各段等级再抢位置
+  if (!compact){
+    ctx.beginPath(); ctx.arc(peakX, yOf(ELEV_PEAK.e), 4, 0, Math.PI * 2);
+    ctx.fillStyle = T.color.text; ctx.fill();
+    const pp = [{ t:'最高 ', mono:false }, { t:fmtNum(ELEV_PEAK.e) + ' m', mono:true }];
+    if (mergedLevel) pp.push({ t:' · ' + mergedLevel, mono:false });
+    place(peakX, yOf(ELEV_PEAK.e) - 16, 22,
+          pp.map(function(p){ return p.t; }),
+          pp.map(function(p){ return p.mono; }), T.color.text);
+  }
+
+  segs.forEach(function(s, i){
+    if (!compact && i === mergedIdx) return;         // 已并入峰值标注
+    const ly = Math.max(yOf(s.ePeak) - 14, r.y + (compact ? 24 : 32));
+    place(xOf(s.kmPeak), ly, compact ? 20 : 22, [s.level], [false], T.color.textSecondary);
+  });
+
+  ctx.restore();
+
+  if (compact){
+    txt(ctx, '海拔剖面', r.x + 32, r.y + 24, { size:20, color:T.color.textSecondary });
+    return;
+  }
+
+  txt(ctx, '海拔剖面', r.x + 32, r.y + 40, { size:24, color:T.color.textSecondary });
+  txtMixed(ctx,
+    [{ t:'累计爬升 ', mono:false }, { t:fmtNum(ELEV_GAIN) + ' m', mono:true }],
+    r.x + r.w - 32, r.y + 40, { size:24, color:T.color.textSecondary, align:'right' });
+
+  // x 轴刻度
+  [0, 45, 90, RIDE_KM].forEach(function(km){
+    const a = (km === 0) ? 'left' : (km === RIDE_KM ? 'right' : 'center');
+    txt(ctx, Math.round(km) + ' km', xOf(km), r.y + r.h - 14,
+        { size:22, mono:true, color:T.color.textSecondary, align:a });
+  });
+}
+
+/**
+ * 分段配速：22 根柱，最快一段荧光绿高亮，虚线为全程均速。
+ * 柱宽按各段实际里程等比（末段 3.4 km ≈ 其他段的 0.68 倍），
+ * x 轴因此是真实的里程轴，右端写 108.4 与 RIDE_KM 一致 —— 不再把末段画成 5 km。
+ */
+function drawSplits(ctx, r){
+  const padX = 32, top = 58, bottom = 44;
+  const px = r.x + padX, pw = r.w - padX * 2;
+  const py = r.y + top, ph = r.y + r.h - bottom - py;
+
+  drawPanelFrame(ctx, r);
+
+  let vmin = Infinity, vmax = -Infinity, bestI = 0;
+  SPLITS.forEach(function(v, i){
+    if (v < vmin) vmin = v;
+    if (v > vmax){ vmax = v; bestI = i; }
+  });
+  const base = Math.floor(vmin - 0.6), cap = Math.ceil(vmax + 0.6);
+  const yOf = function(v){ return py + (cap - v) / (cap - base) * ph; };
+
+  ctx.save();
+  rrect(ctx, r.x, r.y, r.w, r.h, 16); ctx.clip();
+
+  const n = SPLITS.length;
+  const gap = Math.min(8, pw / (n * 4));
+  const unit = (pw - gap * (n - 1)) / RIDE_KM;      // 每公里像素数
+  let x = px;
+  SPLITS.forEach(function(v, i){
+    const w = SPLITS_LENS[i] * unit;
+    ctx.fillStyle = (i === bestI) ? T.color.track : T.color.bar;
+    ctx.fillRect(x, yOf(v), w, py + ph - yOf(v));
+    x += w + gap;
+  });
+
+  // 全程均速（虚线）+ 标签
+  const ya = yOf(SPLITS_AVG);
+  ctx.save();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = T.color.textSecondary; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(px, ya); ctx.lineTo(px + pw, ya); ctx.stroke();
+  ctx.restore();
+  txtMixed(ctx,
+    [{ t:'全程 ', mono:false }, { t:SPLITS_AVG.toFixed(1), mono:true }],
+    px + pw, ya - 8, { size:20, color:T.color.textSecondary, align:'right' });
+
+  ctx.restore();
+
+  txt(ctx, '分段配速 (km/h)', r.x + 32, r.y + 40, { size:24, color:T.color.textSecondary });
+
+  // x 轴刻度：每 5 km 一根柱，km50 = 第 10 根后、km100 = 第 20 根后，末段止于 108.4
+  [0, 50, 100, RIDE_KM].forEach(function(km){
+    const a = (km === 0) ? 'left' : (km === RIDE_KM ? 'right' : 'center');
+    const xx = (km === RIDE_KM) ? px + pw : px + (km / 5) * (5 * unit + gap);
+    txt(ctx, String(km), xx, r.y + r.h - 14,
+        { size:22, mono:true, color:T.color.textSecondary, align:a });
+  });
+}
+
+/** 心率区间：横向条形（沿用站内形态），配色为强度递进映射，见 HR_ZONES 注释 */
+function drawHrZones(ctx, r){
+  const padX = 32, top = 58, bottom = 20;
+  const px = r.x + padX, pw = r.w - padX * 2;
+  const py = r.y + top, ph = r.y + r.h - bottom - py;
+
+  drawPanelFrame(ctx, r);
+  txt(ctx, '心率区间 (%)', r.x + 32, r.y + 40, { size:24, color:T.color.textSecondary });
+
+  const rowH = ph / HR_ZONES.length;
+  const labelW = 100, pctW = 64;
+  const barX = px + labelW + 14;
+  const barW = px + pw - pctW - barX;
+  const barH = Math.max(12, Math.min(20, rowH * 0.25));   // 面板越高条形略粗
+
+  HR_ZONES.forEach(function(z, i){
+    const cy = py + rowH * i + rowH / 2;
+    txt(ctx, 'Z' + (i + 1) + ' ' + z.name, px, cy + 8,
+        { size:22, color:T.color.textSecondary });
+    rrect(ctx, barX, cy - barH / 2, barW, barH, barH / 2);   // 轨道
+    ctx.fillStyle = T.color.gridMinor; ctx.fill();
+    const w = Math.max(barW * z.pct / 100, 12);            // 填充
+    rrect(ctx, barX, cy - barH / 2, w, barH, barH / 2);
+    ctx.fillStyle = z.color; ctx.fill();
+    txt(ctx, z.pct + '%', px + pw, cy + 8,
+        { size:22, mono:true, color:T.color.text, align:'right' });
+  });
+}
+
+/**
+ * 一行指标：label（sans）+ value（mono）
+ * · 末列右对齐到 right（默认 1008）：否则 3 列版式右侧会空出 158px、4 列只空 62px，
+ *   切版式时空白突跳。
+ * · 溢出保护：真实长骑行（如 10:12:33）在 64px mono 下约 307px，会撞进下一列。
+ *   这里用 measureText 检测，超限则退到该指标的 compact 写法（绝不缩字号）。
+ */
+function drawMetrics(ctx, keys, c){
+  const right = c.right || 1008;
+  const slot = (c.step || 240) - 24;            // 列宽 − gutter
+  const vs = c.valueSize || 64;
+  keys.forEach(function(k, i){
+    const m = METRICS[k];
+    const last = (i === keys.length - 1);
+    const x = c.x0 + i * c.step;
+
+    ctx.font = f(vs, { mono:true, weight:600 });
+    let val = m.value;
+    if (m.compact && ctx.measureText(val).width > slot)
+      val = (typeof m.compact === 'function') ? m.compact(val) : m.compact;
+
+    if (last){
+      txtR(ctx, m.label, right, c.labelBaseline, { size:c.labelSize || 24, color:T.color.textSecondary });
+      txtR(ctx, val, right, c.valueBaseline, {
+        size:vs, mono:true, weight:600,
+        color:(k === c.hook) ? T.color.primary : T.color.text,
+      });
+    } else {
+      txt(ctx, m.label, x, c.labelBaseline, { size:c.labelSize || 24, color:T.color.textSecondary });
+      txt(ctx, val, x, c.valueBaseline, {
+        size:vs, mono:true, weight:600,
+        color:(k === c.hook) ? T.color.primary : T.color.text,
+      });
+    }
+  });
+}
+
+/**
+ * 卡片页脚
+ * 原为 22px + #6b7178（在 #121417 上仅 3.74:1，不达 AA）；
+ * 现 24px + #9aa0a6（6.99:1，22/24px 均不算 large text，按 4.5:1 要求）。
+ */
+function drawFooter(ctx, pad, baseline){
+  txt(ctx, '本地解析 · 数据不出浏览器', pad, baseline, { size:24, color:T.color.textSecondary });
+}
+
+/* ==========================================================================
+   5. 三套卡片版式（逻辑 px；导出时整个 canvas ×exportScale）
+   ========================================================================== */
+
+/* ---------- 5.1 朋友圈单图 1080 × 1440 ---------- */
+function drawMoments(ctx){
+  const v = getVariant();
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1440);
+
+  // meta：日期 + 车型角标（右对齐）
+  const right = 1008, base = 100;
+  ctx.font = f(24);
+  const chipW = ctx.measureText(RIDE.bike).width + 24;
+  const chipX = right - chipW, chipY = 76;
+  rrect(ctx, chipX, chipY, chipW, 32, 8);
+  ctx.fillStyle = T.color.elevated; ctx.fill();
+  ctx.strokeStyle = T.color.border; ctx.lineWidth = 1; ctx.stroke();
+  txt(ctx, RIDE.bike, chipX + 12, base, { size:24, color:T.color.textSecondary });
+  txtR(ctx, RIDE.date, chipX - 12, base, { size:24, color:T.color.textSecondary });
+
+  // title
+  para(ctx, state.copy.headline, 72, 240,
+       { size:76, lh:96, maxLines:2, width:936, weight:700, color:T.color.text });
+
+  // map：x=72 y=384 w=936；剖面侧重版地图压到 h=540，让位给海拔剖面窄条
+  const isProfile = (v.id === 'profile');
+  drawMap(ctx, { x:72, y:384, w:936, h:isProfile ? 540 : 774 }, 56);
+  if (isProfile){
+    // 窄条 196px：省略右侧注记与 x 轴刻度，避免挤成一团
+    drawElevationProfile(ctx, { x:72, y:948, w:936, h:196 }, { compact:true });
+  }
+
+  // metrics：4 项（span3=216, step=240）或 3 项（span4=288, step=312）
+  const step = v.metrics.length === 4 ? 240 : 312;
+  drawMetrics(ctx, v.metrics, {
+    x0:72, step:step, labelBaseline:1190 + 22, valueBaseline:1190 + 84,
+    hook:v.hook, labelSize:24, valueSize:64,
+  });
+
+  drawFooter(ctx, 72, 1350);   // P1-4：三套 1440 卡页脚基线统一 1350
+}
+
+/* ---------- 5.2 小红书 1080 × 1440（封面 / 内页1 / 内页2） ---------- */
+function drawXhsCover(ctx){
+  const v = getVariant();
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1440);
+
+  txt(ctx, RIDE.date + ' · ' + RIDE.kind, 72, 168, { size:26, color:T.color.textSecondary });
+
+  para(ctx, state.copy.headline, 72, 300,
+       { size:76, lh:97, maxLines:3, width:936, weight:700, color:T.color.text });
+
+  hline(ctx, 72, 1008, 580, T.color.border);
+
+  txt(ctx, v.hook.label, 72, 660, { size:26, color:T.color.textSecondary });
+
+  // hook 大数字：P1-1 由 200px 降到 160px，把第一落点让给结论句标题
+  txt(ctx, v.hook.value, 72, 860, { size:160, mono:true, weight:700, color:T.color.primary });
+  ctx.font = f(160, { mono:true, weight:700 });
+  txt(ctx, v.hook.unit, 72 + ctx.measureText(v.hook.value).width + 16, 860,
+      { size:56, color:T.color.text });
+
+  // mini 三列
+  drawMetrics(ctx, v.mini, {
+    x0:72, step:320, labelBaseline:1000, valueBaseline:1072,
+    labelSize:24, valueSize:52,
+  });
+
+  drawFooter(ctx, 72, 1350);
+}
+
+function drawXhsMap(ctx){
+  const v = getVariant();
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1440);
+
+  txt(ctx, '路线 · ' + RIDE.routeName, 72, 140, { size:24, color:T.color.textSecondary });
+
+  drawMap(ctx, { x:72, y:176, w:936, h:680 }, 56);
+  hline(ctx, 72, 1008, 920, T.color.border);
+
+  // 2 × 2 指标
+  drawMetrics(ctx, v.p1.slice(0, 2), { x0:72, step:480, labelBaseline:1000, valueBaseline:1080 });
+  drawMetrics(ctx, v.p1.slice(2, 4), { x0:72, step:480, labelBaseline:1180, valueBaseline:1260 });
+
+  drawFooter(ctx, 72, 1350);
+}
+
+function drawXhsInsights(ctx){
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1440);
+
+  txt(ctx, '本次骑行', 72, 140, { size:24, color:T.color.textSecondary });
+
+  const ys = [200, 512, 824];
+  RIDE.insights.forEach(function(s, i){
+    const y = ys[i];
+    rrect(ctx, 72, y, 936, 280, 16);
+    ctx.fillStyle = T.color.surface; ctx.fill();
+    ctx.strokeStyle = T.color.border; ctx.lineWidth = 1; ctx.stroke();
+
+    // bullet：与首行文字视觉居中对齐（首行基线 y+96）。
+    // P2：不再用 primary 绿——三个绿点属于越界强调。改用中性弱化色；
+    // 审查建议的 border(#2a2e35) 在 surface(#1b1e23) 上只有约 1.3:1，等于看不见，
+    // 故取 textTertiary(#6b7178, 约 3.3:1)：够弱，但看得见。
+    ctx.beginPath(); ctx.arc(72 + 40 + 6, y + 83, 6, 0, Math.PI * 2);
+    ctx.fillStyle = T.color.textTertiary; ctx.fill();
+
+    para(ctx, s, 72 + 72, y + 96,
+         { size:36, lh:58, maxLines:3, width:824, color:T.color.text });
+  });
+
+  drawFooter(ctx, 72, 1350);
+}
+
+/* ---------- 内页 3 · 数据图表：海拔剖面 + 分段配速 + 心率区间 ---------- */
+function drawXhsCharts(ctx){
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1440);
+
+  txt(ctx, '数据图表', 72, 140, { size:24, color:T.color.textSecondary });
+
+  drawElevationProfile(ctx, { x:72, y:176, w:936, h:576 }, {});
+  // 下排两块，间隙 32，右缘对齐 1008；整体加高让版面重心下沉（原 420 高时页脚上方空 160px）
+  drawSplits(ctx,  { x:72,  y:784, w:456, h:500 });
+  drawHrZones(ctx, { x:552, y:784, w:456, h:500 });
+
+  drawFooter(ctx, 72, 1350);
+}
+
+/* ---------- 5.3 抖音封面 1080 × 1920（外框与其他版式统一 72/936） ---------- */
+function drawDouyin(ctx){
+  const v = getVariant();
+  ctx.fillStyle = T.color.bg; ctx.fillRect(0, 0, 1080, 1920);
+
+  txt(ctx, RIDE.date + ' · ' + RIDE.kind, 72, 168, { size:30, color:T.color.textSecondary });
+
+  para(ctx, state.copy.headline, 72, 360,
+       { size:96, lh:120, maxLines:3, width:936, weight:700, color:T.color.text });
+
+  drawMap(ctx, { x:72, y:680, w:936, h:700 }, 56);
+
+  drawMetrics(ctx, v.metrics.slice(0, 2),
+    { x0:72, step:468, labelBaseline:1470, valueBaseline:1555, labelSize:26 });
+  drawMetrics(ctx, v.metrics.slice(2, 4),
+    { x0:72, step:468, labelBaseline:1665, valueBaseline:1750, labelSize:26 });
+
+  drawFooter(ctx, 72, 1820);
+}
+
+/* ---------- 绘制分发 ---------- */
+function drawCard(ctx){
+  const p = state.platform;
+  if (p === 'moments') drawMoments(ctx);
+  else if (p === 'douyin') drawDouyin(ctx);
+  else if (state.page === 0) drawXhsCover(ctx);
+  else if (state.page === 1) drawXhsMap(ctx);
+  else if (state.page === 2) drawXhsInsights(ctx);
+  else drawXhsCharts(ctx);
+}
+
+/** 画布尺寸（逻辑 px） */
+function cardSize(){
+  return state.platform === 'douyin' ? { w:1080, h:1920 } : { w:1080, h:1440 };
+}
+
+/**
+ * 渲染到画布：内部分辨率 = 逻辑尺寸 × scale，只用 CSS 缩放，不重绘
+ * 主预览 scale = exportScale(2)；缩略图 scale = 0.5
+ */
+function paint(canvas, scale){
+  const s = cardSize();
+  canvas.width  = Math.round(s.w * scale);
+  canvas.height = Math.round(s.h * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.clearRect(0, 0, s.w, s.h);
+  drawCard(ctx);
+  return canvas;
+}
+
+/* ==========================================================================
+   6. 状态
+   ========================================================================== */
+const state = {
+  step:0,
+  platform:'moments',
+  variant:'data',
+  page:0,
+  copyIdx:0,
+  copy:{ headline:'', body:'' },
+};
+
+function getPlatform(){ return PLATFORMS.find(function(p){ return p.id === state.platform; }); }
+function getVariant(){
+  return VARIANTS[state.platform].find(function(v){ return v.id === state.variant; });
+}
+function pageCount(){ return PAGES[state.platform] || 1; }
+
+/** 载入平台默认（版式 0 + 文案 0） */
+function loadPlatformDefaults(){
+  state.variant = VARIANTS[state.platform][0].id;
+  state.page = 0;
+  state.copyIdx = 0;
+  applyCopyTemplate(0);
+}
+function applyCopyTemplate(idx){
+  const t = COPY[state.platform][idx];
+  state.copy = { headline:t.fields.headline, body:t.fields.body };
+  state.copyIdx = idx;
+}
+function tagsOf(){ return COPY[state.platform][state.copyIdx].tags; }
+
+/* ==========================================================================
+   7. 站内 UI 渲染
+   ========================================================================== */
+const $ = function(id){ return document.getElementById(id); };
+/* P1-2：原「下载」步没有输入也没有决策，只是把摘要再显示一遍 —— 砍掉，改三步 */
+const STEPS = ['平台', '模板', '文案'];
+const LAST_STEP = STEPS.length - 1;
+
+/* 功能性图标用 inline SVG：U+2713 / U+2715 属 dingbat，会被 emoji 扫描误报 */
+const SVG_CHECK =
+  '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">' +
+  '<path d="M2.4 6.3 L4.7 8.6 L9.6 3.4" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/** textarea 内容转义（防用户输入破坏结构） */
+function esc(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderStepbar(){
+  const el = $('stepbar');
+  el.innerHTML = '';
+  el.dataset.mini = (state.step + 1) + '/' + STEPS.length + ' · ' + STEPS[state.step];
+  el.insertAdjacentHTML('beforeend',
+    '<li class="mini">' + (state.step + 1) + '/' + STEPS.length + ' · ' + STEPS[state.step] + '</li>');
+  STEPS.forEach(function(name, i){
+    if (i > 0){
+      el.insertAdjacentHTML('beforeend',
+        '<li class="conn' + (i <= state.step ? ' done' : '') + '"></li>');
+    }
+    const cls = i === state.step ? 'step active' : (i < state.step ? 'step done' : 'step');
+    el.insertAdjacentHTML('beforeend',
+      '<li class="' + cls + '"><span class="dot">' + (i < state.step ? SVG_CHECK : (i + 1)) +
+      '</span><span class="name">' + name + '</span></li>');
+  });
+}
+
+function renderStage(){
+  const stage = $('stage');
+  stage.classList.toggle('is-9x16', cardSize().h === 1920);
+  paint($('preview'), DISPLAY_SCALE);
+
+  const n = pageCount();
+  if (n > 1){
+    $('pager').innerHTML = PAGE_NAMES.xhs.map(function(nm, i){
+      return '<button data-page="' + i + '"' + (i === state.page ? ' class="on"' : '') + '>' + nm + '</button>';
+    }).join('');
+    $('pager').querySelectorAll('[data-page]').forEach(function(b){
+      b.onclick = function(){ state.page = +b.dataset.page; renderStage(); };
+    });
+  } else {
+    $('pager').innerHTML = '';
+  }
+  const p = getPlatform(), v = getVariant();
+  $('stageCap').textContent = p.name + ' · ' + v.name + ' · ' + p.size +
+    ' · 预览 ×' + DISPLAY_SCALE + '（导出 ×' + T.exportScale + '）';
+}
+
+function renderPanel(){
+  const el = $('panel');
+  if (state.step === 0)      el.innerHTML = panelPlatform();
+  else if (state.step === 1) el.innerHTML = panelTemplate();
+  else                       el.innerHTML = panelCopy();   // 第 3 步 = 文案 + 下载
+
+  // 事件绑定
+  el.querySelectorAll('[data-platform]').forEach(function(b){
+    b.onclick = function(){ selectPlatform(b.dataset.platform); };
+  });
+  el.querySelectorAll('[data-variant]').forEach(function(b){
+    b.onclick = function(){ state.variant = b.dataset.variant; state.page = 0; renderAll(); };
+  });
+  if (state.step === 1) renderThumbs();   // 缩略图：同一套绘制函数，0.5× 缩绘
+  updateCount();
+  const ta = el.querySelectorAll('textarea');
+  ta.forEach(function(t){
+    t.oninput = function(){
+      state.copy[t.dataset.key] = t.value;
+      updateCount();
+      scheduleRepaint();
+    };
+  });
+  const cw = $('copyWarn');
+  if (cw) cw.onclick = function(){              // 换个模板
+    applyCopyTemplate((state.copyIdx + 1) % COPY[state.platform].length);
+    renderPanel(); scheduleRepaint();
+    toast('已切换到文案模板 ' + (state.copyIdx === 0 ? 'A' : 'B'), 'info');
+  };
+  const rst = $('copyReset');
+  if (rst) rst.onclick = function(){
+    applyCopyTemplate(state.copyIdx);
+    renderPanel(); scheduleRepaint();
+    toast('文案已重置', 'info');
+  };
+  const cp = $('copyBtn');
+  if (cp) cp.onclick = copyText;
+  const dlAll = $('dlAll');
+  if (dlAll) dlAll.onclick = downloadAll;
+}
+
+/** 模板缩略图：临时切换 variant 后复用主绘制函数（0.5×），保证与出图同源 */
+function renderThumbs(){
+  const keepV = state.variant, keepP = state.page;
+  document.querySelectorAll('[data-thumb]').forEach(function(cv){
+    state.variant = cv.dataset.thumb;
+    state.page = 0;
+    const s = cardSize();
+    cv.style.aspectRatio = (s.h === 1920 ? '9 / 16' : '3 / 4');
+    paint(cv, 0.5);
+  });
+  state.variant = keepV; state.page = keepP;
+}
+
+function markPager(){
+  document.querySelectorAll('#pager [data-page]').forEach(function(b){
+    b.classList.toggle('on', +b.dataset.page === state.page);
+  });
+}
+
+function renderFooter(){
+  $('prevBtn').disabled = state.step === 0;
+  const last = state.step === LAST_STEP;
+  $('nextBtn').hidden = last;
+  $('mainBtn').hidden = !last;          // 「下载图片」提前到最后一步（原第 4 步已砍）
+  $('nextBtn').textContent = state.step === LAST_STEP - 1 ? '去写文案' : '下一步';
+}
+
+function renderAll(){ renderStepbar(); renderStage(); renderPanel(); renderFooter(); }
+
+/* ---------- 各步面板 ---------- */
+function panelPlatform(){
+  return '<div class="panel"><h2>要发到哪个平台</h2>' +
+    '<p class="hint">不同平台的信息密度和钩子位置完全不同，选一个就按它的规矩来。</p>' +
+    '<div class="opt-grid">' + PLATFORMS.map(function(p){
+      const on = p.id === state.platform;
+      return '<button class="opt-card' + (on ? ' on' : '') + '" data-platform="' + p.id + '">' +
+        '<span class="t">' + p.name + ' <small>' + p.size + '</small></span>' +
+        '<span class="d">' + p.desc + '</span>' +
+        '<span class="m">' + p.meta + '</span></button>';
+    }).join('') + '</div></div>';
+}
+
+function panelTemplate(){
+  return '<div class="panel"><h2>选一个版式</h2>' +
+    '<p class="hint">同一平台给你两种侧重：结论优先，或数据优先。选中即重绘预览。</p>' +
+    '<div class="tpl-grid">' + VARIANTS[state.platform].map(function(v){
+      const on = v.id === state.variant;
+      return '<button class="tpl-card' + (on ? ' on' : '') + '" data-variant="' + v.id + '">' +
+        '<canvas data-thumb="' + v.id + '"></canvas>' +
+        '<span class="t">' + v.name + '</span>' +
+        '<span class="d">' + v.desc + '</span></button>';
+    }).join('') + '</div>' +
+    '<div class="warn-box">缩略图为真实 Canvas 缩绘（0.5×），与最终出图同源，可用来判断版式是否成立。</div>' +
+    '</div>';
+}
+
+function panelCopy(){
+  const fields = FIELD_LABEL[state.platform].map(function(fl){
+    return '<div class="field"><label>' + fl.label + '</label>' +
+      '<textarea class="' + (fl.short ? 'short' : '') + '" data-key="' + fl.key + '">' +
+      esc(state.copy[fl.key]) + '</textarea>' +
+      '<div class="field-note">' + fl.note + '</div></div>';
+  }).join('');
+  const tags = tagsOf();
+  const tagHtml = tags.length
+    ? '<div class="field"><label>话题标签（' + tags.length + ' 个 · 大词 / 精准词 / 地域 / 场景混排）</label>' +
+      '<div class="tags">' + tags.map(function(t){ return '<span>' + t + '</span>'; }).join('') + '</div></div>'
+    : '';
+  return '<div class="panel"><h2>确认文案</h2>' +
+    '<p class="hint">系统按平台口径自动生成，可以直接改。左侧预览会同步大标题。</p>' +
+    fields + tagHtml +
+    '<div class="count" id="count">—</div>' +
+    '<div class="btn-row" style="margin-top:12px">' +
+      '<button class="btn btn-ghost" id="copyBtn">复制文案</button>' +
+      '<button class="btn-link info" id="copyWarn">换个模板</button>' +
+      '<button class="btn-link warn" id="copyReset">重置文案</button>' +
+    '</div>' +
+    exportBlock() +
+    '</div>';
+}
+
+/** 导出信息（已合并进第 3 步，不再单占一步） */
+function exportBlock(){
+  const s = cardSize(), n = pageCount();
+  return '<h2 style="margin-top:26px">下载图片</h2>' +
+    '<p class="hint">出图全部在本地完成，不会上传到任何服务器。' +
+      '编辑态按 ' + DISPLAY_SCALE + '× 预览，导出时才按 ' + T.exportScale + '× 重绘一次。</p>' +
+    '<div class="kv"><span class="k">尺寸</span><span class="v">' + s.w + ' × ' + s.h +
+      ' @' + T.exportScale + 'x</span></div>' +
+    '<div class="kv"><span class="k">张数</span><span class="v">' + n + ' 张</span></div>' +
+    '<div class="kv"><span class="k">文件名</span><span class="v">' + fileName(0) + '</span></div>' +
+    (n > 1
+      ? '<div class="warn-box">小红书为多图。右下「下载图片」只导出<b>当前预览的这一张</b>；' +
+        '点下方按钮会按顺序依次下载全部 ' + n + ' 张。</div>' +
+        '<div class="btn-row" style="margin-top:12px">' +
+        '<button class="btn btn-ghost" id="dlAll">下载全部 ' + n + ' 张</button></div>'
+      : '<div class="warn-box">抖音本轮只做封面帧，视频导出复用现有能力，不在本原型范围内。</div>');
+}
+
+/* ---------- 字数统计 ---------- */
+function updateCount(){
+  const el = $('count'); if (!el) return;
+  const n = (state.copy.headline + state.copy.body).replace(/\n/g, '').length;
+  el.textContent = '共 ' + n + ' 字' + (n > 140 ? ' · 偏长，建议精简' : '');
+  el.classList.toggle('over', n > 140);
+}
+
+/* ---------- 重绘节流 ----------
+   P2-3：编辑态用 1× 重绘（2× 每次按键要画 6.2MP，会卡）；只有导出时才 2× 重绘一次。 */
+let raf = 0;
+function scheduleRepaint(){
+  if (raf) return;
+  raf = requestAnimationFrame(function(){ raf = 0; paint($('preview'), DISPLAY_SCALE); });
+}
+
+/* ==========================================================================
+   8. 交互动作
+   ========================================================================== */
+function selectPlatform(id){
+  if (state.platform === id) return;
+  state.platform = id;
+  loadPlatformDefaults();
+  renderAll();
+}
+
+function copyText(){
+  const tags = tagsOf();
+  const text = (state.copy.headline + '\n\n' + state.copy.body +
+    (tags.length ? '\n\n' + tags.join(' ') : '')).trim();
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(
+      function(){ toast('文案已复制到剪贴板'); },
+      function(){ legacyCopy(text); }
+    );
+  } else {
+    legacyCopy(text);
+  }
+}
+function legacyCopy(text){
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    ok ? toast('文案已复制到剪贴板') : toast('复制失败，请手动选择文本', 'warn');
+  } catch (e){
+    toast('复制失败，请手动选择文本', 'warn');
+  }
+}
+
+function fileName(page){
+  return 'cycling-' + state.platform + '-' + state.variant + '-p' + page + '.png';
+}
+function saveCanvas(canvas, name){
+  return new Promise(function(resolve){
+    canvas.toBlob(function(blob){
+      if (!blob){ toast('导出失败，请重试', 'warn'); return resolve(false); }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+      resolve(true);
+    }, 'image/png');
+  });
+}
+/** 以导出倍率重绘一次再 toBlob，随后恢复到预览倍率 */
+async function exportAt(scale, name){
+  paint($('preview'), scale);
+  const ok = await saveCanvas($('preview'), name);
+  return ok;
+}
+async function downloadCurrent(){
+  const s = cardSize();
+  const ok = await exportAt(T.exportScale, fileName(state.page));
+  paint($('preview'), DISPLAY_SCALE);            // 导出后恢复预览倍率
+  if (ok) toast('已导出 PNG · ' + s.w + ' × ' + s.h + ' @' + T.exportScale + 'x');
+}
+async function downloadAll(){
+  const n = pageCount();
+  let done = 0;
+  for (let i = 0; i < n; i++){
+    state.page = i; renderStage(); markPager();
+    if (await exportAt(T.exportScale, fileName(i))) done++;
+    await new Promise(function(r){ setTimeout(r, 350); });
+  }
+  state.page = 0; renderStage(); markPager();
+  toast('已依次下载 ' + done + ' / ' + n + ' 张');
+}
+
+/* ---------- Toast ---------- */
+let toastTimer = 0;
+function toast(msg, kind){
+  const el = $('toast');
+  $('toastMsg').textContent = msg;
+  el.className = 'toast on' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.className = 'toast' + (kind ? ' ' + kind : ''); }, 2600);
+}
+
+/* ---------- 开关 / 键盘 ---------- */
+function openModal(){
+  $('overlay').hidden = false;
+  document.body.style.overflow = 'hidden';
+  renderAll();
+}
+function closeModal(){
+  $('overlay').hidden = true;
+  document.body.style.overflow = '';
+}
+$('openShare').onclick = openModal;
+$('closeBtn').onclick = closeModal;
+$('overlay').addEventListener('mousedown', function(e){ if (e.target === $('overlay')) return; });
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && !$('overlay').hidden) closeModal();
+});
+$('prevBtn').onclick = function(){ if (state.step > 0){ state.step--; renderAll(); } };
+$('nextBtn').onclick = function(){ if (state.step < LAST_STEP){ state.step++; renderAll(); } };
+$('mainBtn').onclick = downloadCurrent;
+
+/* ---------- 初始化 ---------- */
+loadPlatformDefaults();
+renderStepbar();
+renderStage();
+renderPanel();
+renderFooter();
+openModal();
+</script>
+</body>
+</html>
