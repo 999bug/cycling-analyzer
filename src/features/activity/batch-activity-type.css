@@ -98,6 +98,62 @@
   color: var(--text-secondary);
 }
 
+/* ===== 范围切换（可疑记录 / 全部记录）===== */
+.batch-type__range {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.batch-type__range-button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.batch-type__range-button:hover {
+  color: var(--text);
+  border-color: var(--text-secondary);
+}
+
+.batch-type__range-button--active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+/* 「全部记录」范围的搜索框 */
+.batch-type__search {
+  padding: 0 20px 12px;
+}
+
+.batch-type__search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.batch-type__search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* 超出渲染上限的提示 */
+.batch-type__truncated {
+  padding: 10px 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background-color: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
 /* ===== 分组 chips ===== */
 .batch-type__chips {
   display: flex;
