@@ -522,7 +522,13 @@ export function graphShortestPath(nodeCoord, adj, start, end) {
 }
 
 /** 锚点吸附最近路网节点（半径内），失败返回 -1 */
-export function snapNode(nodeCoord, anchor, radiusM = 800) {
+/**
+ * 锚点吸附：把 via 给的经纬度落到最近的路网节点上。
+ * 半径默认 1200m——山区/景区道路在 OSM 上测绘稀疏，800m 会让崂山、青海湖这类
+ * 路线直接吸附失败（实测凤凰岛 7 个锚点全军覆没）。放宽后起点最多偏离 1.2km，
+ * 对几十公里的路线示意几何可接受。
+ */
+export function snapNode(nodeCoord, anchor, radiusM = 1200) {
   let best = -1
   let bestD = Infinity
   for (const [id, coord] of nodeCoord) {

@@ -35,6 +35,8 @@ export const CURATED_REGIONS: CuratedRegion[] = [
   { id: 'nanjing', label: '南京', routes: nationalRoutesOf('nanjing') },
   { id: 'dali', label: '大理', routes: nationalRoutesOf('dali') },
   { id: 'hainan', label: '海南', routes: nationalRoutesOf('hainan') },
+  { id: 'qingdao', label: '青岛', routes: nationalRoutesOf('qingdao') },
+  { id: 'qinghai', label: '青海湖', routes: nationalRoutesOf('qinghai') },
 ]
 
 /** 全部精选路线（地区顺序拼接） */
