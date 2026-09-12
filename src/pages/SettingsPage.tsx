@@ -62,6 +62,10 @@ import '@/features/settings/settings-page.css'
 const CLEAR_ALL_CONFIRM_TEXT =
   '确定清空全部本地数据？将删除你导入的全部骑行活动、赛段与训练配置（共本机数据，不含作者发布数据），此操作不可恢复'
 
+/** 重置类型提示确认文案：清空「已确认」标记后，记录列表会重新提示可疑类型 */
+const RESET_TYPE_HINTS_CONFIRM_TEXT =
+  '确定重置运动类型提示？此前你在「批量修正运动类型」里确认过的记录会重新出现在待修正清单中（不改变已保存的运动类型）'
+
 /** 作者数据可见性选项（值 + 标题 + 说明） */
 const AUTHOR_VISIBILITY_OPTIONS: Array<{
   value: AuthorDataVisibility
@@ -141,6 +145,9 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   // 作者数据可见性策略（「作者数据」区块；读写 dataSourceStore，立即生效）
   const authorVisibility = useDataSourceStore((s) => s.authorVisibility)
   const setAuthorVisibility = useDataSourceStore((s) => s.setAuthorVisibility)
+  // 顶部「示例数据」说明条的关闭/恢复（说明条关闭后在此重新显示）
+  const authorBannerDismissed = useDataSourceStore((s) => s.authorBannerDismissed)
+  const restoreAuthorBanner = useDataSourceStore((s) => s.restoreAuthorBanner)
   // 「作者数据」区块锚点（提示条「去设置」跳转 /settings#author-data）
   const location = useLocation()
   const navigate = useNavigate()
@@ -191,6 +198,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [resettingTypeHints, setResettingTypeHints] = useState(false)
 
   // FTP/VO2Max 估算（规格 §39）：近 90 天功率数据异步扫描
   const [estimateStatus, setEstimateStatus] = useState<EstimateStatus>('loading')
@@ -413,6 +421,34 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
   }
 
   /**
+   * 重置运动类型提示：清空全部「已确认」标记，让记录列表重新提示可疑类型。
+   *
+   * 只动标记（typeConfirmedAt），不改已保存的运动类型——用户改错了类型
+   * 想重新走一遍核对流程时用；清完切回记录页即重新检测。
+   */
+  async function handleResetTypeHints() {
+    if (resettingTypeHints) {
+      return
+    }
+    if (!window.confirm(RESET_TYPE_HINTS_CONFIRM_TEXT)) {
+      return
+    }
+    setResettingTypeHints(true)
+    try {
+      const cleared = await context.activityRepository.clearTypeConfirmations()
+      setMessage({
+        type: 'success',
+        text: cleared > 0 ? `已重置 ${cleared} 条记录的类型提示，回记录页即可重新查看` : '没有需要重置的记录',
+      })
+    } catch (error) {
+      console.error('Failed to reset type confirmations', error)
+      setMessage({ type: 'error', text: '重置失败，请重试' })
+    } finally {
+      setResettingTypeHints(false)
+    }
+  }
+
+  /**
    * 清空全部本地数据（规格 §32）：二次确认后执行。
    */
   async function handleClearAll() {
@@ -520,6 +556,14 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
       console.error('Failed to switch sidebar mode', error)
       setMessage({ type: 'error', text: '侧边栏设置保存失败，请重试' })
     }
+  }
+
+  /**
+   * 恢复顶部「示例数据」说明条：清除关闭记忆，提示用户已重新显示。
+   */
+  function handleRestoreAuthorBanner() {
+    restoreAuthorBanner()
+    setMessage({ type: 'success', text: '已重新显示顶部「示例数据」说明' })
   }
 
   // 当前选中区块直接由 URL hash 派生（单一数据源）：
@@ -1011,6 +1055,17 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                     ))}
                   </div>
                 </div>
+                <div className="settings-field">
+                  <span className="settings-field__label">顶部说明条</span>
+                  <button
+                    type="button"
+                    className="settings-button"
+                    onClick={handleRestoreAuthorBanner}
+                    disabled={!authorBannerDismissed}
+                  >
+                    {authorBannerDismissed ? '重新显示「示例数据」说明' : '当前已在顶部显示'}
+                  </button>
+                </div>
               </div>
             </section>
             )}
@@ -1045,6 +1100,14 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                   className="settings-file-input"
                   onChange={handleImportFile}
                 />
+                <button
+                  type="button"
+                  className="settings-button"
+                  onClick={handleResetTypeHints}
+                  disabled={resettingTypeHints}
+                >
+                  {resettingTypeHints ? '重置中…' : '重置类型提示'}
+                </button>
                 <button
                   type="button"
                   className="settings-button settings-button--danger"

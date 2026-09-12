@@ -13,8 +13,13 @@
  * zip 展开为通用能力：任意入口选中的 .zip 均先解压再分拣（深度 2 层）。
  * 单文件导入无需数据源（格式通用）：选择单个 FIT/GPX 时弹出编辑框（标题/说明/个人备注）。
  * 面板只负责交互与状态呈现，导入逻辑在 importer 中（通过 importStore 编排）。
+ *
+ * 弹窗开合状态提升到 importStore（dialogOpen），侧边栏按钮与顶部「示例数据」
+ * 说明条共用同一弹窗；弹窗经 createPortal 挂到 body——侧边栏在移动端是带
+ * transform 的抽屉，会为 fixed 定位创建包含块导致弹窗错位。
  */
 import { useCallback, useEffect, useRef, useState, type InputHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 
 /** TS DOM 类型未包含 showDirectoryPicker（File System Access API），此处补充 */
 interface DirectoryPickerWindow extends Window {
@@ -66,9 +71,11 @@ function ImportPanel() {
   const startImport = useImportStore((state) => state.startImport);
   const retryFailed = useImportStore((state) => state.retryFailed);
   const reset = useImportStore((state) => state.reset);
+  /** 弹窗开合（store 共享：顶部「示例数据」说明条可唤起同一弹窗） */
+  const open = useImportStore((state) => state.dialogOpen);
+  const openImportDialog = useImportStore((state) => state.openImportDialog);
+  const closeImportDialog = useImportStore((state) => state.closeImportDialog);
 
-  /** 入口区是否展开（弹窗） */
-  const [open, setOpen] = useState(false);
   /** 当前向导步骤 */
   const [step, setStep] = useState<WizardStep>('choose');
   /** 选中的平台指引（null = 直接导入模式，未指定平台） */
@@ -244,8 +251,14 @@ function ImportPanel() {
       reloadPage();
       return;
     }
-    setOpen(false);
-  }, [importing]);
+    closeImportDialog();
+  }, [importing, closeImportDialog]);
+
+  /**
+   * 组件卸载时关闭弹窗：开合状态在 store 中，不清理会让卸载后的「打开」
+   * 残留到下次挂载（重新挂载即自动弹窗）。
+   */
+  useEffect(() => () => closeImportDialog(), [closeImportDialog])
 
   /**
    * 弹窗打开时锁定背景滚动（模态语义）。
@@ -299,13 +312,14 @@ function ImportPanel() {
         type="button"
         className="import-panel__toggle"
         aria-expanded={open}
-        onClick={() => (open ? closeDialog() : setOpen(true))}
+        onClick={() => (open ? closeDialog() : openImportDialog())}
       >
         同步骑行数据
       </button>
 
-      {open && (
-        <div className="import-dialog__backdrop" onClick={closeDialog} role="presentation">
+      {open &&
+        createPortal(
+          <div className="import-dialog__backdrop" onClick={closeDialog} role="presentation">
           <div
             className="import-dialog import-dialog--wizard"
             role="dialog"
@@ -608,8 +622,9 @@ function ImportPanel() {
               {errors.length > 0 && <p className="import-panel__error">{errors.join('；')}</p>}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+        )}
 
       {/* 隐藏输入：文件选择与 webkitdirectory 目录回退 */}
       <input

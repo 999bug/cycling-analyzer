@@ -126,6 +126,24 @@ describe('detectTypeSuspects 归入「其他」但明确是骑行', () => {
   })
 })
 
+describe('detectTypeSuspects 已确认记录不再提示', () => {
+  it('带 typeConfirmedAt 的灰区记录被排除（否则提示永远消不掉）', () => {
+    const grey = { ...makeSummary('a', 'cycling', 12.4, 13.2), typeConfirmedAt: 1_760_000_000 }
+
+    expect(detectTypeSuspects([grey])).toHaveLength(0)
+  })
+
+  it('未确认的同特征记录仍被检出', () => {
+    expect(detectTypeSuspects([makeSummary('a', 'cycling', 12.4, 13.2)])).toHaveLength(1)
+  })
+
+  it('已确认的「其他→骑行」找回记录同样不再提示', () => {
+    const other = { ...makeSummary('a', 'other', 40, 25.6), typeConfirmedAt: 1_760_000_000 }
+
+    expect(detectTypeSuspects([other])).toHaveLength(0)
+  })
+})
+
 describe('detectTypeSuspects 排序', () => {
   it('按开始时间倒序，与列表页一致', () => {
     const suspects = detectTypeSuspects([

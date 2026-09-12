@@ -46,12 +46,20 @@ export interface TypeSuspect {
 /**
  * 检测类型标注可疑的活动（按开始时间倒序，与列表页一致）。
  *
+ * **已确认的记录直接跳过**：用户一旦在批量修正弹窗里亲手应用过类型
+ * （`typeConfirmedAt` 有值），这条不再提示——灰区记录库里类型仍是 cycling，
+ * 若不做这个排除，每次进列表都会被重新检出，用户永远消不掉那个数字。
+ *
  * @param summaries 全量活动摘要（**不要预先过滤**：本函数需要看到其他类型）
  * @returns 待复核候选列表；无候选时为空数组
  */
 export function detectTypeSuspects(summaries: readonly ActivitySummary[]): TypeSuspect[] {
   const suspects: TypeSuspect[] = []
   for (const summary of summaries) {
+    // 用户已拍板过的记录：检测不再打扰
+    if (summary.typeConfirmedAt !== undefined) {
+      continue
+    }
     const inference = inferActivityType(summary)
     if (isCyclingType(summary.activityType)) {
       // 情形 1：记为骑行但推断为非骑行（灰区也列出，由用户拍板）。
@@ -97,22 +105,26 @@ export function isGreySuspect(suspect: TypeSuspect): boolean {
 }
 
 /**
- * 由列表勾选的记录构造「手动模式」候选：建议类型 = 当前类型归一化，
- * confidence 固定 high——天然满足「默认全勾、无灰区」，弹窗引擎零分支复用。
+ * 由全量摘要构造「全部记录」候选（弹窗范围切换用）：
+ * 建议类型 = 当前类型归一化，confidence 固定 high——天然满足「无灰区语义」，
+ * 判定依据仍展示速度/距离证据供参考，已确认过的记录额外标注。
  *
- * @param items 用户在列表页勾选的活动摘要
- * @returns 手动模式候选列表
+ * @param items 活动摘要（通常为全量）
+ * @returns 候选列表（开始时间倒序，与列表页一致）
  */
 export function toManualSuspects(items: readonly ActivitySummary[]): TypeSuspect[] {
   return [...items]
     .sort((a, b) => b.startTime.localeCompare(a.startTime))
-    .map((summary) => ({
-      summary,
-      currentType: summary.activityType,
-      suggestedType: normalizeActivityType(summary.activityType),
-      confidence: 'high' as const,
-      basis: '手动指定（列表勾选）',
-    }))
+    .map((summary) => {
+      const basis = describeTypeInference(inferActivityType(summary))
+      return {
+        summary,
+        currentType: summary.activityType,
+        suggestedType: normalizeActivityType(summary.activityType),
+        confidence: 'high' as const,
+        basis: summary.typeConfirmedAt !== undefined ? `${basis}，已确认` : basis,
+      }
+    })
 }
 
 /**

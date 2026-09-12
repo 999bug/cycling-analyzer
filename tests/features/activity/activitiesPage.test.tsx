@@ -7,7 +7,7 @@
  */
 import 'fake-indexeddb/auto'
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -804,75 +804,80 @@ describe('骑行记录列表页', () => {
     expect(screen.queryByText('详情页 act-01')).not.toBeInTheDocument()
   })
 
-  it('勾选批量改类型：操作条出现「修正类型」按钮，未勾选时不出现', async () => {
-    await repo.addActivities(makeSeed())
+  it('批量修正运动类型：应用后不再提示（按钮角标消失）', async () => {
+    // 追加一条「记为骑行、实际是跑步节奏」的记录触发检测
+    await repo.addActivities([
+      ...makeSeed(),
+      {
+        id: 'slow-run',
+        fileId: 'file-slow',
+        fileName: 'slow.fit',
+        fingerprint: 'fp-slow',
+        activityType: 'cycling',
+        startTime: '2026-09-09T10:00:00.000Z',
+        endTime: '2026-09-09T11:00:00.000Z',
+        duration: 1910,
+        elapsedTime: 1910,
+        distance: 5200,
+        elevationGain: 40,
+        avgSpeed: 9.8 / 3.6,
+      },
+    ])
     renderPage()
 
-    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
-    expect(screen.queryByRole('button', { name: '修正类型' })).not.toBeInTheDocument()
+    // 检出 1 条 → 按钮带数字角标
+    const button = await screen.findByRole('button', { name: /批量修正运动类型（1）/ })
+    await user.click(button)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
-    expect(screen.getByRole('button', { name: '修正类型' })).toBeInTheDocument()
-  })
-
-  it('勾选批量改类型：弹窗列出勾选记录，改类型应用后落库并清空勾选', async () => {
-    await repo.addActivities(makeSeed())
-    renderPage()
-
-    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
-
-    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
-    await user.click(screen.getByRole('button', { name: '修正类型' }))
-
-    // 手动模式弹窗：列出勾选记录，下拉默认=当前类型（骑行）
-    expect(await screen.findByRole('heading', { name: '批量修改运动类型' })).toBeInTheDocument()
-    expect(screen.getByText(/已选择 1 条记录/)).toBeInTheDocument()
-    const select = screen.getByRole('combobox', { name: '修改「ride-01.fit」的目标类型' })
-    expect(select).toHaveValue('cycling')
-
-    // 改为跑步并应用
-    await user.selectOptions(select, 'running')
+    // 应用后：类型落库 + 写入已确认标记 + 角标消失
     await user.click(screen.getByRole('button', { name: /应用勾选项（1）/ }))
 
-    // 弹窗关闭、勾选清空、写库生效
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: '批量修改运动类型' })).not.toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: '批量修正运动类型' })).toBeInTheDocument(),
     )
-    expect(screen.queryByText('已勾选 1 条')).not.toBeInTheDocument()
-    const updated = await repo.getById('act-01')
+    const updated = await repo.getById('slow-run')
     expect(updated?.activityType).toBe('running')
+    expect(updated?.typeConfirmedAt).toBeGreaterThan(0)
+    // 再次检测该记录已被排除（已确认 → 不再提示）
+    expect(await repo.getById('slow-run')).toMatchObject({ typeConfirmedAt: expect.any(Number) })
   })
 
-  it('勾选批量改类型：作者快照源无勾选列，操作条与按钮不出现', async () => {
-    await repo.addActivities(makeSeed())
-    // 强制作者源生效（本地库仍有数据也不可写）
-    useDataSourceStore.setState({ authorAvailable: true, authorVisibility: 'show' })
+  it('批量修正运动类型：完全未勾选（含灰区）时角标不变，勾选灰区应用后同样消除', async () => {
+    // act-01（11km/21.9km/h）为正常骑行不检出；额外造一条灰区记录（13.2km/h）
+    await repo.addActivities([
+      ...makeSeed(),
+      {
+        id: 'grey-ride',
+        fileId: 'file-grey',
+        fileName: 'grey.fit',
+        fingerprint: 'fp-grey',
+        activityType: 'cycling',
+        startTime: '2026-09-09T10:00:00.000Z',
+        endTime: '2026-09-09T11:00:00.000Z',
+        duration: 3400,
+        elapsedTime: 3400,
+        distance: 12400,
+        elevationGain: 60,
+        avgSpeed: 13.2 / 3.6,
+      },
+    ])
     renderPage()
 
-    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
+    // 灰区默认不勾选 → 直接应用被禁用
+    await user.click(await screen.findByRole('button', { name: /批量修正运动类型（1）/ }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByRole('button', { name: /应用勾选项（0）/ })).toBeDisabled()
 
-    expect(screen.queryByRole('checkbox', { name: '选择 ride-01.fit' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '修正类型' })).not.toBeInTheDocument()
-  })
+    // 勾选灰区（确认它就是骑行）后应用 → 不再提示
+    await user.click(within(dialog).getAllByRole('checkbox')[0])
+    await user.click(within(dialog).getByRole('button', { name: /应用勾选项（1）/ }))
 
-  it('勾选批量改类型：跨页勾选整体进入弹窗，按开始时间倒序排列', async () => {
-    await repo.addActivities(makeSeed())
-    renderPage()
-
-    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(21))
-
-    // 第 1 页勾选 act-01（2026-08-29），翻到第 2 页勾选 act-25（2026-06-05）
-    await user.click(screen.getByRole('checkbox', { name: '选择 ride-01.fit' }))
-    await user.click(screen.getByRole('button', { name: '下一页' }))
-    await user.click(await screen.findByRole('checkbox', { name: '选择 ride-25.fit' }))
-    expect(screen.getByText('已勾选 2 条')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: '修正类型' }))
-
-    expect(await screen.findByRole('heading', { name: '批量修改运动类型' })).toBeInTheDocument()
-    // 开始时间倒序：act-01（最新）在前（makeSeed 无 name，行显示 fileName）
-    const names = screen.getAllByText(/^ride-(01|25)\.fit$/)
-    expect(names[0]).toHaveTextContent('ride-01.fit')
-    expect(names[1]).toHaveTextContent('ride-25.fit')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '批量修正运动类型' })).toBeInTheDocument(),
+    )
+    const grey = await repo.getById('grey-ride')
+    expect(grey?.activityType).toBe('cycling')
+    expect(grey?.typeConfirmedAt).toBeGreaterThan(0)
   })
 })

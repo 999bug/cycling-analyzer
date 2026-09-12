@@ -258,6 +258,43 @@ describe('设置页', () => {
     expect(await screen.findByText(/导入失败：/)).toBeInTheDocument()
   })
 
+  it('重置类型提示：二次确认后清空已确认标记，类型保持不变', async () => {
+    const activityRepo = new DexieActivityRepository(testDb)
+    await activityRepo.addActivity(makeActivity('act-1', 'fp-1'))
+    await activityRepo.confirmActivityType('act-1', 'running')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+    await user.click(await screen.findByRole('button', { name: '重置类型提示' }))
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('重新出现在待修正清单'))
+    expect(await screen.findByText(/已重置 1 条记录的类型提示/)).toBeInTheDocument()
+    const updated = await activityRepo.getById('act-1')
+    expect(updated?.typeConfirmedAt).toBeUndefined()
+    // 已保存的运动类型不受重置影响
+    expect(updated?.activityType).toBe('running')
+  })
+
+  it('重置类型提示：取消确认时不执行清空', async () => {
+    const activityRepo = new DexieActivityRepository(testDb)
+    await activityRepo.addActivity(makeActivity('act-1', 'fp-1'))
+    await activityRepo.confirmActivityType('act-1', 'cycling')
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(
+      <MemoryRouter initialEntries={['/settings#settings-data']}>
+        <SettingsPage />
+      </MemoryRouter>,
+    )
+    await user.click(await screen.findByRole('button', { name: '重置类型提示' }))
+
+    expect((await activityRepo.getById('act-1'))?.typeConfirmedAt).toBeGreaterThan(0)
+  })
+
   it('清空全部本地数据：二次确认后清空活动与设置，表单重置为默认', async () => {
     const activityRepo = new DexieActivityRepository(testDb)
     await activityRepo.addActivity(makeActivity('act-1', 'fp-1', { records: [{ timestamp: 1 }] }))

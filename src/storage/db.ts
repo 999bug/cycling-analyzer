@@ -54,6 +54,16 @@ export interface ActivityEntity {
   /** 运动类型（如 cycling / running） */
   activityType: string;
 
+  /**
+   * 用户确认运动类型的时间（Unix 秒）；非索引字段，免升版本。
+   *
+   * 只有「用户在批量修正弹窗里亲手应用过类型」的活动才会带上此标记，
+   * 用于让类型复核检测不再重复提示同一条记录（灰区记录库里类型仍是
+   * cycling，若不标记，每次进列表都会被重新检出，提示永远消不掉）。
+   * 导入映射不写该字段——新导入的活动一律视为未确认。
+   */
+  typeConfirmedAt?: number;
+
   /** 开始时间（ISO 8601，索引字段） */
   startTime: string;
 

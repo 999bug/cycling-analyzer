@@ -20,6 +20,45 @@ describe('DexieActivityRepository', () => {
     await db.delete();
   });
 
+  describe('运动类型确认标记（批量修正后不再提示）', () => {
+    it('confirmActivityType 同时写入类型与 Unix 秒确认时间', async () => {
+      const [activity] = await seed([{ id: 'a1', activityType: 'cycling' }])
+
+      await repo.confirmActivityType('a1', 'running')
+
+      const updated = await repo.getById(activity.id)
+      expect(updated?.activityType).toBe('running')
+      expect(updated?.typeConfirmedAt).toBeGreaterThan(0)
+    })
+
+    it('导入的活动不带确认标记（新导入视为未确认）', async () => {
+      const [activity] = await seed([{ id: 'a2' }])
+
+      expect((await repo.getById(activity.id))?.typeConfirmedAt).toBeUndefined()
+    })
+
+    it('clearTypeConfirmations 清空全部标记并返回条数，类型保持不变', async () => {
+      await seed([{ id: 'a3' }, { id: 'a4' }])
+      await repo.confirmActivityType('a3', 'walking')
+      await repo.confirmActivityType('a4', 'cycling')
+
+      const cleared = await repo.clearTypeConfirmations()
+
+      expect(cleared).toBe(2)
+      const a3 = await repo.getById('a3')
+      expect(a3?.typeConfirmedAt).toBeUndefined()
+      // 类型是用户确认的结果，重置提示不该改它
+      expect(a3?.activityType).toBe('walking')
+      expect((await repo.getById('a4'))?.typeConfirmedAt).toBeUndefined()
+    })
+
+    it('无标记时 clearTypeConfirmations 返回 0', async () => {
+      await seed([{ id: 'a5' }])
+
+      expect(await repo.clearTypeConfirmations()).toBe(0)
+    })
+  })
+
   /**
    * 批量写入测试活动（自动补全默认字段）。
    *

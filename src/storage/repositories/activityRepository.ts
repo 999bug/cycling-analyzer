@@ -274,6 +274,27 @@ export interface ActivityRepository extends ActivityReadRepository {
   updateActivityType(id: string, activityType: string): Promise<void>;
 
   /**
+   * 修正运动类型并标记「用户已确认」（批量修正弹窗应用时调用）。
+   *
+   * 与 `updateActivityType` 的区别只在多写一个 `typeConfirmedAt` 时间戳：
+   * 类型复核检测据此跳过该记录，避免灰区记录（库里仍记为 cycling、速度特征
+   * 又落在重叠区）每次进列表都被重新提示。用户未确认的记录不受影响。
+   *
+   * @param id 活动 ID
+   * @param activityType 规范运动类型
+   */
+  confirmActivityType(id: string, activityType: string): Promise<void>;
+
+  /**
+   * 清空全部活动的类型确认标记（设置页「重置类型提示」）。
+   *
+   * 标记删除后类型复核检测会重新提示这些记录——作为用户改错了的后悔药。
+   *
+   * @returns 被清除标记的活动条数
+   */
+  clearTypeConfirmations(): Promise<number>;
+
+  /**
    * 更新轨迹坐标系 / 来源 / 手动微调（纠偏写操作）。
    *
    * 只改标记与微调量，绝不改写 activity_records 中的原始坐标——
@@ -633,6 +654,36 @@ export class DexieActivityRepository implements ActivityRepository {
    */
   async updateActivityType(id: string, activityType: string): Promise<void> {
     await this.db.activities.update(id, { activityType });
+  }
+
+  /**
+   * 修正运动类型并标记用户已确认（时间戳为 Unix 秒）。
+   *
+   * 标记只影响类型复核检测是否再提示该记录，不参与任何统计口径。
+   * 注：typeConfirmedAt 是非索引字段（db.ts 注释），无需升 DB_VERSION。
+   */
+  async confirmActivityType(id: string, activityType: string): Promise<void> {
+    await this.db.activities.update(id, {
+      activityType,
+      typeConfirmedAt: Math.floor(Date.now() / 1000),
+    });
+  }
+
+  /**
+   * 清空全部类型确认标记，返回被清除的活动条数。
+   *
+   * typeConfirmedAt 无索引（免升版本），故不能在 where() 上做区间查询，
+   * 用全表 filter 收集后按主键批量 update。
+   */
+  async clearTypeConfirmations(): Promise<number> {
+    const confirmed = await this.db.activities.filter((row) => row.typeConfirmedAt !== undefined).toArray()
+    for (const row of confirmed) {
+      // 用 modify + delete 真正移除字段（update 传 undefined 会留下空键）
+      await this.db.activities.where(':id').equals(row.id).modify((entity) => {
+        delete entity.typeConfirmedAt
+      })
+    }
+    return confirmed.length
   }
 
   async updateNormalizedPower(id: string, normalizedPower: number): Promise<void> {

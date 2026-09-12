@@ -4,11 +4,11 @@
  * 重点验证「不静默修改」这条设计约束：默认勾选只覆盖非灰区，
  * 灰区必须由用户手动勾选后才会写入。
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import BatchActivityTypeDialog from '@/features/activity/BatchActivityTypeDialog'
-import { detectTypeSuspects, toManualSuspects } from '@/features/activity/suspectTypes'
+import { detectTypeSuspects } from '@/features/activity/suspectTypes'
 import type { ActivitySummary } from '@/storage/repositories/activityRepository'
 
 /**
@@ -63,7 +63,7 @@ describe('BatchActivityTypeDialog 渲染', () => {
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -83,7 +83,7 @@ describe('BatchActivityTypeDialog 渲染', () => {
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -100,7 +100,7 @@ describe('BatchActivityTypeDialog 渲染', () => {
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -121,7 +121,7 @@ describe('BatchActivityTypeDialog 分组筛选', () => {
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -138,13 +138,13 @@ describe('BatchActivityTypeDialog 应用', () => {
   it('只写入勾选项：灰区未勾选则不被改写', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     const onApplied = vi.fn()
     render(
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={onApplied}
       />,
@@ -152,23 +152,23 @@ describe('BatchActivityTypeDialog 应用', () => {
 
     await user.click(screen.getByRole('button', { name: /应用勾选项（2）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledTimes(2)
-    expect(updateActivityType).toHaveBeenCalledWith('walk', 'walking')
-    expect(updateActivityType).toHaveBeenCalledWith('run', 'running')
+    expect(confirmActivityType).toHaveBeenCalledTimes(2)
+    expect(confirmActivityType).toHaveBeenCalledWith('walk', 'walking')
+    expect(confirmActivityType).toHaveBeenCalledWith('run', 'running')
     // 灰区必须由用户主动勾选
-    expect(updateActivityType).not.toHaveBeenCalledWith('grey', expect.anything())
+    expect(confirmActivityType).not.toHaveBeenCalledWith('grey', expect.anything())
     expect(onApplied).toHaveBeenCalledWith(2)
   })
 
   it('手动勾选灰区后一并写入（灰区建议保持骑行）', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     render(
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -179,19 +179,19 @@ describe('BatchActivityTypeDialog 应用', () => {
     await user.click(greyBox)
     await user.click(screen.getByRole('button', { name: /应用勾选项（3）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledWith('grey', 'cycling')
-    expect(updateActivityType).not.toHaveBeenCalledWith('grey', 'running')
+    expect(confirmActivityType).toHaveBeenCalledWith('grey', 'cycling')
+    expect(confirmActivityType).not.toHaveBeenCalledWith('grey', 'running')
   })
 
   it('下拉手动改类型后按所选项写入（不再局限于单一建议）', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     render(
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -202,19 +202,19 @@ describe('BatchActivityTypeDialog 应用', () => {
     await user.selectOptions(runSelect, 'cycling')
     await user.click(screen.getByRole('button', { name: /应用勾选项（2）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledWith('run', 'cycling')
-    expect(updateActivityType).toHaveBeenCalledWith('walk', 'walking')
+    expect(confirmActivityType).toHaveBeenCalledWith('run', 'cycling')
+    expect(confirmActivityType).toHaveBeenCalledWith('walk', 'walking')
   })
 
   it('灰区手动改成跑步后应用，按用户所选拍板', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     render(
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -226,7 +226,7 @@ describe('BatchActivityTypeDialog 应用', () => {
     await user.selectOptions(greySelect, 'running')
     await user.click(screen.getByRole('button', { name: /应用勾选项（3）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledWith('grey', 'running')
+    expect(confirmActivityType).toHaveBeenCalledWith('grey', 'running')
   })
 
   it('全部取消勾选时应用按钮禁用（不得提交空修改）', async () => {
@@ -236,7 +236,7 @@ describe('BatchActivityTypeDialog 应用', () => {
       <BatchActivityTypeDialog
         suspects={suspects}
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -258,7 +258,7 @@ describe('BatchActivityTypeDialog 无候选', () => {
       <BatchActivityTypeDialog
         suspects={[]}
         allSummaries={[makeSummary('ride', 'cycling', 40, 25.6, '傍晚骑行')]}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
@@ -269,153 +269,182 @@ describe('BatchActivityTypeDialog 无候选', () => {
   })
 })
 
-/** 手动模式夹具：1 条被误标跑步 + 1 条正常骑行（模拟用户在列表勾选） */
+/** 范围切换夹具：记为骑行但实为跑步节奏（会被检出）+ 正常骑行 + 正常步行 */
 function makeManualFixtures() {
   const allSummaries = [
-    makeSummary('m-run', 'running', 5.2, 9.8, '误标跑步'),
+    makeSummary('m-run', 'cycling', 5.2, 9.8, '误标跑步'),
     makeSummary('m-ride', 'cycling', 40, 25.6, '正常骑行'),
+    makeSummary('m-walk', 'walking', 2.1, 4.3, '晚间散步'),
   ]
-  return { allSummaries, suspects: toManualSuspects(allSummaries) }
+  return { allSummaries, suspects: detectTypeSuspects(allSummaries) }
 }
 
-describe('BatchActivityTypeDialog 手动模式', () => {
-  it('渲染勾选记录：标题/副标题为手动口径，下拉默认=当前类型，依据为手动指定', () => {
+describe('BatchActivityTypeDialog 范围切换（全部记录）', () => {
+  it('默认可疑记录范围；切到「全部记录」后列出全量，下拉默认=当前类型', async () => {
+    const user = userEvent.setup()
     const { allSummaries, suspects } = makeManualFixtures()
     render(
       <BatchActivityTypeDialog
-        mode="manual"
         suspects={suspects}
+        allowFullRange
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
     )
 
-    expect(screen.getByRole('heading', { name: '批量修改运动类型' })).toBeInTheDocument()
-    expect(screen.getByText(/已选择 2 条记录/)).toBeInTheDocument()
+    // 默认可疑范围：只有「误标跑步」被检出（正常骑行/步行不入清单）
+    expect(screen.getByText(/检测到 1 条活动/)).toBeInTheDocument()
+    expect(screen.getByText('误标跑步')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
+
+    expect(screen.getByText(/共 3 条记录/)).toBeInTheDocument()
     expect(screen.getByText('误标跑步')).toBeInTheDocument()
     expect(screen.getByText('正常骑行')).toBeInTheDocument()
-    // 下拉默认 = 归一化后的当前类型
+    expect(screen.getByText('晚间散步')).toBeInTheDocument()
+    // 下拉默认 = 归一化后的当前类型（该条库里记为 cycling，用户可改成跑步）
     expect(
       screen.getByRole('combobox', { name: '修改「误标跑步」的目标类型' }),
-    ).toHaveValue('running')
-    // 依据为手动指定，不带灰区问号
-    expect(screen.getAllByText('手动指定（列表勾选）')).toHaveLength(2)
+    ).toHaveValue('cycling')
+    // 依据展示速度证据（与检测范围同列语义），无灰区标记
+    expect(screen.getByText(/均速 9\.8 km\/h、距离 5\.2 km/)).toBeInTheDocument()
     expect(screen.queryByText(/灰区/)).not.toBeInTheDocument()
   })
 
-  it('手动模式隐藏分组 chips（每行已自带 current→target）', () => {
-    const { allSummaries, suspects } = makeManualFixtures()
-    render(
-      <BatchActivityTypeDialog
-        mode="manual"
-        suspects={suspects}
-        allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
-        onClose={vi.fn()}
-        onApplied={vi.fn()}
-      />,
-    )
-
-    expect(screen.queryByRole('button', { name: /^全部 / })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /建议/ })).not.toBeInTheDocument()
-  })
-
-  it('默认全部勾选，按钮计数=N', () => {
-    const { allSummaries, suspects } = makeManualFixtures()
-    render(
-      <BatchActivityTypeDialog
-        mode="manual"
-        suspects={suspects}
-        allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
-        onClose={vi.fn()}
-        onApplied={vi.fn()}
-      />,
-    )
-
-    const checked = screen.getAllByRole('checkbox').filter((el) => (el as HTMLInputElement).checked)
-    expect(checked).toHaveLength(2)
-    expect(screen.getByRole('button', { name: /应用勾选项（2）/ })).toBeInTheDocument()
-  })
-
-  it('下拉改类型后按所选写入，取消勾选的行跳过', async () => {
+  it('「全部记录」范围按当前类型分组 chips + 关键词搜索过滤', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeManualFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    render(
+      <BatchActivityTypeDialog
+        suspects={suspects}
+        allowFullRange
+        allSummaries={allSummaries}
+        writeRepository={{ confirmActivityType: vi.fn() }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
+
+    // 类型 chips 按当前类型分组（骑行 2 / 步行 1）
+    await user.click(screen.getByRole('button', { name: /^步行 1$/ }))
+    expect(screen.getByText('晚间散步')).toBeInTheDocument()
+    expect(screen.queryByText('正常骑行')).not.toBeInTheDocument()
+
+    // 回到全部 → 关键词搜索命中标题
+    await user.click(screen.getByRole('button', { name: /^全部 3$/ }))
+    await user.type(screen.getByLabelText('搜索记录'), '正常')
+    expect(screen.getByText('正常骑行')).toBeInTheDocument()
+    expect(screen.queryByText('晚间散步')).not.toBeInTheDocument()
+  })
+
+  it('「全部记录」范围默认不勾选（避免误点应用批量重写）', async () => {
+    const user = userEvent.setup()
+    const { allSummaries, suspects } = makeManualFixtures()
+    render(
+      <BatchActivityTypeDialog
+        suspects={suspects}
+        allowFullRange
+        allSummaries={allSummaries}
+        writeRepository={{ confirmActivityType: vi.fn() }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
+
+    const checked = screen.getAllByRole('checkbox').filter((el) => (el as HTMLInputElement).checked)
+    expect(checked).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /应用勾选项（0）/ })).toBeDisabled()
+  })
+
+  it('「全部记录」范围勾选后改类型：按所选写入并标记已确认', async () => {
+    const user = userEvent.setup()
+    const { allSummaries, suspects } = makeManualFixtures()
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     const onApplied = vi.fn()
     render(
       <BatchActivityTypeDialog
-        mode="manual"
         suspects={suspects}
+        allowFullRange
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={onApplied}
       />,
     )
 
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
     await user.selectOptions(
       screen.getByRole('combobox', { name: '修改「误标跑步」的目标类型' }),
-      'cycling',
+      'running',
     )
-    // 取消勾选正常骑行（用户只想改第一条）
-    await user.click(screen.getAllByRole('checkbox')[1])
+    // 只勾选第一行（误标跑步那条）
+    await user.click(screen.getAllByRole('checkbox')[0])
     await user.click(screen.getByRole('button', { name: /应用勾选项（1）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledTimes(1)
-    expect(updateActivityType).toHaveBeenCalledWith('m-run', 'cycling')
-    expect(updateActivityType).not.toHaveBeenCalledWith('m-ride', expect.anything())
+    expect(confirmActivityType).toHaveBeenCalledTimes(1)
+    expect(confirmActivityType).toHaveBeenCalledWith('m-run', 'running')
     expect(onApplied).toHaveBeenCalledWith(1)
   })
 
-  it('影响预览随手动改动生效（跑步改骑行 → 里程次数 +1）', async () => {
+  it('影响预览随所选改动生效（改跑步 → 骑行里程减少）', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeManualFixtures()
     render(
       <BatchActivityTypeDialog
-        mode="manual"
         suspects={suspects}
+        allowFullRange
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType: vi.fn() }}
+        writeRepository={{ confirmActivityType: vi.fn() }}
         onClose={vi.fn()}
         onApplied={vi.fn()}
       />,
     )
 
-    // 改前骑行总里程 40km（仅正常骑行计入）
-    expect(screen.getByText('40 km')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
+    // 改前骑行总里程 45.2km（误标跑步那条也被算作骑行）
+    expect(screen.getByText('45 km')).toBeInTheDocument()
 
+    await user.click(screen.getAllByRole('checkbox')[0])
     await user.selectOptions(
       screen.getByRole('combobox', { name: '修改「误标跑步」的目标类型' }),
-      'cycling',
+      'running',
     )
 
-    // 改后 45.2km（m-ride 40km + m-run 5.2km）
-    expect(await screen.findByText('45 km')).toBeInTheDocument()
+    // 改后 40km（只剩正常骑行）
+    await waitFor(() => expect(screen.getByText('40 km')).toBeInTheDocument())
   })
 
-  it('不改类型直接应用：按归一化后的当前类型幂等写入', async () => {
+  it('「全部记录」范围不改类型直接应用：按归一化后的当前类型幂等确认', async () => {
     const user = userEvent.setup()
     const { allSummaries, suspects } = makeManualFixtures()
-    const updateActivityType = vi.fn().mockResolvedValue(undefined)
+    const confirmActivityType = vi.fn().mockResolvedValue(undefined)
     const onApplied = vi.fn()
     render(
       <BatchActivityTypeDialog
-        mode="manual"
         suspects={suspects}
+        allowFullRange
         allSummaries={allSummaries}
-        writeRepository={{ updateActivityType }}
+        writeRepository={{ confirmActivityType }}
         onClose={vi.fn()}
         onApplied={onApplied}
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /应用勾选项（2）/ }))
+    await user.click(screen.getByRole('button', { name: /全部记录/ }))
+    for (const box of screen.getAllByRole('checkbox')) {
+      await user.click(box)
+    }
+    await user.click(screen.getByRole('button', { name: /应用勾选项（3）/ }))
 
-    expect(updateActivityType).toHaveBeenCalledWith('m-run', 'running')
-    expect(updateActivityType).toHaveBeenCalledWith('m-ride', 'cycling')
-    expect(onApplied).toHaveBeenCalledWith(2)
+    expect(confirmActivityType).toHaveBeenCalledWith('m-run', 'cycling')
+    expect(confirmActivityType).toHaveBeenCalledWith('m-ride', 'cycling')
+    expect(confirmActivityType).toHaveBeenCalledWith('m-walk', 'walking')
+    expect(onApplied).toHaveBeenCalledWith(3)
   })
 })

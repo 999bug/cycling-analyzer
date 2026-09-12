@@ -1,27 +1,84 @@
 /**
- * 作者模式横幅样式：主内容区顶部的只读提示条。
- * 中性 info 语义色（提示而非警告，UI-3 / 评审 §6.3）。
+ * 示例数据说明条样式：主内容区顶部的只读提示条。
+ *
+ * 视觉权重高于普通 info 提示（左侧 3px 色条 + 徽章 + 主色行动按钮）：
+ * 首访用户必须一眼看出「这不是我的数据」，否则会把示例当成自己的记录。
  */
 .author-banner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 16px;
+  padding: 12px 16px;
   margin-bottom: 16px;
-  background-color: color-mix(in srgb, var(--info) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+  background-color: color-mix(in srgb, var(--info) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--info) 32%, transparent);
+  border-left: 3px solid var(--info);
   border-radius: 10px;
 }
 
-.author-banner__text {
+.author-banner__body {
   flex: 1;
+  min-width: 0;
+}
+
+.author-banner__headline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0;
-  font-size: 13px;
   color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.author-banner__badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--info) 45%, transparent);
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--info) 18%, transparent);
+  color: var(--info);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.author-banner__hint {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.author-banner__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.author-banner__import {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.author-banner__import:hover {
+  opacity: 0.88;
+}
+
+.author-banner__import:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .author-banner__close {
-  flex-shrink: 0;
   padding: 2px 8px;
   border: none;
   border-radius: 6px;
@@ -34,4 +91,17 @@
 .author-banner__close:hover {
   color: var(--text);
   background-color: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+/* 窄屏（≤768px）：纵向堆叠，行动按钮独占一行，避免与文案挤在一行换行错乱 */
+@media (max-width: 768px) {
+  .author-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .author-banner__actions {
+    justify-content: flex-end;
+  }
 }

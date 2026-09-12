@@ -1,25 +1,25 @@
 /**
- * 作者模式横幅（规格 §6；可见性改造后定位为「示例模式」说明条）。
+ * 示例数据说明条（规格 §6）。
  *
- * 仅有效源为作者时显示：说明当前是作者的公开数据示例，
- * 导入自己的 FIT 文件后站点会自动换成用户的数据。
- * 可关闭，localStorage 记忆（key：author-banner-dismissed）。
+ * 仅有效源为作者时显示：说明当前看到的是站点内置的示例数据（不强调作者身份），
+ * 导入自己的 FIT 文件后自动换成用户的数据；条上直接提供导入入口，
+ * 免去新用户在界面里找「同步骑行数据」的成本。
+ *
+ * 关闭状态持久化在 dataSourceStore（设置页「作者数据」区块可重新显示），
+ * 不再使用独立的 localStorage key。
  */
-import { useState } from 'react'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { useImportStore } from '@/stores/importStore'
 import '@/components/AuthorBanner.css'
 
-/** 关闭记忆的 localStorage key */
-const DISMISS_KEY = 'author-banner-dismissed'
-
 /**
- * 作者模式横幅。
+ * 示例数据说明条。
  */
 function AuthorBanner() {
   const source = useDataSourceStore(selectEffectiveSource)
-  const authorName = useDataSourceStore((s) => s.authorName)
-  // 关闭记忆：挂载时读一次 localStorage
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem(DISMISS_KEY) === '1')
+  const dismissed = useDataSourceStore((s) => s.authorBannerDismissed)
+  const dismiss = useDataSourceStore((s) => s.dismissAuthorBanner)
+  const openImportDialog = useImportStore((s) => s.openImportDialog)
 
   if (source !== 'author' || dismissed) {
     return null
@@ -27,23 +27,32 @@ function AuthorBanner() {
 
   return (
     <div className="author-banner" role="status">
-      <p className="author-banner__text">
-        你现在看到的是作者{authorName === null ? '' : ` ${authorName} `}
-        的公开骑行数据，用来演示这个站点能做什么。
-        导入你自己的 FIT 文件后，这里会自动换成你的数据——
-        你的数据只保存在这台设备的浏览器里，不会上传。
-      </p>
-      <button
-        type="button"
-        aria-label="关闭提示"
-        className="author-banner__close"
-        onClick={() => {
-          localStorage.setItem(DISMISS_KEY, '1')
-          setDismissed(true)
-        }}
-      >
-        ×
-      </button>
+      <div className="author-banner__body">
+        <p className="author-banner__headline">
+          <span className="author-banner__badge">示例数据</span>
+          你现在看到的不是自己的骑行记录，而是站点内置的示例数据
+        </p>
+        <p className="author-banner__hint">
+          导入你的 FIT 文件后，这里会立刻换成你自己的数据 · 文件只在本机解析，不会上传
+        </p>
+      </div>
+      <div className="author-banner__actions">
+        <button
+          type="button"
+          className="author-banner__import"
+          onClick={openImportDialog}
+        >
+          导入我的数据
+        </button>
+        <button
+          type="button"
+          aria-label="关闭提示"
+          className="author-banner__close"
+          onClick={dismiss}
+        >
+          ×
+        </button>
+      </div>
     </div>
   )
 }

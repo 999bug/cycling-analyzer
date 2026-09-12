@@ -3,6 +3,9 @@
  *
  * 与页面解耦：UI 组件（ImportPanel）只订阅本 store，
  * 导入执行逻辑在 features/import/importer 中，store 仅编排状态。
+ *
+ * 弹窗开关（dialogOpen）同样放在 store：侧边栏「同步骑行数据」按钮与
+ * 顶部「示例数据」说明条共用同一个导入弹窗，二者需共享开合状态。
  */
 import { create } from 'zustand'
 import { importFiles, type FailedItem, type ImportFile, type ImportOptions, type ImportSummary } from '@/features/import/importer'
@@ -36,6 +39,9 @@ export interface ImportStoreState {
   /** 非文件级错误（如导入流程整体失败） */
   errors: string[]
 
+  /** 导入弹窗是否打开（外部入口如「示例数据」横幅可唤起） */
+  dialogOpen: boolean
+
   /** 上次导入中失败的文件（重试失败文件用，规格 §21） */
   lastFailedFiles: ImportFile[]
 
@@ -57,6 +63,12 @@ export interface ImportStoreState {
 
   /** 重置导入状态（进度/汇总/错误/失败缓存）。 */
   reset(): void
+
+  /** 打开导入弹窗（侧边栏按钮与「示例数据」横幅共用） */
+  openImportDialog(): void
+
+  /** 关闭导入弹窗（关闭前的导入中守卫与刷新判断在 ImportPanel 内） */
+  closeImportDialog(): void
 }
 
 /**
@@ -68,6 +80,10 @@ export const useImportStore = create<ImportStoreState>()((set, get) => ({
   summary: null,
   errors: [],
   lastFailedFiles: [],
+  dialogOpen: false,
+
+  openImportDialog: () => set({ dialogOpen: true }),
+  closeImportDialog: () => set({ dialogOpen: false }),
 
   startImport: async (files, options) => {
     set({

@@ -58,6 +58,9 @@ export interface DataSourceState {
   /** 一次性提示：作者数据因 auto 被隐藏，待用户在提示条确认（持久化） */
   authorHiddenNoticePending: boolean
 
+  /** 顶部「示例数据」说明条是否已被用户关闭（持久化，设置页可恢复显示） */
+  authorBannerDismissed: boolean
+
   /** 临时查看作者数据（深链兜底；运行时状态不持久化，离开详情页自动清除） */
   peekAuthorData: boolean
 
@@ -76,6 +79,12 @@ export interface DataSourceState {
   /** 用户已确认「作者数据已隐藏」提示（清除一次性标记） */
   dismissAuthorHiddenNotice(): void
 
+  /** 关闭顶部「示例数据」说明条（持久化，不再自动显示） */
+  dismissAuthorBanner(): void
+
+  /** 恢复顶部「示例数据」说明条（设置页入口） */
+  restoreAuthorBanner(): void
+
   /** 开/关临时查看作者数据（深链「仅本次查看」） */
   setPeekAuthorData(active: boolean): void
 }
@@ -90,6 +99,7 @@ export const useDataSourceStore = create<DataSourceState>()(
       authorVisibility: 'auto',
       hasLocalData: false,
       authorHiddenNoticePending: false,
+      authorBannerDismissed: false,
       peekAuthorData: false,
       // 显式切源视为用户主见，同时清除临时查看状态
       setSource: (source) => set({ source, peekAuthorData: false }),
@@ -107,6 +117,8 @@ export const useDataSourceStore = create<DataSourceState>()(
               : state.authorHiddenNoticePending,
         })),
       dismissAuthorHiddenNotice: () => set({ authorHiddenNoticePending: false }),
+      dismissAuthorBanner: () => set({ authorBannerDismissed: true }),
+      restoreAuthorBanner: () => set({ authorBannerDismissed: false }),
       setPeekAuthorData: (peekAuthorData) => set({ peekAuthorData }),
     }),
     {
@@ -117,6 +129,7 @@ export const useDataSourceStore = create<DataSourceState>()(
         source: state.source,
         authorVisibility: state.authorVisibility,
         authorHiddenNoticePending: state.authorHiddenNoticePending,
+        authorBannerDismissed: state.authorBannerDismissed,
       }),
     },
   ),
