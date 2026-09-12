@@ -27,6 +27,7 @@ export const CURATED_REGIONS: CuratedRegion[] = [
   { id: 'shenzhen', label: '深圳', routes: nationalRoutesOf('shenzhen') },
   { id: 'chengdu', label: '成都', routes: nationalRoutesOf('chengdu') },
   { id: 'kunming', label: '昆明', routes: nationalRoutesOf('kunming') },
+  { id: 'shanghai', label: '上海', routes: nationalRoutesOf('shanghai') },
 ]
 
 /** 全部精选路线（地区顺序拼接） */

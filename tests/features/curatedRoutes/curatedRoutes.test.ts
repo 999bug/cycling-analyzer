@@ -99,6 +99,8 @@ describe('curatedRoutes 数据完整性', () => {
       chengdu: { lat: [30.53, 30.57], lng: [104.26, 104.33] },
       // 昆明：西山前山公路（碧鸡关 → 猫猫箐）
       kunming: { lat: [24.94, 24.99], lng: [102.61, 102.65] },
+      // 上海：佘山 → 崇明岛（含环崇明、环淀山湖）
+      shanghai: { lat: [31.05, 31.78], lng: [120.88, 121.5] },
     }
     for (const route of ALL_CURATED_ROUTES) {
       const bbox = REGION_BBOX[route.region]
@@ -122,6 +124,7 @@ describe('curatedRoutes 数据完整性', () => {
       'shenzhen',
       'chengdu',
       'kunming',
+          'shanghai',
     ])
     // 每个地区的路线集合 = 数据文件全集（无遗漏、无重复收录）
     for (const region of CURATED_REGIONS) {
@@ -151,7 +154,20 @@ describe('curatedRoutes 数据完整性', () => {
       'yxh',
     ])
     // 全国路线的生成 key（fxl/lj/kcs/wts/lqs/mmq）
-    expect(Object.keys(NATIONAL_TRACKS).sort()).toEqual(['fxl', 'kcs', 'lj', 'lqs', 'mmq', 'wts'])
+    expect(Object.keys(NATIONAL_TRACKS).sort()).toEqual([
+      'chongming',
+      'dianshanhu',
+      'fulushan',
+      'fxl',
+      'jiabei',
+      'jiufeng',
+      'kcs',
+      'lj',
+      'lqs',
+      'mmq',
+      'sheshan',
+      'wts',
+    ])
     for (const route of ALL_CURATED_ROUTES) {
       expect(route.tracks.length).toBeGreaterThan(0)
     }

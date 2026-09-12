@@ -37,6 +37,7 @@ export const REGION_META = {
   shenzhen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   chengdu: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   kunming: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  shanghai: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
 }
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'

@@ -80,6 +80,7 @@ export type CuratedRegionId =
   | 'shenzhen'
   | 'chengdu'
   | 'kunming'
+  | 'shanghai'
 
 /** 难度文案（展示用，避免 UI 层散落映射） */
 export function difficultyLabel(difficulty: CuratedRoute['difficulty']): string {

@@ -68,6 +68,12 @@ const OVERPASS_MIRRORS = [
   'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ]
+/**
+ * 公共 OSM 服务要求可识别的 User-Agent。
+ * 实测（2026-09-12）：缺 UA 时 overpass-api.de 返回 406、private.coffee 与 kumi.systems 返回 429，
+ * Nominatim 返回 403 —— 三个镜像会全部失败，只剩 curl 兜底可用。
+ */
+const UA = 'cycling-analyzer-curate/1.0 (curated route pipeline; OSM data)'
 
 // ---- CLI 参数 ----
 const args = process.argv.slice(2)
@@ -136,11 +142,22 @@ const REGION_CENTER = {
   shenzhen: [22.58, 114.18],
   chengdu: [30.6, 104.1],
   kunming: [24.98, 102.65],
+  // 二期全国扩展：新地区必须登记中心点，否则地名定位会命中同名地点（如「龙井路」命中江西）
+  shanghai: [31.2, 121.45],
+  nanjing: [32.05, 118.78],
+  xiamen: [24.48, 118.09],
+  guangzhou: [23.13, 113.26],
+  hainan: [19.5, 109.8],
+  wuhan: [30.59, 114.3],
+  chongqing: [29.56, 106.55],
+  dali: [25.6, 100.27],
+  qingdao: [36.07, 120.38],
+  qinghai: [36.9, 100.5],
 }
 
 async function geocodeOne(url, pick) {
   const resp = await fetch(url, {
-    headers: { 'User-Agent': 'cycling-analyzer-curate/1.0 (curated route pipeline; OSM data)' },
+    headers: { 'User-Agent': UA },
     signal: AbortSignal.timeout(30_000),
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
@@ -167,7 +184,9 @@ async function geocode(name) {
   }
   providers.push(() =>
     geocodeOne(
-      `https://photon.komoot.io/api/?limit=1&lang=default${center ? `&lat=${center[0]}&lon=${center[1]}` : ''}&q=${encodeURIComponent(searchText)}`,
+      // Photon 对多词查询要求全部命中：拼上 hint 反而查不到（实测「佘山地铁站 上海松江」无结果，
+      // 单查「佘山地铁站」配合地区中心 bias 命中正常）。故 Photon 只用原名。
+      `https://photon.komoot.io/api/?limit=1&lang=default${center ? `&lat=${center[0]}&lon=${center[1]}` : ''}&q=${encodeURIComponent(query)}`,
       (json) => {
         const hit = json.features?.[0]
         if (!hit) throw new Error('无结果')
@@ -228,7 +247,7 @@ async function fetchWaysMirrors(bbox) {
     try {
       const resp = await fetch(base, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': UA },
         body: new URLSearchParams({ data: q }).toString(),
         signal: AbortSignal.timeout(150_000),
       })
@@ -243,7 +262,7 @@ async function fetchWaysMirrors(bbox) {
     try {
       const { stdout } = await execFileP(
         'curl.exe',
-        ['--noproxy', '*', '--max-time', '150', '-sS', '-d', `data=${q}`, base],
+        ['--noproxy', '*', '--max-time', '150', '-sS', '-A', UA, '-d', `data=${q}`, base],
         { maxBuffer: 64 * 1024 * 1024 },
       )
       return parse(JSON.parse(stdout))
@@ -433,8 +452,94 @@ if (!chosen?.coords) {
     for (const s of failed.suggestions.nearEndInFromComp) say(`  [${s}]`)
   }
   say('常见原因：① OSM 该爬坡路缺失（如白羊沟案例，无法生成）② 锚点在孤立景区分量（换上面建议点）③ bbox 太小')
+  // 失败路径不会走到预览目录的 mkdir（预览在成功后才建），此处必须先建再写
+  mkdirSync(resolve(OUT_DIR, spec.id), { recursive: true })
   writeFileSync(resolve(OUT_DIR, `${spec.id}`, 'report.txt'), log.join('\n'), 'utf8')
   process.exit(2)
+}
+
+// ---- 4b. 爬升估算（可选）----
+/**
+ * 无权威爬升来源时的兜底：沿几何采样 SRTM 90m 公开高程计算累计爬升。
+ * - 重采样步距按线长自适应（上限 400 点），控制公共 API 请求数
+ * - 单段高差 < 3m 不计入，滤掉 SRTM 在平原地区的高程噪声（否则爬升会严重虚高）
+ * - 结果按 4 位小数坐标缓存，重复跑同一区域不再消耗额度
+ */
+const ELEV_CACHE_FILE = resolve(ROOT, '.tmp/curated-v2/elev-cache.json')
+const ELEV_PROVIDERS = [
+  (locs) => `https://api.opentopodata.org/v1/srtm90m?locations=${locs}`,
+  (locs) => `https://api.open-elevation.com/api/v1/lookup?locations=${locs}`,
+]
+
+function resampleByDistance(line, maxPoints = 400) {
+  const total = lineLength(line)
+  const step = Math.max(200, Math.ceil(total / maxPoints))
+  const out = [line[0]]
+  let acc = 0
+  for (let i = 1; i < line.length; i += 1) {
+    acc += distM(line[i - 1], line[i])
+    if (acc >= step) {
+      out.push(line[i])
+      acc = 0
+    }
+  }
+  const last = line[line.length - 1]
+  const tail = out[out.length - 1]
+  if (tail[0] !== last[0] || tail[1] !== last[1]) out.push(last)
+  return out
+}
+
+function loadElevCache() {
+  try {
+    return JSON.parse(readFileSync(ELEV_CACHE_FILE, 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+async function fetchElevationBatch(points) {
+  const locs = points.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join('|')
+  for (const build of ELEV_PROVIDERS) {
+    try {
+      const resp = await fetch(build(locs), { signal: AbortSignal.timeout(30_000) })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const rows = (await resp.json()).results ?? []
+      if (rows.length !== points.length) throw new Error('返回点数不符')
+      return rows.map((r) => r.elevation)
+    } catch (error) {
+      say(`  高程源失败：${String(error.message).slice(0, 60)}`)
+    }
+  }
+  return null
+}
+
+async function estimateElevationGain(line) {
+  const pts = resampleByDistance(line)
+  const cache = loadElevCache()
+  const keys = pts.map((p) => `${p[0].toFixed(4)},${p[1].toFixed(4)}`)
+  const missing = keys.map((key, i) => [key, i]).filter(([key]) => cache[key] === undefined)
+  for (let i = 0; i < missing.length; i += 100) {
+    const batch = missing.slice(i, i + 100)
+    const values = await fetchElevationBatch(batch.map(([, idx]) => pts[idx]))
+    if (!values) return null
+    batch.forEach(([key], j) => {
+      cache[key] = values[j]
+    })
+    // opentopodata 公共实例限 1 req/s
+    if (i + 100 < missing.length) await new Promise((r) => setTimeout(r, 1100))
+  }
+  mkdirSync(dirname(ELEV_CACHE_FILE), { recursive: true })
+  writeFileSync(ELEV_CACHE_FILE, JSON.stringify(cache), 'utf8')
+  const hs = keys.map((key) => cache[key]).filter((v) => typeof v === 'number')
+  let gain = 0
+  let ref = hs[0]
+  for (const h of hs) {
+    if (h >= ref + 3) {
+      gain += h - ref
+      ref = h
+    } else if (h < ref) ref = h
+  }
+  return Math.round(gain)
 }
 
 // ---- 5. 质检 ----
@@ -447,6 +552,18 @@ say(`几何：${simplified.length} pts，${drawnKm.toFixed(2)}km，与申报 ${s
 say(`geometryScope 自动判定：${geometryScope}${spec.geometryScope ? '（需求单指定）' : ''}`)
 if (geometryScope === 'full' && (ratio < 0.45 || ratio > 1.7)) {
   say('⚠ 线长与申报量级偏差过大（full 容差 [0.45, 1.7]）——检查锚点是否绕路/申报口径是否含往返')
+}
+
+// 需求单 elevEstimate: true 时，用 SRTM 公开高程覆盖申报爬升（无权威来源时的兜底）
+if (spec.elevEstimate === true) {
+  const gain = await estimateElevationGain(simplified)
+  if (gain === null) {
+    say('⚠ 高程服务不可用：爬升仍是需求单原值，请人工补权威数据后再入库')
+  } else {
+    say(`爬升估算：SRTM 90m 沿几何采样 → ${gain} m（需求单原值 ${spec.declaredElevM} m）`)
+    spec.declaredElevM = gain
+    spec.source = { ...spec.source, text: `${spec.source.text}；爬升为 SRTM 90m 公开高程估算` }
+  }
 }
 
 // ---- 6. 产出 ----
@@ -515,6 +632,8 @@ ${anchorMarks}
 const outDir = resolve(OUT_DIR, spec.id)
 mkdirSync(outDir, { recursive: true })
 writeFileSync(resolve(outDir, 'preview.html'), buildPreviewHtml(), 'utf8')
+// 几何坐标一并落盘：便于外部复核、重算爬升，不必重新拉路网
+writeFileSync(resolve(outDir, 'geometry.json'), JSON.stringify(simplified), 'utf8')
 
 // 数据条目与测试补丁说明（dry 模式下只落盘建议文本）
 writeFileSync(resolve(outDir, 'proposed-entry.ts'), entryText, 'utf8')
@@ -581,7 +700,8 @@ if (DRY) {
         console.error('测试 REGION_BBOX 插入点未找到，请手工登记界框')
         process.exit(1)
       }
-      testText = testText.replace(anchor, `    }\n${bboxLine}\n    for (const route of ALL_CURATED_ROUTES) {`)
+      // bbox 行必须落在 REGION_BBOX 对象内部（闭合 } 之前），插到 } 之后会产生语法错误
+      testText = testText.replace(anchor, `${bboxLine}\n    }\n    for (const route of ALL_CURATED_ROUTES) {`)
     }
     say(`✔ 测试界框已更新（${region}）`)
   }
@@ -610,7 +730,8 @@ if (DRY) {
     let typesText = readFileSync(typesFile, 'utf8')
     const unionRe = /(export type CuratedRegionId =[\s\S]*?)(\n\n)/
     if (!typesText.includes(`| '${region}'`)) {
-      typesText = typesText.replace(unionRe, `$1  | '${region}'$2`)
+      // $1 结尾不含换行（被 (\n\n) 捕获），必须显式补 \n，否则拼成 `| 'kunming'  | 'shanghai'` 单行
+      typesText = typesText.replace(unionRe, `$1\n  | '${region}'$2`)
       writeFileSync(typesFile, typesText, 'utf8')
       say('✔ CuratedRegionId 已扩展')
     }
