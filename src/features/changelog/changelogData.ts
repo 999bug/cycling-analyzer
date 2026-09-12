@@ -20,7 +20,7 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
-    version: '2.74.0',
+    version: '2.74.1',
     date: '2026-09-11',
     features: [
       '分享素材「真实界面」样式扩展到小红书：4 页套图都用站内真实界面出图——封面（大字结论句 + 钩子数字 + 3 项指标）、路线（真实底图地图 + 2×2 指标）、洞察（站内「骑行洞察」区块原样）、图表（站内「数据曲线」卡片原样）',

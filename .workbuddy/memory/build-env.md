@@ -53,8 +53,13 @@
      `… node_modules/eslint/bin/eslint.js <路径>`、
      `… node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5199`（起 dev server 给 Playwright 验 UI）。
 - 注意 `npm run check`（scripts/fast-check.mjs）依赖 npm，同样跑不了；按上面三条手工跑一遍等价。
-- 网络：本环境出网走代理，GitHub `git fetch/push` 会 `CONNECT tunnel failed, response 502`，
-  绕代理（`env -u https_proxy …`）则直连超时 —— **推送可能暂时做不了，提交先落本地**，事后补推。
+- 网络：本环境出网走代理，GitHub **HTTPS 走不通**（`git fetch/push` 报 `CONNECT tunnel failed, response 502`
+  或 `SSL_ERROR_SYSCALL`；绕代理直连则连接超时）。**但 SSH 通**（2026-09-12 实测）：
+  `ssh -T git@github.com` 认证成功，因此推送用显式 SSH 地址即可，不必改 remote 配置：
+  `git push git@github.com:999bug/cycling-analyzer.git main:main`；
+  抓远端同理 `git fetch git@github.com:999bug/cycling-analyzer.git main:refs/remotes/origin/main`。
+  另外 `gh` 命令（api.github.com）是**通的**，可用于看 CI：`gh run list` / `gh run view <id> --log-failed`
+  （`gh run watch <id> --exit-status` 也能用）。
 
 ## 其它
 

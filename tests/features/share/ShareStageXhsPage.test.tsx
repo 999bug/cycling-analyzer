@@ -22,8 +22,9 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
     fileName: 'sample.fit',
     fingerprint: 'fp-1',
     activityType: 'cycling',
-    startTime: '2026-09-06T07:30:00+08:00',
-    endTime: '2026-09-06T12:00:00+08:00',
+    // 不带时区偏移 → 按本地时间解析，任何时区下都落在同一天（CI 跑 UTC）
+    startTime: '2026-09-06T12:00:00',
+    endTime: '2026-09-06T16:30:00',
     duration: 4 * 3600 + 12 * 60,
     elapsedTime: 4.5 * 3600,
     distance: 108_400,
