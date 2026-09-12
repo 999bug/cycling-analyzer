@@ -125,7 +125,10 @@ const dataMeta = isNewRegion
       entryPrefix: NATIONAL_PREFIX[region] ?? spec.entryPrefix ?? region,
     }
 const tracksMeta = REGION_META[region] ?? { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' }
-const entryId = spec.entryId ?? `${dataMeta.entryPrefix}-${spec.id}`
+// 需求单里的 id 往往已自带地区前缀（nj-laoshan），此时不能再拼一次，否则会生成 nj-nj-laoshan
+const prefix = dataMeta.entryPrefix
+const bareId = spec.id.startsWith(`${prefix}-`) ? spec.id.slice(prefix.length + 1) : spec.id
+const entryId = spec.entryId ?? `${prefix}-${bareId}`
 const kind = spec.kind ?? 'climb'
 if (spec.difficulty < 1 || spec.difficulty > 5) {
   console.error('difficulty 必须 1–5')
@@ -586,7 +589,11 @@ function buildEntryText(scope) {
     `    sourceGrade: '${spec.source.grade}',`,
   ]
   if (scope === 'core') lines.push(`    geometryScope: 'core',`)
-  lines.push(`    tracks: ${dataMeta.tracksImport}.${spec.id} ?? [],`, '  },')
+  // tracks key 可能含连字符（cd-haute-s1），点号访问是非法 JS，必须改方括号
+  const trackRef = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(spec.id)
+    ? `.${spec.id}`
+    : `['${escape(spec.id)}']`
+  lines.push(`    tracks: ${dataMeta.tracksImport}${trackRef} ?? [],`, '  },')
   return lines.join('\n')
 }
 

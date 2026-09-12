@@ -28,6 +28,13 @@ export const CURATED_REGIONS: CuratedRegion[] = [
   { id: 'chengdu', label: '成都', routes: nationalRoutesOf('chengdu') },
   { id: 'kunming', label: '昆明', routes: nationalRoutesOf('kunming') },
   { id: 'shanghai', label: '上海', routes: nationalRoutesOf('shanghai') },
+  { id: 'chongqing', label: '重庆', routes: nationalRoutesOf('chongqing') },
+  { id: 'guangzhou', label: '广州', routes: nationalRoutesOf('guangzhou') },
+  { id: 'wuhan', label: '武汉', routes: nationalRoutesOf('wuhan') },
+  { id: 'xiamen', label: '厦门', routes: nationalRoutesOf('xiamen') },
+  { id: 'nanjing', label: '南京', routes: nationalRoutesOf('nanjing') },
+  { id: 'dali', label: '大理', routes: nationalRoutesOf('dali') },
+  { id: 'hainan', label: '海南', routes: nationalRoutesOf('hainan') },
 ]
 
 /** 全部精选路线（地区顺序拼接） */

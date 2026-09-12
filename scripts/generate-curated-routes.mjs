@@ -37,6 +37,11 @@ export const REGION_META = {
   shenzhen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   chengdu: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   kunming: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  nanjing: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  xiamen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  wuhan: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  guangzhou: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  chongqing: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   shanghai: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
 }
 
@@ -423,28 +428,88 @@ export function buildGraph(ways, opts = {}) {
 }
 
 /** 图上两点最短路径（节点 ID 序列），不可达返回 null */
+/**
+ * 二叉最小堆：长距离路线（30km+）的 bbox 会拉进数万节点，
+ * 朴素「每次扫描全表找最小」的 Dijkstra 是 O(V²)，实测会卡死；
+ * 换堆后为 O(E log V)，同样规模秒级返回。
+ */
+class MinHeap {
+  constructor() {
+    this.ids = []
+    this.ds = []
+  }
+
+  get size() {
+    return this.ids.length
+  }
+
+  push(id, d) {
+    this.ids.push(id)
+    this.ds.push(d)
+    let i = this.ids.length - 1
+    while (i > 0) {
+      const p = (i - 1) >> 1
+      if (this.ds[p] <= this.ds[i]) break
+      this.#swap(i, p)
+      i = p
+    }
+  }
+
+  pop() {
+    if (!this.ids.length) return null
+    const id = this.ids[0]
+    const d = this.ds[0]
+    const lastId = this.ids.pop()
+    const lastD = this.ds.pop()
+    if (this.ids.length) {
+      this.ids[0] = lastId
+      this.ds[0] = lastD
+      let i = 0
+      for (;;) {
+        const l = i * 2 + 1
+        const r = l + 1
+        let m = i
+        if (l < this.ds.length && this.ds[l] < this.ds[m]) m = l
+        if (r < this.ds.length && this.ds[r] < this.ds[m]) m = r
+        if (m === i) break
+        this.#swap(i, m)
+        i = m
+      }
+    }
+    return { id, d }
+  }
+
+  #swap(a, b) {
+    const ti = this.ids[a]
+    this.ids[a] = this.ids[b]
+    this.ids[b] = ti
+    const td = this.ds[a]
+    this.ds[a] = this.ds[b]
+    this.ds[b] = td
+  }
+}
+
 export function graphShortestPath(nodeCoord, adj, start, end) {
+  if (start === end) return [start]
   const dist = new Map([[start, 0]])
   const prev = new Map()
   const visited = new Set()
-  // 简易优先队列（数据规模小，数组扫描足够）
+  const heap = new MinHeap()
+  heap.push(start, 0)
   for (;;) {
-    let cur = -1
-    let curD = Infinity
-    for (const [id, d] of dist) {
-      if (!visited.has(id) && d < curD) {
-        cur = id
-        curD = d
-      }
-    }
-    if (cur < 0 || cur === end) break
+    const top = heap.pop()
+    if (!top) break
+    const cur = top.id
+    if (visited.has(cur)) continue // 堆里残留的过期项
+    if (cur === end) break
     visited.add(cur)
     for (const [next, w] of adj.get(cur) ?? []) {
       if (visited.has(next)) continue
-      const nd = curD + w
+      const nd = top.d + w
       if (nd < (dist.get(next) ?? Infinity)) {
         dist.set(next, nd)
         prev.set(next, cur)
+        heap.push(next, nd)
       }
     }
   }

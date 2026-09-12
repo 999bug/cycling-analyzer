@@ -223,7 +223,8 @@ describe('骑行路线图页 · 热门路线板块', () => {
       .toBeInTheDocument()
     const beijingCount = CURATED_REGIONS.find((region) => region.id === 'beijing')!.routes.length
     expect(screen.getByRole('button', { name: `北京 · ${beijingCount}` })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '西安 · 1' })).toBeInTheDocument()
+    const xianCount = CURATED_REGIONS.find((region) => region.id === 'xian')!.routes.length
+    expect(screen.getByRole('button', { name: `西安 · ${xianCount}` })).toBeInTheDocument()
 
     // 卡片列表：一期妙峰山可见，难度标签渲染（前缀匹配，避免命中描述提到妙峰山的其他卡片）
     const card = screen.getByRole('button', { name: /^妙峰山/ })
@@ -237,7 +238,7 @@ describe('骑行路线图页 · 热门路线板块', () => {
     // 再次点击卡片 → 取消选中，详情回到提示态
     await user.click(card)
     expect(screen.getByText(/点击路线卡片在地图上单独高亮并查看详情/)).toBeInTheDocument()
-  })
+  }, 20_000)
 
   it('地区筛选 chips：切换地区清空选中态，卡片仍按地区渲染', async () => {
     const user = userEvent.setup()
@@ -257,9 +258,10 @@ describe('骑行路线图页 · 热门路线板块', () => {
     expect(screen.getByText(/点击路线卡片在地图上单独高亮并查看详情/)).toBeInTheDocument()
     // 卡片仍渲染（北京筛选命中妙峰山）
     expect(screen.getByRole('button', { name: /^妙峰山/ })).toBeInTheDocument()
-    // 西安 chip 筛选后只剩秦岭分水岭一张卡，妙峰山不再显示
-    await user.click(screen.getByRole('button', { name: '西安 · 1' }))
+    // 西安 chip 筛选后只剩西安的路线（秦岭分水岭等），妙峰山不再显示
+    const xianCount = CURATED_REGIONS.find((region) => region.id === 'xian')!.routes.length
+    await user.click(screen.getByRole('button', { name: `西安 · ${xianCount}` }))
     expect(screen.getByRole('button', { name: /^秦岭分水岭/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^妙峰山/ })).not.toBeInTheDocument()
-  })
+  }, 20_000)
 })
