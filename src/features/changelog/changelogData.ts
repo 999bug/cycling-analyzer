@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.75.2',
+    date: '2026-09-12',
+    features: [
+      '依赖安全维护：升级开发依赖 vitest 4.1.10 → 4.1.11，修复 @vitest/mocker 路径穿越漏洞（Dependabot moderate，仅影响测试环境，不影响线上产物）',
+    ],
+  },
+  {
     version: '2.75.1',
     date: '2026-09-12',
     features: [
