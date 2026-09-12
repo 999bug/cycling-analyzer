@@ -171,4 +171,27 @@ describe('ReplayEngine 状态机', () => {
       raf.restore()
     }
   })
+
+  it('帧监听器抛异常不杀 rAF 循环（全屏过渡期瞬态错误只记录）', async () => {
+    const raf = installFakeRaf()
+    try {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const engine = new ReplayEngine(points)
+      engine.onFrame(() => {
+        throw new Error('transition transient error')
+      })
+      let recoveredCount = 0
+      engine.play()
+      await raf.advance(50)
+      expect(engine.playing).toBe(true) // 循环仍存活
+      // 异常监听器退订后，其余订阅者照常收帧（这里用重新订阅模拟恢复）
+      engine.onFrame(() => recoveredCount++)
+      await raf.advance(50)
+      expect(recoveredCount).toBeGreaterThan(0)
+      expect(errorSpy).toHaveBeenCalled()
+      engine.dispose()
+    } finally {
+      raf.restore()
+    }
+  })
 })

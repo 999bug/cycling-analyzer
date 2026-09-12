@@ -94,6 +94,14 @@
     min-height: 44px;
     padding: 8px 14px;
   }
+
+  /*
+   * 移动端去掉毛玻璃：backdrop-filter 在中低端机的全屏大画布上逐帧重绘成本
+   * 极高，是回放/全屏掉帧卡顿的元凶之一；底色本身 0.9 不透明，观感损失可忽略。
+   */
+  .track-replay {
+    backdrop-filter: none;
+  }
 }
 
 .track-replay__btn--primary {

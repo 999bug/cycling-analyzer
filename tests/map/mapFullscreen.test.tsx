@@ -76,6 +76,35 @@ describe('MapFullscreenButton', () => {
     expect(isPseudoFullscreen(wrapperEl)).toBe(false)
   })
 
+  it('手机类设备（触摸优先指针）非 standalone 也走伪全屏，不碰原生 API', async () => {
+    // 2026-09-12：快捷方式/WebView 的 display-mode 判定不可靠，移动端一律伪全屏
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => {
+      if (query.includes('pointer: coarse')) {
+        return makeMql(true)
+      }
+      return makeMql(false)
+    })
+    const { wrapperEl, requestFullscreen } = renderFullscreenButton()
+
+    await userEvent.click(screen.getByRole('button', { name: '全屏查看' }))
+
+    expect(requestFullscreen).not.toHaveBeenCalled()
+    expect(wrapperEl.classList.contains(MAP_PSEUDO_FULLSCREEN_CLASS)).toBe(true)
+  })
+
+  it('手机类设备（窄视口兜底）非 standalone 也走伪全屏', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue(makeMql(false))
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { value: 500, configurable: true })
+    const { wrapperEl, requestFullscreen } = renderFullscreenButton()
+
+    await userEvent.click(screen.getByRole('button', { name: '全屏查看' }))
+
+    expect(requestFullscreen).not.toHaveBeenCalled()
+    expect(wrapperEl.classList.contains(MAP_PSEUDO_FULLSCREEN_CLASS)).toBe(true)
+    Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true })
+  })
+
   it('原生全屏被拒（NotAllowedError）时降级伪全屏', async () => {
     vi.spyOn(window, 'matchMedia').mockReturnValue(makeMql(false))
     const { wrapperEl, requestFullscreen } = renderFullscreenButton()

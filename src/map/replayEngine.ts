@@ -250,7 +250,13 @@ export class ReplayEngine {
       longitude: pt.longitude,
     }
     for (const listener of this.frameListeners) {
-      listener(frame)
+      try {
+        listener(frame)
+      } catch (error) {
+        // 单个订阅者异常不杀循环：全屏过渡期容器 0 尺寸、动画被打断等瞬态
+        // 错误若向上抛出会永久终止 rAF，表现为「播放中卡死后再也不动」
+        console.error('Replay frame listener error', error)
+      }
     }
   }
 

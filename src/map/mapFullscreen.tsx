@@ -6,18 +6,22 @@
  * - ZoomControlBottomRight：MapContainer 子组件，把 + / - 缩放控件统一移到右下角。
  * - MapFullscreenButton：MapContainer 兄弟节点，放在相对定位包裹层内，点击切换包裹层全屏。
  *
- * 全屏分两路（2026-09-11）：
- * - 浏览器标签页 → 原生 Fullscreen API（requestFullscreen）；
- * - PWA 独立窗口（standalone）→ 伪全屏（fixed 覆盖层）。Android Chromium
- *   独立窗口里运行时调用 requestFullscreen 存在整页卡死的已知 bug 族
- *   （系统栏与全屏状态互相冲突，crbug 1232956 / 1415037 等），而手机浏览器
- *   标签页内完全正常，故独立窗口绕开原生 API；原生 API 缺失（iPhone Safari
- *   不支持元素全屏）或调用被拒时同样降级伪全屏。
+ * 全屏分三路（2026-09-12 收敛）：
+ * - 手机类设备（触摸优先指针 / 窄视口）→ 一律伪全屏：standalone 判定在
+ *   「添加到主屏幕」快捷方式、部分 WebView 里不可靠（display-mode 不匹配），
+ *   误走原生 API 会触发 Android Chromium 独立窗口整页卡死 bug 族；
+ * - PWA 独立窗口（standalone）→ 伪全屏（fixed 覆盖层）；
+ * - 桌面浏览器 → 原生 Fullscreen API（requestFullscreen），被拒时降级伪全屏。
+ *   iPhone Safari 不支持元素全屏，同样落到伪全屏兜底。
  */
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useMap } from 'react-leaflet'
 import { isStandaloneDisplay } from '@/features/pwa/install'
-import { enterPseudoFullscreen, exitPseudoFullscreen } from '@/map/pseudoFullscreen'
+import {
+  enterPseudoFullscreen,
+  exitPseudoFullscreen,
+  isMobileLikeDevice,
+} from '@/map/pseudoFullscreen'
 import '@/map/mapFullscreen.css'
 
 /**
@@ -186,8 +190,10 @@ export function MapFullscreenButton({ targetRef }: MapFullscreenButtonProps) {
       return
     }
 
-    // 独立窗口 PWA 或原生 API 不可用 → 伪全屏（绕开 Chromium standalone 全屏卡死 bug 族）
-    if (isStandaloneDisplay() || typeof wrapper.requestFullscreen !== 'function') {
+    // 移动端一律伪全屏（standalone 判定在快捷方式/WebView 里不可靠，原生
+    // requestFullscreen 在移动 Chromium 有整页卡死 bug 族）；独立窗口 PWA、
+    // 原生 API 缺失 → 同样伪全屏
+    if (isMobileLikeDevice() || isStandaloneDisplay() || typeof wrapper.requestFullscreen !== 'function') {
       enterPseudo(wrapper)
       return
     }

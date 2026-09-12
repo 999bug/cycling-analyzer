@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.75.1',
+    date: '2026-09-12',
+    features: [
+      '修复手机端点地图「全屏」整页卡死：移动端不再调用原生全屏 API（部分环境里「添加到主屏幕」快捷方式与 WebView 的安装判定不可靠，会误触发 Android Chromium 独立窗口的全屏卡死 bug），一律改用站内伪全屏覆盖层；桌面端行为不变',
+      '回放播放中进入全屏更稳：全屏过渡期的瞬态错误不再打断回放循环（此前一旦报错播放就永久停住），过渡期结束后镜头恢复正常跟随',
+      '移动端回放控制栏去掉毛玻璃模糊效果，降低全屏播放时的渲染负担，减少掉帧',
+    ],
+  },
+  {
     version: '2.75.0',
     date: '2026-09-12',
     features: [

@@ -243,6 +243,19 @@ function ReplayOverlay({ engine, points, skeleton, stride, freezeCamera }: {
     }
   }, [map])
 
+  // 全屏切换/布局变化后复位镜头跟随状态：进出伪全屏各广播一次 window resize，
+  // 但过渡期平移动画可能被打断且 moveend 不再触发，panningRef 会卡在 true，
+  // 表现为「全屏后镜头再也不跟随」——以 resize 为复位时机兜底
+  useEffect(() => {
+    const onResize = () => {
+      panningRef.current = false
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
   // 创建/销毁光标数据牌 DOM（挂在地图容器上，屏幕空间定位，不随窗格变换）
   useEffect(() => {
     const tip = document.createElement('div')
@@ -317,6 +330,10 @@ function ReplayOverlay({ engine, points, skeleton, stride, freezeCamera }: {
       return
     }
     const size = map.getSize()
+    // 全屏过渡期容器可能短暂为 0 尺寸：此时坐标换算无意义，跳过本帧的镜头决策
+    if (size.x <= 0 || size.y <= 0) {
+      return
+    }
     const point = map.latLngToContainerPoint(latLng)
     const edgeX = size.x * FOLLOW_EDGE_RATIO
     const edgeY = size.y * FOLLOW_EDGE_RATIO
