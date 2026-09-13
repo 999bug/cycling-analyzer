@@ -39,6 +39,8 @@ import {
   REGION_META,
   readExistingOutput,
   renderTracksFile,
+  atomicWriteFileSync,
+  withFileLock,
   buildGraph,
   graphShortestPath,
   snapNode,
@@ -341,8 +343,11 @@ function componentOf(adj, start) {
 /** 单次尝试：返回 { ok, coords } 或 { ok:false, stage, legIndex, suggestions } */
 function attemptRoute(ways, anchorsList, opts) {
   const { nodeCoord, adj } = buildGraph(ways, opts)
+  // 吸附半径阶梯：默认 1200m（山区/景区 OSM 测绘稀疏，太紧会全军覆没）；
+  // 标准尝试全失败后才逐级放宽，避免把本来精确的路书锚点拉偏
+  const radius = opts.snapRadius ?? 1200
   const snaps = anchorsList.map((a) => {
-    const id = snapNode(nodeCoord, a)
+    const id = snapNode(nodeCoord, a, radius)
     return { id, d: id < 0 ? Infinity : distM(nodeCoord.get(id), a) }
   })
   if (snaps.some((s) => s.id < 0)) {
@@ -387,7 +392,8 @@ let usedBboxPad = null
 let chosen = null
 let attemptLog = []
 
-const PAD_LADDER = [0.02, 0.05, 0.1]
+// bbox 外扩阶梯：长距离路线锚点跨度大，小 bbox 会把路段切在框外导致「段不可达」
+const PAD_LADDER = [0.02, 0.05, 0.1, 0.18]
 for (const pad of PAD_LADDER) {
   const bbox = deriveBbox(anchors, pad)
   const cacheFile = resolve(CACHE_DIR, `${spec.id}-all.json`)
@@ -421,6 +427,13 @@ for (const pad of PAD_LADDER) {
     { label: '放行 trunk', opts: { allowTrunk: true } },
     { label: '隧道+track+trunk 全放行', opts: { allowTunnelNames: new Set(tunnels), allowTrack: true, allowTrunk: true } },
   )
+  // 全放行仍失败 → 逐级放宽锚点吸附半径（偏远景区/草原/湖岸的锚点常偏 1–5km）
+  for (const r of [2500, 5000]) {
+    attempts.push({
+      label: `放宽吸附 ${r / 1000}km`,
+      opts: { allowTunnelNames: new Set(tunnels), allowTrack: true, allowTrunk: true, snapRadius: r },
+    })
+  }
   attemptLog = []
   for (const attempt of attempts) {
     const result = attemptRoute(ways, anchors, attempt.opts)
@@ -650,7 +663,10 @@ if (DRY) {
   say(`[dry] 预览/报告/建议条目已写入 ${outDir}，src 与测试未改动。`)
   say('[dry] 确认无误后去掉 --dry 重跑即正式入库。')
 } else {
-  // tracks 合并（key 已存在时默认报错，防误伤已上线几何）
+  // 入库整段加锁：tracks / 数据条目 / 测试文件都是「读-改-写」，
+  // 两个 curate 进程并发会把彼此的写入覆盖掉（2026-09-13 曾因此丢失 123 条几何）
+  const lockFile = resolve(ROOT, '.tmp', 'curate-write.lock')
+  withFileLock(lockFile, () => {
   const tracksFile = resolve(ROOT, tracksMeta.file)
   const output = readExistingOutput(tracksFile, tracksMeta.exportName)
   if (output[spec.id] !== undefined && !FORCE) {
@@ -658,7 +674,7 @@ if (DRY) {
     process.exit(1)
   }
   output[spec.id] = [simplified]
-  writeFileSync(tracksFile, renderTracksFile(tracksMeta.exportName, output), 'utf8')
+  atomicWriteFileSync(tracksFile, renderTracksFile(tracksMeta.exportName, output))
   say(`✔ tracks 已合并 → ${tracksMeta.file}`)
 
   // 数据条目追加
@@ -673,7 +689,7 @@ if (DRY) {
     console.error(`数据条目 ${entryId} 已存在于 ${dataMeta.file}，请换 id 或先手工处理`)
     process.exit(1)
   }
-  writeFileSync(dataFile, `${dataText.slice(0, insertAt)}\n${entryText}${dataText.slice(insertAt)}`, 'utf8')
+  atomicWriteFileSync(dataFile, `${dataText.slice(0, insertAt)}\n${entryText}${dataText.slice(insertAt)}`)
   say(`✔ 数据条目 ${entryId} 已追加 → ${dataMeta.file}`)
 
   // 测试文件补丁：界框 + key 全集断言 +（新地区）注册表断言
@@ -769,8 +785,9 @@ if (DRY) {
     }
   }
 
-  writeFileSync(testFile, testText, 'utf8')
+  atomicWriteFileSync(testFile, testText)
   say('✔ 测试文件已更新')
+  }) // ---- 入库临界区结束（释放文件锁）----
 }
 
 writeFileSync(resolve(outDir, 'report.txt'), log.join('\n'), 'utf8')

@@ -16,7 +16,8 @@
  * 输出文件为生成物，人工勿改。OSM 数据 © OpenStreetMap 贡献者（ODbL）。
  */
 
-import { writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, existsSync, readFileSync, mkdirSync, renameSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -37,6 +38,10 @@ export const REGION_META = {
   shenzhen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   chengdu: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   kunming: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  hainan: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  dali: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  qingdao: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
+  qinghai: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   nanjing: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   xiamen: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
   wuhan: { file: 'src/features/curatedRoutes/nationalTracks.ts', exportName: 'NATIONAL_TRACKS' },
@@ -618,14 +623,55 @@ function namedChains(ways, names) {
 /** 解析既有生成文件里的 JSON 数据（合并用），无文件或解析失败返回空 */
 export function readExistingOutput(outFile, exportName) {
   if (!existsSync(outFile)) return {}
+  const text = readFileSync(outFile, 'utf8')
+  const marker = `${exportName}: Record<string, [number, number][][]> = `
+  const idx = text.indexOf(marker)
+  if (idx < 0) {
+    // 事故教训（2026-09-13）：这里曾经「解析失败就返回 {}」，随后一次写入把
+    // 整份几何覆盖成只剩 1 条，123 条已上线几何丢失。宁可中止，也不能静默兜底。
+    throw new Error(`${outFile} 里找不到「${marker}」：文件可能被并发写坏，请先用 git 恢复后重跑`)
+  }
   try {
-    const text = readFileSync(outFile, 'utf8')
-    const marker = `${exportName}: Record<string, [number, number][][]> = `
-    const idx = text.indexOf(marker)
-    if (idx < 0) return {}
     return JSON.parse(text.slice(idx + marker.length))
-  } catch {
-    return {}
+  } catch (error) {
+    throw new Error(`${outFile} 解析失败（${error.message}）：文件可能写坏或不完整，请先用 git 恢复后重跑`)
+  }
+}
+
+/**
+ * 原子写：先写同目录临时文件再 rename。
+ * 读-改-写型写入在并发下会互相覆盖，rename 在同盘是原子的，
+ * 至少保证别的进程读到的永远是「完整的旧版或完整的新版」。
+ */
+export function atomicWriteFileSync(file, content, encoding = 'utf8') {
+  const tmp = `${file}.tmp-${process.pid}`
+  writeFileSync(tmp, content, encoding)
+  renameSync(tmp, file)
+}
+
+/**
+ * 文件锁（mkdir 原子性实现）：保护「读取 → 修改 → 写回」整段临界区。
+ * 两个 curate 进程同时入库会互相覆盖数据，必须串行化。
+ */
+export function withFileLock(lockFile, fn, { timeoutMs = 120_000 } = {}) {
+  const started = Date.now()
+  for (;;) {
+    try {
+      mkdirSync(lockFile)
+      try {
+        return fn()
+      } finally {
+        rmSync(lockFile, { recursive: true, force: true })
+      }
+    } catch {
+      if (Date.now() - started > timeoutMs) {
+        throw new Error(`等待文件锁超时（${lockFile}）；若有残留锁目录可手工删除`)
+      }
+      execFileSync(process.execPath, [
+        '-e',
+        'const t=Date.now();while(Date.now()-t<300);',
+      ])
+    }
   }
 }
 

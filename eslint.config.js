@@ -8,7 +8,9 @@ import tseslint from 'typescript-eslint'
 // JS 推荐规则 + TypeScript 推荐规则 + React Hooks 最新推荐 + React Refresh（Vite 预设）
 export default tseslint.config(
   // 全局忽略：构建产物与依赖目录
-  { ignores: ['dist', 'node_modules'] },
+  // .tmp/ 是并行会话约定（AGENTS.md）的中间产物目录，已 gitignore；
+  // 里面会落盘「待入库条目片段」这类非完整模块的 ts 文本，不该进 lint
+  { ignores: ['dist', 'node_modules', '.tmp', '.tmp/**'] },
   {
     extends: [
       js.configs.recommended,
