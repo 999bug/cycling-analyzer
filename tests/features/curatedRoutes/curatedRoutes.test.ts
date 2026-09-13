@@ -96,7 +96,7 @@ describe('curatedRoutes 数据完整性', () => {
       // 深圳：梧桐山北路一带
       shenzhen: { lat: [22.46, 22.77], lng: [113.79, 114.52] },
       // 成都：龙泉驿 G318 上山段
-      chengdu: { lat: [30.52, 31.14], lng: [103.52, 104.37] },
+      chengdu: { lat: [30.30, 31.14], lng: [103.18, 104.37] },
       // 昆明：西山前山公路（碧鸡关 → 猫猫箐）
       kunming: { lat: [24.77, 26.02], lng: [102.46, 103.17] },
       // 上海：佘山 → 崇明岛（含环崇明、环淀山湖）
@@ -173,14 +173,20 @@ describe('curatedRoutes 数据完整性', () => {
     ])
     // 全国路线的生成 key（fxl/lj/kcs/wts/lqs/mmq）
     expect(Object.keys(NATIONAL_TRACKS).sort()).toEqual([
+      'cd-chongqing-road',
       'cd-haute-s1',
       'cd-haute-s2',
+      'cd-huancheng-greenway',
+      'cd-jinjiang-greenway',
       'cd-longquan-climb-race',
       'cd-longquan-loop',
       'cd-luodai',
       'cd-panda',
       'cd-qingcheng-dujiang',
       'cd-qingcheng-full',
+      'cd-wenjiang-beilin',
+      'cd-xiling-huashuiwan',
+      'cd-zhaogongshan-loop',
       'chongming',
       'cq-babin',
       'cq-binjiang-full',
