@@ -32,6 +32,7 @@ import {
 import { switchTheme, applyTheme } from '@/features/settings/theme'
 import { switchSidebarMode } from '@/features/settings/sidebar'
 import InstallSection from '@/features/pwa/InstallSection'
+import AiSettingsSection from '@/features/ai/AiSettingsSection'
 import {
   useDataSourceStore,
   type AuthorDataVisibility,
@@ -92,6 +93,7 @@ const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'settings-units', label: '单位' },
   { id: 'settings-appearance', label: '外观' },
   { id: 'settings-scope', label: '数据口径' },
+  { id: 'ai-service', label: 'AI 服务' },
   { id: 'settings-offline', label: '离线地图' },
   { id: 'settings-import', label: '导入' },
   { id: 'author-data', label: '作者数据' },
@@ -968,6 +970,7 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
             </section>
             )}
 
+            {activeSectionId === 'ai-service' && <AiSettingsSection id="ai-service" />}
             {activeSectionId === 'settings-offline' && (
             <section className="settings-section" aria-label="离线地图" id="settings-offline">
               <h2 className="settings-section__title">离线地图</h2>

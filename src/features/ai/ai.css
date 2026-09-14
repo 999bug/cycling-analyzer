@@ -1,0 +1,207 @@
+/**
+ * AI 服务区块样式（设置页「AI 服务」+ 详情页 AI 解读，AI 接入 v1）。
+ * 颜色全部取自全局 CSS 变量，与 settings-page / share-studio 同一套令牌。
+ */
+
+/* —— 厂商预设卡片 —— */
+.ai-service__providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.ai-service__provider {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.ai-service__provider:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.ai-service__provider--active {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.ai-service__provider-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ai-service__provider-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
+.ai-service__provider-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* —— 配置表单微调（复用 settings-field 基础样式） —— */
+.ai-service__fields {
+  margin-top: 14px;
+}
+
+.ai-service__form-actions {
+  margin-top: 12px;
+}
+
+.ai-service__key-wrap {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.ai-service__hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.ai-service__prefill-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* 高级折叠容器（虚线框，与 settings-estimate 同语言） */
+.ai-service__advanced {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.ai-service__advanced summary {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.ai-service__advanced .settings-field {
+  margin-top: 10px;
+}
+
+/* —— 状态行 —— */
+.ai-service__status {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ai-service__status strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.ai-service__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: var(--text-tertiary);
+}
+
+.ai-service__dot--on {
+  background: var(--success);
+}
+
+.ai-service__privacy {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 12px 0 0;
+}
+
+/* —— Share Studio 内的 AI 提示行 —— */
+.share-studio__ai-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+
+.share-studio__ai-note--fail {
+  color: var(--danger);
+}
+
+/* —— 详情页 AI 解读行 —— */
+.ai-insight {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ai-insight__label {
+  font-size: 12px;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+
+.ai-insight__text {
+  color: var(--text);
+  margin: 0;
+}
+
+.ai-insight__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.ai-insight__btn {
+  padding: 2px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.ai-insight__btn:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.ai-insight__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ai-insight__hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.ai-insight__error {
+  color: var(--danger);
+  font-size: 12px;
+}

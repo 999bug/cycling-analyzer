@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.76.0',
+    date: '2026-09-14',
+    features: [
+      'AI 服务上线（BYOK，你自己的 Key）：设置页新增「AI 服务」区块，预设 DeepSeek / 智谱 GLM / Kimi / OpenRouter / 通义千问 / 自定义，接口地址与模型参数全部内置，只需粘贴 Key 并保存即可使用',
+      '分享素材弹窗发布文案支持「AI 生成文案」：按朋友圈 / 小红书风格从骑行摘要生成草稿，生成后可继续手改再复制',
+      '详情页新增「AI 解读」：根据聚合指标写 1~2 句训练解读，按活动缓存不重复计费',
+      '隐私边界：AI 只接收距离 / 爬升 / 功率等聚合指标，GPS 轨迹点与逐点心率不出本机；Key 只存本机浏览器、不随数据备份导出；未配置 Key 时所有 AI 入口不显示',
+    ],
+  },
+  {
     version: '2.75.2',
     date: '2026-09-12',
     features: [

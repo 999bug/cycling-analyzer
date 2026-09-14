@@ -70,6 +70,7 @@ import { computeQualityScore } from '@/features/analysis/qualityScore'
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
+import AiInsightSection from '@/features/ai/AiInsightSection'
 import ShareStudioModal from '@/features/share/ShareStudioModal'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
 import CompareSection from '@/features/activity/CompareSection'
@@ -1007,6 +1008,14 @@ function ActivityDetailPage() {
       </header>
 
       <RideSummaryBanner activity={activity} options={summaryOptions} />
+
+      {/* AI 解读（AI 接入 v1）：未配置 AI 服务时不渲染，按活动缓存不重复计费 */}
+      <AiInsightSection
+        activity={activity}
+        ftp={ftp}
+        maxHeartRate={maxHeartRate}
+        distanceUnit={distanceUnit}
+      />
 
       <section className="activity-detail__stats" aria-label="核心指标">
         {coreMetrics.map((metric) => (

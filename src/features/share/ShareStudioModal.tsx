@@ -33,6 +33,9 @@ import {
 } from '@/features/share/shareStageCapture'
 import { simplifyRoute } from '@/map/simplify'
 import { formatDate } from '@/utils/format'
+import { generateShareCaption } from '@/features/ai/aiService'
+import { resolveAiConfig, useAiConfigStore } from '@/features/ai/aiConfigStore'
+import '@/features/ai/ai.css'
 import '@/features/share/shareStudio.css'
 
 /** 弹窗 props */
@@ -83,6 +86,9 @@ const DEFAULT_STAGE_SCALE = 0.34
 /** 导出流程状态：idle 正常 / busy 生成中 / fallback 已降级出图 / fail 未出图 */
 type ExportState = 'idle' | 'busy' | 'fallback' | 'fail'
 
+/** AI 文案生成状态：idle 正常 / busy 请求中 / fail 失败（aiMessage 展示原因） */
+type AiCaptionState = 'idle' | 'busy' | 'fail'
+
 /** 舞台页标识：朋友圈单图 + 小红书四页（快照节点按它登记） */
 type StagePageKey = ShareStagePageId | 'moments'
 
@@ -121,6 +127,9 @@ function ShareStudioModal({
   // 图上文字编辑态（键缺省 = 用默认值）
   const [stageText, setStageText] = useState<{ title?: string; script?: string }>(() => ({}))
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
+  // AI 文案生成状态与提示（未配置 / 失败时展示引导或原因）
+  const [aiState, setAiState] = useState<AiCaptionState>('idle')
+  const [aiMessage, setAiMessage] = useState('')
   const [exportState, setExportState] = useState<ExportState>('idle')
   const [stageScale, setStageScale] = useState(DEFAULT_STAGE_SCALE)
 
@@ -282,6 +291,37 @@ function ShareStudioModal({
       setCopyState('ok')
     } catch {
       setCopyState('fail')
+    }
+  }
+
+  /**
+   * AI 生成当前平台发布文案（BYOK：未配置时引导到设置页）。
+   * 结果直接填入编辑框，用户可继续手改；图上文字不受影响。
+   */
+  async function handleAiCaption() {
+    if (aiState === 'busy') {
+      return
+    }
+    const config = resolveAiConfig(useAiConfigStore.getState())
+    if (config === null) {
+      setAiState('fail')
+      setAiMessage('AI 服务未配置：到「更多 → AI 服务」选择厂商并粘贴 Key 即可开启')
+      return
+    }
+    setAiState('busy')
+    setAiMessage('')
+    try {
+      const result = await generateShareCaption(activity, platform, { ftp, maxHeartRate, distanceUnit })
+      setCaptions((current) =>
+        platform === 'moments'
+          ? { ...current, moments: result.body }
+          : { ...current, xhsTitle: result.title ?? current.xhsTitle ?? data.captions.xhsTitle, xhsBody: result.body },
+      )
+      setAiState('idle')
+      setAiMessage('AI 文案已填入，可继续修改后复制')
+    } catch (error) {
+      setAiState('fail')
+      setAiMessage(error instanceof Error ? error.message : 'AI 生成失败，请重试')
     }
   }
 
@@ -520,6 +560,14 @@ function ShareStudioModal({
                 <button
                   type="button"
                   className="share-studio__btn share-studio__btn--ghost"
+                  disabled={aiState === 'busy'}
+                  onClick={() => void handleAiCaption()}
+                >
+                  {aiState === 'busy' ? 'AI 生成中…' : 'AI 生成文案'}
+                </button>
+                <button
+                  type="button"
+                  className="share-studio__btn share-studio__btn--ghost"
                   onClick={() =>
                     setCaptions((current) => ({
                       ...current,
@@ -539,6 +587,18 @@ function ShareStudioModal({
                   {copyState === 'ok' ? '已复制' : copyState === 'fail' ? '复制失败' : '复制文案'}
                 </button>
               </div>
+              {aiMessage.length > 0 && (
+                <p
+                  role="status"
+                  className={
+                    aiState === 'fail'
+                      ? 'share-studio__ai-note share-studio__ai-note--fail'
+                      : 'share-studio__ai-note'
+                  }
+                >
+                  {aiMessage}
+                </p>
+              )}
             </div>
           </section>
         </div>
