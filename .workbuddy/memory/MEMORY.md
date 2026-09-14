@@ -31,6 +31,7 @@
 | `workflow.md` | 改 UI/交互、写 effect、做折叠面板、地图悬浮控件前 |
 | `data-docs.md` | 用 `private-fixtures/` 真实数据、改算法口径、改云端教程文档前 |
 | `curate-routes.md` | 给 `src/features/curatedRoutes/` 补录全国路线（跑 curate-batch、调闸门、离线入库）前 |
+| `docs-screenshots.md` | 要重拍/新增 README 界面预览图（`scripts/capture-screenshots.mjs`、编号命名、选择器与沙箱坑）时 |
 
 ## 维护规则
 
