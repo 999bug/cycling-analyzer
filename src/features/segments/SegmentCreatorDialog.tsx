@@ -7,16 +7,19 @@
  *   匹配误差大，仅提示不拦截）；
  * - 两点齐后自动做历史命中预览：扫描近 90 天骑行活动，给出命中次数与
  *   正/反方向分布（正向 = 穿越 Net 位移与「起点 → 终点」一致）；
+ * - 地图右上角支持全屏（桌面原生 Fullscreen API，移动端 / PWA 独立窗口
+ *   自动降级伪全屏，见 mapFullscreen.tsx）：框选长路段时看得更清；
  * - 创建写入 segments 表（轨迹切片存 trackPoints 供路径校验），并把当前
  *   活动的穿越成绩增量回写 segment_efforts，跳转赛段页即可看到成绩。
  *
  * 坐标口径与匹配器一致：存储原始记录坐标（不做坐标系转换），展示投影。
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CircleMarker, MapContainer, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
+import { FullscreenSync, MapFullscreenButton } from '@/map/mapFullscreen'
 import type { ActivityRecord, TrackOffset } from '@/types/activity'
 import type { CoordinateSystem } from '@/geo/coordinateSystem'
 import type { ActivityReadRepository } from '@/storage/repositories/activityRepository'
@@ -152,6 +155,9 @@ function SegmentCreatorDialog({
   onCreated,
 }: SegmentCreatorDialogProps) {
   const navigate = useNavigate()
+
+  // 地图包裹层（全屏目标：桌面走原生 Fullscreen API，移动端 / PWA 独立窗口伪全屏）
+  const mapWrapperRef = useRef<HTMLDivElement>(null)
 
   // 第一次点击 = A（候选起点），第二次 = B；direction 反向时两圆互换
   const [pickA, setPickA] = useState<Pick | undefined>()
@@ -467,8 +473,11 @@ function SegmentCreatorDialog({
                 )}
                 <ClickCatcher onPick={handleMapPick} />
                 <FitTrack points={projected} />
+                {/* 进出全屏后重算地图尺寸，避免瓦片错位 */}
+                <FullscreenSync />
               </MapContainer>
             )}
+            {center !== undefined && <MapFullscreenButton targetRef={mapWrapperRef} />}
             <div className="segment-creator__map-hint">
               {pickA === undefined
                 ? '等待选择起点'

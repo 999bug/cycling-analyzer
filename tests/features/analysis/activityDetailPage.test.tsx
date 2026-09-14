@@ -305,6 +305,15 @@ describe('活动详情页训练分析集成', () => {
     expect(powerZ5).toHaveTextContent('00:00:10')
     expect(powerZ5).toHaveTextContent('25%')
 
+    // 各区间的数值范围：按最大心率 180 bpm / FTP 200 W 换算
+    expect(heartZ4).toHaveTextContent('144–162 bpm')
+    expect(heartZ2).toHaveTextContent('108–126 bpm')
+    expect(screen.getByText('Z5 无氧区').closest('.zone-row')).toHaveTextContent('≥162 bpm')
+    expect(powerZ5).toHaveTextContent('≥210 W')
+    expect(
+      screen.getByRole('region', { name: '训练区间' }).textContent,
+    ).toContain('区间划分基准：最大心率 180 bpm · FTP 200 W')
+
     expect(screen.queryByText('在设置中配置 FTP 与最大心率后可查看区间分析')).not.toBeInTheDocument()
   })
 

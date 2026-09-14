@@ -79,6 +79,7 @@ const INSIGHT_PERSPECTIVES: readonly AiInsightPerspective[] = ['pacing', 'body',
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
+import { buildRideSummary } from '@/features/insights/rideSummary'
 import AiInsightSection from '@/features/ai/AiInsightSection'
 import ShareStudioModal from '@/features/share/ShareStudioModal'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
@@ -92,7 +93,10 @@ import { downsampleRecords } from '@/charts/downsample'
 import {
   calculateHeartRateZones,
   calculatePowerZones,
+  heartRateZoneRanges,
+  powerZoneRanges,
   type ZoneDistribution,
+  type ZoneRange,
 } from '@/features/analysis/zones'
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
@@ -533,6 +537,11 @@ function ActivityDetailPage() {
   const summaryOptions = useMemo(
     () => ({ ...insightsOptions, qualityScore: qualityOverall }),
     [insightsOptions, qualityOverall],
+  )
+  // 本地确定性一句话总结：顶部 AI 解读行的「本地」态文案（与总结条同源）
+  const localSummaryText = useMemo(
+    () => (activity === undefined ? undefined : buildRideSummary(activity, summaryOptions)?.headline),
+    [activity, summaryOptions],
   )
 
   // 强度因子（IF）：FTP 存在且可算出 NP 时才有意义
@@ -1029,6 +1038,7 @@ function ActivityDetailPage() {
         ftp={ftp}
         maxHeartRate={maxHeartRate}
         distanceUnit={distanceUnit}
+        localText={localSummaryText}
       />
 
       <section className="activity-detail__stats" aria-label="核心指标">
@@ -1067,6 +1077,7 @@ function ActivityDetailPage() {
       {/* 评分缺数据时 AiEnhanceBlock 不包裹（无结论可增强，入口无意义） */}
       {qualitySubScores.some((item) => item.score !== undefined) && qualityOverall !== undefined ? (
         <AiEnhanceBlock
+          title="数据质量"
           cacheKey={`score:${activity.id}`}
           buildParams={() => scoreExplainStreamParams(qualityOverall, qualitySubScores, activity, aiRichFacts)}
         >
@@ -1078,6 +1089,7 @@ function ActivityDetailPage() {
 
       {localConclusions.length > 0 ? (
         <AiEnhanceBlock
+          title="骑行洞察"
           cacheKey={`insights:${activity.id}`}
           buildParams={() => {
           const perspective = INSIGHT_PERSPECTIVES[insightVariantRef.current % INSIGHT_PERSPECTIVES.length]
@@ -1089,6 +1101,7 @@ function ActivityDetailPage() {
             activity={activity}
             records={records}
             options={insightsOptions}
+            showTitle={false}
           />
         </AiEnhanceBlock>
       ) : (
@@ -1238,6 +1251,8 @@ function ActivityDetailPage() {
         maxHeartRate={activity.maxHeartRate}
         minHeartRate={minHeartRate}
         heartRateRecords={chartRecords}
+        heartRateBaseline={maxHeartRate}
+        ftpBaseline={ftp}
       />
 
       {/* 社媒分享素材弹窗：Canvas 本地出图，无网络请求（规格外延伸功能） */}
@@ -1349,6 +1364,12 @@ interface TrainingZonesSectionProps {
 
   /** 心率折线图数据（抽稀后逐点记录） */
   heartRateRecords: ActivityRecord[]
+
+  /** 心率区间基线（用户设置的最大心率 bpm）：换算各区间心率范围 */
+  heartRateBaseline: number | undefined
+
+  /** 功率区间基线（用户设置的 FTP W）：换算各区间功率范围 */
+  ftpBaseline: number | undefined
 }
 
 /**
@@ -1370,9 +1391,14 @@ function TrainingZonesSection({
   maxHeartRate,
   minHeartRate,
   heartRateRecords,
+  heartRateBaseline,
+  ftpBaseline,
 }: TrainingZonesSectionProps) {
   const showHeartRate = heartRateZones !== null && hasHeartRateData
   const showPower = powerZones !== null && hasPowerData
+  // 各区间的数值范围（心率 bpm / 功率 W）：基线缺失时为空，行内不显示范围
+  const heartRateRanges = useMemo(() => heartRateZoneRanges(heartRateBaseline), [heartRateBaseline])
+  const powerRanges = useMemo(() => powerZoneRanges(ftpBaseline), [ftpBaseline])
 
   // 心率统计行：摘要平均/最大 + 逐点最小，缺失显示 '—'
   const heartRateStats: ReadonlyArray<{ label: string; value: number | undefined }> = [
@@ -1380,6 +1406,14 @@ function TrainingZonesSection({
     { label: '最大心率', value: maxHeartRate },
     { label: '最小心率', value: minHeartRate },
   ]
+
+  // 区间划分基准（用户设置的最大心率 / FTP）：让各区间范围有据可依
+  const baselineNote = [
+    heartRateBaseline === undefined ? undefined : `最大心率 ${Math.round(heartRateBaseline)} bpm`,
+    ftpBaseline === undefined ? undefined : `FTP ${Math.round(ftpBaseline)} W`,
+  ]
+    .filter((item): item is string => item !== undefined)
+    .join(' · ')
 
   // 区间/指标均无可显示内容（配置缺失或数据无对应指标）时显示引导文案
   const metrics =
@@ -1393,6 +1427,9 @@ function TrainingZonesSection({
   return (
     <section className="activity-detail__zones" aria-label="训练区间">
       <h2 className="activity-detail__zones-title">训练区间</h2>
+      {baselineNote.length > 0 && (
+        <p className="activity-detail__zones-note">区间划分基准：{baselineNote}</p>
+      )}
       {hasHeartRateData && (
         <div className="activity-detail__hr-analysis">
           <div className="activity-detail__hr-stats">
@@ -1408,10 +1445,22 @@ function TrainingZonesSection({
       {showHeartRate || showPower || metrics !== null ? (
         <>
           {showHeartRate && heartRateZones !== null && (
-            <ZoneGroup title="心率区间" zones={heartRateZones} names={HEART_RATE_ZONE_NAMES} />
+            <ZoneGroup
+              title="心率区间"
+              zones={heartRateZones}
+              names={HEART_RATE_ZONE_NAMES}
+              ranges={heartRateRanges}
+              unit="bpm"
+            />
           )}
           {showPower && powerZones !== null && (
-            <ZoneGroup title="功率区间" zones={powerZones} names={POWER_ZONE_NAMES} />
+            <ZoneGroup
+              title="功率区间"
+              zones={powerZones}
+              names={POWER_ZONE_NAMES}
+              ranges={powerRanges}
+              unit="W"
+            />
           )}
           {metrics}
         </>
@@ -1423,6 +1472,10 @@ function TrainingZonesSection({
         <ul>
           <li>心率区间：按最大心率百分比划分（&lt;60% / 60-70% / 70-80% / 80-90% / ≥90%），按逐点时间间隔累计各区时长</li>
           <li>功率区间：按 FTP 百分比划分（&lt;55% / 55-75% / 75-90% / 90-105% / ≥105%）</li>
+          <li>
+            每行右侧的数值范围由你设置的最大心率 / FTP 换算（如最大心率 190 bpm 时，Z4 阈值区为
+            152–171 bpm）；恰好落在边界上的数据归入更高的区间
+          </li>
           <li>标准化功率（NP）：30 秒滑动平均的四次方均值再开四次方，反映体感强度而非简单平均</li>
           <li>强度因子（IF）= NP ÷ FTP</li>
           <li>训练压力分数（TSS）= 时长（秒）× IF² × 100 ÷ 3600，以 IF=1 骑行 1 小时为 100 分</li>
@@ -1433,31 +1486,65 @@ function TrainingZonesSection({
 }
 
 /**
+ * 单个区间行的范围文案：开区间侧写作「<x」「≥x」（与区间划分的边界归属一致）。
+ *
+ * @param range 区间范围（缺失时返回空串）
+ * @param unit 单位（bpm / W）
+ */
+function formatZoneRange(range: ZoneRange | undefined, unit: string): string {
+  if (range === undefined) {
+    return ''
+  }
+  if (range.min === undefined && range.max !== undefined) {
+    return `<${range.max} ${unit}`
+  }
+  if (range.max === undefined && range.min !== undefined) {
+    return `≥${range.min} ${unit}`
+  }
+  if (range.min !== undefined && range.max !== undefined) {
+    return `${range.min}–${range.max} ${unit}`
+  }
+  return ''
+}
+
+/**
  * 单个指标（心率/功率）的区间分布组：标题 + 5 行分布条。
- * 每行显示区间名、时长与占比，条宽按 percent 渲染。
+ * 每行显示区间名、数值范围、时长与占比，条宽按 percent 渲染。
  *
  * @param title 分组标题
  * @param zones 5 个区间分布（按 1-5 顺序）
  * @param names 区间名称（Z1-Z5）
+ * @param ranges 各区间数值范围（基线缺失时为空数组，行内不显示范围）
+ * @param unit 范围单位（bpm / W）
  */
 function ZoneGroup({
   title,
   zones,
   names,
+  ranges,
+  unit,
 }: {
   title: string
   zones: ZoneDistribution[]
   names: readonly string[]
+  ranges: readonly ZoneRange[]
+  unit: string
 }) {
   return (
     <div className="activity-detail__zone-group">
       <h3 className="activity-detail__zone-group-title">{title}</h3>
-      {zones.map((entry) => (
-        <div key={entry.zone} className="zone-row">
-          <span className="zone-row__label">
-            Z{entry.zone} {names[entry.zone - 1]}
-          </span>
-          <div className="zone-row__bar">
+      {zones.map((entry) => {
+        const rangeText = formatZoneRange(
+          ranges.find((item) => item.zone === entry.zone),
+          unit,
+        )
+        return (
+          <div key={entry.zone} className="zone-row">
+            <span className="zone-row__label">
+              Z{entry.zone} {names[entry.zone - 1]}
+            </span>
+            {rangeText.length > 0 && <span className="zone-row__range">{rangeText}</span>}
+            <div className="zone-row__bar">
             <div
               className="zone-row__bar-fill"
               style={{
@@ -1465,11 +1552,12 @@ function ZoneGroup({
                 backgroundColor: ZONE_COLORS[entry.zone - 1],
               }}
             />
+            </div>
+            <span className="zone-row__time">{formatDuration(entry.seconds)}</span>
+            <span className="zone-row__percent">{Math.round(entry.percent)}%</span>
           </div>
-          <span className="zone-row__time">{formatDuration(entry.seconds)}</span>
-          <span className="zone-row__percent">{Math.round(entry.percent)}%</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

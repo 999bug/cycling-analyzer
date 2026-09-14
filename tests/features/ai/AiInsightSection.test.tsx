@@ -76,11 +76,13 @@ describe('AiInsightSection', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AiInsightSection activity={makeActivity()} ftp={235} distanceUnit="km" />)
-    fireEvent.click(screen.getByRole('button', { name: '生成解读' }))
+    fireEvent.click(screen.getByRole('button', { name: 'AI 解读' }))
 
     await waitFor(() => expect(screen.getByText('本次属于节奏爬坡训练，强度不低。')).toBeDefined())
-    // 流式结束后按钮切换为重新解读（流式过程中是「终止」）
-    await waitFor(() => expect(screen.getByRole('button', { name: '重新解读' })).toBeDefined())
+    // 流式结束后控件换为 [本地|AI] + ⟳（流式过程中额外有 ■ 终止）
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '重新生成 AI 解读' })).toBeDefined(),
+    )
     // 缓存落盘
     const raw = window.localStorage.getItem('cycling-ai-insight-cache')
     expect(raw).toContain('节奏爬坡')
@@ -112,5 +114,59 @@ describe('AiInsightSection', () => {
     expect(fetchMock).not.toHaveBeenCalled()
 
     vi.unstubAllGlobals()
+  })
+
+  it('本地态默认展示确定性总结，切「AI」回到解读正文', () => {
+    useAiConfigStore.setState({
+      profiles: [{
+        id: 'p1',
+        name: 'DeepSeek',
+        vendorId: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-test-123456',
+        model: 'deepseek-chat',
+      }],
+      activeProfileId: 'p1',
+    })
+    window.localStorage.setItem(
+      'cycling-ai-insight-cache',
+      JSON.stringify({ 'act-1': { text: '缓存里的解读', at: '2026-09-14T00:00:00.000Z' } }),
+    )
+
+    render(
+      <AiInsightSection
+        activity={makeActivity()}
+        distanceUnit="km"
+        localText="长距离，全程 207 公里，均速 21.2 公里每小时"
+      />,
+    )
+    // 有缓存时默认进 AI 态；切本地可见确定性总结，再切 AI 回到解读
+    expect(screen.getByText('缓存里的解读')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: '本地' }))
+    expect(screen.getByText('长距离，全程 207 公里，均速 21.2 公里每小时')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }))
+    expect(screen.getByText('缓存里的解读')).toBeDefined()
+  })
+
+  it('标题「AI 解读」在本地与 AI 两种模式下都在', () => {
+    useAiConfigStore.setState({
+      profiles: [{
+        id: 'p1',
+        name: 'DeepSeek',
+        vendorId: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-test-123456',
+        model: 'deepseek-chat',
+      }],
+      activeProfileId: 'p1',
+    })
+    window.localStorage.setItem(
+      'cycling-ai-insight-cache',
+      JSON.stringify({ 'act-1': { text: '缓存里的解读', at: '2026-09-14T00:00:00.000Z' } }),
+    )
+    render(<AiInsightSection activity={makeActivity()} distanceUnit="km" localText="本地总结" />)
+    expect(screen.getByRole('heading', { name: 'AI 解读' })).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: '本地' }))
+    expect(screen.getByRole('heading', { name: 'AI 解读' })).toBeDefined()
   })
 })

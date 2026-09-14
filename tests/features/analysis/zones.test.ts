@@ -4,7 +4,12 @@
  * 缺失指标跳过、时间未推进防御、配置缺失/无效返回 null。
  */
 import { describe, expect, it } from 'vitest'
-import { calculateHeartRateZones, calculatePowerZones } from '@/features/analysis/zones'
+import {
+  calculateHeartRateZones,
+  calculatePowerZones,
+  heartRateZoneRanges,
+  powerZoneRanges,
+} from '@/features/analysis/zones'
 import type { ActivityRecord } from '@/types/activity'
 
 /**
@@ -140,5 +145,42 @@ describe('calculatePowerZones', () => {
     expect(calculatePowerZones([makeRecord(0, undefined, 150)], Number.NaN)).toBeNull()
     expect(calculatePowerZones([makeRecord(0, undefined, 150)], 0)).toBeNull()
     expect(calculatePowerZones([makeRecord(0, undefined, 150)], -200)).toBeNull()
+  })
+})
+
+describe('heartRateZoneRanges', () => {
+  it('按最大心率百分比换算 5 档心率范围（相邻区共用边界）', () => {
+    // maxHR=190：<114 / 114–133 / 133–152 / 152–171 / ≥171
+    expect(heartRateZoneRanges(190)).toEqual([
+      { zone: 1, max: 114 },
+      { zone: 2, min: 114, max: 133 },
+      { zone: 3, min: 133, max: 152 },
+      { zone: 4, min: 152, max: 171 },
+      { zone: 5, min: 171 },
+    ])
+  })
+
+  it('最大心率缺失/无效时返回空数组（不伪造范围）', () => {
+    expect(heartRateZoneRanges(undefined)).toEqual([])
+    expect(heartRateZoneRanges(Number.NaN)).toEqual([])
+    expect(heartRateZoneRanges(0)).toEqual([])
+  })
+})
+
+describe('powerZoneRanges', () => {
+  it('按 FTP 百分比换算 5 档功率范围', () => {
+    // FTP=200：<110 / 110–150 / 150–180 / 180–210 / ≥210
+    expect(powerZoneRanges(200)).toEqual([
+      { zone: 1, max: 110 },
+      { zone: 2, min: 110, max: 150 },
+      { zone: 3, min: 150, max: 180 },
+      { zone: 4, min: 180, max: 210 },
+      { zone: 5, min: 210 },
+    ])
+  })
+
+  it('FTP 缺失/无效时返回空数组', () => {
+    expect(powerZoneRanges(undefined)).toEqual([])
+    expect(powerZoneRanges(-1)).toEqual([])
   })
 })

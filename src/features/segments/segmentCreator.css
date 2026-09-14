@@ -88,6 +88,14 @@
   width: 100%;
 }
 
+/* 原生全屏态：铺满屏幕、去掉弹窗内的圆角与描边 */
+.segment-creator__map:fullscreen {
+  min-height: 100%;
+  border: none;
+  border-radius: 0;
+  background-color: var(--bg);
+}
+
 .segment-creator__map-hint {
   position: absolute;
   left: 10px;

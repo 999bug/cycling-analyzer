@@ -8,6 +8,9 @@
  *
  * 2.86.0：移除「一键解读全部」与其注册表（enhanceRegistry）——所有区块
  * 统一走 AiEnhanceBlock 本身（含赛段区块内部包裹）。
+ *
+ * 2.88.0：控件行新增左侧标题（title），本地 / AI 两种模式共用——切到 AI
+ * 时 children 不渲染，标题若留在 children 里会随内容一起消失。
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
@@ -30,14 +33,27 @@ export interface AiEnhanceBlockProps {
 
   /** 按钮文案（默认「AI 解读」） */
   aiLabel?: string
+
+  /**
+   * 区块标题：渲染在控件行最左侧（本地 / AI 两种模式共用同一份，
+   * 切到 AI 时不会消失）。提供了标题时，children 内不应再渲染同
+   * 名标题，避免本地态出现两处。
+   */
+  title?: string
 }
 
 /**
- * AI 增强区块组件（未配置 AI 服务时只渲染 children，无任何按钮）。
+ * AI 增强区块组件（未配置 AI 服务时只渲染标题 + children，无任何按钮）。
  *
  * @param props 组件参数
  */
-function AiEnhanceBlock({ cacheKey, buildParams, children, aiLabel = 'AI 解读' }: AiEnhanceBlockProps) {
+function AiEnhanceBlock({
+  cacheKey,
+  buildParams,
+  children,
+  aiLabel = 'AI 解读',
+  title,
+}: AiEnhanceBlockProps) {
   const aiReady = useAiConfigStore(selectAiReady)
   const agent = useAgentStream()
   const [mode, setMode] = useState<'local' | 'ai'>('local')
@@ -78,14 +94,16 @@ function AiEnhanceBlock({ cacheKey, buildParams, children, aiLabel = 'AI 解读'
   const display =
     agent.content.trim().length > 0 ? agent.content : agent.phase === 'idle' ? (cachedText ?? '') : ''
 
-  if (!aiReady) {
-    return <>{children}</>
-  }
-
-  return (
-    <div className="ai-enhance">
-      <div className="ai-enhance__bar">
-        {hasAi ? (
+  // 标题行：标题固定最左，AI 控件靠右；本地 / AI 两种模式共用这一行
+  const head = (
+    <div
+      className={
+        title === undefined ? 'ai-enhance__bar' : 'ai-enhance__bar ai-enhance__bar--titled'
+      }
+    >
+      {title !== undefined && <h2 className="ai-enhance__title">{title}</h2>}
+      {aiReady &&
+        (hasAi ? (
           <>
             <div className="ai-miniseg" role="group" aria-label="结论来源切换">
               <button
@@ -125,9 +143,25 @@ function AiEnhanceBlock({ cacheKey, buildParams, children, aiLabel = 'AI 解读'
           >
             <span aria-hidden="true">✦</span> {running ? 'AI 解读中…' : aiLabel}
           </button>
-        )}
-      </div>
+        ))}
+    </div>
+  )
 
+  if (!aiReady) {
+    // 有标题时仍走统一标题行（区块标题不应依赖是否配置 AI），否则原样透传
+    if (title === undefined) {
+      return <>{children}</>
+    }
+    return (
+      <div className="ai-enhance">
+        {head}
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className="ai-enhance">
+      {head}
       {mode === 'ai' && (
         <div className="ai-enhance__pane">
           <div className="ai-block">

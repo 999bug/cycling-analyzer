@@ -1,9 +1,9 @@
 /**
  * 详情页 AI 解读行（AI 接入 v3：agent 式流式生成）。
  *
- * 本地已算好的结论由 RideSummaryBanner 展示；本组件提供 AI 的
- * 口语化解读，交互沿用 v3 定稿：思考过程卡实时展示、正文流式落框、
- * 全程可终止（已收到部分保留，不写入缓存）。
+ * 2.88.0 起交互与 `AiEnhanceBlock` 完全对齐：控件行左侧固定标题「AI 解读」，
+ * 右侧为 [本地|AI] 迷你分段 + ⟳ 重新生成（生成中额外给 ■ 终止）——本地模式
+ * 展示本地确定性一句话总结（与顶部总结条同源），AI 模式展示模型解读。
  *
  * 行为约束：
  * - 未配置 AI 服务时**整行不渲染**（默认关闭，按需开启）；
@@ -34,6 +34,9 @@ export interface AiInsightSectionProps {
 
   /** 距离显示单位（规格 §27） */
   distanceUnit: DistanceUnit
+
+  /** 本地确定性一句话总结（「本地」模式展示；缺失时本地态为空） */
+  localText?: string
 }
 
 /**
@@ -41,8 +44,18 @@ export interface AiInsightSectionProps {
  *
  * @param props 组件参数
  */
-function AiInsightSection({ activity, ftp, maxHeartRate, distanceUnit }: AiInsightSectionProps) {
+function AiInsightSection({
+  activity,
+  ftp,
+  maxHeartRate,
+  distanceUnit,
+  localText,
+}: AiInsightSectionProps) {
   const aiReady = useAiConfigStore(selectAiReady)
+  // 已有缓存 = 用户要的就是 AI 版，直接进 AI 态；否则先看本地总结
+  const [mode, setMode] = useState<'local' | 'ai'>(() =>
+    getCachedInsight(activity.id) === undefined ? 'local' : 'ai',
+  )
   const [notice, setNotice] = useState('')
   const agent = useAgentStream()
 
@@ -59,14 +72,10 @@ function AiInsightSection({ activity, ftp, maxHeartRate, distanceUnit }: AiInsig
     return null
   }
 
-  // 展示优先级：生成中/刚完成 → 实时内容；待机/终止无正文 → 活动缓存
   const cachedText = getCachedInsight(activity.id)
-  const display =
-    agent.phase === 'idle' || (agent.phase === 'stopped' && agent.content.trim().length === 0)
-      ? cachedText
-      : agent.content.trim().length > 0
-        ? agent.content
-        : cachedText
+  const hasAi = cachedText !== undefined || agent.phase === 'done'
+  // AI 态展示优先级：流式正文 → 终止后的部分结果 → 缓存
+  const aiText = agent.content.trim().length > 0 ? agent.content : (cachedText ?? '')
 
   /** 生成解读（或重新解读覆盖旧结果） */
   function handleGenerate() {
@@ -74,6 +83,7 @@ function AiInsightSection({ activity, ftp, maxHeartRate, distanceUnit }: AiInsig
       return
     }
     setNotice('')
+    setMode('ai')
     try {
       agent.start(insightStreamParams(activity, { ftp, maxHeartRate, distanceUnit }), (outcome) => {
         if (outcome.phase === 'error') {
@@ -86,26 +96,102 @@ function AiInsightSection({ activity, ftp, maxHeartRate, distanceUnit }: AiInsig
   }
 
   return (
-    <section className="ai-insight" aria-label="AI 解读">
-      <div className="ai-insight__label">AI 解读</div>
-      <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
-      {display !== undefined && display.length > 0 && <p className="ai-insight__text">{renderAiProse(display)}</p>}
-      <div className="ai-insight__actions">
-        {running ? (
-          <button type="button" className="ai-insight__btn ai-insight__btn--stop" onClick={agent.stop}>
-            终止
-          </button>
+    <section className="ai-enhance" aria-label="AI 解读">
+      <div className="ai-enhance__bar ai-enhance__bar--titled">
+        <h2 className="ai-enhance__title">AI 解读</h2>
+        {hasAi ? (
+          <>
+            <div className="ai-miniseg" role="group" aria-label="结论来源切换">
+              <button
+                type="button"
+                className={mode === 'local' ? 'on' : ''}
+                aria-pressed={mode === 'local'}
+                onClick={() => setMode('local')}
+              >
+                本地
+              </button>
+              <button
+                type="button"
+                className={mode === 'ai' ? 'on' : ''}
+                aria-pressed={mode === 'ai'}
+                onClick={() => setMode('ai')}
+              >
+                AI
+              </button>
+            </div>
+            <button
+              type="button"
+              className="ai-iconbtn"
+              title="重新生成 AI 解读"
+              aria-label="重新生成 AI 解读"
+              onClick={handleGenerate}
+              disabled={running}
+            >
+              ⟳
+            </button>
+          </>
         ) : (
-          <button type="button" className="ai-insight__btn" onClick={handleGenerate}>
-            {cachedText !== undefined || agent.phase === 'done' ? '重新解读' : '生成解读'}
+          <button
+            type="button"
+            className={running ? 'ai-pill ai-pill--busy' : 'ai-pill'}
+            onClick={handleGenerate}
+            disabled={running}
+          >
+            <span aria-hidden="true">✦</span> {running ? 'AI 解读中…' : 'AI 解读'}
           </button>
         )}
-        {cachedText === undefined && !running && agent.phase === 'idle' && (
-          <span className="ai-insight__hint">根据聚合指标写 1~2 句解读；仅上行汇总数字，不含轨迹</span>
+        {running && (
+          <button
+            type="button"
+            className="ai-iconbtn"
+            title="终止生成"
+            aria-label="终止生成"
+            onClick={agent.stop}
+          >
+            ■
+          </button>
         )}
-        {agent.phase === 'error' && <span className="ai-insight__error">{agent.error}</span>}
-        {notice.length > 0 && <span className="ai-insight__error">{notice}</span>}
       </div>
+
+      {mode === 'ai' ? (
+        <div className="ai-enhance__pane">
+          <div className="ai-block">
+            <div className="ai-block__meta">
+              <span className="dot" />
+              <span>AI 生成</span>
+              <span className="token">
+                {agent.reasoning.length > 0 && `· 思考 ~${Math.round(agent.reasoning.length * 0.6)} token `}
+                {agent.elapsedSec > 0 && `· ${agent.elapsedSec.toFixed(1)}s`}
+              </span>
+            </div>
+            {aiText.length > 0 ? (
+              <div className="ai-prose">{renderAiProse(aiText)}</div>
+            ) : running ? (
+              <>
+                <div className="ai-shimmer" />
+                <div className="ai-shimmer" />
+                <div className="ai-shimmer" />
+              </>
+            ) : (
+              <div className="ai-enhance__placeholder">正在生成…</div>
+            )}
+          </div>
+          <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
+          {agent.phase === 'error' && <p className="ai-insight__error">{agent.error}</p>}
+          {agent.phase === 'stopped' && (
+            <p className="ai-insight__error">已终止（已发生的用量照常计费）</p>
+          )}
+          {notice.length > 0 && <p className="ai-insight__error">{notice}</p>}
+        </div>
+      ) : (
+        <>
+          {localText !== undefined && <p className="ai-insight__text">{localText}</p>}
+          {!hasAi && (
+            <p className="ai-insight__hint">根据聚合指标写 1~2 句解读；仅上行汇总数字，不含轨迹</p>
+          )}
+          {notice.length > 0 && <p className="ai-insight__error">{notice}</p>}
+        </>
+      )}
     </section>
   )
 }

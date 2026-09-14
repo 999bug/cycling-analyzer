@@ -110,6 +110,68 @@ export function calculateHeartRateZones(
 }
 
 /**
+ * 区间数值范围（展示用：如「Z3 有氧区 145–165 bpm」）。
+ * 开区间侧为 undefined——最低区无下界、最高区无上界，展示时写作「<x」「≥x」。
+ */
+export interface ZoneRange {
+  /** 区间编号（1-5） */
+  zone: number
+
+  /** 下界（含）；undefined = 无下界 */
+  min?: number
+
+  /** 上界（与下一区下界同值，恰好落在该值归更高区）；undefined = 无上界 */
+  max?: number
+}
+
+/**
+ * 按百分比边界换算绝对值区间：相邻区间共用同一边界值，与 zoneIndexOf 的
+ * 归属口径一致（恰好落在边界归更高区）。
+ *
+ * @param bounds 百分比边界（升序）
+ * @param scale 百分比 → 绝对值（如 0.7 × 最大心率）
+ * @returns 各区间范围（bounds.length + 1 个）
+ */
+function buildZoneRanges(bounds: readonly number[], scale: (bound: number) => number): ZoneRange[] {
+  const edges = bounds.map(scale)
+  const ranges: ZoneRange[] = []
+  for (let index = 0; index < edges.length; index += 1) {
+    const max = edges[index]
+    const min = index === 0 ? undefined : edges[index - 1]
+    ranges.push({ zone: index + 1, ...(min === undefined ? {} : { min }), max })
+  }
+  const last = edges[edges.length - 1]
+  ranges.push({ zone: edges.length + 1, min: last })
+  return ranges
+}
+
+/**
+ * 心率区间对应的心率范围（bpm，按最大心率百分比换算并取整）。
+ *
+ * @param maxHeartRate 用户最大心率（bpm），无效时返回空数组
+ * @returns 5 个区间的心率范围
+ */
+export function heartRateZoneRanges(maxHeartRate: number | undefined): ZoneRange[] {
+  if (maxHeartRate === undefined || !Number.isFinite(maxHeartRate) || maxHeartRate <= 0) {
+    return []
+  }
+  return buildZoneRanges(HEART_RATE_ZONE_BOUNDS, (bound) => Math.round(bound * maxHeartRate))
+}
+
+/**
+ * 功率区间对应的功率范围（W，按 FTP 百分比换算并取整）。
+ *
+ * @param ftp 用户功能阈值功率（W），无效时返回空数组
+ * @returns 5 个区间的功率范围
+ */
+export function powerZoneRanges(ftp: number | undefined): ZoneRange[] {
+  if (ftp === undefined || !Number.isFinite(ftp) || ftp <= 0) {
+    return []
+  }
+  return buildZoneRanges(POWER_ZONE_BOUNDS, (bound) => Math.round(bound * ftp))
+}
+
+/**
  * 计算功率区间分布（按 FTP 百分比）。
  *
  * @param records 逐点记录

@@ -435,6 +435,33 @@
   color: var(--text);
 }
 
+/* 区间数值范围（如「145–165 bpm」） */
+.zone-row__range {
+  flex-shrink: 0;
+  width: 84px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 区间划分基准说明（最大心率 / FTP） */
+.activity-detail__zones-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* 窄屏（≤480px）：区间行让出空间，名称与范围各缩一档 */
+@media (max-width: 480px) {
+  .zone-row__label {
+    width: 76px;
+  }
+
+  .zone-row__range {
+    width: 72px;
+  }
+}
+
 .zone-row__bar {
   flex: 1;
   height: 8px;

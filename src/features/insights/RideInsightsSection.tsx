@@ -36,6 +36,13 @@ export interface RideInsightsSectionProps {
 
   /** 计算参数（FTP/最大心率/距离单位） */
   options?: RideInsightsOptions
+
+  /**
+   * 是否渲染区块自带标题（默认 true）。
+   * 被 AiEnhanceBlock 包裹时传 false：标题由增强区块统一渲染在本地 / AI
+   * 两种模式共用的控件行上，避免本地态出现两处同名标题。
+   */
+  showTitle?: boolean
 }
 
 /**
@@ -43,7 +50,12 @@ export interface RideInsightsSectionProps {
  *
  * @param props 组件参数
  */
-function RideInsightsSection({ activity, records, options }: RideInsightsSectionProps) {
+function RideInsightsSection({
+  activity,
+  records,
+  options,
+  showTitle = true,
+}: RideInsightsSectionProps) {
   const insights = useMemo(() => buildRideInsights(activity, records, options), [activity, records, options])
 
   if (insights.length === 0) {
@@ -52,7 +64,7 @@ function RideInsightsSection({ activity, records, options }: RideInsightsSection
 
   return (
     <section className="insights-section" aria-label="骑行洞察">
-      <h2 className="insights-section__title">骑行洞察</h2>
+      {showTitle && <h2 className="insights-section__title">骑行洞察</h2>}
       <ul className="insights-section__list">
         {insights.map((insight) => (
           <li

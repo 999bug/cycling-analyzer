@@ -349,9 +349,9 @@ function ActivityMatchedSegments({
 
   return (
     <section className="matched-segments" aria-label="本次赛段">
-      <h2 className="matched-segments__title">本次赛段</h2>
       <p className="matched-segments__hint">经过 {items.length} 个赛段 · 对比个人最好成绩</p>
       <AiEnhanceBlock
+        title="本次赛段"
         cacheKey={`segments:${activityId}`}
         buildParams={() => segmentsCommentStreamParams(items, activityName)}
         aiLabel="AI 点评赛段"

@@ -118,6 +118,36 @@ describe('AiEnhanceBlock', () => {
     vi.unstubAllGlobals()
   })
 
+  it('标题在本地与 AI 两种模式下都渲染（切到 AI 不消失）', async () => {
+    configure()
+    vi.stubGlobal('fetch', vi.fn(async () => sseOk('AI 版洞察内容')))
+    render(
+      <AiEnhanceBlock title="骑行洞察" cacheKey="insights:act-1" buildParams={okParams}>
+        <div>本地洞察内容</div>
+      </AiEnhanceBlock>,
+    )
+    expect(screen.getByRole('heading', { name: '骑行洞察' })).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: 'AI 解读' }))
+    await waitFor(() => expect(screen.getByText('AI 版洞察内容')).toBeDefined())
+    // AI 模式下 children 不渲染，标题仍由控件行提供
+    expect(screen.queryByText('本地洞察内容')).toBeNull()
+    expect(screen.getByRole('heading', { name: '骑行洞察' })).toBeDefined()
+
+    vi.unstubAllGlobals()
+  })
+
+  it('未配置 AI 但有标题：标题照常渲染，仍无按钮', () => {
+    render(
+      <AiEnhanceBlock title="骑行洞察" cacheKey="insights:act-1" buildParams={okParams}>
+        <div>本地洞察内容</div>
+      </AiEnhanceBlock>,
+    )
+    expect(screen.getByRole('heading', { name: '骑行洞察' })).toBeDefined()
+    expect(screen.getByText('本地洞察内容')).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'AI 解读' })).toBeNull()
+  })
+
   it('有缓存时重进页面：默认本地、可直接切 AI 版', () => {
     configure()
     window.localStorage.setItem(

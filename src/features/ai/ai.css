@@ -639,6 +639,19 @@
   color: var(--ai-accent);
 }
 
+/* 控件行左侧标题（本地 / AI 共用，2.88.0） */
+.ai-enhance__bar--titled {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-enhance__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ⟳ 小圆钮 */
 .ai-iconbtn {
   width: 26px;
