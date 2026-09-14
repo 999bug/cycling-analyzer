@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.80.1',
+    date: '2026-09-14',
+    features: [
+      '修复流式生成误报「流式读取中断，请重试」：个别厂商忽略流式参数、返回普通 JSON 响应体时，旧解析逻辑只取到响应末行碎片导致解析失败——现正确整体解析并给出正文/思考；无法解析时给出明确原因',
+    ],
+  },
+  {
     version: '2.80.0',
     date: '2026-09-14',
     features: [

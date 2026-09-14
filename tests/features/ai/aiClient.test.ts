@@ -273,3 +273,51 @@ describe('streamChatComplete（agent 式流式）', () => {
     expect(released).toBe(true)
   })
 })
+
+describe('streamChatComplete 非 SSE 响应体兜底（2.80.1 回归）', () => {
+  /** 用文本块构造的流式响应桩 */
+  function textResponse(text: string): Response {
+    const encoder = new TextEncoder()
+    let sent = false
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (sent) {
+              return { done: true, value: undefined }
+            }
+            sent = true
+            return { done: false, value: encoder.encode(text) }
+          },
+          releaseLock: () => {},
+        }),
+      },
+    } as unknown as Response
+  }
+
+  it('单行普通 JSON（旧版静默返回空）→ 兜底解析出正文', async () => {
+    vi.mocked(fetch).mockImplementation(async () =>
+      textResponse('{"choices":[{"message":{"content":"正文内容"}}]}'),
+    )
+    const result = await streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 })
+    expect(result.content).toBe('正文内容')
+  })
+
+  it('多行格式化 JSON（旧版误报「流式读取中断」）→ 兜底解析出正文', async () => {
+    vi.mocked(fetch).mockImplementation(async () =>
+      textResponse('{\n  "choices": [\n    { "message": { "content": "格式化正文", "reasoning": "思考" } }\n  ]\n}'),
+    )
+    const result = await streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 })
+    expect(result.content).toBe('格式化正文')
+    expect(result.reasoning).toBe('思考')
+  })
+
+  it('非 JSON 垃圾响应 → 明确报错而不是笼统的中断提示', async () => {
+    vi.mocked(fetch).mockImplementation(async () => textResponse('<html>gateway error</html>'))
+    await expect(
+      streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
+    ).rejects.toThrow('服务商未返回流式数据')
+  })
+})

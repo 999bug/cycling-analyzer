@@ -398,11 +398,44 @@ export async function streamChatComplete(
 
   let content = ''
   let reasoning = ''
+  let sawData = false
   let sawDone = false
-  let buffer = ''
-  let nonStreamFallback = false
+  let sawNonSse = false
+  // 全量原始响应（非 SSE 兜底解析用；SSE 分行只从行缓冲取，避免碎片错位）
+  let rawAll = ''
+  let lineBuf = ''
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
+
+  /** 处理一条 data: 事件；返回是否收到 [DONE] */
+  const handleDataEvent = (data: string): boolean => {
+    if (data === '[DONE]') {
+      return true
+    }
+    let payload: StreamChunk
+    try {
+      payload = JSON.parse(data) as StreamChunk
+    } catch {
+      return false
+    }
+    if (payload.error !== undefined) {
+      throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
+    }
+    const delta = payload.choices?.[0]?.delta
+    if (delta === undefined) {
+      return false
+    }
+    const reasoningDelta = delta.reasoning ?? delta.reasoning_content
+    if (typeof reasoningDelta === 'string' && reasoningDelta.length > 0) {
+      reasoning += reasoningDelta
+      handlers.onReasoning?.(reasoningDelta)
+    }
+    if (typeof delta.content === 'string' && delta.content.length > 0) {
+      content += delta.content
+      handlers.onContent?.(delta.content)
+    }
+    return false
+  }
 
   try {
     while (true) {
@@ -410,61 +443,45 @@ export async function streamChatComplete(
       if (done) {
         break
       }
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      // 最后一段可能是半行，留到下个 chunk
-      buffer = lines.pop() ?? ''
-      for (const rawLine of lines) {
-        const line = rawLine.trim()
-        if (line.length === 0) {
+      const text = decoder.decode(value, { stream: true })
+      rawAll += text
+      lineBuf += text
+      // 按 \n 切完整行（半行留缓冲），逐行处理 SSE 事件
+      let newlineIndex = lineBuf.indexOf('\n')
+      while (newlineIndex !== -1) {
+        const line = lineBuf.slice(0, newlineIndex).trim()
+        lineBuf = lineBuf.slice(newlineIndex + 1)
+        if (line.length === 0 || line.startsWith(':')) {
+          // 空行 / SSE 注释（如 OpenRouter 的 : OPENROUTER PROCESSING）
+          newlineIndex = lineBuf.indexOf('\n')
           continue
         }
         if (!line.startsWith('data:')) {
-          if (nonStreamFallback) {
-            continue
-          }
-          // 非 SSE 响应体（个别厂商忽略 stream 参数）：跳过 SSE 解析，收完按整体 JSON 解析
-          nonStreamFallback = true
-          break
+          // 非 SSE 内容：整体标记为普通 JSON 兜底，继续收完再解析
+          sawNonSse = true
+          newlineIndex = lineBuf.indexOf('\n')
+          continue
         }
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') {
+        sawData = true
+        if (handleDataEvent(line.slice(5).trim())) {
           sawDone = true
           break
         }
-        let payload: StreamChunk
-        try {
-          payload = JSON.parse(data) as StreamChunk
-        } catch {
-          continue
-        }
-        if (payload.error !== undefined) {
-          throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
-        }
-        const delta = payload.choices?.[0]?.delta
-        if (delta === undefined) {
-          continue
-        }
-        const reasoningDelta = delta.reasoning ?? delta.reasoning_content
-        if (typeof reasoningDelta === 'string' && reasoningDelta.length > 0) {
-          reasoning += reasoningDelta
-          handlers.onReasoning?.(reasoningDelta)
-        }
-        if (typeof delta.content === 'string' && delta.content.length > 0) {
-          content += delta.content
-          handlers.onContent?.(delta.content)
-        }
+        newlineIndex = lineBuf.indexOf('\n')
       }
-      if (sawDone || nonStreamFallback || controller.signal.aborted) {
+      if (sawDone || sawNonSse || controller.signal.aborted) {
         break
       }
     }
 
-    // 非 SSE 响应体兜底：整体按普通 JSON 解析并一次性回调
-    if (nonStreamFallback) {
-      const remainder = buffer
-      buffer = ''
-      const payload = JSON.parse(remainder) as ChatCompletionResponse
+    // 非 SSE 响应体兜底（个别厂商忽略 stream 参数返回普通 JSON）：整体解析并一次性回调
+    if (!sawData) {
+      let payload: ChatCompletionResponse
+      try {
+        payload = JSON.parse(rawAll.trim()) as ChatCompletionResponse
+      } catch (error) {
+        throw new AiRequestError('服务商未返回流式数据，请重试或检查接口地址', error)
+      }
       if (payload.error !== undefined) {
         throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
       }
