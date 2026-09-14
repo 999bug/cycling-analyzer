@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.81.1',
+    date: '2026-09-14',
+    features: [
+      '修复建段弹窗点击跑偏：地图点击（高德 GCJ-02 坐标）与轨迹吸附计算（WGS-84 原始坐标）坐标系不一致导致吸附点沿轨迹系统性偏移数百米——吸附改为与点击同坐标系的投影轨迹上计算，再映射回原始记录索引',
+      '吸附新增 50 米拒绝半径：点击离轨迹过远时不再误吸到远端点',
+    ],
+  },
+  {
     version: '2.81.0',
     date: '2026-09-14',
     features: [

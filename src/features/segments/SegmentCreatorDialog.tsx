@@ -25,7 +25,8 @@ import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository
 import {
   buildSegmentDraft,
   effortMatchesDirection,
-  nearestRecordIndex,
+  nearestProjectedIndex,
+  PICK_SNAP_REJECT_METERS,
   type SegmentDraft,
 } from '@/features/segments/segmentCreator'
 import { matchSegmentEffortDetail } from '@/features/segments/segmentMatching'
@@ -163,25 +164,33 @@ function SegmentCreatorDialog({
   // 命中预览状态（两点齐后计算）
   const [preview, setPreview] = useState<HitPreview | null | 'loading'>(null)
 
-  const projected = useMemo<[number, number][]>(
-    () =>
-      records
-        .filter(
-          (record): record is ActivityRecord & { latitude: number; longitude: number } =>
-            record.latitude !== undefined && record.longitude !== undefined,
+  // 投影展示轨迹 + 「投影索引 → 原始记录索引」映射：
+  // 吸附必须在投影坐标系里做（点击返回的是底图坐标），映射回原始 records 索引建段
+  const { projected, projectedRecordIndices } = useMemo<{
+    projected: [number, number][]
+    projectedRecordIndices: number[]
+  }>(
+    () => {
+      const projected: [number, number][] = []
+      const projectedRecordIndices: number[] = []
+      records.forEach((record, index) => {
+        if (record.latitude === undefined || record.longitude === undefined) {
+          return
+        }
+        const point = projectPoint(
+          { longitude: record.longitude, latitude: record.latitude },
+          {
+            from: coordinateSystem,
+            to: mapSystem(sourceIndex),
+            northMeters: trackOffset?.northMeters,
+            eastMeters: trackOffset?.eastMeters,
+          },
         )
-        .map((record) => {
-          const point = projectPoint(
-            { longitude: record.longitude, latitude: record.latitude },
-            {
-              from: coordinateSystem,
-              to: mapSystem(sourceIndex),
-              northMeters: trackOffset?.northMeters,
-              eastMeters: trackOffset?.eastMeters,
-            },
-          )
-          return [point.latitude, point.longitude] as [number, number]
-        }),
+        projected.push([point.latitude, point.longitude])
+        projectedRecordIndices.push(index)
+      })
+      return { projected, projectedRecordIndices }
+    },
     [records, coordinateSystem, trackOffset, sourceIndex],
   )
 
@@ -276,7 +285,18 @@ function SegmentCreatorDialog({
   }
 
   const handleMapPick = (latitude: number, longitude: number) => {
-    const index = nearestRecordIndex(records, latitude, longitude)
+    // 吸附在投影坐标系里算（与点击同坐标系，修复 GCJ-02 偏差导致的跑偏），
+    // 超出拒绝半径不吸附；再经映射表还原到原始 records 索引
+    const projectedIndex = nearestProjectedIndex(
+      projected,
+      latitude,
+      longitude,
+      PICK_SNAP_REJECT_METERS,
+    )
+    if (projectedIndex === undefined) {
+      return
+    }
+    const index = projectedRecordIndices[projectedIndex]
     if (index === undefined) {
       return
     }

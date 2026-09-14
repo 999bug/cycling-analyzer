@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildSegmentDraft,
   effortMatchesDirection,
+  nearestProjectedIndex,
   nearestRecordIndex,
+  PICK_SNAP_REJECT_METERS,
 } from '@/features/segments/segmentCreator'
 import type { ActivityRecord } from '@/types/activity'
 
@@ -23,6 +25,36 @@ function makeTrackRecords(): ActivityRecord[] {
   }
   return records
 }
+
+describe('nearestProjectedIndex（点击跑偏修复）', () => {
+  /** 投影后的轨迹（示意：与点击同坐标系，如 GCJ-02） */
+  const projected: [number, number][] = [
+    [31.200, 121.500],
+    [31.205, 121.505],
+    [31.210, 121.510],
+    [31.215, 121.515],
+  ]
+
+  it('点击在轨迹附近时吸附到最近投影点', () => {
+    expect(nearestProjectedIndex(projected, 31.2098, 121.5098)).toBe(2)
+  })
+
+  it('点击离轨迹超出拒绝半径时返回 undefined（不误吸远端）', () => {
+    // 偏差约 0.02° ≈ 2.2km，远超 50m 拒绝半径
+    expect(nearestProjectedIndex(projected, 31.22, 121.53)).toBeUndefined()
+  })
+
+  it('拒绝半径可自定义', () => {
+    // 最近点距离约 29m（0.0002° ≈ 22m + 19m），30m 内吸附、10m 内不吸附
+    expect(nearestProjectedIndex(projected, 31.2098, 121.5098, 30)).toBe(2)
+    expect(nearestProjectedIndex(projected, 31.2098, 121.5098, 10)).toBeUndefined()
+    expect(PICK_SNAP_REJECT_METERS).toBe(50)
+  })
+
+  it('空轨迹返回 undefined', () => {
+    expect(nearestProjectedIndex([], 31.2, 121.5)).toBeUndefined()
+  })
+})
 
 describe('nearestRecordIndex', () => {
   it('吸附到最近的带坐标记录', () => {

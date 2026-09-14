@@ -32,6 +32,51 @@ export interface SegmentDraft {
   direction: 'forward' | 'reverse'
 }
 
+/** 吸附拒绝半径（米）：点击离轨迹超过该距离不吸附，避免误选远端 */
+export const PICK_SNAP_REJECT_METERS = 50
+
+/**
+ * 在**投影展示坐标系**里找距目标点最近的轨迹点索引。
+ *
+ * 修复「点击跑偏」：地图点击返回的是底图坐标系（高德 GCJ-02）坐标，
+ * 与原始 WGS-84 记录坐标存在数百米系统性偏差——吸附必须与点击同坐标系。
+ * 调用方传入的 points 应为已投影的展示轨迹，返回投影数组索引，
+ * 由调用方经「投影索引 → 原始记录索引」映射表还原。
+ *
+ * @param projected 投影后轨迹点（[纬度, 经度]）
+ * @param latitude 点击纬度（与 projected 同坐标系）
+ * @param longitude 点击经度
+ * @param maxMeters 拒绝半径：最近距离超过该值返回 undefined
+ * @returns 投影数组索引；无点或超出拒绝半径返回 undefined
+ */
+export function nearestProjectedIndex(
+  projected: readonly (readonly [number, number])[],
+  latitude: number,
+  longitude: number,
+  maxMeters: number = PICK_SNAP_REJECT_METERS,
+): number | undefined {
+  let bestIndex: number | undefined
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (let i = 0; i < projected.length; i += 1) {
+    const point = projected[i]
+    if (point === undefined) {
+      continue
+    }
+    const distance = haversineMeters(
+      { latitude, longitude },
+      { latitude: point[0], longitude: point[1] },
+    )
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestIndex = i
+    }
+  }
+  if (bestIndex === undefined || bestDistance > maxMeters) {
+    return undefined
+  }
+  return bestIndex
+}
+
 /**
  * 找到距目标坐标最近的带坐标记录索引。
  *
