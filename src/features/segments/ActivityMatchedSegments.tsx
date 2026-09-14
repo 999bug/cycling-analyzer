@@ -34,6 +34,7 @@ import { downloadSegmentPrPng } from '@/features/segments/segmentPrShareCard'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { formatDuration } from '@/utils/format'
 import './activityMatchedSegments.css'
+import SegmentAiComment from '@/features/segments/SegmentAiComment'
 
 /** 默认仓库（组件注入点，测试传内存实现） */
 const defaultRepository = new DexieSegmentRepository(db)
@@ -123,6 +124,9 @@ export interface ActivityMatchedSegmentsProps {
   /** 当前数据源（local / author） */
   source: 'local' | 'author'
 
+  /** 活动名（赛段 AI 点评的 prompt 引用；可选） */
+  activityName?: string
+
   /** 赛段仓库注入（测试用） */
   repository?: SegmentRepository
 
@@ -140,6 +144,7 @@ function ActivityMatchedSegments({
   startTime,
   records,
   source,
+  activityName,
   repository = defaultRepository,
   snapshotClient = defaultSnapshotClient,
 }: ActivityMatchedSegmentsProps) {
@@ -457,6 +462,9 @@ function ActivityMatchedSegments({
           )
         })}
       </div>
+
+      {/* 赛段 AI 点评（v4）：未配置 AI 服务时不渲染，按活动缓存 */}
+      <SegmentAiComment activityId={activityId} activityName={activityName} views={items} />
     </section>
   )
 }

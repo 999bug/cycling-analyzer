@@ -16,10 +16,15 @@ import { getAiVendor } from '@/features/ai/providers'
 import {
   buildCaptionRequest,
   buildInsightRequest,
+  buildInsightEnhanceRequest,
+  buildScoreExplainRequest,
+  buildSegmentsCommentRequest,
   parseCaptionResponse,
   type AiActivityContext,
   type AiCaptionPlatform,
   type AiCaptionResult,
+  type AiLocalConclusion,
+  type AiSegmentView,
 } from '@/features/ai/aiPrompts'
 import type { AiRequestConfig } from '@/features/ai/aiClient'
 import type { AgentStartParams } from '@/features/ai/useAgentStream'
@@ -130,4 +135,72 @@ export async function generateAiInsight(
   const config = requireAiConfig()
   const request = buildInsightRequest(activity, context)
   return chatComplete(config, { ...request, signal, maxTokens: maxOutputTokens() })
+}
+
+/**
+ * 组装骑行洞察增强的流式请求参数（详情页洞察区块「AI 解读」）。
+ *
+ * @param activity 活动摘要
+ * @param conclusions 本地规则结论（buildRideInsights 结果）
+ * @throws AiRequestError 未配置
+ */
+export function insightEnhanceStreamParams(
+  activity: Activity,
+  conclusions: readonly AiLocalConclusion[],
+): AgentStartParams {
+  const config = requireAiConfig()
+  const request = buildInsightEnhanceRequest(activity, conclusions)
+  return {
+    config,
+    system: request.system,
+    user: request.user,
+    maxTokens: maxOutputTokens(),
+    temperature: request.temperature,
+  }
+}
+
+/**
+ * 组装综合评分解读的流式请求参数。
+ *
+ * @param overall 综合分（0-100）
+ * @param subScores 分项得分（label + score）
+ * @param activity 活动摘要
+ * @throws AiRequestError 未配置
+ */
+export function scoreExplainStreamParams(
+  overall: number,
+  subScores: readonly { label: string; score: number | undefined }[],
+  activity: Activity,
+): AgentStartParams {
+  const config = requireAiConfig()
+  const request = buildScoreExplainRequest(overall, subScores, activity)
+  return {
+    config,
+    system: request.system,
+    user: request.user,
+    maxTokens: maxOutputTokens(),
+    temperature: request.temperature,
+  }
+}
+
+/**
+ * 组装赛段点评的流式请求参数（本次赛段区块「AI 点评」）。
+ *
+ * @param views 本次经过的赛段行
+ * @param activityName 活动名（prompt 引用；赛段组件拿不到完整 Activity）
+ * @throws AiRequestError 未配置
+ */
+export function segmentsCommentStreamParams(
+  views: readonly AiSegmentView[],
+  activityName: string | undefined,
+): AgentStartParams {
+  const config = requireAiConfig()
+  const request = buildSegmentsCommentRequest(views, activityName)
+  return {
+    config,
+    system: request.system,
+    user: request.user,
+    maxTokens: maxOutputTokens(),
+    temperature: request.temperature,
+  }
 }

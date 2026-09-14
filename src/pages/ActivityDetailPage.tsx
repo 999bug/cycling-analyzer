@@ -67,6 +67,9 @@ import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
 import { computeQualityScore } from '@/features/analysis/qualityScore'
+import { buildRideInsights } from '@/features/insights/rideInsights'
+import AiEnhanceBlock, { AiEnhanceAllButton } from '@/features/ai/AiEnhanceBlock'
+import { insightEnhanceStreamParams, scoreExplainStreamParams } from '@/features/ai/aiService'
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
@@ -480,6 +483,13 @@ function ActivityDetailPage() {
   )
   // 骑行质量综合分（总结条展示档位短语用；须位于条件早退之前）
   const qualityOverall = useMemo(() => computeQualityScore(records).overall, [records])
+  // 骑行质量各分项（AI 评分解读输入；须位于条件早退之前）
+  const qualitySubScores = useMemo(() => computeQualityScore(records).subScores, [records])
+  // 本地洞察结论（AI 洞察增强输入；须位于条件早退之前）
+  const localConclusions = useMemo(
+    () => (activity === undefined ? [] : buildRideInsights(activity, records, insightsOptions)),
+    [activity, records, insightsOptions],
+  )
   // 总结条参数（含质量分；对象引用稳定）
   const summaryOptions = useMemo(
     () => ({ ...insightsOptions, qualityScore: qualityOverall }),
@@ -1005,6 +1015,9 @@ function ActivityDetailPage() {
         </details>
       )}
 
+      {/* AI 增强解读入口（v4）：串行补齐下方各区块的 AI 版内容 */}
+      <AiEnhanceAllButton />
+
       {/* 本次赛段（赛段重设计一期）：骑完即见经过的赛段与 vs 个人最好差值，
           无赛段或未穿越时整块不渲染 */}
       <ActivityMatchedSegments
@@ -1012,15 +1025,35 @@ function ActivityDetailPage() {
         startTime={activity.startTime}
         records={records}
         source={source}
+        activityName={activity.name}
       />
 
-      <QualityScoreSection records={records} />
+      {/* 评分缺数据时 AiEnhanceBlock 不包裹（无结论可增强，入口无意义） */}
+      {qualitySubScores.some((item) => item.score !== undefined) && qualityOverall !== undefined ? (
+        <AiEnhanceBlock
+          cacheKey={`score:${activity.id}`}
+          buildParams={() => scoreExplainStreamParams(qualityOverall, qualitySubScores, activity)}
+        >
+          <QualityScoreSection records={records} />
+        </AiEnhanceBlock>
+      ) : (
+        <QualityScoreSection records={records} />
+      )}
 
-      <RideInsightsSection
-        activity={activity}
-        records={records}
-        options={insightsOptions}
-      />
+      {localConclusions.length > 0 ? (
+        <AiEnhanceBlock
+          cacheKey={`insights:${activity.id}`}
+          buildParams={() => insightEnhanceStreamParams(activity, localConclusions)}
+        >
+          <RideInsightsSection
+            activity={activity}
+            records={records}
+            options={insightsOptions}
+          />
+        </AiEnhanceBlock>
+      ) : (
+        <RideInsightsSection activity={activity} records={records} options={insightsOptions} />
+      )}
 
       <AchievementsSection achievements={achievements} distanceUnit={distanceUnit} />
 

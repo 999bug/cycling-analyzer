@@ -1,7 +1,7 @@
 {
   "name": "cycling-analyzer",
   "private": true,
-  "version": "2.80.1",
+  "version": "2.81.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

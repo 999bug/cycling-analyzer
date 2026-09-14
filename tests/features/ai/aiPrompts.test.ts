@@ -6,6 +6,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Activity } from '@/types/activity'
 import {
+  buildInsightEnhanceRequest,
+  buildScoreExplainRequest,
+  buildSegmentsCommentRequest,
+} from '@/features/ai/aiPrompts'
+import {
   buildAiMetricsPayload,
   buildCaptionRequest,
   buildInsightRequest,
@@ -112,5 +117,38 @@ describe('parseCaptionResponse', () => {
     const result = parseCaptionResponse('xhs', '只有一段话')
     expect(result.title).toBeUndefined()
     expect(result.body).toContain('只有一段话')
+  })
+})
+
+describe('内容面增强提示词（v4）', () => {
+  const conclusions = [
+    { kind: '强度', title: '心率处于 Z3 区间', text: '平均心率 152 bpm，全程有氧为主。' },
+    { kind: '功率', title: '标准化功率 218 W', text: '达到 FTP（235 W）的 93%。' },
+  ]
+
+  it('洞察增强：带本地结论与禁编造约束，不含任何 GPS 字段', () => {
+    const request = buildInsightEnhanceRequest(makeActivity(), conclusions)
+    expect(request.system).toContain('禁止编造')
+    expect(request.user).toContain('[强度] 心率处于 Z3 区间')
+    expect(request.user).not.toMatch(/latitude|longitude|经纬|轨迹点/i)
+  })
+
+  it('评分解读：带综合分与分项', () => {
+    const request = buildScoreExplainRequest(78, [
+      { label: '强度', score: 92 },
+      { label: '耐力', score: 74 },
+      { label: '技术', score: undefined },
+    ], makeActivity())
+    expect(request.user).toContain('综合分：78/100')
+    expect(request.user).toContain('技术：无数据')
+  })
+
+  it('赛段点评：带各赛段计时与差值（不含坐标）', () => {
+    const request = buildSegmentsCommentRequest([
+      { name: '九溪爬坡', durationSeconds: 243, prSeconds: 245, rank: 1, distanceKm: 1.8, avgSpeed: 7.4 },
+    ], '晨骑 · 环滴水湖')
+    expect(request.user).toContain('九溪爬坡')
+    expect(request.user).toContain('新纪录（较此前最好快')
+    expect(request.user).not.toMatch(/latitude|longitude/i)
   })
 })

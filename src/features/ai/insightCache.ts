@@ -38,6 +38,25 @@ export function getCachedInsight(activityId: string): string | undefined {
 }
 
 /**
+ * 读取任意缓存键的文本（v4 内容面增强复用同一 KV 存储）。
+ *
+ * @param key 缓存键（如 `insights:${activityId}`）
+ */
+export function getCachedText(key: string): string | undefined {
+  return getCachedInsight(key)
+}
+
+/**
+ * 写入任意缓存键的文本。
+ *
+ * @param key 缓存键
+ * @param text 文本
+ */
+export function setCachedText(key: string, text: string): void {
+  setCachedInsight(key, text)
+}
+
+/**
  * 写入/更新某次活动的解读缓存（超限时淘汰最早写入的条目）。
  *
  * @param activityId 活动 id

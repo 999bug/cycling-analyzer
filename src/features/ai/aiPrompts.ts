@@ -219,3 +219,161 @@ export function parseCaptionResponse(platform: AiCaptionPlatform, text: string):
     body: restBody,
   }
 }
+
+/**
+ * 内容面增强提示词（AI 接入 v4）。
+ *
+ * 三个区块（骑行洞察 / 综合评分 / 赛段点评）默认展示本地确定性结论，
+ * 点「AI 解读」后把**本地已算好的结论**喂给模型改写成有温度的叙事——
+ * AI 只负责换一种说法，禁止引入任何数据之外的新数字（口径同 v2 硬约束）。
+ */
+
+/** 本地结论条目（洞察列表通用结构） */
+export interface AiLocalConclusion {
+  /** 分类标签 */
+  kind: string
+
+  /** 结论标题 */
+  title: string
+
+  /** 结论正文 */
+  text: string
+}
+
+/** 结论列表 → prompt 数据段（每行一条「[分类] 标题：正文」） */
+function formatConclusions(conclusions: readonly AiLocalConclusion[]): string {
+  return conclusions
+    .map((item) => `- [${item.kind}] ${item.title}：${item.text}`)
+    .join('\n')
+}
+
+/** 叙事化改写的通用指令（v4 评审定稿的文风口径） */
+const NARRATIVE_CONSTRAINTS = [
+  '硬性约束：',
+  '1. 只允许复述给定结论中的数字与事实，禁止编造、推算任何新数据；',
+  '2. 把干巴巴的指标连成有温度的叙事，像懂骑行的人在讲这次经历；',
+  '3. 禁止营销话术、浮夸形容词与 emoji；',
+  '4. 用简体中文口语书写。',
+].join('\n')
+
+/** 洞察增强的输出 token 上限（3 段叙事，给思考型模型留余量） */
+const INSIGHT_ENHANCE_MAX_TOKENS = 4000
+
+/** 赛段点评的输出 token 上限 */
+const SEGMENT_COMMENT_MAX_TOKENS = 2000
+
+/**
+ * 骑行洞察增强请求（把本地规则结论改写成叙事版）。
+ *
+ * @param activity 活动摘要
+ * @param conclusions buildRideInsights 的本地结论
+ * @param context 训练配置上下文
+ */
+export function buildInsightEnhanceRequest(
+  activity: Activity,
+  conclusions: readonly AiLocalConclusion[],
+): AiChatRequest {
+  return {
+    system: `你是骑行数据解读员，把本地算好的骑行结论改写成更有温度的叙事版。${NARRATIVE_CONSTRAINTS}
+输出格式：3 段，段与段之间空一行，每段 1~3 句；每段开头用一个 2~4 字的主题词加冒号（如「节奏：」）。`,
+    user: `本地结论：\n${formatConclusions(conclusions)}\n\n活动：${activity.name ?? '骑行记录'}`,
+    maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
+    temperature: CAPTION_TEMPERATURE,
+  }
+}
+
+/**
+ * 综合评分解读请求。
+ *
+ * @param overall 综合分（0-100）
+ * @param subScores 分项得分（label + score）
+ * @param activity 活动摘要
+ * @param context 训练配置上下文
+ */
+export function buildScoreExplainRequest(
+  overall: number,
+  subScores: readonly { label: string; score: number | undefined }[],
+  activity: Activity,
+): AiChatRequest {
+  const dims = subScores
+    .map((item) => `${item.label}：${item.score === undefined ? '无数据' : `${Math.round(item.score)}/100`}`)
+    .join('\n')
+  return {
+    system: `你是骑行数据解读员，解释一次骑行的综合评分是怎么构成的。${NARRATIVE_CONSTRAINTS}
+输出格式：1 段，2~4 句。说明分数高在哪、失分失在哪、这个分数对接下来训练节奏意味着什么（可建议恢复，不做医疗表述）。`,
+    user: `综合分：${Math.round(overall)}/100\n分项：\n${dims}\n\n活动：${activity.name ?? '骑行记录'}`,
+    maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
+    temperature: INSIGHT_TEMPERATURE,
+  }
+}
+
+/** 单条赛段的展示数据（来自 ActivityMatchedSegments 的行数据） */
+export interface AiSegmentView {
+  /** 赛段名 */
+  name: string
+
+  /** 本次用时（秒） */
+  durationSeconds: number
+
+  /** 历史最好（秒）；undefined = 首次成绩（新纪录） */
+  prSeconds?: number
+
+  /** 含本次的排名（1 起） */
+  rank: number
+
+  /** 距离（km） */
+  distanceKm: number
+
+  /** 本次均速（m/s；缺失 = undefined） */
+  avgSpeed?: number
+
+  /** 本次平均功率（W；缺失 = undefined） */
+  avgPower?: number
+}
+
+/** 秒 → h:mm:ss / m:ss 口径文本（与赛段页展示一致的数量级） */
+function formatDurationClock(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(secs).padStart(2, '0')}`
+}
+
+/**
+ * 赛段点评请求：一段综述 + 每条赛段一句点评。
+ *
+ * @param views 本次经过的赛段行
+ * @param activity 活动摘要
+ */
+export function buildSegmentsCommentRequest(
+  views: readonly AiSegmentView[],
+  activityName: string | undefined,
+): AiChatRequest {
+  const lines = views
+    .map((view) => {
+      const isNewRecord =
+        view.prSeconds === undefined || view.durationSeconds < view.prSeconds
+      const pr = isNewRecord
+        ? `新纪录（较此前最好快 ${formatDurationClock(Math.abs(view.durationSeconds - (view.prSeconds ?? view.durationSeconds)))}）`
+        : `vs 最好 +${formatDurationClock(view.durationSeconds - (view.prSeconds ?? view.durationSeconds))}`
+      const extra = [
+        view.avgSpeed !== undefined ? `均速 ${(view.avgSpeed * 3.6).toFixed(1)} km/h` : undefined,
+        view.avgPower !== undefined ? `平均功率 ${Math.round(view.avgPower)} W` : undefined,
+      ]
+        .filter(Boolean)
+        .join('，')
+      return `- ${view.name}（${view.distanceKm.toFixed(1)} km）：本次 ${formatDurationClock(view.durationSeconds)}，${pr}，排名 #${view.rank}${extra.length > 0 ? `，${extra}` : ''}`
+    })
+    .join('\n')
+  return {
+    system: `你是骑行赛段解读员。${NARRATIVE_CONSTRAINTS}
+输出格式：第一段 1~2 句综述（把几条赛段连起来讲一个故事）；之后每条赛段各一行，格式严格为「赛段名：一句点评」，点评要说清快慢背后的原因或值得注意的点。`,
+    user: `本次骑行经过以下赛段（数据来自本地计时）：\n${lines}\n\n活动：${activityName ?? '骑行记录'}`,
+    maxTokens: SEGMENT_COMMENT_MAX_TOKENS,
+    temperature: CAPTION_TEMPERATURE,
+  }
+}
