@@ -51,21 +51,36 @@ describe('AiInsightSection', () => {
       }],
       activeProfileId: 'p1',
     })
-    const fetchMock = vi.fn(async () =>
-      ({
+    const fetchMock = vi.fn(async () => {
+      const encoder = new TextEncoder()
+      let index = 0
+      const chunks = [
+        'data: {"choices":[{"delta":{"reasoning":"先看数据……"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"本次属于节奏爬坡训练，强度不低。"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]
+      return {
         ok: true,
         status: 200,
-        json: async () => ({ choices: [{ message: { content: '本次属于节奏爬坡训练，强度不低。' } }] }),
-      }) as unknown as Response,
-    )
+        body: {
+          getReader: () => ({
+            read: async () =>
+              index < chunks.length
+                ? { done: false, value: encoder.encode(chunks[index++]) }
+                : { done: true, value: undefined },
+            releaseLock: () => {},
+          }),
+        },
+      } as unknown as Response
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     render(<AiInsightSection activity={makeActivity()} ftp={235} distanceUnit="km" />)
     fireEvent.click(screen.getByRole('button', { name: '生成解读' }))
 
     await waitFor(() => expect(screen.getByText('本次属于节奏爬坡训练，强度不低。')).toBeDefined())
-    // 按钮切换为重新解读
-    expect(screen.getByRole('button', { name: '重新解读' })).toBeDefined()
+    // 流式结束后按钮切换为重新解读（流式过程中是「终止」）
+    await waitFor(() => expect(screen.getByRole('button', { name: '重新解读' })).toBeDefined())
     // 缓存落盘
     const raw = window.localStorage.getItem('cycling-ai-insight-cache')
     expect(raw).toContain('节奏爬坡')

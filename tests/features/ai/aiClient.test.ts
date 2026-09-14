@@ -6,7 +6,7 @@
  * 思考型模型空正文（连接测试放行 / 文案报可读原因）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AiRequestError, chatComplete, fetchAiModelList, testAiConnection } from '@/features/ai/aiClient'
+import { AiRequestError, chatComplete, fetchAiModelList, streamChatComplete, testAiConnection } from '@/features/ai/aiClient'
 
 const CONFIG = {
   baseUrl: 'https://api.example.com/v1',
@@ -153,5 +153,123 @@ describe('fetchAiModelList', () => {
 
     vi.mocked(fetch).mockImplementation(async () => jsonResponse({ data: [] }))
     await expect(fetchAiModelList(CONFIG)).rejects.toThrow('服务商未返回模型列表')
+  })
+})
+
+/** 用手动 getReader 实现的流式响应桩（jsdom 无 ReadableStream 依赖） */
+function sseResponse(chunks: string[]): Response {
+  const encoder = new TextEncoder()
+  let index = 0
+  return {
+    ok: true,
+    status: 200,
+    body: {
+      getReader: () => ({
+        read: async () =>
+          index < chunks.length
+            ? { done: false, value: encoder.encode(chunks[index++]) }
+            : { done: true, value: undefined },
+        releaseLock: () => {},
+      }),
+    },
+  } as unknown as Response
+}
+
+describe('streamChatComplete（agent 式流式）', () => {
+  it('解析 reasoning / content delta 并逐段回调', async () => {
+    vi.mocked(fetch).mockImplementation(async () =>
+      sseResponse([
+        'data: {"choices":[{"delta":{"reasoning":"想一想"}}]}\n\n',
+        'data: {"choices":[{"delta":{"reasoning_content":"：先看数据"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"晨骑"}}]}\n\ndata: {"choices":[{"delta":{"content":"42.7km"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]),
+    )
+    const seen: { r?: string; c?: string } = {}
+    const result = await streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 100, temperature: 0 }, {
+      onReasoning: (d) => {
+        seen.r = (seen.r ?? '') + d
+      },
+      onContent: (d) => {
+        seen.c = (seen.c ?? '') + d
+      },
+    })
+    expect(seen.r).toBe('想一想：先看数据')
+    expect(seen.c).toBe('晨骑42.7km')
+    expect(result.content).toBe('晨骑42.7km')
+    expect(result.reasoning).toBe('想一想：先看数据')
+  })
+
+  it('流中错误事件 → 抛出真实原因', async () => {
+    vi.mocked(fetch).mockImplementation(async () =>
+      sseResponse(['data: {"error":{"message":"User not found."}}\n\n']),
+    )
+    await expect(
+      streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
+    ).rejects.toThrow('服务商返回错误：User not found.')
+  })
+
+  it('请求体带 stream: true 且携带 extraHeaders', async () => {
+    const fetchMock = vi.fn(async () => sseResponse(['data: [DONE]\n\n']))
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    await streamChatComplete(
+      { ...CONFIG, extraHeaders: { 'anthropic-dangerous-direct-browser-access': 'true' } },
+      { system: '', user: '', maxTokens: 1, temperature: 0 },
+    )
+    const [url, init] = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>)[0]
+    expect(url).toBe('https://api.example.com/v1/chat/completions')
+    expect(JSON.parse(String(init.body)).stream).toBe(true)
+    expect((init.headers as Record<string, string>)['anthropic-dangerous-direct-browser-access']).toBe('true')
+  })
+
+  it('厂商忽略 stream 参数返回普通 JSON（无响应体）→ 兜底一次性解析', async () => {
+    vi.mocked(fetch).mockImplementation(async () =>
+      jsonResponse({ choices: [{ message: { content: '正文', reasoning: '思考' } }] }),
+    )
+    const result = await streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 })
+    expect(result.content).toBe('正文')
+    expect(result.reasoning).toBe('思考')
+  })
+
+  it('外部中断：返回已收到的部分内容而不抛错', async () => {
+    const encoder = new TextEncoder()
+    const chunks = ['data: {"choices":[{"delta":{"content":"部分"}}]}\n\n']
+    let index = 0
+    const abort = new AbortController()
+    let released = false
+    const stream = {
+      getReader: () => ({
+        // 第二次 read 挂起直到外部中断，模拟真实长连接被用户终止
+        read: () =>
+          new Promise<{ done: boolean; value?: Uint8Array }>((resolve) => {
+            if (index < chunks.length) {
+              resolve({ done: false, value: encoder.encode(chunks[index++]) })
+              return
+            }
+            abort.signal.addEventListener('abort', () => resolve({ done: true, value: undefined }), {
+              once: true,
+            })
+          }),
+        releaseLock: () => {
+          released = true
+        },
+      }),
+    }
+    vi.mocked(fetch).mockImplementation(
+      async () => ({ ok: true, status: 200, body: stream }) as unknown as Response,
+    )
+
+    const pending = streamChatComplete(CONFIG, {
+      system: '',
+      user: '',
+      maxTokens: 1,
+      temperature: 0,
+      signal: abort.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    abort.abort()
+    const result = await pending
+    expect(result.content).toBe('部分')
+    expect(released).toBe(true)
   })
 })

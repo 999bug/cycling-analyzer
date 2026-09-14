@@ -6,6 +6,8 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  clampMaxOutputTokens,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   normalizeAiBaseUrl,
   resolveAiConfig,
   selectAiReady,
@@ -140,5 +142,33 @@ describe('持久化与迁移', () => {
     )
     await useAiConfigStore.persist.rehydrate()
     expect(useAiConfigStore.getState().profiles).toHaveLength(0)
+  })
+})
+
+describe('单次输出上限（v4）', () => {
+  it('默认 10000；setter 收敛非法输入', () => {
+    expect(useAiConfigStore.getState().maxOutputTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS)
+
+    useAiConfigStore.getState().setMaxOutputTokens(4000)
+    expect(useAiConfigStore.getState().maxOutputTokens).toBe(4000)
+
+    useAiConfigStore.getState().setMaxOutputTokens(1)
+    expect(useAiConfigStore.getState().maxOutputTokens).toBe(200)
+
+    useAiConfigStore.getState().setMaxOutputTokens(Number.NaN)
+    expect(useAiConfigStore.getState().maxOutputTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS)
+  })
+
+  it('clampMaxOutputTokens 边界', () => {
+    expect(clampMaxOutputTokens(64000)).toBe(64000)
+    expect(clampMaxOutputTokens(65000)).toBe(64000)
+    expect(clampMaxOutputTokens(100)).toBe(200)
+  })
+
+  it('输出上限随 profiles 一起持久化', () => {
+    addReadyProfile()
+    useAiConfigStore.getState().setMaxOutputTokens(20000)
+    const raw = JSON.parse(window.localStorage.getItem('cycling-ai-config') as string)
+    expect(raw.state.maxOutputTokens).toBe(20000)
   })
 })

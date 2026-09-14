@@ -310,3 +310,213 @@ export async function fetchAiModelList(config: AiRequestConfig): Promise<string[
     clearTimeout(timer)
   }
 }
+
+/**
+ * 流式对话补全（SSE，agent 式生成专用，AI 接入 v3）。
+ *
+ * 与 chatComplete 的区别：
+ * - `stream: true`，思考（reasoning）与正文（content）delta 逐段经回调吐出，
+ *   供 UI 实时展示思考过程（v3 交互核心）
+ * - **无总超时**：思考型模型输出 30 秒以上是常态，终止只由外部 signal 驱动；
+ * - 外部中断（用户点「终止」）**不抛错**，返回已收到的部分内容——
+ *   已产生部分保留进编辑框、按实际用量计费（v3 原型定稿行为）。
+ *
+ * @param config 请求配置（extraHeaders 照常合并）
+ * @param options 对话参数（timeoutMs 字段被忽略）
+ * @param handlers delta 回调（可选）
+ * @returns 全量 content 与 reasoning（用户中断时为已收到部分）
+ * @throws AiRequestError 用户可读的失败原因
+ */
+export async function streamChatComplete(
+  config: AiRequestConfig,
+  options: ChatCompleteOptions,
+  handlers: AgentStreamHandlers = {},
+): Promise<AgentStreamResult> {
+  const controller = new AbortController()
+  const onExternalAbort = () => controller.abort()
+  options.signal?.addEventListener('abort', onExternalAbort)
+
+  let response: Response
+  try {
+    response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: buildHeaders(config),
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: 'system', content: options.system },
+          { role: 'user', content: options.user },
+        ],
+        max_tokens: options.maxTokens,
+        temperature: options.temperature,
+        stream: true,
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    options.signal?.removeEventListener('abort', onExternalAbort)
+    if (controller.signal.aborted) {
+      return { content: '', reasoning: '' }
+    }
+    throw new AiRequestError(
+      '网络请求失败：可能是该服务商不允许浏览器直接调用（CORS），可改用「自定义」填写兼容接口或中转站地址',
+      error,
+    )
+  }
+
+  // 无响应体：无法走流式读取，整体按普通 JSON 解析（厂商忽略 stream 参数的兜底）
+  if (response.body === null || response.body === undefined) {
+    options.signal?.removeEventListener('abort', onExternalAbort)
+    if (controller.signal.aborted) {
+      return { content: '', reasoning: '' }
+    }
+    if (!response.ok) {
+      let detail = ''
+      try {
+        const payload = (await response.json()) as ChatCompletionResponse
+        detail = payload.error?.message ?? ''
+      } catch {
+        // 非 JSON 错误体：保留状态码提示即可
+      }
+      throw new AiRequestError(statusMessage(response.status, detail))
+    }
+    const payload = (await response.json()) as ChatCompletionResponse
+    if (payload.error !== undefined) {
+      throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
+    }
+    const message = payload.choices?.[0]?.message
+    const fullContent = message?.content?.trim() ?? ''
+    const fullReasoning = message?.reasoning ?? message?.reasoning_content ?? ''
+    if (fullReasoning.length > 0) {
+      handlers.onReasoning?.(fullReasoning)
+    }
+    if (fullContent.length > 0) {
+      handlers.onContent?.(fullContent)
+    }
+    return { content: fullContent, reasoning: fullReasoning }
+  }
+
+  let content = ''
+  let reasoning = ''
+  let sawDone = false
+  let buffer = ''
+  let nonStreamFallback = false
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      // 最后一段可能是半行，留到下个 chunk
+      buffer = lines.pop() ?? ''
+      for (const rawLine of lines) {
+        const line = rawLine.trim()
+        if (line.length === 0) {
+          continue
+        }
+        if (!line.startsWith('data:')) {
+          if (nonStreamFallback) {
+            continue
+          }
+          // 非 SSE 响应体（个别厂商忽略 stream 参数）：跳过 SSE 解析，收完按整体 JSON 解析
+          nonStreamFallback = true
+          break
+        }
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') {
+          sawDone = true
+          break
+        }
+        let payload: StreamChunk
+        try {
+          payload = JSON.parse(data) as StreamChunk
+        } catch {
+          continue
+        }
+        if (payload.error !== undefined) {
+          throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
+        }
+        const delta = payload.choices?.[0]?.delta
+        if (delta === undefined) {
+          continue
+        }
+        const reasoningDelta = delta.reasoning ?? delta.reasoning_content
+        if (typeof reasoningDelta === 'string' && reasoningDelta.length > 0) {
+          reasoning += reasoningDelta
+          handlers.onReasoning?.(reasoningDelta)
+        }
+        if (typeof delta.content === 'string' && delta.content.length > 0) {
+          content += delta.content
+          handlers.onContent?.(delta.content)
+        }
+      }
+      if (sawDone || nonStreamFallback || controller.signal.aborted) {
+        break
+      }
+    }
+
+    // 非 SSE 响应体兜底：整体按普通 JSON 解析并一次性回调
+    if (nonStreamFallback) {
+      const remainder = buffer
+      buffer = ''
+      const payload = JSON.parse(remainder) as ChatCompletionResponse
+      if (payload.error !== undefined) {
+        throw new AiRequestError(`服务商返回错误：${payload.error.message ?? '未知原因'}`)
+      }
+      const message = payload.choices?.[0]?.message
+      const fullContent = message?.content?.trim() ?? ''
+      const fullReasoning = message?.reasoning ?? message?.reasoning_content ?? ''
+      if (fullReasoning.length > 0) {
+        reasoning += fullReasoning
+        handlers.onReasoning?.(fullReasoning)
+      }
+      if (fullContent.length > 0) {
+        content += fullContent
+        handlers.onContent?.(fullContent)
+      }
+    }
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      throw new AiRequestError(
+        error instanceof AiRequestError ? error.message : '流式读取中断，请重试',
+        error,
+      )
+    }
+  } finally {
+    reader.releaseLock()
+    options.signal?.removeEventListener('abort', onExternalAbort)
+  }
+  return { content, reasoning }
+}
+
+/** 流式 delta 事件体（只声明解析用到的字段） */
+interface StreamChunk {
+  choices?: Array<{
+    delta?: {
+      content?: string | null
+      reasoning?: string | null
+      reasoning_content?: string | null
+    }
+  }>
+  error?: { message?: string }
+}
+
+/** 流式回调集合 */
+export interface AgentStreamHandlers {
+  /** 思考过程 delta（逐段） */
+  onReasoning?(delta: string): void
+
+  /** 正文 delta（逐段） */
+  onContent?(delta: string): void
+}
+
+/** 流式结果（正常完成或用户中断的已收部分） */
+export interface AgentStreamResult {
+  content: string
+  reasoning: string
+}

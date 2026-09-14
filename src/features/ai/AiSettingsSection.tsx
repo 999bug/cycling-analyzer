@@ -22,8 +22,10 @@ import {
   type AiVendorPreset,
 } from '@/features/ai/providers'
 import {
+  clampMaxOutputTokens,
   normalizeAiBaseUrl,
   useAiConfigStore,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   type AiProfile,
 } from '@/features/ai/aiConfigStore'
 import { fetchAiModelList, testAiConnection } from '@/features/ai/aiClient'
@@ -56,12 +58,25 @@ function AiSettingsSection({ id }: { id?: string }) {
   const activeProfileId = useAiConfigStore((state) => state.activeProfileId)
   const setActiveProfile = useAiConfigStore((state) => state.setActiveProfile)
   const removeProfile = useAiConfigStore((state) => state.removeProfile)
+  const maxOutputTokens = useAiConfigStore((state) => state.maxOutputTokens)
+  const setMaxOutputTokens = useAiConfigStore((state) => state.setMaxOutputTokens)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
+  /** 输出上限输入草稿（提交时 clamp 并持久化） */
+  const [limitDraft, setLimitDraft] = useState(String(maxOutputTokens))
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId)
+
+  /**
+   * 保存输出上限（clamp 后写入 store，立即生效并持久化）。
+   */
+  function handleLimitSave() {
+    setMaxOutputTokens(Number(limitDraft))
+    setLimitDraft(String(clampMaxOutputTokens(Number(limitDraft))))
+    setNotice({ ok: true, text: '输出上限已更新' })
+  }
 
   /**
    * 删除配置（确认弹窗；删当前生效配置时 store 会自动切到剩余第一条）。
@@ -161,6 +176,46 @@ function AiSettingsSection({ id }: { id?: string }) {
       </div>
 
       {editorOpen && <ProfileEditor editingId={editingId} onClose={() => setEditorOpen(false)} />}
+
+      {/* 单次输出上限（v4）：含思考过程的硬顶，防失控调用 */}
+      <div className="settings-field ai-service__limit-row">
+        <label className="settings-field__label" htmlFor="ai-service-limit">
+          单次输出上限
+        </label>
+        <input
+          id="ai-service-limit"
+          type="number"
+          min={200}
+          max={64000}
+          step={500}
+          className="settings-field__input settings-field__input--number"
+          value={limitDraft}
+          onChange={(event) => setLimitDraft(event.target.value)}
+        />
+        <span className="settings-field__unit">token</span>
+        <button
+          type="button"
+          className="settings-button"
+          onClick={() => {
+            setLimitDraft(String(DEFAULT_MAX_OUTPUT_TOKENS))
+            setMaxOutputTokens(DEFAULT_MAX_OUTPUT_TOKENS)
+          }}
+        >
+          恢复默认
+        </button>
+        <button
+          type="button"
+          className="settings-button settings-button--primary"
+          onClick={handleLimitSave}
+          disabled={limitDraft === String(maxOutputTokens)}
+        >
+          保存上限
+        </button>
+      </div>
+      <p className="ai-service__hint" style={{ margin: '4px 0 0' }}>
+        单次生成的输出上限（含思考过程），到达即截断并提示；覆盖文案 / 解读 / 洞察增强等所有
+        AI 生成，按实际用量计费，上限本身不产生费用。默认 {DEFAULT_MAX_OUTPUT_TOKENS}。
+      </p>
 
       {notice !== null && (
         <p

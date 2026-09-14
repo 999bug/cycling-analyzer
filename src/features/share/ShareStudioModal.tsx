@@ -33,8 +33,10 @@ import {
 } from '@/features/share/shareStageCapture'
 import { simplifyRoute } from '@/map/simplify'
 import { formatDate } from '@/utils/format'
-import { generateShareCaption } from '@/features/ai/aiService'
-import { resolveAiConfig, useAiConfigStore } from '@/features/ai/aiConfigStore'
+import { captionStreamParams } from '@/features/ai/aiService'
+import { useAgentStream } from '@/features/ai/useAgentStream'
+import AgentThinking from '@/features/ai/AgentThinking'
+import { parseCaptionResponse } from '@/features/ai/aiPrompts'
 import '@/features/ai/ai.css'
 import '@/features/share/shareStudio.css'
 
@@ -86,9 +88,6 @@ const DEFAULT_STAGE_SCALE = 0.34
 /** 导出流程状态：idle 正常 / busy 生成中 / fallback 已降级出图 / fail 未出图 */
 type ExportState = 'idle' | 'busy' | 'fallback' | 'fail'
 
-/** AI 文案生成状态：idle 正常 / busy 请求中 / fail 失败（aiMessage 展示原因） */
-type AiCaptionState = 'idle' | 'busy' | 'fail'
-
 /** 舞台页标识：朋友圈单图 + 小红书四页（快照节点按它登记） */
 type StagePageKey = ShareStagePageId | 'moments'
 
@@ -127,8 +126,9 @@ function ShareStudioModal({
   // 图上文字编辑态（键缺省 = 用默认值）
   const [stageText, setStageText] = useState<{ title?: string; script?: string }>(() => ({}))
   const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle')
-  // AI 文案生成状态与提示（未配置 / 失败时展示引导或原因）
-  const [aiState, setAiState] = useState<AiCaptionState>('idle')
+  // AI 文案（v3 agent 式）：流式思考 + 正文，可终止；错误经 agent.error 展示
+  const agent = useAgentStream()
+  const genPlatformRef = useRef<SharePlatform>(platform)
   const [aiMessage, setAiMessage] = useState('')
   const [exportState, setExportState] = useState<ExportState>('idle')
   const [stageScale, setStageScale] = useState(DEFAULT_STAGE_SCALE)
@@ -295,32 +295,44 @@ function ShareStudioModal({
   }
 
   /**
-   * AI 生成当前平台发布文案（BYOK：未配置时引导到设置页）。
-   * 结果直接填入编辑框，用户可继续手改；图上文字不受影响。
+   * AI 生成当前平台发布文案（v3 agent 式：流式思考 + 可终止）。
+   * 完成 / 终止后由下方 effect 把已收到的正文填入编辑框。
    */
-  async function handleAiCaption() {
-    if (aiState === 'busy') {
+  function handleAiCaption() {
+    if (agent.phase === 'thinking' || agent.phase === 'content') {
       return
     }
-    const config = resolveAiConfig(useAiConfigStore.getState())
-    if (config === null) {
-      setAiState('fail')
-      setAiMessage('AI 服务未配置：到「更多 → AI 服务」添加并启用一个供应商配置即可开启')
-      return
-    }
-    setAiState('busy')
+    genPlatformRef.current = platform
     setAiMessage('')
     try {
-      const result = await generateShareCaption(activity, platform, { ftp, maxHeartRate, distanceUnit })
-      setCaptions((current) =>
-        platform === 'moments'
-          ? { ...current, moments: result.body }
-          : { ...current, xhsTitle: result.title ?? current.xhsTitle ?? data.captions.xhsTitle, xhsBody: result.body },
+      agent.start(captionStreamParams(activity, platform, { ftp, maxHeartRate, distanceUnit }), (outcome) => {
+          if (outcome.phase === 'error') {
+            setAiMessage(outcome.error)
+            return
+          }
+          const text = outcome.content.trim()
+          if (text.length === 0) {
+            setAiMessage('已终止：本次没有生成正文（已发生的用量照常计费）')
+            return
+          }
+          const result = parseCaptionResponse(genPlatformRef.current, text)
+          setCaptions((current) =>
+            genPlatformRef.current === 'moments'
+              ? { ...current, moments: result.body }
+              : {
+                  ...current,
+                  xhsTitle: result.title ?? current.xhsTitle ?? data.captions.xhsTitle,
+                  xhsBody: result.body,
+                },
+          )
+          setAiMessage(
+            outcome.phase === 'stopped'
+              ? '已终止：已生成的部分已填入，可继续修改'
+              : 'AI 文案已填入，可继续修改后复制',
+          )
+        }
       )
-      setAiState('idle')
-      setAiMessage('AI 文案已填入，可继续修改后复制')
     } catch (error) {
-      setAiState('fail')
       setAiMessage(error instanceof Error ? error.message : 'AI 生成失败，请重试')
     }
   }
@@ -556,15 +568,25 @@ function ShareStudioModal({
                   }))
                 }
               />
+              <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
               <div className="share-studio__caption-actions">
                 <button
                   type="button"
                   className="share-studio__btn share-studio__btn--ghost"
-                  disabled={aiState === 'busy'}
-                  onClick={() => void handleAiCaption()}
+                  disabled={agent.phase === 'thinking' || agent.phase === 'content'}
+                  onClick={handleAiCaption}
                 >
-                  {aiState === 'busy' ? 'AI 生成中…' : 'AI 生成文案'}
+                  {agent.phase === 'thinking' || agent.phase === 'content' ? '生成中…' : 'AI 生成文案'}
                 </button>
+                {(agent.phase === 'thinking' || agent.phase === 'content') && (
+                  <button
+                    type="button"
+                    className="share-studio__btn share-studio__btn--ghost share-studio__ai-stop"
+                    onClick={agent.stop}
+                  >
+                    终止
+                  </button>
+                )}
                 <button
                   type="button"
                   className="share-studio__btn share-studio__btn--ghost"
@@ -591,12 +613,12 @@ function ShareStudioModal({
                 <p
                   role="status"
                   className={
-                    aiState === 'fail'
+                    agent.phase === 'error'
                       ? 'share-studio__ai-note share-studio__ai-note--fail'
                       : 'share-studio__ai-note'
                   }
                 >
-                  {aiMessage}
+                  {agent.phase === 'error' && aiMessage.length === 0 ? agent.error : aiMessage}
                 </p>
               )}
             </div>

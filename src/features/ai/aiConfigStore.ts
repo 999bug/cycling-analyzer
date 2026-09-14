@@ -61,6 +61,12 @@ export interface AiConfigState {
   /** 当前生效配置 id（null = 未启用任何配置） */
   activeProfileId: string | null
 
+  /**
+   * 单次生成输出上限（token，含思考过程；v4 评审定稿默认 10000）。
+   * 到达即截断并提示——防失控调用的硬性省钱闸，按实际用量计费。
+   */
+  maxOutputTokens: number
+
   /** 添加配置（返回新配置 id） */
   addProfile(profile: Omit<AiProfile, 'id'>): string
 
@@ -72,6 +78,24 @@ export interface AiConfigState {
 
   /** 启用某配置（切换 activeProfileId） */
   setActiveProfile(id: string): void
+
+  /** 设置单次输出上限（设置页，立即生效并持久化） */
+  setMaxOutputTokens(tokens: number): void
+}
+
+/** 输出上限默认值（v4 评审定稿：默认 1 万 token） */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 10_000
+
+/** 输出上限允许范围（低于 200 生成不出正文，高于 64000 多数模型也不支持） */
+export const MIN_MAX_OUTPUT_TOKENS = 200
+export const MAX_MAX_OUTPUT_TOKENS = 64_000
+
+/** 把任意输入收敛为合法的输出上限（设置页输入框脏数据兜底） */
+export function clampMaxOutputTokens(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_MAX_OUTPUT_TOKENS
+  }
+  return Math.min(MAX_MAX_OUTPUT_TOKENS, Math.max(MIN_MAX_OUTPUT_TOKENS, Math.round(value)))
 }
 
 /** persist 版本号（v0 = v1 单配置结构，v1 = v2 profiles 结构） */
@@ -83,6 +107,7 @@ export const useAiConfigStore = create<AiConfigState>()(
     (set) => ({
       profiles: [],
       activeProfileId: null,
+      maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
       addProfile: (profile) => {
         // 同一毫秒内可能连续添加多条，时间戳后必须拼随机段保证唯一
         const id = `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -107,6 +132,7 @@ export const useAiConfigStore = create<AiConfigState>()(
           return { profiles, activeProfileId }
         }),
       setActiveProfile: (id) => set({ activeProfileId: id }),
+      setMaxOutputTokens: (tokens) => set({ maxOutputTokens: clampMaxOutputTokens(tokens) }),
     }),
     {
       name: 'cycling-ai-config',
