@@ -12,8 +12,9 @@ describe('buildSegmentNameRequest', () => {
     expect(request.system).toContain('赛段名')
     expect(request.user).toContain('0.95 km')
     expect(request.user).toContain('12')
-    // 小输出额度：只需要一个名称
-    expect(request.maxTokens).toBeLessThanOrEqual(200)
+    // max_tokens 由调用方用设置统一上限覆盖（默认 9999）——思考型模型
+    // 会先烧 reasoning，固定小额度会「空内容」失败（2.83.0 线上踩坑）
+    expect(request.maxTokens).toBe(9_999)
   })
 
   it('上行内容不含 GPS 坐标样式数据', () => {

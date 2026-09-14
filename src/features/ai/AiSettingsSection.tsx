@@ -13,6 +13,11 @@
  */
 import { useMemo, useState, type ChangeEvent } from 'react'
 import {
+  clearAiDebugLog,
+  listAiDebugLog,
+  type AiDebugEntry,
+} from '@/features/ai/aiDebugLog'
+import {
   AI_COMMON_TEMPLATES,
   AI_PRESET_LIBRARY,
   AI_VENDOR_CATEGORY_LABELS,
@@ -66,6 +71,20 @@ function AiSettingsSection({ id }: { id?: string }) {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
   /** 输出上限输入草稿（提交时 clamp 并持久化） */
   const [limitDraft, setLimitDraft] = useState(String(maxOutputTokens))
+
+  // 诊断日志（展开面板时刷新；初始空态即可，规则禁 effect 同步 setState）
+  const [debugEntries, setDebugEntries] = useState<AiDebugEntry[]>([])
+  const [debugErrorsOnly, setDebugErrorsOnly] = useState(false)
+  const [debugNotice, setDebugNotice] = useState<string | null>(null)
+  const debugView = useMemo(
+    () =>
+      (debugErrorsOnly
+        ? debugEntries.filter((entry) => entry.status === 'error')
+        : debugEntries
+      ).slice()
+        .reverse(),
+    [debugEntries, debugErrorsOnly],
+  )
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId)
 
@@ -245,6 +264,98 @@ function AiSettingsSection({ id }: { id?: string }) {
         隐私边界：AI 只接收聚合指标，GPS 轨迹点与逐点心率不出本机；所有 AI 功能默认关闭，
         添加并启用配置后按需使用；解读结果按活动缓存，不重复计费。
       </p>
+
+      {/* 诊断日志（2.84.0）：本机 AI 调用留痕，排查「起名失败」这类问题用；
+          不含提示词正文与 Key，独立 localStorage 键不随数据备份导出 */}
+      <details
+        className="ai-service__debug"
+        aria-label="AI 诊断日志"
+        onToggle={(event) => {
+          // 展开时刷新（掘取最新留痕；RSForm details toggle 事件带旧态，读 newState）
+          if ((event.target as HTMLDetailsElement).open) {
+            setDebugEntries(listAiDebugLog())
+          }
+        }}
+      >
+        <summary>诊断日志（本机最近 200 条 · 不含提示词与密钥）</summary>
+        <div className="ai-service__debug-body">
+          <div className="ai-service__debug-toolbar">
+            <label className="ai-service__debug-filter">
+              <input
+                type="checkbox"
+                checked={debugErrorsOnly}
+                onChange={(event) => setDebugErrorsOnly(event.target.checked)}
+              />
+              仅看失败
+            </label>
+            <span className="ai-service__debug-spacer" />
+            <button
+              type="button"
+              className="settings-button"
+              onClick={() => {
+                void navigator.clipboard
+                  .writeText(JSON.stringify(debugEntries, null, 2))
+                  .then(() => setDebugNotice('已复制到剪贴板。'))
+                  .catch(() => setDebugNotice('复制失败：浏览器未授权剪贴板。'))
+              }}
+            >
+              复制
+            </button>
+            <button
+              type="button"
+              className="settings-button"
+              onClick={() => {
+                if (window.confirm('确定清空全部 AI 诊断日志？')) {
+                  clearAiDebugLog()
+                  setDebugEntries([])
+                  setDebugNotice('已清空。')
+                }
+              }}
+            >
+              清空
+            </button>
+          </div>
+          {debugNotice !== null && <p className="ai-service__debug-notice">{debugNotice}</p>}
+          {debugEntries.length === 0 ? (
+            <p className="ai-service__debug-empty">暂无记录。使用任一 AI 功能后这里会出现调用留痕。</p>
+          ) : debugView.length === 0 ? (
+            <p className="ai-service__debug-empty">筛选条件下没有记录。</p>
+          ) : (
+            <div className="ai-service__debug-scroll">
+              <table className="ai-service__debug-table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>功能</th>
+                    <th>模型</th>
+                    <th>结果</th>
+                    <th>耗时</th>
+                    <th>原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {debugView.map((entry) => (
+                    <tr key={`${entry.ts}-${entry.feature}`}>
+                      <td className="num">{new Date(entry.ts).toLocaleTimeString()}</td>
+                      <td>{entry.feature}</td>
+                      <td className="mono">{entry.model}</td>
+                      <td>
+                        <span className={entry.status === 'ok' ? 'ai-service__tag ai-service__tag--ok' : 'ai-service__tag ai-service__tag--err'}>
+                          {entry.status === 'ok' ? '成功' : '失败'}
+                        </span>
+                      </td>
+                      <td className="num">{(entry.durationMs / 1000).toFixed(1)}s</td>
+                      <td className="mono">
+                        {entry.status === 'error' ? (entry.detail ?? '未知原因') : entry.outputChars !== undefined ? `输出 ${entry.outputChars} 字` : '——'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </details>
     </section>
   )
 }

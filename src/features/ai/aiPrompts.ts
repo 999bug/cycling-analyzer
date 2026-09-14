@@ -449,6 +449,8 @@ export function buildSegmentsCommentRequest(
  *
  * 数据边界：只上行聚合特征（长度 / 共现次数），不含 GPS 轨迹点。
  * 输出约束：短中文名、只回名称本身——结果仅作为推荐卡名称输入框的预填草稿。
+ * max_tokens 运行时由调用方用设置里的统一输出上限覆盖（默认 9999）：
+ * 思考型模型会先烧 reasoning，固定小额度会导致「空内容」失败。
  */
 export function buildSegmentNameRequest(stats: {
   distanceKm: number
@@ -457,7 +459,7 @@ export function buildSegmentNameRequest(stats: {
   return {
     system: `你是骑行社区的赛段命名助手。根据路段特征起一个简短中文赛段名：6 字以内、无标点、可体现路况或气质（如爬坡、冲刺、河堤）。只输出名称本身，不要解释、不要引号。`,
     user: `路段长度 ${stats.distanceKm.toFixed(2)} km，被不同骑行经过 ${stats.hitCount} 次。请起一个赛段名。`,
-    maxTokens: 100,
+    maxTokens: 9_999,
     temperature: 0.7,
   }
 }

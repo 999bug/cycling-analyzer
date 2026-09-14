@@ -84,7 +84,7 @@ export interface AiConfigState {
 }
 
 /** 输出上限默认值（v4 评审定稿：默认 1 万 token） */
-export const DEFAULT_MAX_OUTPUT_TOKENS = 10_000
+export const DEFAULT_MAX_OUTPUT_TOKENS = 9_999
 
 /** 输出上限允许范围（低于 200 生成不出正文，高于 64000 多数模型也不支持） */
 export const MIN_MAX_OUTPUT_TOKENS = 200

@@ -23,6 +23,9 @@ export interface AgentStartParams {
   user: string
   maxTokens: number
   temperature: number
+
+  /** 功能标签（诊断日志用，透传给 streamChatComplete） */
+  featureTag?: string
 }
 
 /** 生成结束结果（onFinish 回调携带；phase ∈ done/stopped/error） */
@@ -115,6 +118,7 @@ export function useAgentStream(): AgentStream {
         maxTokens: params.maxTokens,
         temperature: params.temperature,
         signal: controller.signal,
+        featureTag: params.featureTag,
       },
       {
         onReasoning: (delta) => setReasoning((current) => current + delta),

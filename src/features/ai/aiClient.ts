@@ -18,6 +18,8 @@
  */
 
 /** 单次请求超时（毫秒）：文案生成是小请求，30 秒足够覆盖慢模型 */
+import { hostOf, logAiDebug } from '@/features/ai/aiDebugLog'
+
 const REQUEST_TIMEOUT_MS = 30_000
 
 /** 连接测试的最大输出 token（思考型模型会先产出 reasoning，需留余量） */
@@ -60,6 +62,12 @@ export interface ChatCompleteOptions {
 
   /** 外部中断信号（可选，弹窗关闭等场景） */
   signal?: AbortSignal
+
+  /**
+   * 功能标签（可选，诊断日志用）：segment-name / share-caption /
+   * insight-enhance …缺省记为 unknown。标签只进本机诊断日志，不参与请求。
+   */
+  featureTag?: string
 
   /**
    * 允许空正文（连接测试用）：思考型模型把 max_tokens 花在 reasoning 上时
@@ -181,12 +189,46 @@ async function executeRequest(
 /**
  * 调用 OpenAI 兼容 chat/completions，返回模型输出文本。
  *
+ * 外层为诊断日志包装（耗时 / 结果 / 失败原因，不含提示词内容），
+ * 实际请求在 chatCompleteInternal。
+ *
  * @param config 请求配置
  * @param options 对话参数
  * @returns 模型输出文本（已 trim）
  * @throws AiRequestError 用户可读的失败原因
  */
 export async function chatComplete(
+  config: AiRequestConfig,
+  options: ChatCompleteOptions,
+): Promise<string> {
+  const startedAt = Date.now()
+  try {
+    const text = await chatCompleteInternal(config, options)
+    logAiDebug({
+      ts: startedAt,
+      feature: options.featureTag ?? 'unknown',
+      model: config.model,
+      host: hostOf(config.baseUrl),
+      status: 'ok',
+      durationMs: Date.now() - startedAt,
+      outputChars: text.length,
+    })
+    return text
+  } catch (error) {
+    logAiDebug({
+      ts: startedAt,
+      feature: options.featureTag ?? 'unknown',
+      model: config.model,
+      host: hostOf(config.baseUrl),
+      status: 'error',
+      durationMs: Date.now() - startedAt,
+      detail: error instanceof AiRequestError ? error.message : String(error),
+    })
+    throw error
+  }
+}
+
+async function chatCompleteInternal(
   config: AiRequestConfig,
   options: ChatCompleteOptions,
 ): Promise<string> {
@@ -331,6 +373,38 @@ export async function streamChatComplete(
   config: AiRequestConfig,
   options: ChatCompleteOptions,
   handlers: AgentStreamHandlers = {},
+): Promise<AgentStreamResult> {
+  const startedAt = Date.now()
+  try {
+    const result = await streamChatCompleteInternal(config, options, handlers)
+    logAiDebug({
+      ts: startedAt,
+      feature: options.featureTag ?? 'unknown',
+      model: config.model,
+      host: hostOf(config.baseUrl),
+      status: 'ok',
+      durationMs: Date.now() - startedAt,
+      outputChars: result.content.length,
+    })
+    return result
+  } catch (error) {
+    logAiDebug({
+      ts: startedAt,
+      feature: options.featureTag ?? 'unknown',
+      model: config.model,
+      host: hostOf(config.baseUrl),
+      status: 'error',
+      durationMs: Date.now() - startedAt,
+      detail: error instanceof AiRequestError ? error.message : String(error),
+    })
+    throw error
+  }
+}
+
+async function streamChatCompleteInternal(
+  config: AiRequestConfig,
+  options: ChatCompleteOptions,
+  handlers: AgentStreamHandlers,
 ): Promise<AgentStreamResult> {
   const controller = new AbortController()
   const onExternalAbort = () => controller.abort()

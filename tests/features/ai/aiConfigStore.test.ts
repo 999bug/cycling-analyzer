@@ -146,7 +146,7 @@ describe('持久化与迁移', () => {
 })
 
 describe('单次输出上限（v4）', () => {
-  it('默认 10000；setter 收敛非法输入', () => {
+  it('默认 9999；setter 收敛非法输入', () => {
     expect(useAiConfigStore.getState().maxOutputTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS)
 
     useAiConfigStore.getState().setMaxOutputTokens(4000)

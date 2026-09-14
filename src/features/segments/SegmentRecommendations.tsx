@@ -23,7 +23,7 @@ import type { SegmentGeometry } from '@/features/segments/segmentMatching'
 import { computeLeaderboardsSync, createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import { buildSegmentNameRequest } from '@/features/ai/aiPrompts'
-import { chatComplete } from '@/features/ai/aiClient'
+import { chatComplete, AiRequestError } from '@/features/ai/aiClient'
 import { resolveAiConfig, selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
 import { formatDistance } from '@/utils/format'
 import './segmentRecommendations.css'
@@ -82,6 +82,9 @@ function SegmentRecommendations({
 
   /**
    * AI 起名：只上行候选段聚合特征（长度/共现次数），结果填入名称输入框。
+   * max_tokens 用设置里的统一输出上限（默认 9999）——起名本身极短，
+   * 但思考型模型（DeepSeek-R1 系）会先烧 reasoning，小额度会「空内容」失败。
+   * 失败原因直出（AiRequestError.message 已是可直接展示的中文）。
    *
    * @param candidate 候选段
    * @param key 列表键
@@ -101,8 +104,9 @@ function SegmentRecommendations({
       const name = await chatComplete(config, {
         system: request.system,
         user: request.user,
-        maxTokens: request.maxTokens,
+        maxTokens: useAiConfigStore.getState().maxOutputTokens,
         temperature: request.temperature,
+        featureTag: 'segment-name',
       })
       const cleaned = name
         .trim()
@@ -113,7 +117,12 @@ function SegmentRecommendations({
       }
     } catch (err: unknown) {
       console.error('Failed to name segment with AI', err)
-      setError('AI 起名失败，请稍后重试。')
+      // AiRequestError 的 message 已是可直接展示的中文原因（超时/401/429/空内容等），直出
+      setError(
+        err instanceof AiRequestError
+          ? `AI 起名失败：${err.message}`
+          : 'AI 起名失败，请稍后重试。',
+      )
     } finally {
       setNamingKey(undefined)
     }

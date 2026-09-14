@@ -75,6 +75,7 @@ export function captionStreamParams(
     system: request.system,
     user: request.user,
     maxTokens: maxOutputTokens(),
+    featureTag: 'share-caption',
     temperature: request.temperature,
   }
 }
@@ -94,6 +95,7 @@ export function insightStreamParams(activity: Activity, context: AiActivityConte
     system: request.system,
     user: request.user,
     maxTokens: maxOutputTokens(),
+    featureTag: 'insight',
     temperature: request.temperature,
   }
 }
@@ -116,7 +118,7 @@ export async function generateShareCaption(
 ): Promise<AiCaptionResult> {
   const config = requireAiConfig()
   const request = buildCaptionRequest(activity, platform, context)
-  const text = await chatComplete(config, { ...request, signal, maxTokens: maxOutputTokens() })
+  const text = await chatComplete(config, { ...request, signal, maxTokens: maxOutputTokens(), featureTag: 'share-caption' })
   return parseCaptionResponse(platform, text)
 }
 
@@ -136,7 +138,7 @@ export async function generateAiInsight(
 ): Promise<string> {
   const config = requireAiConfig()
   const request = buildInsightRequest(activity, context)
-  return chatComplete(config, { ...request, signal, maxTokens: maxOutputTokens() })
+  return chatComplete(config, { ...request, signal, maxTokens: maxOutputTokens(), featureTag: 'insight' })
 }
 
 /**
@@ -159,6 +161,7 @@ export function insightEnhanceStreamParams(
     system: request.system,
     user: request.user,
     maxTokens: maxOutputTokens(),
+    featureTag: 'insight-enhance',
     temperature: request.temperature,
   }
 }
@@ -184,6 +187,7 @@ export function scoreExplainStreamParams(
     system: request.system,
     user: request.user,
     maxTokens: maxOutputTokens(),
+    featureTag: 'score-explain',
     temperature: request.temperature,
   }
 }
@@ -206,6 +210,7 @@ export function segmentsCommentStreamParams(
     system: request.system,
     user: request.user,
     maxTokens: maxOutputTokens(),
+    featureTag: 'segments-comment',
     temperature: request.temperature,
   }
 }
