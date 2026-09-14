@@ -105,9 +105,9 @@ describe('AiEnhanceBlock', () => {
 
     await waitFor(() => expect(screen.getByText('AI 版洞察内容')).toBeDefined())
     // 生成后可来回切
-    fireEvent.click(screen.getByRole('button', { name: '本地结论' }))
+    fireEvent.click(screen.getByRole('button', { name: '本地' }))
     expect(screen.getByText('本地洞察内容')).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'AI 结论' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'AI' })[0])
     expect(screen.getByText('AI 版洞察内容')).toBeDefined()
     // 缓存落盘
     const raw = window.localStorage.getItem('cycling-ai-insight-cache')
@@ -128,7 +128,7 @@ describe('AiEnhanceBlock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'AI 解读' }))
     await waitFor(() => expect(screen.getByText('AI 版洞察内容')).toBeDefined())
 
-    fireEvent.click(screen.getByRole('button', { name: '重新生成' }))
+    fireEvent.click(screen.getByTitle('重新生成 AI 解读'))
     await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2))
 
     vi.unstubAllGlobals()
@@ -146,7 +146,7 @@ describe('AiEnhanceBlock', () => {
       </AiEnhanceBlock>,
     )
     expect(screen.getByText('本地洞察内容')).toBeDefined()
-    fireEvent.click(screen.getByRole('button', { name: 'AI 结论' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'AI' })[0])
     expect(screen.getByText('缓存的 AI 版')).toBeDefined()
   })
 })
