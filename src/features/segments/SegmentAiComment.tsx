@@ -13,6 +13,7 @@ import { useAgentStream } from '@/features/ai/useAgentStream'
 import AgentThinking from '@/features/ai/AgentThinking'
 import { getCachedText, setCachedText } from '@/features/ai/insightCache'
 import type { AiSegmentView } from '@/features/ai/aiPrompts'
+import { renderAiProse } from '@/features/ai/aiProse'
 import '@/features/ai/ai.css'
 
 /** 赛段 AI 点评 props */
@@ -98,7 +99,7 @@ function SegmentAiComment({ activityId, activityName, views }: SegmentAiCommentP
         <div className="ai-enhance__pane">
           <div className="ai-badge">AI 版 · 基于本地计时结果，可重新生成</div>
           <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
-          {display !== undefined && display.length > 0 && <div className="ai-prose">{display}</div>}
+          {display !== undefined && display.length > 0 && <div className="ai-prose">{renderAiProse(display)}</div>}
           {agent.phase === 'error' && <p className="ai-insight__error">{agent.error}</p>}
           {notice.length > 0 && <p className="ai-insight__error">{notice}</p>}
         </div>
