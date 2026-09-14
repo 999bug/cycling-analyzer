@@ -22,6 +22,7 @@ import {
   getEnhanceRegistryVersion,
 } from '@/features/ai/enhanceRegistry'
 import { useAgentStream, type AgentStartParams } from '@/features/ai/useAgentStream'
+import { renderAiProse } from '@/features/ai/aiProse'
 import AgentThinking from '@/features/ai/AgentThinking'
 import '@/features/ai/ai.css'
 
@@ -104,47 +105,73 @@ function AiEnhanceBlock({ cacheKey, buildParams, children, aiLabel = 'AI 解读'
   return (
     <div className="ai-enhance">
       <div className="ai-enhance__bar">
-        {hasAi && (
-          <button type="button" className="ai-enhance__btn" onClick={() => setMode('local')}>
-            本地结论
-          </button>
-        )}
-        {hasAi && (
-          <button type="button" className="ai-enhance__btn" onClick={() => setMode('ai')}>
-            AI 结论
-          </button>
-        )}
-        {hasAi && (
+        {hasAi ? (
+          <>
+            <div className="ai-miniseg" role="group" aria-label="结论来源切换">
+              <button
+                type="button"
+                className={mode === 'local' ? 'on' : ''}
+                aria-pressed={mode === 'local'}
+                onClick={() => setMode('local')}
+              >
+                本地
+              </button>
+              <button
+                type="button"
+                className={mode === 'ai' ? 'on' : ''}
+                aria-pressed={mode === 'ai'}
+                onClick={() => setMode('ai')}
+              >
+                AI
+              </button>
+            </div>
+            <button
+              type="button"
+              className="ai-iconbtn"
+              title="重新生成 AI 解读"
+              aria-label="重新生成 AI 解读"
+              onClick={() => void runGeneration()}
+              disabled={running}
+            >
+              ⟳
+            </button>
+          </>
+        ) : (
           <button
             type="button"
-            className="ai-enhance__btn ai-enhance__btn--ai"
+            className={running ? 'ai-pill ai-pill--busy' : 'ai-pill'}
             onClick={() => void runGeneration()}
             disabled={running}
           >
-            {running ? '生成中…' : '重新生成'}
-          </button>
-        )}
-        {!hasAi && (
-          <button
-            type="button"
-            className="ai-enhance__btn ai-enhance__btn--ai"
-            onClick={() => void runGeneration()}
-            disabled={running}
-          >
-            {running ? 'AI 解读中…' : aiLabel}
+            <span aria-hidden="true">✦</span> {running ? 'AI 解读中…' : aiLabel}
           </button>
         )}
       </div>
 
       {mode === 'ai' && (
         <div className="ai-enhance__pane">
-          <div className="ai-badge">AI 版 · 可切回本地结论，或重新生成换一版</div>
+          <div className="ai-block">
+            <div className="ai-block__meta">
+              <span className="dot" />
+              <span>AI 生成</span>
+              <span className="token">
+                {agent.reasoning.length > 0 && `· 思考 ~${Math.round(agent.reasoning.length * 0.6)} token `}
+                {agent.elapsedSec > 0 && `· ${agent.elapsedSec.toFixed(1)}s`}
+              </span>
+            </div>
+            {display.length > 0 ? (
+              <div className="ai-prose">{renderAiProse(display)}</div>
+            ) : running ? (
+              <>
+                <div className="ai-shimmer" />
+                <div className="ai-shimmer" />
+                <div className="ai-shimmer" />
+              </>
+            ) : (
+              <div className="ai-enhance__placeholder">正在生成…</div>
+            )}
+          </div>
           <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
-          {display.length > 0 ? (
-            <div className="ai-prose">{display}</div>
-          ) : (
-            <div className="ai-enhance__placeholder">正在生成…</div>
-          )}
           {agent.phase === 'error' && <p className="ai-insight__error">{agent.error}</p>}
           {agent.phase === 'stopped' && (
             <p className="ai-insight__error">已终止（已发生的用量照常计费）</p>
@@ -192,19 +219,13 @@ export function AiEnhanceAllButton({ label = '一键解读全部' }: AiEnhanceAl
 
   return (
     <div className="ai-enhance-all">
-      <div>
-        <p className="ai-enhance-all__title">一键解读整个骑行</p>
-        <p className="ai-enhance-all__hint">
-          把下方各区块一次性换成 AI 版（依次流式生成）；也可在各区块单独解读。
-        </p>
-      </div>
       <button
         type="button"
-        className="ai-enhance__btn ai-enhance__btn--primary"
+        className={busy ? 'ai-pill ai-pill--busy' : 'ai-pill'}
         onClick={() => void handleAll()}
         disabled={busy}
       >
-        {busy ? '解读中…' : label}
+        <span aria-hidden="true">✦</span> {busy ? '解读中…' : label}
       </button>
     </div>
   )

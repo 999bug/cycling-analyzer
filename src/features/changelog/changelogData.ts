@@ -20,6 +20,16 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.85.0',
+    date: '2026-09-14',
+    features: [
+      'AI 解读界面重设计（v5）：每个区块的 AI 入口收敛为一个「✦ AI 解读」小药丸（青色标识），生成后变成 [本地 | AI] 迷你开关 + 刷新小圆钮，替代原来一排文字按钮',
+      'AI 内容独立版式：左侧渐变竖条 + 淡青底专属卡片，带元信息行（思考 token / 耗时），关键数字加粗高亮',
+      '思考过程从大卡片降级为一行：生成中显示状态行，完成后「✦ 思考 · N token」可展开回看，不再占据版面',
+      '「一键 AI 解读」缩为页头小药丸，与区块控件同语言',
+    ],
+  },
+  {
     version: '2.84.0',
     date: '2026-09-14',
     features: [

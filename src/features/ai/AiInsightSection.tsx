@@ -18,6 +18,7 @@ import { insightStreamParams } from '@/features/ai/aiService'
 import { useAgentStream } from '@/features/ai/useAgentStream'
 import AgentThinking from '@/features/ai/AgentThinking'
 import { getCachedInsight, setCachedInsight } from '@/features/ai/insightCache'
+import { renderAiProse } from '@/features/ai/aiProse'
 import '@/features/ai/ai.css'
 
 /** AI 解读行 props */
@@ -88,7 +89,7 @@ function AiInsightSection({ activity, ftp, maxHeartRate, distanceUnit }: AiInsig
     <section className="ai-insight" aria-label="AI 解读">
       <div className="ai-insight__label">AI 解读</div>
       <AgentThinking phase={agent.phase} reasoning={agent.reasoning} elapsedSec={agent.elapsedSec} />
-      {display !== undefined && display.length > 0 && <p className="ai-insight__text">{display}</p>}
+      {display !== undefined && display.length > 0 && <p className="ai-insight__text">{renderAiProse(display)}</p>}
       <div className="ai-insight__actions">
         {running ? (
           <button type="button" className="ai-insight__btn ai-insight__btn--stop" onClick={agent.stop}>

@@ -572,3 +572,248 @@
   color: var(--text-tertiary);
   margin: 0;
 }
+
+/* ===== v5 版式：AI 控件收敛 + 独立内容卡 ===== */
+:root {
+  --ai-accent: #7ee0c3;
+}
+
+/* 控件行：右对齐、紧凑 */
+.ai-enhance__bar {
+  justify-content: flex-end;
+  margin-bottom: 2px;
+}
+
+/* ✦ AI 解读 药丸（未生成态唯一入口） */
+.ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font: inherit;
+  border: 1px solid color-mix(in srgb, var(--ai-accent) 40%, transparent);
+  color: var(--ai-accent);
+  background: color-mix(in srgb, var(--ai-accent) 8%, transparent);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.ai-pill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ai-accent) 16%, transparent);
+}
+
+.ai-pill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ai-pill--busy {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+/* [本地 | AI] 迷你分段（已生成态） */
+.ai-miniseg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ai-miniseg button {
+  padding: 3px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-miniseg button.on {
+  background: color-mix(in srgb, var(--ai-accent) 14%, transparent);
+  color: var(--ai-accent);
+}
+
+/* ⟳ 小圆钮 */
+.ai-iconbtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+}
+
+.ai-iconbtn:hover:not(:disabled) {
+  border-color: var(--ai-accent);
+  color: var(--ai-accent);
+}
+
+.ai-iconbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* AI 内容卡：左渐变竖条 + 淡青底 */
+.ai-block {
+  position: relative;
+  padding: 14px 16px 14px 18px;
+  border-radius: 8px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ai-accent) 7%, transparent),
+    color-mix(in srgb, var(--ai-accent) 3%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--ai-accent) 18%, transparent);
+  overflow: hidden;
+}
+
+.ai-block::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--ai-accent), transparent);
+}
+
+.ai-block__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  color: color-mix(in srgb, var(--ai-accent) 80%, var(--text-tertiary));
+}
+
+.ai-block__meta .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ai-accent);
+}
+
+.ai-block__meta .token {
+  color: var(--text-tertiary);
+}
+
+.ai-prose {
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.ai-prose strong {
+  color: var(--ai-accent);
+  font-weight: 600;
+}
+
+/* 思考一行化（v5）：替代大思考卡 */
+.agent-think-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: var(--bg-inset, var(--bg));
+  font-size: 12px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.agent-think-line__st {
+  color: var(--text-secondary);
+}
+
+.agent-think-line__st--live {
+  color: var(--warning);
+}
+
+.agent-think-line__expand {
+  margin-left: auto;
+}
+
+.agent-think-line__body {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: var(--bg-inset, var(--bg));
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* 生成中骨架（无正文时的占位） */
+.ai-shimmer {
+  height: 12px;
+  border-radius: 6px;
+  margin: 10px 0;
+  background: linear-gradient(
+    90deg,
+    var(--bg-inset, var(--bg)) 25%,
+    color-mix(in srgb, var(--ai-accent) 12%, var(--bg-inset, var(--bg))) 50%,
+    var(--bg-inset, var(--bg)) 75%
+  );
+  background-size: 200% 100%;
+  animation: ai-shimmer 1.4s ease infinite;
+}
+
+.ai-shimmer:nth-child(2) {
+  width: 85%;
+}
+
+.ai-shimmer:nth-child(3) {
+  width: 60%;
+}
+
+@keyframes ai-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shimmer,
+  .agent-think-line .caret {
+    animation: none;
+  }
+}
+
+.caret {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  background: var(--primary);
+  vertical-align: -2px;
+  margin-left: 2px;
+  animation: ai-shimmer 1s steps(1) infinite;
+}
+
+/* 一键解读：页头小药丸行 */
+.ai-enhance-all {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}

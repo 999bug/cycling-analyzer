@@ -1,10 +1,10 @@
 /**
- * 思考过程卡（agent 式生成的通用 UI，AI 接入 v3）。
+ * 思考过程行（v5：一行化，替代大思考卡）。
  *
- * 行为（v3 原型定稿）：
- * - thinking 阶段展开、流式追加思考文本，头部实时显示耗时；
- * - 首段正文到达时**自动折叠**（用户可再点开回看）；
- * - done / stopped 停止计时，状态标注思考 token 估算或「已终止」。
+ * 行为（v5 原型定稿）：
+ * - 生成中：一行「✦ 思考中 · Ns」，默认收起，点开看流式思考全文；
+ * - 完成：一行「✦ 思考 · ~N token」，可展开回看；
+ * - 终止：一行「✦ 思考 · 已终止」。
  *
  * token 估算：中文 1 字 ≈ 0.6 token（展示用粗估，不代表计费口径）。
  */
@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentPhase } from '@/features/ai/useAgentStream'
 import '@/features/ai/ai.css'
 
-/** 思考卡 props */
+/** 思考行 props */
 export interface AgentThinkingProps {
   /** agent 当前阶段（idle 时不渲染） */
   phase: AgentPhase
@@ -28,7 +28,7 @@ export interface AgentThinkingProps {
 const ZH_TOKEN_RATIO = 0.6
 
 /**
- * 思考过程卡组件（phase = idle 时返回 null）。
+ * 思考过程行组件（phase = idle 时返回 null）。
  *
  * @param props 组件参数
  */
@@ -36,21 +36,20 @@ function AgentThinking({ phase, reasoning, elapsedSec }: AgentThinkingProps) {
   if (phase === 'idle') {
     return null
   }
-  return <AgentThinkingInner phase={phase} reasoning={reasoning} elapsedSec={elapsedSec} />
+  return <AgentThinkingLine phase={phase} reasoning={reasoning} elapsedSec={elapsedSec} />
 }
 
 /**
- * 内层组件：折叠状态在「思考 → 正文」转换时自动收起一次，
- * 之后完全由用户手动控制（不能放在外层条件渲染里丢状态）。
+ * 内层组件：折叠状态与阶段解耦（完成/终止后仍可展开回看）。
  */
-function AgentThinkingInner({ phase, reasoning, elapsedSec }: AgentThinkingProps) {
-  const [collapsed, setCollapsed] = useState(false)
+function AgentThinkingLine({ phase, reasoning, elapsedSec }: AgentThinkingProps) {
+  const [open, setOpen] = useState(false)
   const prevPhase = useRef<AgentPhase>(phase)
 
   useEffect(() => {
-    // 思考完毕、正文开始：自动折叠一次（v3 定稿行为）
-    if (prevPhase.current === 'thinking' && phase === 'content') {
-      setCollapsed(true)
+    // 生成结束：自动收起（用户可再展开）
+    if (prevPhase.current === 'thinking' && (phase === 'content' || phase === 'stopped')) {
+      setOpen(false)
     }
     prevPhase.current = phase
   }, [phase])
@@ -58,37 +57,37 @@ function AgentThinkingInner({ phase, reasoning, elapsedSec }: AgentThinkingProps
   const live = phase === 'thinking'
   const statusText =
     phase === 'thinking'
-      ? `思考中 · ${elapsedSec.toFixed(1)}s`
+      ? `✦ 思考中 · ${elapsedSec.toFixed(1)}s`
       : phase === 'stopped'
-        ? '已终止'
-        : `已完成 · ~${Math.round(reasoning.length * ZH_TOKEN_RATIO)} token`
+        ? '✦ 思考 · 已终止'
+        : `✦ 思考 · ~${Math.round(reasoning.length * ZH_TOKEN_RATIO)} token`
 
   return (
-    <div
-      className={collapsed ? 'agent-think agent-think--collapsed' : 'agent-think'}
-      aria-label="AI 思考过程"
-    >
+    <div aria-label="AI 思考过程">
       <div
-        className="agent-think__head"
+        className="agent-think-line"
         role="button"
         tabIndex={0}
-        onClick={() => setCollapsed((current) => !current)}
+        onClick={() => setOpen((current) => !current)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
-            setCollapsed((current) => !current)
+            setOpen((current) => !current)
           }
         }}
+        aria-expanded={open}
       >
-        <span className="agent-think__title">思考过程</span>
-        <span className={live ? 'agent-think__status agent-think__status--live' : 'agent-think__status'}>
+        <span className={live ? 'agent-think-line__st agent-think-line__st--live' : 'agent-think-line__st'}>
           {statusText}
         </span>
-        <span className="agent-think__toggle">{collapsed ? '展开' : '收起'}</span>
+        {live && reasoning.length > 0 && (
+          <span className="agent-think-line__st">{reasoning.slice(-18)}</span>
+        )}
+        <span className="agent-think-line__expand">{open ? '收起' : '展开'}</span>
       </div>
-      {!collapsed && (
-        <div className="agent-think__body">
+      {open && (
+        <div className="agent-think-line__body">
           {reasoning.length > 0 ? reasoning : live ? '正在组织思考…' : '（无思考输出）'}
-          {live && <span className="agent-think__caret" />}
+          {live && <span className="caret" />}
         </div>
       )}
     </div>

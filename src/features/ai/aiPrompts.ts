@@ -339,7 +339,7 @@ export function buildInsightEnhanceRequest(
   return {
     system: `你是骑行数据解读员。任务：基于给定数据，讲出本地规则结论讲不出来的东西。${NARRATIVE_CONSTRAINTS}
 本次切入视角：${PERSPECTIVE_TASKS[perspective]}
-输出格式：3 段，段与段之间空一行，每段 1~3 句；每段开头用一个 2~4 字的主题词加冒号（如「节奏：」）。`,
+输出格式：3 段，段与段之间空一行，每段 1~3 句；每段开头用一个 2~4 字的主题词加冒号（如「节奏：」）；关键数字用 **双星号加粗** 标记。`,
     user: `本地结论（背景参考，不要复述）：\n${formatConclusions(conclusions)}\n\n给定数据：\n${formatRichFacts(rich)}\n\n活动：${activity.name ?? '骑行记录'}`,
     maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
     temperature: CAPTION_TEMPERATURE,
@@ -366,7 +366,7 @@ export function buildScoreExplainRequest(
   const richText = rich !== undefined ? `\n\n给定数据：\n${formatRichFacts(rich)}` : ''
   return {
     system: `你是骑行数据解读员，解释一次骑行的综合评分是怎么构成的。${NARRATIVE_CONSTRAINTS}
-输出格式：1 段，2~4 句。说明分数高在哪、失分失在哪、这个分数对接下来训练节奏意味着什么（可建议恢复，不做医疗表述）。`,
+输出格式：1 段，2~4 句。说明分数高在哪、失分失在哪、这个分数对接下来训练节奏意味着什么（可建议恢复，不做医疗表述）；关键数字用 **双星号加粗** 标记。`,
     user: `综合分：${Math.round(overall)}/100\n分项：\n${dims}${richText}\n\n活动：${activity.name ?? '骑行记录'}`,
     maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
     temperature: INSIGHT_TEMPERATURE,
@@ -437,7 +437,7 @@ export function buildSegmentsCommentRequest(
     .join('\n')
   return {
     system: `你是骑行赛段解读员。${NARRATIVE_CONSTRAINTS}
-输出格式：第一段 1~2 句综述（把几条赛段连起来讲一个故事）；之后每条赛段各一行，格式严格为「赛段名：一句点评」，点评要说清快慢背后的原因或值得注意的点。`,
+输出格式：第一段 1~2 句综述（把几条赛段连起来讲一个故事）；之后每条赛段各一行，格式严格为「赛段名：一句点评」，点评要说清快慢背后的原因或值得注意的点；关键数字用 **双星号加粗** 标记。`,
     user: `本次骑行经过以下赛段（数据来自本地计时）：\n${lines}\n\n活动：${activityName ?? '骑行记录'}`,
     maxTokens: SEGMENT_COMMENT_MAX_TOKENS,
     temperature: CAPTION_TEMPERATURE,
