@@ -6,8 +6,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import AiEnhanceBlock, { AiEnhanceAllButton } from '@/features/ai/AiEnhanceBlock'
-import { hasEnhanceEntries } from '@/features/ai/enhanceRegistry'
+import AiEnhanceBlock from '@/features/ai/AiEnhanceBlock'
 import { useAiConfigStore } from '@/features/ai/aiConfigStore'
 
 /** 构造 SSE 流式响应桩 */
@@ -59,21 +58,6 @@ function configure() {
     ],
     activeProfileId: 'p1',
   })
-}
-
-/** 两个区块的固定挂载（key 由 props 传入） */
-function renderBlocks() {
-  return render(
-    <div>
-      <AiEnhanceAllButton />
-      <AiEnhanceBlock cacheKey="insights:act-1" buildParams={okParams}>
-        <div>本地洞察内容</div>
-      </AiEnhanceBlock>
-      <AiEnhanceBlock cacheKey="score:act-1" buildParams={okParams}>
-        <div>本地评分内容</div>
-      </AiEnhanceBlock>
-    </div>,
-  )
 }
 
 beforeEach(() => {
@@ -148,31 +132,5 @@ describe('AiEnhanceBlock', () => {
     expect(screen.getByText('本地洞察内容')).toBeDefined()
     fireEvent.click(screen.getAllByRole('button', { name: 'AI' })[0])
     expect(screen.getByText('缓存的 AI 版')).toBeDefined()
-  })
-})
-
-describe('AiEnhanceAllButton（一键解读）', () => {
-  it('串行补齐未生成的区块', async () => {
-    configure()
-    const fetchMock = vi.fn(async () => sseOk('AI 版内容'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    renderBlocks()
-    // 区块挂载后一键按钮出现
-    await waitFor(() => expect(screen.getByRole('button', { name: '一键解读全部' })).toBeDefined())
-    expect(hasEnhanceEntries()).toBe(true)
-
-    fireEvent.click(screen.getByRole('button', { name: '一键解读全部' }))
-    await waitFor(() =>
-      expect(screen.getAllByText('AI 版内容')).toHaveLength(2),
-    )
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
-
-    vi.unstubAllGlobals()
-  })
-
-  it('未配置 AI 服务时不渲染', () => {
-    renderBlocks()
-    expect(screen.queryByRole('button', { name: '一键解读全部' })).toBeNull()
   })
 })

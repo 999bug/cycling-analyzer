@@ -70,7 +70,7 @@ import { computeQualityScore } from '@/features/analysis/qualityScore'
 import { buildSplits } from '@/features/activity/splits'
 import { buildClimbs } from '@/features/activity/climbs'
 import { buildRideInsights } from '@/features/insights/rideInsights'
-import AiEnhanceBlock, { AiEnhanceAllButton } from '@/features/ai/AiEnhanceBlock'
+import AiEnhanceBlock from '@/features/ai/AiEnhanceBlock'
 import { insightEnhanceStreamParams, scoreExplainStreamParams } from '@/features/ai/aiService'
 import type { AiInsightPerspective } from '@/features/ai/aiPrompts'
 
@@ -1053,9 +1053,6 @@ function ActivityDetailPage() {
           </div>
         </details>
       )}
-
-      {/* AI 增强解读入口（v4）：串行补齐下方各区块的 AI 版内容 */}
-      <AiEnhanceAllButton />
 
       {/* 本次赛段（赛段重设计一期）：骑完即见经过的赛段与 vs 个人最好差值，
           无赛段或未穿越时整块不渲染 */}

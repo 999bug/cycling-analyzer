@@ -34,7 +34,8 @@ import { downloadSegmentPrPng } from '@/features/segments/segmentPrShareCard'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { formatDuration } from '@/utils/format'
 import './activityMatchedSegments.css'
-import SegmentAiComment from '@/features/segments/SegmentAiComment'
+import AiEnhanceBlock from '@/features/ai/AiEnhanceBlock'
+import { segmentsCommentStreamParams } from '@/features/ai/aiService'
 
 /** 默认仓库（组件注入点，测试传内存实现） */
 const defaultRepository = new DexieSegmentRepository(db)
@@ -350,6 +351,11 @@ function ActivityMatchedSegments({
     <section className="matched-segments" aria-label="本次赛段">
       <h2 className="matched-segments__title">本次赛段</h2>
       <p className="matched-segments__hint">经过 {items.length} 个赛段 · 对比个人最好成绩</p>
+      <AiEnhanceBlock
+        cacheKey={`segments:${activityId}`}
+        buildParams={() => segmentsCommentStreamParams(items, activityName)}
+        aiLabel="AI 点评赛段"
+      >
       <div className="matched-segments__list">
         {items.map((item) => {
           const isNewRecord =
@@ -462,9 +468,7 @@ function ActivityMatchedSegments({
           )
         })}
       </div>
-
-      {/* 赛段 AI 点评（v4）：未配置 AI 服务时不渲染，按活动缓存 */}
-      <SegmentAiComment activityId={activityId} activityName={activityName} views={items} />
+      </AiEnhanceBlock>
     </section>
   )
 }
