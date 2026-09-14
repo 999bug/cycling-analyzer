@@ -1,11 +1,14 @@
 /**
  * IndexedDB 数据库定义（规格 §18）。
  *
- * 库名 cycling-data，version 1，共四张表：
+ * 库名 cycling-data，当前 DB_VERSION = 6，表结构：
  * - activities：活动摘要（不存 records/route，大数据拆表避免单条记录过大）
- * - activity_records：逐点数据，按 activityId 关联活动
+ * - activity_blobs：逐点数据，每活动一行（v5 起，替代逐点行表）
+ * - activity_records：旧逐点行表（迁移兜底，迁移完成后不再写入）
  * - files：导入文件状态台账（重复检测、失败记录）
  * - settings：键值对设置
+ * - segments / segment_efforts：赛段定义与成绩落库（v2 / v6）
+ * - tile_cache / scan_cache：离线瓦片与导入扫描结果缓存
  *
  * 单位约定与领域模型一致（src/types/activity.ts，规格 §11）：
  * 距离米、速度 m/s、海拔米、心率 bpm、踏频 rpm、功率 W。

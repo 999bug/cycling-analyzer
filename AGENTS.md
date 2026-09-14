@@ -5,6 +5,7 @@
 ## 必读文档（动手前先读）
 
 - `CLAUDE.md` — 架构分层、设计决策、代码/提交规范（中文注释、日志英文、`@/` 别名、React 组件 `function` 声明、无魔法值）
+- `docs/架构总览.md` — 分层架构图、导入数据流、AI 与分享出图链路、存储模型、地图与瓦片（改架构/画图前先读）
 - `docs/PROGRESS.md` — 功能状态清单；**§0 是进行中任务清单，中断恢复必读；每开始任务先登记、完成后移出**
 - `docs/个人骑行数据分析网站——Agent 开发规格说明.md` — 产品规格原文（规格 §N 引用出处）
 
@@ -16,9 +17,11 @@ npm run check               # 提交前快速验证（并行：tsc -b + 改动�
 npm run check -- --full     # 全量版（大改动/排查时用：全仓库 lint + 全量测试）
 npx vitest run <file>       # 单文件测试
 npm run test                # 全量测试（常规提交不用，CI 兜底）
-npm run build              # vite build（本地通常不需要跑，见下方说明）
+npm run build              # tsc -b + vite build（本地通常不需要跑，见下方说明）
 npm run build:author-data   # 快照构建（tsx 脚本，全量重建，fail-fast 解析失败即报错）
 npm run test:e2e            # Playwright（本地跑，不进 CI；首次需 npx playwright install chromium）
+npm run curate -- --spec <需求单.json>   # 精选路线半自动添加（--dry 试运行不落盘）
+node scripts/curate-batch.mjs            # 批量跑需求单数组（--only/--from/--dry/--delay）
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 ```
 
@@ -47,6 +50,8 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - React 组件**禁止**直接调用 `@garmin/fitsdk`；UI 只依赖 `src/types/activity.ts` 领域模型与 repository 接口
 - 数据源：组件不 new 仓库，统一经 `useActivityRepository()`（`dataSourceStore` 当前源 → 本地 Dexie 或作者快照）；作者源只读，写操作 UI 必须按源隐藏
 - 单位固定：米/m/s/bpm/W、Unix 秒；**缺失字段 = undefined ≠ 0**，UI 显示 `—`
+- 运动类型：判断是否骑行一律用 `isCyclingType()`，禁止 `=== 'cycling'`；分析页取数走 `listCyclingSummaries()`
+- AI（BYOK）：API Key 只存 localStorage（`aiConfigStore`），**绝不入 Dexie settings 表**；上行只允许聚合指标，GPS 轨迹点与逐点序列不出本机；未配置供应商时全部 AI 入口不渲染
 
 ## 关键坑
 
