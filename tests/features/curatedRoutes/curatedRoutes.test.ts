@@ -98,7 +98,7 @@ describe('curatedRoutes 数据完整性', () => {
       // 深圳：梧桐山北路一带
       shenzhen: { lat: [22.46, 22.77], lng: [113.79, 114.59] },
       // 成都：龙泉驿 G318 上山段
-      chengdu: { lat: [30.25, 31.14], lng: [103.18, 104.37] },
+      chengdu: { lat: [30.25, 31.23], lng: [103.18, 104.37] },
       // 昆明：西山前山公路（碧鸡关 → 猫猫箐）
       kunming: { lat: [24.32, 26.04], lng: [102.43, 103.40] },
       // 上海：佘山 → 崇明岛（含环崇明、环淀山湖）
@@ -112,7 +112,7 @@ describe('curatedRoutes 数据完整性', () => {
       // 厦门：环东海域浪漫线 → 同安汀溪
       xiamen: { lat: [24.41, 24.97], lng: [117.95, 118.29] },
       // 大理：环洱海 → 剑川沙溪、云龙诺邓、宾川鸡足山
-      dali: { lat: [25.32, 26.89], lng: [99.23, 100.59] },
+      dali: { lat: [25.21, 26.89], lng: [99.23, 100.59] },
       // 海南：环岛各段（东方尖峰 → 文昌）+ 五指山/黎母山/吊罗山
       hainan: { lat: [18.21, 20.06], lng: [108.69, 110.82] },
       // 青岛：环崂山 → 西海岸唐岛湾、平度莱西湖
@@ -194,6 +194,7 @@ describe('curatedRoutes 数据完整性', () => {
       'cd-longquan-loop',
       'cd-luodai',
       'cd-panda',
+      'cd-pengzhou-bailu',
       'cd-qingcheng-dujiang',
       'cd-qingcheng-full',
       'cd-wenjiang-beilin',
@@ -216,6 +217,7 @@ describe('curatedRoutes 数据完整性', () => {
       'dl-dali-lijiang',
       'dl-dali-nuodeng',
       'dl-dali-shaxi',
+      'dl-dali-weishan',
       'dl-dali-xizhou',
       'dl-erhai-east',
       'dl-erhai-loop',
@@ -225,6 +227,7 @@ describe('curatedRoutes 数据完整性', () => {
       'dl-shaxi-stone',
       'dl-shuanglang-xizhou',
       'dl-xizhou-dali',
+      'dl-zibi-lake',
       'fulushan',
       'fxl',
       'gz-baiyunshan',
