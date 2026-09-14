@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { db, type SegmentEntity } from '@/storage/db'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import SegmentCards from '@/features/segments/SegmentCards'
+import SegmentAchievements from '@/features/segments/SegmentAchievements'
 import {
   type SegmentActivityInput,
   type SegmentEffort,
@@ -472,16 +473,19 @@ function SegmentsPage() {
         </p>
       )}
       {state === 'ready' && segments !== null && segments.length > 0 && (
-        <SegmentCards
-          segments={segments}
-          leaderboards={leaderboards}
-          onDelete={source === 'local' ? handleDelete : undefined}
-          sourceIndex={mapSourceIndex}
-          onMapFallback={() => {
-            setMapSourceIndex(1)
-            storeSourceIndex(1)
-          }}
-        />
+        <>
+          <SegmentAchievements leaderboards={leaderboards} />
+          <SegmentCards
+            segments={segments}
+            leaderboards={leaderboards}
+            onDelete={source === 'local' ? handleDelete : undefined}
+            sourceIndex={mapSourceIndex}
+            onMapFallback={() => {
+              setMapSourceIndex(1)
+              storeSourceIndex(1)
+            }}
+          />
+        </>
       )}
     </>
   )

@@ -1,0 +1,55 @@
+/**
+ * 赛段成就摘要样式：三卡横排，配色取主题语义令牌。
+ */
+.segment-achievements {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+@media (max-width: 576px) {
+  .segment-achievements {
+    grid-template-columns: 1fr;
+  }
+}
+
+.segment-achievements__card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+}
+
+.segment-achievements__value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.segment-achievements__value--gold {
+  color: var(--warning);
+}
+
+.segment-achievements__unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.segment-achievements__label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+/* 传奇徽章：达成近 90 天高频（≥10 次）时点亮 */
+.segment-achievements__legend-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 600;
+}

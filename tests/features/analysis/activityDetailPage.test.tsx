@@ -515,7 +515,7 @@ describe('导出 GPX（后续工作项）', () => {
   })
 })
 
-describe('设为赛段（后续工作项：完整 Segment）', () => {
+describe('设为赛段（二期：弹窗框选建段）', () => {
   let repo: DexieActivityRepository
 
   beforeEach(async () => {
@@ -524,7 +524,7 @@ describe('设为赛段（后续工作项：完整 Segment）', () => {
     await testDb.segments.clear()
   })
 
-  it('含坐标活动：点击设为赛段落库并跳转', async () => {
+  it('含坐标活动：点击打开框选建段弹窗，未确认前不落库', async () => {
     await repo.addActivity(makeActivity('act-1', [100, 200], [120, 140]))
     renderPage()
 
@@ -532,14 +532,9 @@ describe('设为赛段（后续工作项：完整 Segment）', () => {
     expect(button).toBeEnabled()
     await userEvent.click(button)
 
-    // 落库一条赛段：起终点取首尾坐标点（makeActivity 首点 31.2/121.5）
-    const segments = await testDb.segments.toArray()
-    expect(segments).toHaveLength(1)
-    expect(segments[0]).toMatchObject({
-      startLatitude: 31.2,
-      startLongitude: 121.5,
-      sourceActivityId: 'act-1',
-    })
+    // 弹窗打开：地图框选两点确认后才建段（替代旧的首尾点直建）
+    expect(await screen.findByRole('dialog', { name: '截取路段建段' })).toBeInTheDocument()
+    expect(await testDb.segments.toArray()).toHaveLength(0)
   })
 
   it('无坐标活动：设为赛段按钮禁用', async () => {

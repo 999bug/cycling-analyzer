@@ -6,10 +6,13 @@
  */
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { CyclingDatabase } from '@/storage/db'
+import { CyclingDatabase, db as globalDb } from '@/storage/db'
+import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
+import { useDataSourceStore } from '@/stores/dataSourceStore'
 import ActivityMatchedSegments from '@/features/segments/ActivityMatchedSegments'
 import type { ActivityRecord } from '@/types/activity'
 
@@ -20,6 +23,10 @@ let repository: DexieSegmentRepository
 beforeEach(async () => {
   testDb = new CyclingDatabase(`matched-segments-test-${crypto.randomUUID()}`)
   repository = new DexieSegmentRepository(testDb)
+  // 对比展开经 useActivityRepository 读全局库：本地源 + 预置最好成绩活动
+  useDataSourceStore.setState({ source: 'local', authorAvailable: false, authorName: null })
+  await globalDb.activities.clear()
+  await globalDb.activity_blobs.clear()
 })
 
 /** 穿越测试赛段的轨迹：t=startTs 进起点圈，t=endTs 进终点圈 → endTs - startTs 秒 */
@@ -130,5 +137,55 @@ describe('ActivityMatchedSegments', () => {
     expect(await screen.findByText('个人第 3')).toBeInTheDocument()
     // 差值 100s ≥ 60s，按分秒格式展示
     expect(screen.getByText('+1:40 vs 最好')).toBeInTheDocument()
+  })
+
+  it('点击「对比」展开前后半程对比（懒加载最好成绩活动逐点重新匹配）', async () => {
+    const segmentId = await seedSegment()
+    // 最好成绩 act-old：800s（窗口 100 → 900）
+    await repository.upsertActivityEffort(segmentId, 'act-old', {
+      startTime: '2026-08-01T08:00:00',
+      durationSeconds: 800,
+    })
+    // 最好成绩活动的逐点数据进全局库（useActivityRepository 本地源读取）
+    const activityRepository = new DexieActivityRepository(globalDb)
+    await activityRepository.addActivity({
+      id: 'act-old',
+      fileId: 'file-act-old',
+      fileName: 'act-old.fit',
+      fingerprint: 'fp-act-old',
+      activityType: 'cycling',
+      startTime: '2026-08-01T08:00:00',
+      endTime: '2026-08-01T09:00:00',
+      duration: 3600,
+      elapsedTime: 3600,
+      distance: 14000,
+      records: makeThroughRecords(100, 900),
+    })
+    renderSection('act-new')
+
+    await screen.findByText('新纪录')
+    await userEvent.click(screen.getByRole('button', { name: '对比' }))
+
+    // 本次窗口 100→700（前/后各 300s），最好窗口 100→900（前/后各 400s）
+    // 两半程数值相同（各 2 行）
+    expect((await screen.findAllByText(/前半程|后半程/)).length).toBe(2)
+    expect(screen.getAllByText(/本次 00:05:00 · 最好 00:06:40/).length).toBe(2)
+    // 收起
+    await userEvent.click(screen.getByRole('button', { name: '收起' }))
+    expect(screen.queryByText(/前半程/)).not.toBeInTheDocument()
+  })
+
+  it('新纪录行提供分享图按钮（jsdom 无 2d context 不抛错）', async () => {
+    const segmentId = await seedSegment()
+    await repository.upsertActivityEffort(segmentId, 'act-old', {
+      startTime: '2026-08-01T08:00:00',
+      durationSeconds: 800,
+    })
+    renderSection('act-new')
+
+    await screen.findByText('新纪录')
+    const shareButton = screen.getByRole('button', { name: '分享图' })
+    // 点击不抛错（jsdom canvas.getContext 返回 null，绘制层安全返回 false）
+    await userEvent.click(shareButton)
   })
 })

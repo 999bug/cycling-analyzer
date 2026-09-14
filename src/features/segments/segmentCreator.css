@@ -1,0 +1,222 @@
+/**
+ * 地图框选建段弹窗样式：遮罩/面板结构与 VideoExportDialog 一致，
+ * 颜色全部取主题语义令牌，深浅主题自适应。
+ */
+.segment-creator__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.segment-creator {
+  display: flex;
+  flex-direction: column;
+  width: min(920px, 96vw);
+  max-height: 92vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.segment-creator__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.segment-creator__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.segment-creator__subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.segment-creator__close {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+.segment-creator__close:hover {
+  border-color: var(--text-secondary);
+}
+
+.segment-creator__body {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--space-md);
+  padding: var(--space-md) 20px;
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  .segment-creator__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.segment-creator__map {
+  position: relative;
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.segment-creator__leaflet {
+  height: 100%;
+  min-height: 320px;
+  width: 100%;
+}
+
+.segment-creator__map-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 500;
+  background: rgba(18, 20, 23, 0.88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segment-creator__field {
+  display: block;
+  margin-bottom: var(--space-md);
+}
+
+.segment-creator__field > span {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.segment-creator__field input[type='text'] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.segment-creator__dir {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.segment-creator__dir button {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.segment-creator__dir button.segment-creator__dir-on {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.segment-creator__checks {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px 12px;
+  margin-bottom: var(--space-md);
+}
+
+.segment-creator__check {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.segment-creator__check:first-child {
+  border-top: none;
+}
+
+.segment-creator__num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.segment-creator__check-ok {
+  color: var(--success);
+}
+
+.segment-creator__check-warn {
+  color: var(--warning);
+}
+
+.segment-creator__error {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 0 0 var(--space-sm);
+}
+
+.segment-creator__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.segment-creator__ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.segment-creator__primary {
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-primary);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.segment-creator__primary:disabled,
+.segment-creator__ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -77,8 +77,8 @@ import CompareSection from '@/features/activity/CompareSection'
 import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
 import AchievementsSection from '@/features/activity/AchievementsSection'
 import { detectAchievements } from '@/features/activity/achievements'
-import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import ActivityMatchedSegments from '@/features/segments/ActivityMatchedSegments'
+import SegmentCreatorDialog from '@/features/segments/SegmentCreatorDialog'
 import { downsampleRecords } from '@/charts/downsample'
 import {
   calculateHeartRateZones,
@@ -101,9 +101,6 @@ import '@/pages/ActivityDetailPage.css'
 
 /** 本地库仓库（删除/重命名等写操作永远只进本地库） */
 const localRepository = new DexieActivityRepository(db)
-
-/** 赛段仓库单例（「设为赛段」创建入口） */
-const segmentRepository = new DexieSegmentRepository(db)
 
 /** 轨迹抽稀阈值（米）：GPS 噪声级，保留骑行路线形状 */
 const SIMPLIFY_TOLERANCE_METERS = 5
@@ -272,6 +269,8 @@ function ActivityDetailPage() {
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   /** 社媒分享素材弹窗（Share Studio：朋友圈/小红书出图） */
   const [shareOpen, setShareOpen] = useState(false)
+  // 地图框选建段弹窗（二期）：点击轨迹两点截取任意路段
+  const [segmentCreatorOpen, setSegmentCreatorOpen] = useState(false)
   /** 录制进度文案（「录制中 x/y 秒」，录制中在面板底部展示） */
   const [videoProgressLabel, setVideoProgressLabel] = useState<string>()
   /** 导出录制态：地图切成「黑底 + 居中竖屏画框」，供真实页面录制裁出成片 */
@@ -755,41 +754,6 @@ function ActivityDetailPage() {
   }
 
   /**
-   * 设为赛段（后续工作项：完整 Segment）：以本骑行首尾坐标点创建
-   * 起终点圆赛段，名称取活动标题，创建后跳转赛段页查看成绩榜。
-   */
-  function handleCreateSegment() {
-    if (activity === undefined || !hasTrack) {
-      return
-    }
-    const coordPoints = records.filter(
-      (record): record is ActivityRecord & { latitude: number; longitude: number } =>
-        record.latitude !== undefined && record.longitude !== undefined,
-    )
-    // 至少需首末两个点才能建起终点圆赛段；hasTrack 只保证 ≥1 个坐标点
-    if (coordPoints.length < 2) {
-      console.warn('Cannot create segment: fewer than two track points with coordinates')
-      return
-    }
-    const first = coordPoints[0]
-    const last = coordPoints[coordPoints.length - 1]
-    segmentRepository
-      .addSegment({
-        name: activity.name || `${formatDate(activity.startTime)} 骑行`,
-        startLatitude: first.latitude,
-        startLongitude: first.longitude,
-        endLatitude: last.latitude,
-        endLongitude: last.longitude,
-        sourceActivityId: activity.id,
-        createdAt: new Date().toISOString(),
-      })
-      .then(() => navigate('/segments'))
-      .catch((err: unknown) => {
-        console.error('Failed to create segment', err)
-      })
-  }
-
-  /**
    * 进入重命名编辑态：输入框预填当前自定义名。
    */
   function handleStartRename() {    setNameInput(activity?.name ?? '')
@@ -980,17 +944,17 @@ function ActivityDetailPage() {
           >
             分享
           </button>
-          {/* 设为赛段 / 删除活动：作者源只读时保留可见但禁用（提示切源），不再凭空隐藏 */}
+          {/* 设为赛段（二期：弹窗框选任意路段）/ 删除活动：作者源只读时保留可见但禁用 */}
           <button
             type="button"
             className="activity-detail__export"
-            onClick={handleCreateSegment}
+            onClick={() => setSegmentCreatorOpen(true)}
             disabled={source === 'author' || !hasTrack}
             title={
               source === 'author'
                 ? '作者数据为只读快照，切换到「我的数据」后可创建赛段'
                 : hasTrack
-                  ? '以本骑行起终点创建赛段'
+                  ? '在轨迹地图上截取任意路段创建赛段'
                   : '该活动无轨迹坐标，无法创建赛段'
             }
           >
@@ -1212,6 +1176,22 @@ function ActivityDetailPage() {
           ftp={ftp}
           maxHeartRate={maxHeartRate}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {/* 地图框选建段弹窗（二期）：截取任意路段，创建后跳转赛段页 */}
+      {segmentCreatorOpen && activity !== undefined && (
+        <SegmentCreatorDialog
+          open
+          onClose={() => setSegmentCreatorOpen(false)}
+          activityName={activity.name || `${formatDate(activity.startTime)} 骑行`}
+          coordinateSystem={activity.coordinateSystem}
+          trackOffset={activity.trackOffset}
+          records={records}
+          startTime={activity.startTime}
+          sourceActivityId={activity.id}
+          activityRepository={repository}
+          sourceIndex={0}
         />
       )}
 

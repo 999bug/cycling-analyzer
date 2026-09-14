@@ -30,6 +30,8 @@ import {
 } from '@/features/segments/segmentMatching'
 import { computeEffortMetrics } from '@/features/segments/effortMetrics'
 import { segmentDistanceMeters } from '@/features/segments/segmentStats'
+import { downloadSegmentPrPng } from '@/features/segments/segmentPrShareCard'
+import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { formatDuration } from '@/utils/format'
 import './activityMatchedSegments.css'
 
@@ -50,7 +52,19 @@ interface MatchedSegmentView {
   /** 本次穿越用时（秒） */
   durationSeconds: number
 
-  /** 赛段距离（km；无轨迹时为起终点直线距离） */
+  /** 本次穿越窗口（Unix 秒，对比展开用） */
+  startTimestamp: number
+  endTimestamp: number
+
+  /** 本次成绩指标（分享卡用；缺失 = undefined） */
+  avgSpeed?: number
+  avgPower?: number
+  avgHeartRate?: number
+
+  /** 赛段实体（对比展开时对最好成绩活动重新匹配用） */
+  segment: SegmentEntity
+
+  /** 距离（km；无轨迹时为起终点直线距离） */
   distanceKm: number
 
   /** 距离是否为直线估算（赛段无轨迹点时） */
@@ -59,8 +73,19 @@ interface MatchedSegmentView {
   /** 除本次外的历史最好成绩（秒）；undefined = 本次是该赛段首条成绩 */
   prSeconds?: number
 
+  /** 最好成绩所属活动 ID（对比展开懒加载用） */
+  prActivityId?: string
+
   /** 含本次在内的排名（1 起） */
   rank: number
+}
+
+/** 对比展开数据（前/后半程用时，秒） */
+interface CompareData {
+  thisFirst: number
+  thisSecond: number
+  prFirst: number
+  prSecond: number
 }
 
 /** 加载状态 */
@@ -120,6 +145,10 @@ function ActivityMatchedSegments({
 }: ActivityMatchedSegmentsProps) {
   const [state, setState] = useState<LoadState>('loading')
   const [items, setItems] = useState<MatchedSegmentView[]>([])
+  // 对比展开状态：key = segmentId，值 = 'loading' | 前/后半程数据
+  const [compare, setCompare] = useState<Record<string, CompareData | 'loading'>>({})
+  // 最好成绩活动逐点加载（对比展开时懒加载）
+  const activityRepository = useActivityRepository()
 
   useEffect(() => {
     let cancelled = false
@@ -195,9 +224,16 @@ function ActivityMatchedSegments({
             segmentId: segment.id,
             name: segment.name,
             durationSeconds: match.durationSeconds,
+            startTimestamp: match.startTimestamp,
+            endTimestamp: match.endTimestamp,
+            avgSpeed: metrics.avgSpeed,
+            avgPower: metrics.avgPower,
+            avgHeartRate: metrics.avgHeartRate,
+            segment,
             distanceKm: distance.meters / 1000,
             distanceEstimated: distance.estimated,
             prSeconds,
+            prActivityId: others[0]?.activityId,
             rank,
           })
           if (cancelled) {
@@ -225,6 +261,86 @@ function ActivityMatchedSegments({
     return null
   }
 
+  /**
+   * 展开/收起「本次 vs 最好」前后半程对比。
+   * 最好成绩的穿越窗口未落库（efforts 只存用时），展开时对最好成绩活动
+   * 重新匹配一次取窗口（懒加载，仅点击时发生）。
+   *
+   * @param item 目标赛段行
+   */
+  async function toggleCompare(item: MatchedSegmentView) {
+    const key = String(item.segmentId ?? item.name)
+    if (compare[key] !== undefined) {
+      setCompare((previous) => {
+        const next = { ...previous }
+        delete next[key]
+        return next
+      })
+      return
+    }
+    if (item.prActivityId === undefined) {
+      return
+    }
+    setCompare((previous) => ({ ...previous, [key]: 'loading' }))
+    try {
+      const prRecords = await activityRepository.getRecords(item.prActivityId)
+      const prMatch = matchSegmentEffortDetail(item.segment, prRecords)
+      if (prMatch === undefined) {
+        // 最好成绩活动当前已无法匹配（如赛段数据变化）：不展示对比
+        setCompare((previous) => {
+          const next = { ...previous }
+          delete next[key]
+          return next
+        })
+        return
+      }
+      const thisMid = (item.startTimestamp + item.endTimestamp) / 2
+      const prMid = (prMatch.startTimestamp + prMatch.endTimestamp) / 2
+      setCompare((previous) => ({
+        ...previous,
+        [key]: {
+          thisFirst: thisMid - item.startTimestamp,
+          thisSecond: item.endTimestamp - thisMid,
+          prFirst: prMid - prMatch.startTimestamp,
+          prSecond: prMatch.endTimestamp - prMid,
+        },
+      }))
+    } catch (error: unknown) {
+      console.error('Failed to load segment compare', error)
+      setCompare((previous) => {
+        const next = { ...previous }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  /**
+   * 新纪录一键生成分享图（本地 Canvas 绘制，数字与页面同源）。
+   *
+   * @param item 新纪录赛段行
+   */
+  function handleShare(item: MatchedSegmentView) {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const date = new Date(startTime)
+    downloadSegmentPrPng(
+      {
+        segmentName: item.name,
+        durationText: formatDuration(item.durationSeconds),
+        deltaText: `比个人最好快 ${Math.round(item.durationSeconds - (item.prSeconds ?? item.durationSeconds))} 秒`,
+        dateText: Number.isNaN(date.getTime())
+          ? ''
+          : `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+        distanceText: `${item.distanceKm.toFixed(2)} km`,
+        avgSpeedText: item.avgSpeed !== undefined ? `${(item.avgSpeed * 3.6).toFixed(1)} km/h` : undefined,
+        avgPowerText: item.avgPower !== undefined ? `${Math.round(item.avgPower)} W` : undefined,
+        avgHeartRateText:
+          item.avgHeartRate !== undefined ? `${Math.round(item.avgHeartRate)} bpm` : undefined,
+      },
+      `赛段新纪录-${item.name}`,
+    )
+  }
+
   return (
     <section className="matched-segments" aria-label="本次赛段">
       <h2 className="matched-segments__title">本次赛段</h2>
@@ -234,6 +350,8 @@ function ActivityMatchedSegments({
           const isNewRecord =
             item.prSeconds !== undefined && item.durationSeconds < item.prSeconds
           const diff = item.prSeconds !== undefined ? item.durationSeconds - item.prSeconds : undefined
+          const compareKey = String(item.segmentId ?? item.name)
+          const compareData = compare[compareKey]
           const nameBody = (
             <>
               <span className="matched-segments__name">{item.name}</span>
@@ -278,7 +396,63 @@ function ActivityMatchedSegments({
                     {diff === 0 ? '持平最好' : `${formatDelta(diff)} vs 最好`}
                   </span>
                 )}
+                {isNewRecord && (
+                  <button
+                    type="button"
+                    className="matched-segments__share"
+                    onClick={() => handleShare(item)}
+                    title="生成赛段新纪录分享图（本地绘制下载）"
+                  >
+                    分享图
+                  </button>
+                )}
+                {item.prSeconds !== undefined && item.prActivityId !== undefined && (
+                  <button
+                    type="button"
+                    className="matched-segments__compare-toggle"
+                    aria-expanded={compareData !== undefined}
+                    onClick={() => void toggleCompare(item)}
+                  >
+                    {compareData === undefined ? '对比' : '收起'}
+                  </button>
+                )}
               </div>
+              {compareData !== undefined && (
+                <div className="matched-segments__compare">
+                  {compareData === 'loading' ? (
+                    <p className="matched-segments__compare-loading">
+                      正在载入最好成绩活动的逐点数据…
+                    </p>
+                  ) : (
+                    <>
+                      <div className="matched-segments__compare-row">
+                        <span>前半程</span>
+                        <span className="matched-segments__num">
+                          本次 {formatDuration(compareData.thisFirst)} · 最好{' '}
+                          {formatDuration(compareData.prFirst)}（
+                          {compareData.thisFirst <= compareData.prFirst ? '快' : '慢'}
+                          {formatDuration(
+                            Math.abs(compareData.thisFirst - compareData.prFirst),
+                          )}
+                          ）
+                        </span>
+                      </div>
+                      <div className="matched-segments__compare-row">
+                        <span>后半程</span>
+                        <span className="matched-segments__num">
+                          本次 {formatDuration(compareData.thisSecond)} · 最好{' '}
+                          {formatDuration(compareData.prSecond)}（
+                          {compareData.thisSecond <= compareData.prSecond ? '快' : '慢'}
+                          {formatDuration(
+                            Math.abs(compareData.thisSecond - compareData.prSecond),
+                          )}
+                          ）
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
