@@ -1,24 +1,31 @@
 /**
- * AI 服务配置 store（zustand + persist）。
+ * AI 供应商配置 store（zustand + persist，AI 接入 v2：cc-switch 式多配置）。
  *
  * **刻意不进 Dexie settings 表**（硬约束，2026-09-14）：设置表的键值对会被
  * 「导出数据」整表写进 JSON 备份文件（exportImport 的 `db.settings.toArray()`），
  * API Key 属于私密凭据，绝不能跟着备份文件走。故独立存 localStorage
  * （persist key：cycling-ai-config），仅存本机。
  *
- * 配置完整性判定见 resolveAiConfig：未选厂商 / 缺 Key / 自定义缺地址或模型名
- * 时视为未配置，所有 AI 功能入口隐藏或降级提示（默认关闭，按需开启）。
+ * v2 数据模型：profiles 数组（多套供应商配置）+ activeProfileId（当前生效），
+ * 「启用」即切换 activeProfileId，各 AI 功能入口经 resolveAiConfig 取生效配置。
+ * v1 单配置数据经 persist migrate 自动搬迁成 profiles（Key 不丢）。
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { getAiProvider, type AiProviderId } from '@/features/ai/providers'
+import { getAiVendor } from '@/features/ai/providers'
 
-/** 已就绪的 AI 请求配置（resolveAiConfig 返回） */
-export interface ResolvedAiConfig {
-  /** 服务商标识 */
-  providerId: AiProviderId
+/** 一套供应商配置（列表里的一条） */
+export interface AiProfile {
+  /** 配置 id（毫秒时间戳，本机唯一即可） */
+  id: string
 
-  /** OpenAI 兼容接口根地址（预设厂商来自预设表，custom 来自用户填写） */
+  /** 展示名（用户可改，如「OpenRouter 免费档」） */
+  name: string
+
+  /** 供应商模板 id（providers 表里的 id；custom = 手填中转） */
+  vendorId: string
+
+  /** OpenAI 兼容接口根地址（保存时已归一化：去尾斜杠、custom 补 /v1） */
   baseUrl: string
 
   /** API Key（仅存本机浏览器） */
@@ -28,93 +35,164 @@ export interface ResolvedAiConfig {
   model: string
 }
 
-/** AI 配置 store 状态与 actions */
-export interface AiConfigState {
-  /** 选中的服务商（null = 未配置过） */
-  providerId: AiProviderId | null
+/** 已就绪的 AI 请求配置（resolveAiConfig 返回） */
+export interface ResolvedAiConfig {
+  /** 生效配置 id */
+  profileId: string
 
-  /** API Key（password 输入；仅存本机） */
+  /** 供应商模板 id（aiClient 据此合并厂商附加请求头） */
+  vendorId: string
+
+  /** OpenAI 兼容接口根地址 */
+  baseUrl: string
+
+  /** API Key */
   apiKey: string
 
-  /** 模型 ID（预设厂商为预设列表里的值，custom 为手填） */
+  /** 模型 ID */
   model: string
-
-  /** 自定义接口地址（仅 custom 使用） */
-  customBaseUrl: string
-
-  /** 保存配置（设置页「保存配置」提交，整体覆盖） */
-  saveConfig(patch: {
-    providerId: AiProviderId
-    apiKey: string
-    model: string
-    customBaseUrl: string
-  }): void
-
-  /** 清空配置（删除 Key 与全部字段） */
-  clearConfig(): void
 }
+
+/** AI 配置 store 状态与 actions */
+export interface AiConfigState {
+  /** 全部已添加的供应商配置 */
+  profiles: AiProfile[]
+
+  /** 当前生效配置 id（null = 未启用任何配置） */
+  activeProfileId: string | null
+
+  /** 添加配置（返回新配置 id） */
+  addProfile(profile: Omit<AiProfile, 'id'>): string
+
+  /** 更新配置（按 id 覆盖传入字段） */
+  updateProfile(id: string, patch: Partial<Omit<AiProfile, 'id'>>): void
+
+  /** 删除配置；删到当前生效配置时自动切到剩余第一条 */
+  removeProfile(id: string): void
+
+  /** 启用某配置（切换 activeProfileId） */
+  setActiveProfile(id: string): void
+}
+
+/** persist 版本号（v0 = v1 单配置结构，v1 = v2 profiles 结构） */
+const PERSIST_VERSION = 1
 
 /** AI 配置 store 实例（persist key：cycling-ai-config） */
 export const useAiConfigStore = create<AiConfigState>()(
   persist(
     (set) => ({
-      providerId: null,
-      apiKey: '',
-      model: '',
-      customBaseUrl: '',
-      saveConfig: (patch) => set(patch),
-      clearConfig: () =>
-        set({ providerId: null, apiKey: '', model: '', customBaseUrl: '' }),
+      profiles: [],
+      activeProfileId: null,
+      addProfile: (profile) => {
+        // 同一毫秒内可能连续添加多条，时间戳后必须拼随机段保证唯一
+        const id = `ai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        set((state) => ({
+          profiles: [...state.profiles, { ...profile, id }],
+          // 首个配置自动启用（后续添加不打扰当前生效配置）
+          activeProfileId: state.activeProfileId ?? id,
+        }))
+        return id
+      },
+      updateProfile: (id, patch) =>
+        set((state) => ({
+          profiles: state.profiles.map((profile) =>
+            profile.id === id ? { ...profile, ...patch } : profile,
+          ),
+        })),
+      removeProfile: (id) =>
+        set((state) => {
+          const profiles = state.profiles.filter((profile) => profile.id !== id)
+          const activeProfileId =
+            state.activeProfileId === id ? (profiles[0]?.id ?? null) : state.activeProfileId
+          return { profiles, activeProfileId }
+        }),
+      setActiveProfile: (id) => set({ activeProfileId: id }),
     }),
-    { name: 'cycling-ai-config' },
+    {
+      name: 'cycling-ai-config',
+      version: PERSIST_VERSION,
+      // v1 单配置 { providerId, apiKey, model, customBaseUrl } → v2 profiles
+      migrate: (persisted) => {
+        const legacy = persisted as {
+          providerId?: string | null
+          apiKey?: string
+          model?: string
+          customBaseUrl?: string
+        }
+        if (
+          legacy !== null &&
+          typeof legacy === 'object' &&
+          typeof legacy.providerId === 'string' &&
+          typeof legacy.apiKey === 'string' &&
+          legacy.apiKey.length > 0
+        ) {
+          const vendor = getAiVendor(legacy.providerId)
+          const baseUrl =
+            legacy.providerId === 'custom'
+              ? (legacy.customBaseUrl ?? '').trim()
+              : (vendor?.baseUrl ?? '')
+          const profile: AiProfile = {
+            id: 'ai-migrated',
+            name: vendor?.name ?? '自定义',
+            vendorId: legacy.providerId,
+            baseUrl,
+            apiKey: legacy.apiKey,
+            model: (legacy.model ?? vendor?.models[0] ?? '').trim(),
+          }
+          return { profiles: [profile], activeProfileId: profile.id }
+        }
+        return { profiles: [], activeProfileId: null }
+      },
+    },
   ),
 )
 
 /**
+ * 归一化接口地址：去尾斜杠；自定义（无路径版本号）时补 /v1。
+ * 预设厂商的地址来自模板，视为已正确。
+ *
+ * @param rawUrl 用户输入的地址
+ * @param isCustom 是否自定义模板
+ */
+export function normalizeAiBaseUrl(rawUrl: string, isCustom: boolean): string {
+  const trimmed = rawUrl.trim().replace(/\/+$/, '')
+  if (!isCustom || trimmed.length === 0 || /\/v\d+$/.test(trimmed)) {
+    return trimmed
+  }
+  return `${trimmed}/v1`
+}
+
+/**
  * 判定配置是否可用并归一为请求配置。
  *
- * @param state AI 配置 store 状态（或其持久化子集）
- * @returns 就绪配置；未配置/不完整时 null
+ * @param state AI 配置 store 状态
+ * @returns 生效配置；未启用/配置不完整时 null
  */
 export function resolveAiConfig(state: {
-  providerId: AiProviderId | null
-  apiKey: string
-  model: string
-  customBaseUrl: string
+  profiles: AiProfile[]
+  activeProfileId: string | null
 }): ResolvedAiConfig | null {
-  if (state.providerId === null) {
+  const active = state.profiles.find((profile) => profile.id === state.activeProfileId)
+  if (active === undefined) {
     return null
   }
-  const apiKey = state.apiKey.trim()
-  if (apiKey.length === 0) {
+  if (
+    active.apiKey.trim().length === 0 ||
+    active.baseUrl.trim().length === 0 ||
+    active.model.trim().length === 0
+  ) {
     return null
-  }
-  const preset = getAiProvider(state.providerId)
-  if (preset === undefined) {
-    return null
-  }
-  if (preset.id === 'custom') {
-    const baseUrl = state.customBaseUrl.trim().replace(/\/+$/, '')
-    const model = state.model.trim()
-    if (baseUrl.length === 0 || model.length === 0) {
-      return null
-    }
-    return { providerId: preset.id, baseUrl, apiKey, model }
   }
   return {
-    providerId: preset.id,
-    baseUrl: preset.baseUrl,
-    apiKey,
-    model: state.model.trim() || preset.defaultModel,
+    profileId: active.id,
+    vendorId: active.vendorId,
+    baseUrl: active.baseUrl,
+    apiKey: active.apiKey,
+    model: active.model,
   }
 }
 
-/** 便捷选择器：当前配置是否就绪（控制各 AI 入口的显隐；参数为配置子集，便于测试） */
-export function selectAiReady(state: {
-  providerId: AiProviderId | null
-  apiKey: string
-  model: string
-  customBaseUrl: string
-}): boolean {
+/** 便捷选择器：当前配置是否就绪（控制各 AI 入口的显隐） */
+export function selectAiReady(state: AiConfigState): boolean {
   return resolveAiConfig(state) !== null
 }

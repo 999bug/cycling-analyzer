@@ -29,7 +29,7 @@ function makeActivity(overrides: Partial<Activity> = {}): Activity {
 
 beforeEach(() => {
   window.localStorage.clear()
-  useAiConfigStore.setState({ providerId: null, apiKey: '', model: '', customBaseUrl: '' })
+  useAiConfigStore.setState({ profiles: [], activeProfileId: null })
   vi.restoreAllMocks()
 })
 
@@ -41,10 +41,15 @@ describe('AiInsightSection', () => {
 
   it('配置后可生成解读并写入活动缓存', async () => {
     useAiConfigStore.setState({
-      providerId: 'deepseek',
-      apiKey: 'sk-test-123456',
-      model: 'deepseek-chat',
-      customBaseUrl: '',
+      profiles: [{
+        id: 'p1',
+        name: 'DeepSeek',
+        vendorId: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-test-123456',
+        model: 'deepseek-chat',
+      }],
+      activeProfileId: 'p1',
     })
     const fetchMock = vi.fn(async () =>
       ({
@@ -70,10 +75,15 @@ describe('AiInsightSection', () => {
 
   it('缓存命中时直接展示，不发请求', () => {
     useAiConfigStore.setState({
-      providerId: 'deepseek',
-      apiKey: 'sk-test-123456',
-      model: 'deepseek-chat',
-      customBaseUrl: '',
+      profiles: [{
+        id: 'p1',
+        name: 'DeepSeek',
+        vendorId: 'deepseek',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-test-123456',
+        model: 'deepseek-chat',
+      }],
+      activeProfileId: 'p1',
     })
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

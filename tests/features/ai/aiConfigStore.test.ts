@@ -1,69 +1,144 @@
 /**
- * AI 配置 store 测试（aiConfigStore）。
- * 核心契约：配置不完整时 resolveAiConfig 返回 null（AI 入口全部隐藏）；
- * 自定义厂商要求地址 + 模型名；持久化落在 localStorage 独立键
- * （不进 Dexie settings 表，因此不会随 JSON 备份导出）。
+ * AI 供应商配置 store 测试（aiConfigStore，v2 多配置）。
+ * 核心契约：profiles + activeProfileId；生效配置不完整时 resolveAiConfig
+ * 返回 null（AI 入口全部隐藏）；自定义地址自动补 /v1；v1 单配置数据经
+ * migrate 搬迁为 profiles（Key 不丢）；持久化落 localStorage 独立键。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { resolveAiConfig, selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
+import {
+  normalizeAiBaseUrl,
+  resolveAiConfig,
+  selectAiReady,
+  useAiConfigStore,
+  type AiProfile,
+} from '@/features/ai/aiConfigStore'
 
-const READY = {
-  providerId: 'deepseek' as const,
-  apiKey: 'sk-test-123456',
-  model: 'deepseek-chat',
-  customBaseUrl: '',
+const PROFILE: Omit<AiProfile, 'id'> = {
+  name: 'OpenRouter 免费档',
+  vendorId: 'openrouter',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  apiKey: 'sk-or-test-123456',
+  model: 'inclusionai/ling-3.0-flash-vl:free',
+}
+
+/** 添加一条配置并返回其 id（首个配置自动启用） */
+function addReadyProfile(): string {
+  return useAiConfigStore.getState().addProfile(PROFILE)
 }
 
 beforeEach(() => {
   window.localStorage.clear()
-  useAiConfigStore.setState({ providerId: null, apiKey: '', model: '', customBaseUrl: '' })
+  useAiConfigStore.setState({ profiles: [], activeProfileId: null })
 })
 
 describe('resolveAiConfig', () => {
-  it('未选厂商或缺 Key → null', () => {
-    expect(resolveAiConfig({ providerId: null, apiKey: '', model: '', customBaseUrl: '' })).toBeNull()
-    expect(resolveAiConfig({ ...READY, apiKey: '  ' })).toBeNull()
-  })
-
-  it('预设厂商：地址来自预设表，模型缺省取默认推荐', () => {
-    const resolved = resolveAiConfig({ ...READY, model: '' })
-    expect(resolved).toMatchObject({
-      baseUrl: 'https://api.deepseek.com/v1',
-      model: 'deepseek-chat',
-      apiKey: 'sk-test-123456',
-    })
-  })
-
-  it('自定义厂商：地址与模型名缺一不可；地址去掉尾斜杠', () => {
+  it('无配置 / 未启用 / 字段缺失 → null', () => {
+    expect(resolveAiConfig({ profiles: [], activeProfileId: null })).toBeNull()
+    expect(resolveAiConfig({ profiles: [{ ...PROFILE, id: 'a' }], activeProfileId: null })).toBeNull()
     expect(
-      resolveAiConfig({ ...READY, providerId: 'custom', customBaseUrl: '', model: 'qwen-max' }),
+      resolveAiConfig({
+        profiles: [{ ...PROFILE, id: 'a', apiKey: '' }],
+        activeProfileId: 'a',
+      }),
     ).toBeNull()
-    const resolved = resolveAiConfig({
-      ...READY,
-      providerId: 'custom',
-      customBaseUrl: 'https://relay.example.com/v1///',
-      model: 'qwen-max',
-    })
-    expect(resolved).toMatchObject({ baseUrl: 'https://relay.example.com/v1', model: 'qwen-max' })
   })
 
-  it('selectAiReady 与 resolveAiConfig 一致', () => {
-    expect(selectAiReady({ ...READY, apiKey: '' })).toBe(false)
-    expect(selectAiReady(READY)).toBe(true)
+  it('生效配置完整 → 归一返回（含 vendorId）', () => {
+    const id = addReadyProfile()
+    expect(resolveAiConfig(useAiConfigStore.getState())).toEqual({
+      profileId: id,
+      vendorId: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-or-test-123456',
+      model: 'inclusionai/ling-3.0-flash-vl:free',
+    })
+    expect(selectAiReady(useAiConfigStore.getState())).toBe(true)
   })
 })
 
-describe('aiConfigStore 持久化', () => {
-  it('saveConfig 落 localStorage 独立键；clearConfig 清空', () => {
-    useAiConfigStore.getState().saveConfig(READY)
-    expect(useAiConfigStore.getState().providerId).toBe('deepseek')
+describe('normalizeAiBaseUrl', () => {
+  it('自定义地址补 /v1、去尾斜杠；预设地址原样保留', () => {
+    expect(normalizeAiBaseUrl('https://relay.example.com/api///', true)).toBe(
+      'https://relay.example.com/api/v1',
+    )
+    expect(normalizeAiBaseUrl('https://relay.example.com/v1/', true)).toBe('https://relay.example.com/v1')
+    expect(normalizeAiBaseUrl('https://api.deepseek.com/v1', false)).toBe('https://api.deepseek.com/v1')
+  })
+})
 
+describe('多配置管理', () => {
+  it('添加的首个配置自动启用；启用切换 activeProfileId', () => {
+    const first = useAiConfigStore.getState().addProfile(PROFILE)
+    expect(useAiConfigStore.getState().activeProfileId).toBe(first)
+
+    const second = useAiConfigStore.getState().addProfile({
+      ...PROFILE,
+      name: 'DeepSeek 官方',
+      vendorId: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      model: 'deepseek-chat',
+    })
+    expect(useAiConfigStore.getState().activeProfileId).toBe(first)
+
+    useAiConfigStore.getState().setActiveProfile(second)
+    expect(useAiConfigStore.getState().activeProfileId).toBe(second)
+    expect(resolveAiConfig(useAiConfigStore.getState())?.model).toBe('deepseek-chat')
+  })
+
+  it('删除生效配置时自动切到剩余第一条', () => {
+    const first = useAiConfigStore.getState().addProfile(PROFILE)
+    const second = useAiConfigStore.getState().addProfile({ ...PROFILE, name: '第二条' })
+    useAiConfigStore.getState().setActiveProfile(second)
+
+    useAiConfigStore.getState().removeProfile(second)
+    expect(useAiConfigStore.getState().activeProfileId).toBe(first)
+
+    useAiConfigStore.getState().removeProfile(first)
+    expect(useAiConfigStore.getState().profiles).toHaveLength(0)
+    expect(useAiConfigStore.getState().activeProfileId).toBeNull()
+  })
+
+  it('updateProfile 只覆盖传入字段', () => {
+    const id = addReadyProfile()
+    useAiConfigStore.getState().updateProfile(id, { model: 'deepseek/deepseek-chat-v3.1:free' })
+    const profile = useAiConfigStore.getState().profiles.find((p) => p.id === id)
+    expect(profile?.model).toBe('deepseek/deepseek-chat-v3.1:free')
+    expect(profile?.apiKey).toBe('sk-or-test-123456')
+  })
+})
+
+describe('持久化与迁移', () => {
+  it('profiles 落 localStorage 独立键（不进 settings 表）', () => {
+    addReadyProfile()
     const raw = window.localStorage.getItem('cycling-ai-config')
     expect(raw).not.toBeNull()
-    expect(JSON.parse(raw as string).state.apiKey).toBe('sk-test-123456')
+    expect(JSON.parse(raw as string).state.profiles).toHaveLength(1)
+  })
 
-    useAiConfigStore.getState().clearConfig()
-    expect(useAiConfigStore.getState().providerId).toBeNull()
-    expect(useAiConfigStore.getState().apiKey).toBe('')
+  it('migrate：v1 单配置（含 Key）搬迁为 profiles 且自动启用', async () => {
+    window.localStorage.setItem(
+      'cycling-ai-config',
+      JSON.stringify({
+        state: { providerId: 'deepseek', apiKey: 'sk-legacy-key', model: 'deepseek-chat', customBaseUrl: '' },
+        version: 0,
+      }),
+    )
+    // persist 在 rehydrate 时发现版本 0 < 1，走 migrate 搬迁
+    await useAiConfigStore.persist.rehydrate()
+    const state = useAiConfigStore.getState()
+    expect(state.profiles).toHaveLength(1)
+    expect(state.profiles[0].apiKey).toBe('sk-legacy-key')
+    expect(state.profiles[0].baseUrl).toBe('https://api.deepseek.com/v1')
+    expect(state.profiles[0].vendorId).toBe('deepseek')
+    expect(state.activeProfileId).toBe(state.profiles[0].id)
+  })
+
+  it('migrate：v1 数据无 Key / 无 providerId → 空配置', async () => {
+    window.localStorage.setItem(
+      'cycling-ai-config',
+      JSON.stringify({ state: { providerId: null, apiKey: '', model: '', customBaseUrl: '' }, version: 0 }),
+    )
+    await useAiConfigStore.persist.rehydrate()
+    expect(useAiConfigStore.getState().profiles).toHaveLength(0)
   })
 })

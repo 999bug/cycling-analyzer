@@ -20,6 +20,17 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.78.0',
+    date: '2026-09-14',
+    features: [
+      'AI 服务重做为供应商管理模式（照 cc-switch 形态）：支持添加多套供应商配置、一键「启用」切换、编辑与删除，分享文案与骑行解读始终使用当前生效配置',
+      '供应商预设库扩充到 59 条（来源 cc-switch 开源仓库，MIT）：常用 8 卡置顶，其余按官方厂商 / 聚合平台 / 中转站分类 + 名称/域名搜索；OpenAI 与 Claude 官方预设回归',
+      '新增「获取模型列表」：按接口地址与 Key 拉取该账号可用的全部模型填充下拉，不用再手抄模型名',
+      '修复：思考型模型（如 ling / DeepSeek-R1 系）在连接测试时把小输出额度花在思考过程上导致误报「模型返回了空内容」——现以 HTTP 200 判定连通；OpenRouter「200 + 错误体」透出真实原因；自定义接口地址未带 /v1 时自动补齐',
+      'Claude 官方预设内置浏览器直连专用请求头，无需手工处理',
+    ],
+  },
+  {
     version: '2.77.0',
     date: '2026-09-14',
     features: [

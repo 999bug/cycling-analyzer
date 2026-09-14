@@ -305,7 +305,7 @@ function ShareStudioModal({
     const config = resolveAiConfig(useAiConfigStore.getState())
     if (config === null) {
       setAiState('fail')
-      setAiMessage('AI 服务未配置：到「更多 → AI 服务」选择厂商并粘贴 Key 即可开启')
+      setAiMessage('AI 服务未配置：到「更多 → AI 服务」添加并启用一个供应商配置即可开启')
       return
     }
     setAiState('busy')

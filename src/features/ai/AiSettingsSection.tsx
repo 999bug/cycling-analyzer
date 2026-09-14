@@ -1,22 +1,50 @@
 /**
- * 设置页「AI 服务」区块（AI 接入 v1，BYOK：用户自填 Key，浏览器直连服务商）。
+ * 设置页「AI 服务」区块（AI 接入 v2：cc-switch 式供应商管理）。
  *
- * 配置流程压缩到两步（原型评审定稿）：选厂商 → 贴 Key；接口地址与模型
- * 参数全部由预设表内置，「高级选项」里可看不可改（自定义厂商除外）。
- * 保存进 localStorage 独立 store（aiConfigStore），不进 Dexie settings 表，
- * 因此不会随「导出数据」的 JSON 备份带出。
+ * 结构：
+ * - 配置列表：每套供应商配置一行（名称 / 厂商 / 地址 / 模型 / Key 掩码），
+ *   当前生效配置高亮挂「使用中」徽章；行内操作：启用 / 编辑 / 删除。
+ * - 添加 / 编辑表单（ProfileEditor）：8 张常用模板卡置顶 +「更多供应商」
+ *   搜索面板（60 条预设库，按分类与名称/域名过滤）；「获取模型列表」
+ *   调 GET /models 填充模型下拉；连接测试以 HTTP 200 为准。
+ *
+ * Key 安全：全部配置只存本机 localStorage（aiConfigStore），不进 Dexie
+ * settings 表（不随 JSON 备份导出）；列表只显示掩码。
  */
-import { useState, type ChangeEvent } from 'react'
-import { AI_PROVIDERS, getAiProvider, type AiProviderId } from '@/features/ai/providers'
-import { resolveAiConfig, useAiConfigStore } from '@/features/ai/aiConfigStore'
-import { testAiConnection } from '@/features/ai/aiClient'
+import { useMemo, useState, type ChangeEvent } from 'react'
+import {
+  AI_COMMON_TEMPLATES,
+  AI_PRESET_LIBRARY,
+  AI_VENDOR_CATEGORY_LABELS,
+  CUSTOM_VENDOR_ID,
+  getAiVendor,
+  type AiVendorCategory,
+  type AiVendorPreset,
+} from '@/features/ai/providers'
+import {
+  normalizeAiBaseUrl,
+  useAiConfigStore,
+  type AiProfile,
+} from '@/features/ai/aiConfigStore'
+import { fetchAiModelList, testAiConnection } from '@/features/ai/aiClient'
 import '@/features/ai/ai.css'
 
 /** 连接测试状态 */
 type TestStatus = 'idle' | 'testing' | 'ok' | 'fail'
 
+/** 拉取模型列表状态 */
+type FetchStatus = 'idle' | 'fetching' | 'ok' | 'fail'
+
 /** Key 最短长度（低于此视为没贴全，测试前拦截） */
 const MIN_API_KEY_LENGTH = 8
+
+/** Key 掩码：保留前 5 后 4（过短整段打码） */
+function maskKey(key: string): string {
+  if (key.length <= 12) {
+    return '****'
+  }
+  return `${key.slice(0, 5)}****${key.slice(-4)}`
+}
 
 /**
  * AI 服务区块组件。
@@ -24,89 +52,270 @@ const MIN_API_KEY_LENGTH = 8
  * @param props 组件参数（id 供设置页目录锚点）
  */
 function AiSettingsSection({ id }: { id?: string }) {
-  const saved = useAiConfigStore()
-  const [selectedId, setSelectedId] = useState<AiProviderId | null>(saved.providerId)
-  const [apiKeyDraft, setApiKeyDraft] = useState(saved.apiKey)
-  const [modelDraft, setModelDraft] = useState(saved.model)
-  const [baseUrlDraft, setBaseUrlDraft] = useState(saved.customBaseUrl)
+  const profiles = useAiConfigStore((state) => state.profiles)
+  const activeProfileId = useAiConfigStore((state) => state.activeProfileId)
+  const setActiveProfile = useAiConfigStore((state) => state.setActiveProfile)
+  const removeProfile = useAiConfigStore((state) => state.removeProfile)
+
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId)
+
+  /**
+   * 删除配置（确认弹窗；删当前生效配置时 store 会自动切到剩余第一条）。
+   *
+   * @param profile 目标配置
+   */
+  function handleRemove(profile: AiProfile) {
+    if (!window.confirm(`删除「${profile.name}」？该配置的 Key 将从本机一并清除`)) {
+      return
+    }
+    removeProfile(profile.id)
+    setNotice({ ok: true, text: '已删除该配置' })
+  }
+
+  return (
+    <section className="settings-section" aria-label="AI 服务" id={id}>
+      <h2 className="settings-section__title">AI 服务</h2>
+      <p className="settings-section__hint">
+        用于分享文案与骑行解读的 AI 生成。可以添加多套供应商配置、一键切换使用的配置；
+        Key 只保存在本机浏览器，不会随数据导出，更不会上传到本站。
+      </p>
+
+      <div className="ai-service__list-head">
+        <h3 className="ai-service__list-title">已添加的配置（{profiles.length}）</h3>
+        <button
+          type="button"
+          className="settings-button settings-button--primary"
+          onClick={() => {
+            setEditingId(null)
+            setEditorOpen(true)
+          }}
+        >
+          ＋ 添加供应商
+        </button>
+      </div>
+
+      <div className="ai-service__profiles">
+        {profiles.length === 0 ? (
+          <div className="ai-service__empty">
+            还没有配置：点上方「添加供应商」，选模板 → 贴 Key 即可
+          </div>
+        ) : (
+          profiles.map((profile) => {
+            const isActive = profile.id === activeProfileId
+            return (
+              <div
+                key={profile.id}
+                className={isActive ? 'ai-service__profile ai-service__profile--active' : 'ai-service__profile'}
+              >
+                <div className="ai-service__profile-main">
+                  <div className="ai-service__profile-name">
+                    {profile.name}
+                    <span className="ai-service__provider-tag">
+                      {getAiVendor(profile.vendorId)?.name ?? '自定义'}
+                    </span>
+                    {isActive && <span className="ai-service__active-badge">使用中</span>}
+                  </div>
+                  <div className="ai-service__profile-meta">
+                    {profile.baseUrl} · 模型 <strong>{profile.model}</strong> · Key {maskKey(profile.apiKey)}
+                  </div>
+                </div>
+                <div className="ai-service__profile-actions">
+                  {isActive ? null : (
+                    <button
+                      type="button"
+                      className="settings-button"
+                      onClick={() => {
+                        setActiveProfile(profile.id)
+                        setNotice({ ok: true, text: `已切换使用「${profile.name}」` })
+                      }}
+                    >
+                      启用
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="settings-button"
+                    onClick={() => {
+                      setEditingId(profile.id)
+                      setEditorOpen(true)
+                    }}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className="settings-button settings-button--danger"
+                    onClick={() => handleRemove(profile)}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {editorOpen && <ProfileEditor editingId={editingId} onClose={() => setEditorOpen(false)} />}
+
+      {notice !== null && (
+        <p
+          role="status"
+          className={
+            notice.ok
+              ? 'settings-message settings-message--success'
+              : 'settings-message settings-message--error'
+          }
+        >
+          {notice.text}
+        </p>
+      )}
+
+      <div className="ai-service__status">
+        <span>
+          <span className={activeProfile !== undefined ? 'ai-service__dot ai-service__dot--on' : 'ai-service__dot'} />
+          {activeProfile !== undefined
+            ? `当前生效：${activeProfile.name}（${getAiVendor(activeProfile.vendorId)?.name ?? '自定义'} / ${activeProfile.model}）`
+            : '未配置'}
+        </span>
+        <span>
+          数据上行：<strong>仅聚合指标</strong>（距离 / 爬升 / 功率等汇总数字）
+        </span>
+      </div>
+      <p className="ai-service__privacy">
+        隐私边界：AI 只接收聚合指标，GPS 轨迹点与逐点心率不出本机；所有 AI 功能默认关闭，
+        添加并启用配置后按需使用；解读结果按活动缓存，不重复计费。
+      </p>
+    </section>
+  )
+}
+
+/** 编辑器 props */
+interface ProfileEditorProps {
+  /** 编辑目标配置 id（null = 添加模式） */
+  editingId: string | null
+
+  /** 关闭编辑器（保存成功 / 取消） */
+  onClose: () => void
+}
+
+/**
+ * 添加 / 编辑供应商配置表单。
+ *
+ * @param props 组件参数
+ */
+function ProfileEditor({ editingId, onClose }: ProfileEditorProps) {
+  const existing = useAiConfigStore((state) => state.profiles).find(
+    (profile) => profile.id === editingId,
+  )
+  const addProfile = useAiConfigStore((state) => state.addProfile)
+  const updateProfile = useAiConfigStore((state) => state.updateProfile)
+
+  const [vendorId, setVendorId] = useState(existing?.vendorId ?? '')
+  const [name, setName] = useState(existing?.name ?? '')
+  const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? '')
+  const [apiKey, setApiKey] = useState(existing?.apiKey ?? '')
+  const [model, setModel] = useState(existing?.model ?? '')
   const [keyVisible, setKeyVisible] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<readonly string[]>([])
+  const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle')
+  const [fetchMessage, setFetchMessage] = useState('')
   const [testStatus, setTestStatus] = useState<TestStatus>('idle')
   const [testMessage, setTestMessage] = useState('')
   const [testLatency, setTestLatency] = useState<number | undefined>(undefined)
-  const [saveMessage, setSaveMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [showMore, setShowMore] = useState(false)
+  const [presetCat, setPresetCat] = useState<'all' | AiVendorCategory>('all')
+  const [presetSearch, setPresetSearch] = useState('')
 
-  const preset = getAiProvider(selectedId)
+  const vendor = vendorId.length > 0 ? getAiVendor(vendorId) : undefined
+  const isCustom = vendorId === CUSTOM_VENDOR_ID
 
-  /** 当前草稿能否保存（自定义厂商要求地址与模型名齐全） */
+  /** 表单是否可保存（custom 要求地址；其余字段通用） */
   const canSave =
-    preset !== undefined &&
-    apiKeyDraft.trim().length >= MIN_API_KEY_LENGTH &&
-    (preset.id !== 'custom' ||
-      (baseUrlDraft.trim().length > 0 && modelDraft.trim().length > 0))
+    vendor !== undefined &&
+    name.trim().length > 0 &&
+    (isCustom || baseUrl.trim().length > 0) &&
+    apiKey.trim().length >= MIN_API_KEY_LENGTH &&
+    model.trim().length > 0
 
-  /** 保存后的生效配置（状态行展示用） */
-  const activeConfig = resolveAiConfig(saved)
-
-  /**
-   * 选中厂商：模型重置为该厂商默认（Key 保留，方便对比试各家）。
-   *
-   * @param next 目标厂商 id
-   */
-  function handleSelectProvider(next: AiProviderId) {
-    setSelectedId(next)
-    setTestStatus('idle')
-    setTestMessage('')
-    setSaveMessage(null)
-    const nextPreset = getAiProvider(next)
-    setModelDraft(nextPreset?.defaultModel ?? '')
+  /** 草稿请求配置（测试 / 拉取模型列表用；不落库） */
+  function draftConfig(): {
+    baseUrl: string
+    apiKey: string
+    model: string
+    extraHeaders?: Record<string, string>
+  } | null {
+    if (vendor === undefined) {
+      return null
+    }
+    const resolvedBaseUrl = normalizeAiBaseUrl(baseUrl, isCustom)
+    if (resolvedBaseUrl.length === 0 || apiKey.trim().length === 0) {
+      return null
+    }
+    return {
+      baseUrl: resolvedBaseUrl,
+      apiKey: apiKey.trim(),
+      model: model.trim(),
+      extraHeaders: vendor.extraHeaders,
+    }
   }
 
-  /** 保存配置到本机 store */
-  function handleSave() {
-    if (selectedId === null || !canSave) {
+  /** 选中模板：地址带出、名称缺省带出、模型取模板默认 */
+  function handlePickTemplate(template: AiVendorPreset) {
+    setVendorId(template.id)
+    setBaseUrl(template.baseUrl)
+    if (name.trim().length === 0) {
+      setName(template.name)
+    }
+    setModel(template.models[0] ?? '')
+    setFetchedModels([])
+    setFetchStatus('idle')
+    setFetchMessage('')
+    setTestStatus('idle')
+    setTestMessage('')
+  }
+
+  /** 获取模型列表：GET /models 填充 datalist */
+  async function handleFetchModels() {
+    const config = draftConfig()
+    if (config === null) {
+      setFetchStatus('fail')
+      setFetchMessage('请先填好接口地址与 Key')
       return
     }
-    saved.saveConfig({
-      providerId: selectedId,
-      apiKey: apiKeyDraft.trim(),
-      model: modelDraft.trim(),
-      customBaseUrl: baseUrlDraft.trim(),
-    })
-    setSaveMessage({ ok: true, text: 'AI 设置已保存（仅存本机浏览器）。分享文案与骑行解读的 AI 按钮已可用。' })
+    setFetchStatus('fetching')
+    setFetchMessage('')
+    try {
+      const models = await fetchAiModelList(config)
+      setFetchedModels(models)
+      // 当前模型不在列表里时自动落到第一项，引导用户选择
+      if (!models.includes(model.trim()) && models.length > 0) {
+        setModel(models[0])
+      }
+      setFetchStatus('ok')
+      setFetchMessage(`已获取 ${models.length} 个模型，在模型框下拉选择；部分平台带 :free 后缀的是免费档`)
+    } catch (error) {
+      setFetchStatus('fail')
+      setFetchMessage(error instanceof Error ? error.message : '获取模型列表失败，可手填模型名')
+    }
   }
 
-  /** 清空配置（删除 Key；各 AI 入口随之隐藏） */
-  function handleClear() {
-    saved.clearConfig()
-    setSelectedId(null)
-    setApiKeyDraft('')
-    setModelDraft('')
-    setBaseUrlDraft('')
-    setTestStatus('idle')
-    setTestMessage('')
-    setSaveMessage({ ok: true, text: '已清空 AI 配置，相关入口已隐藏' })
-  }
-
-  /** 连接测试：用草稿配置发一条极小请求（不落库也能测） */
+  /** 连接测试（HTTP 200 即成功，思考型模型空正文也算通） */
   async function handleTest() {
-    if (preset === undefined) {
-      return
-    }
-    const draft = resolveAiConfig({
-      providerId: selectedId,
-      apiKey: apiKeyDraft,
-      model: modelDraft,
-      customBaseUrl: baseUrlDraft,
-    })
-    if (draft === null) {
+    const config = draftConfig()
+    if (config === null || model.trim().length === 0) {
       setTestStatus('fail')
-      setTestMessage('配置不完整：请先贴 Key' + (preset.id === 'custom' ? '，并填好接口地址与模型名' : ''))
+      setTestMessage('请先填好接口地址、Key 与模型')
       return
     }
     setTestStatus('testing')
     setTestMessage('')
     try {
-      const latency = await testAiConnection(draft)
+      const latency = await testAiConnection(config)
       setTestLatency(latency)
       setTestStatus('ok')
     } catch (error) {
@@ -115,146 +324,258 @@ function AiSettingsSection({ id }: { id?: string }) {
     }
   }
 
-  /** Key 输入（变化即重置测试与保存提示，避免提示对不上当前内容） */
-  function handleKeyChange(event: ChangeEvent<HTMLInputElement>) {
-    setApiKeyDraft(event.target.value)
+  /** 保存：归一化地址后写入 store（首个配置自动启用） */
+  function handleSave() {
+    if (vendor === undefined || !canSave) {
+      return
+    }
+    const payload = {
+      name: name.trim(),
+      vendorId,
+      baseUrl: normalizeAiBaseUrl(baseUrl, isCustom),
+      apiKey: apiKey.trim(),
+      model: model.trim(),
+    }
+    if (editingId !== null) {
+      updateProfile(editingId, payload)
+    } else {
+      addProfile(payload)
+    }
+    onClose()
+  }
+
+  /** 模型候选：模板预设 + 已拉取列表去重 */
+  const modelOptions = useMemo(() => {
+    const merged = [...(vendor?.models ?? []), ...fetchedModels]
+    return [...new Set(merged)]
+  }, [vendor, fetchedModels])
+
+  /** 「更多供应商」过滤结果（名称 / 域名搜索 + 分类） */
+  const libraryResults = useMemo(() => {
+    return AI_PRESET_LIBRARY.filter((preset) => {
+      if (presetCat !== 'all' && preset.category !== presetCat) {
+        return false
+      }
+      if (presetSearch.trim().length === 0) {
+        return true
+      }
+      const query = presetSearch.trim().toLowerCase()
+      return (
+        preset.name.toLowerCase().includes(query) || preset.baseUrl.toLowerCase().includes(query)
+      )
+    })
+  }, [presetCat, presetSearch])
+
+  /** 字段变更后重置测试与提示状态（内容变了旧提示不再可信） */
+  function resetTransientState() {
     setTestStatus('idle')
-    setSaveMessage(null)
+    setTestMessage('')
+    setFetchStatus('idle')
+    setFetchMessage('')
   }
 
   return (
-    <section className="settings-section" aria-label="AI 服务" id={id}>
-      <h2 className="settings-section__title">AI 服务</h2>
-      <p className="settings-section__hint">
-        用于分享文案与骑行解读的 AI 生成。预设厂商已内置接口地址与模型参数，你只需要粘贴 Key；
-        Key 只保存在本机浏览器，不会随数据导出，更不会上传到本站。
-      </p>
+    <div className="ai-service__editor">
+      <h3 className="ai-service__editor-title">{editingId !== null ? '编辑供应商' : '添加供应商'}</h3>
 
-      <div className="ai-service__providers" role="group" aria-label="选择服务商">
-        {AI_PROVIDERS.map((item) => (
+      <div className="ai-service__templates">
+        {AI_COMMON_TEMPLATES.map((template) => (
           <button
-            key={item.id}
+            key={template.id}
             type="button"
             className={
-              item.id === selectedId
+              vendorId === template.id
                 ? 'ai-service__provider ai-service__provider--active'
                 : 'ai-service__provider'
             }
-            aria-pressed={item.id === selectedId}
-            onClick={() => handleSelectProvider(item.id)}
+            aria-pressed={vendorId === template.id}
+            onClick={() => handlePickTemplate(template)}
           >
             <span className="ai-service__provider-name">
-              {item.name}
-              {item.tag.length > 0 && <span className="ai-service__provider-tag">{item.tag}</span>}
+              {template.name}
+              {template.extraHeaders !== undefined && (
+                <span className="ai-service__provider-tag">需专用请求头</span>
+              )}
             </span>
-            <span className="ai-service__provider-desc">{item.desc}</span>
+            <span className="ai-service__provider-desc">{template.desc}</span>
           </button>
         ))}
+        <button type="button" className="ai-service__provider" onClick={() => setShowMore((current) => !current)}>
+          <span className="ai-service__provider-name">更多供应商（{AI_PRESET_LIBRARY.length}）</span>
+          <span className="ai-service__provider-desc">
+            {showMore ? '收起' : '官方厂商 / 聚合平台 / 中转站，支持搜索'}
+          </span>
+        </button>
       </div>
 
-      {preset !== undefined && (
-        <div className="settings-fields" style={{ marginTop: 14 }}>
+      {showMore && (
+        <div className="ai-service__more-panel">
           <div className="settings-field">
-            <label className="settings-field__label" htmlFor="ai-service-key">
-              API Key
-            </label>
-            <span className="ai-service__key-wrap">
-              <input
-                id="ai-service-key"
-                type={keyVisible ? 'text' : 'password'}
-                className="settings-field__input"
-                placeholder="粘贴服务商控制台里的密钥，仅存本机"
-                autoComplete="off"
-                value={apiKeyDraft}
-                onChange={handleKeyChange}
-              />
-              <button
-                type="button"
-                className="settings-button"
-                onClick={() => setKeyVisible((current) => !current)}
-              >
-                {keyVisible ? '隐藏' : '显示'}
-              </button>
-            </span>
+            <input
+              type="text"
+              className="settings-field__input"
+              placeholder="搜索名称或域名，如 openrouter / 硅基"
+              value={presetSearch}
+              onChange={(event) => setPresetSearch(event.target.value)}
+            />
           </div>
-
-          {preset.id === 'custom' ? (
-            <>
-              <div className="settings-field">
-                <label className="settings-field__label" htmlFor="ai-service-base-url">
-                  接口地址
-                </label>
-                <input
-                  id="ai-service-base-url"
-                  type="text"
-                  className="settings-field__input"
-                  placeholder="以 /v1 结尾的 OpenAI 兼容地址"
-                  value={baseUrlDraft}
-                  onChange={(event) => {
-                    setBaseUrlDraft(event.target.value)
-                    setTestStatus('idle')
-                    setSaveMessage(null)
-                  }}
-                />
-              </div>
-              <div className="settings-field">
-                <label className="settings-field__label" htmlFor="ai-service-model">
-                  模型名称
-                </label>
-                <input
-                  id="ai-service-model"
-                  type="text"
-                  className="settings-field__input"
-                  placeholder="服务商提供的模型 ID，如 qwen-max"
-                  value={modelDraft}
-                  onChange={(event) => {
-                    setModelDraft(event.target.value)
-                    setTestStatus('idle')
-                    setSaveMessage(null)
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="settings-field">
-              <label className="settings-field__label" htmlFor="ai-service-model">
-                模型
-              </label>
-              <select
-                id="ai-service-model"
-                className="settings-field__select"
-                value={modelDraft}
-                onChange={(event) => {
-                  setModelDraft(event.target.value)
-                  setTestStatus('idle')
-                  setSaveMessage(null)
-                }}
+          <div className="ai-service__cat-chips">
+            {(['all', 'official', 'aggregator', 'relay'] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={
+                  presetCat === cat
+                    ? 'settings-button settings-button--primary ai-service__cat-chip'
+                    : 'settings-button ai-service__cat-chip'
+                }
+                onClick={() => setPresetCat(cat)}
               >
-                {(preset.models ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <span className="ai-service__prefill-note">接口地址已预填：{preset.baseUrl}</span>
-            </div>
-          )}
-
-          <div className="settings-field">
-            <span className="settings-field__label">连接测试</span>
-            <button
-              type="button"
-              className="settings-button"
-              onClick={() => void handleTest()}
-              disabled={testStatus === 'testing' || apiKeyDraft.trim().length === 0}
-            >
-              {testStatus === 'testing' ? '测试中…' : '测试连接'}
-            </button>
-            <span className="ai-service__hint">发送一条极小请求验证 Key 可用</span>
+                {cat === 'all' ? `全部（${AI_PRESET_LIBRARY.length}）` : AI_VENDOR_CATEGORY_LABELS[cat]}
+              </button>
+            ))}
+          </div>
+          <div className="ai-service__preset-rows">
+            {libraryResults.length === 0 ? (
+              <div className="ai-service__empty">没有匹配的供应商，可用「自定义 / 中转」手填</div>
+            ) : (
+              libraryResults.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={
+                    vendorId === preset.id
+                      ? 'ai-service__preset-row ai-service__preset-row--active'
+                      : 'ai-service__preset-row'
+                  }
+                  onClick={() => handlePickTemplate(preset)}
+                >
+                  <span className="ai-service__preset-name">{preset.name}</span>
+                  <span className="ai-service__preset-url">{preset.baseUrl}</span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
 
+      <div className="settings-fields ai-service__fields">
+        <div className="settings-field">
+          <label className="settings-field__label" htmlFor="ai-profile-name">
+            名称
+          </label>
+          <input
+            id="ai-profile-name"
+            type="text"
+            className="settings-field__input"
+            placeholder="如：OpenRouter 免费档"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value)
+              resetTransientState()
+            }}
+          />
+        </div>
+        <div className="settings-field">
+          <label className="settings-field__label" htmlFor="ai-profile-base-url">
+            接口地址
+          </label>
+          <input
+            id="ai-profile-base-url"
+            type="text"
+            className="settings-field__input"
+            placeholder={isCustom ? '以 /v1 结尾，未带时自动补齐' : '选模板后自动预填'}
+            value={baseUrl}
+            disabled={vendor !== undefined && !isCustom}
+            onChange={(event) => {
+              setBaseUrl(event.target.value)
+              resetTransientState()
+            }}
+          />
+          <span className="ai-service__hint">
+            {vendor !== undefined && !isCustom ? '模板已预填' : '服务商提供的 OpenAI 兼容地址'}
+          </span>
+        </div>
+        <div className="settings-field">
+          <label className="settings-field__label" htmlFor="ai-profile-key">
+            API Key
+          </label>
+          <span className="ai-service__key-wrap">
+            <input
+              id="ai-profile-key"
+              type={keyVisible ? 'text' : 'password'}
+              className="settings-field__input"
+              placeholder="粘贴服务商控制台里的密钥，仅存本机"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                setApiKey(event.target.value)
+                resetTransientState()
+              }}
+            />
+            <button type="button" className="settings-button" onClick={() => setKeyVisible((current) => !current)}>
+              {keyVisible ? '隐藏' : '显示'}
+            </button>
+          </span>
+        </div>
+        <div className="settings-field">
+          <label className="settings-field__label" htmlFor="ai-profile-model">
+            模型
+          </label>
+          <span className="ai-service__key-wrap">
+            <input
+              id="ai-profile-model"
+              type="text"
+              className="settings-field__input"
+              list="ai-profile-model-options"
+              placeholder="可手填，或点右侧获取后下拉选择"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value)
+                resetTransientState()
+              }}
+            />
+            <datalist id="ai-profile-model-options">
+              {modelOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+            <button
+              type="button"
+              className="settings-button"
+              onClick={() => void handleFetchModels()}
+              disabled={fetchStatus === 'fetching' || apiKey.trim().length === 0 || baseUrl.trim().length === 0}
+            >
+              {fetchStatus === 'fetching' ? '获取中…' : '获取模型列表'}
+            </button>
+          </span>
+        </div>
+        <div className="settings-field">
+          <span className="settings-field__label">连接测试</span>
+          <button
+            type="button"
+            className="settings-button"
+            onClick={() => void handleTest()}
+            disabled={testStatus === 'testing' || !canSave}
+          >
+            {testStatus === 'testing' ? '测试中…' : '测试连接'}
+          </button>
+          <span className="ai-service__hint">发送一条极小请求验证 Key 可用</span>
+        </div>
+      </div>
+
+      {fetchMessage.length > 0 && (
+        <p
+          role="status"
+          className={
+            fetchStatus === 'fail'
+              ? 'settings-message settings-message--error'
+              : 'settings-message settings-message--success'
+          }
+        >
+          {fetchMessage}
+        </p>
+      )}
       {testMessage.length > 0 && (
         <p
           role="status"
@@ -264,57 +585,24 @@ function AiSettingsSection({ id }: { id?: string }) {
               : 'settings-message settings-message--error'
           }
         >
-          {testStatus === 'ok'
-            ? `连接成功 · ${modelDraft || '默认模型'} 可用 · 延迟 ${testLatency ?? 0} ms`
-            : testMessage}
+          {testStatus === 'ok' ? `连接成功 · ${model} 可用 · 延迟 ${testLatency ?? 0} ms` : testMessage}
         </p>
       )}
 
-      {saveMessage !== null && (
-        <p
-          role="status"
-          className={
-            saveMessage.ok
-              ? 'settings-message settings-message--success'
-              : 'settings-message settings-message--error'
-          }
-        >
-          {saveMessage.text}
-        </p>
-      )}
-
-      <div className="settings-form__actions" style={{ marginTop: 12 }}>
-        {activeConfig !== null && (
-          <button type="button" className="settings-button settings-button--danger" onClick={handleClear}>
-            清空配置
-          </button>
-        )}
+      <div className="settings-form__actions ai-service__form-actions">
+        <button type="button" className="settings-button" onClick={onClose}>
+          取消
+        </button>
         <button
           type="button"
           className="settings-button settings-button--primary"
           onClick={handleSave}
           disabled={!canSave}
         >
-          保存配置
+          保存
         </button>
       </div>
-
-      <div className="ai-service__status">
-        <span>
-          <span className={activeConfig !== null ? 'ai-service__dot ai-service__dot--on' : 'ai-service__dot'} />
-          {activeConfig !== null
-            ? `已配置 · ${getAiProvider(activeConfig.providerId)?.name ?? ''} / ${activeConfig.model}`
-            : '未配置'}
-        </span>
-        <span>
-          数据上行：<strong>仅聚合指标</strong>（距离 / 爬升 / 功率等汇总数字）
-        </span>
-      </div>
-      <p className="ai-service__privacy">
-        隐私边界：AI 只接收聚合指标，GPS 轨迹点与逐点心率不出本机；所有 AI 功能默认关闭，
-        配置 Key 后按需使用；生成结果按活动缓存，不重复计费。
-      </p>
-    </section>
+    </div>
   )
 }
 

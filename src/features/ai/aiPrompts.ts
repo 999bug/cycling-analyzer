@@ -46,11 +46,11 @@ export interface AiCaptionResult {
   body: string
 }
 
-/** 文案生成的输出 token 上限（小红书含标题与标签，放宽一档） */
-const CAPTION_MAX_TOKENS = 400
+/** 文案生成的输出 token 上限（小红书含标题与标签；思考型模型需留出 reasoning 余量） */
+const CAPTION_MAX_TOKENS = 800
 
 /** 解读生成的输出 token 上限（2 句以内，给足余量） */
-const INSIGHT_MAX_TOKENS = 200
+const INSIGHT_MAX_TOKENS = 400
 
 /** 文案采样温度（求口语自然） */
 const CAPTION_TEMPERATURE = 0.7

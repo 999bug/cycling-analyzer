@@ -8,6 +8,7 @@ import type { Activity } from '@/types/activity'
 import { AiRequestError, chatComplete } from '@/features/ai/aiClient'
 import { resolveAiConfig } from '@/features/ai/aiConfigStore'
 import { useAiConfigStore } from '@/features/ai/aiConfigStore'
+import { getAiVendor } from '@/features/ai/providers'
 import {
   buildCaptionRequest,
   buildInsightRequest,
@@ -16,19 +17,25 @@ import {
   type AiCaptionPlatform,
   type AiCaptionResult,
 } from '@/features/ai/aiPrompts'
+import type { AiRequestConfig } from '@/features/ai/aiClient'
 
 /** AI 未配置时抛出（UI 层据此展示引导提示，理论上入口已隐藏） */
-const NOT_CONFIGURED_MESSAGE = 'AI 服务未配置：到「更多 → AI 服务」选择厂商并粘贴 Key'
+const NOT_CONFIGURED_MESSAGE = 'AI 服务未配置：到「更多 → AI 服务」添加并启用一个供应商配置'
 
 /**
- * 从配置 store 读取就绪配置；未配置抛 AiRequestError（统一错误通道）。
+ * 从配置 store 读取生效配置（含厂商附加请求头）；未配置抛 AiRequestError。
  */
-function requireAiConfig() {
+function requireAiConfig(): AiRequestConfig {
   const resolved = resolveAiConfig(useAiConfigStore.getState())
   if (resolved === null) {
     throw new AiRequestError(NOT_CONFIGURED_MESSAGE)
   }
-  return resolved
+  return {
+    baseUrl: resolved.baseUrl,
+    apiKey: resolved.apiKey,
+    model: resolved.model,
+    extraHeaders: getAiVendor(resolved.vendorId)?.extraHeaders,
+  }
 }
 
 /**
