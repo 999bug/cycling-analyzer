@@ -708,11 +708,19 @@ export class DexieActivityRepository implements ActivityRepository {
     }
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.segment_efforts],
       async () => {
         // v5 主路径：两个主键表 bulkDelete，每活动各删 1 行，毫秒级
         await this.db.activities.bulkDelete([...ids]);
         await this.db.activity_blobs.bulkDelete([...ids]);
+        // 赛段成绩级联清理（v6）：活动没了成绩无意义，按 activityId 索引删除
+        const effortIds = await this.db.segment_efforts
+          .where('activityId')
+          .anyOf([...ids])
+          .primaryKeys();
+        if (effortIds.length > 0) {
+          await this.db.segment_efforts.bulkDelete(effortIds);
+        }
         // 迁移兜底：旧逐点行表残留数据一并清理（迁移完成后此表为空，空操作）。
         // 先取主键再 bulkDelete，跳过 Dexie 二级索引 delete() 的 modify 回退
         const legacyKeys = await this.db.activity_records
@@ -729,11 +737,13 @@ export class DexieActivityRepository implements ActivityRepository {
   async deleteAll(): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.segment_efforts],
       async () => {
         await this.db.activities.clear();
         await this.db.activity_blobs.clear();
         await this.db.activity_records.clear();
+        // 赛段成绩一并清空（本地活动全没了，成绩自然不成立；赛段定义保留）
+        await this.db.segment_efforts.clear();
       },
     );
   }

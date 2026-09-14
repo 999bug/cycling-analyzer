@@ -78,6 +78,7 @@ import TrainingEffectSection from '@/features/activity/TrainingEffectSection'
 import AchievementsSection from '@/features/activity/AchievementsSection'
 import { detectAchievements } from '@/features/activity/achievements'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
+import ActivityMatchedSegments from '@/features/segments/ActivityMatchedSegments'
 import { downsampleRecords } from '@/charts/downsample'
 import {
   calculateHeartRateZones,
@@ -1039,6 +1040,15 @@ function ActivityDetailPage() {
           </div>
         </details>
       )}
+
+      {/* 本次赛段（赛段重设计一期）：骑完即见经过的赛段与 vs 个人最好差值，
+          无赛段或未穿越时整块不渲染 */}
+      <ActivityMatchedSegments
+        activityId={id}
+        startTime={activity.startTime}
+        records={records}
+        source={source}
+      />
 
       <QualityScoreSection records={records} />
 

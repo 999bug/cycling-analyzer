@@ -14,6 +14,7 @@
  */
 import type { ActivityRecord } from '@/types/activity'
 import { haversineMeters } from '@/features/routes/routeGrouping'
+import { computeEffortMetrics } from '@/features/segments/effortMetrics'
 
 /** 起终点圆半径（米）：GPS 漂移容差 */
 export const SEGMENT_RADIUS_METERS = 200
@@ -66,6 +67,30 @@ export interface SegmentEffort {
 
   /** 穿越用时（秒） */
   durationSeconds: number
+
+  /** 穿越窗口平均速度（m/s，GPS 路径距离 / 用时；无 GPS 数据为 undefined） */
+  avgSpeed?: number
+
+  /** 穿越窗口平均功率（W；无功率计为 undefined） */
+  avgPower?: number
+
+  /** 穿越窗口平均心率（bpm；无心率带为 undefined） */
+  avgHeartRate?: number
+}
+
+/**
+ * 单次穿越匹配明细：最佳用时 + 对应穿越窗口（起止时间戳）。
+ * 窗口供指标计算（均速/均功率/均心率）与详情页逐点分析使用。
+ */
+export interface SegmentEffortMatch {
+  /** 穿越用时（秒） */
+  durationSeconds: number
+
+  /** 计时起点（离开起点圆前的最后一个圈内点，Unix 秒） */
+  startTimestamp: number
+
+  /** 完赛点时间戳（Unix 秒） */
+  endTimestamp: number
 }
 
 /**
@@ -232,29 +257,29 @@ function trackMatchesPath(
 }
 
 /**
- * 匹配单活动的赛段最佳成绩：进入起点圆 → 离开起点圆 → 进入终点圆。
+ * 匹配单活动的赛段最佳穿越（明细版）：进入起点圆 → 离开起点圆 → 进入终点圆。
  *
  * 状态机口径：
  * 1. 起点圆内（含初次进入、圈内停留、重新进入）：持续刷新计时起点，
- *    以离开圈前的最后一个圈内点为计时起点——扣除出发前停留/热身时间
- *    （「设为赛段」以骑行起终点建段，家门口环形路线开机停留不应计入成绩）；
+ *   以离开圈前的最后一个圈内点为计时起点——扣除出发前停留/热身时间
+ * （「设为赛段」以骑行起终点建段，家门口环形路线开机停留不应计入成绩）；
  * 2. 离开起点圆后才允许判终点（环形路线防护：起终点同圆时防止出发即完赛）；
  *    两圆相交/同心（圆心距 < 2R）时「离开」指离开两圆并集：出起点圈但仍在
- *    终点圈内的点不判完赛，防止出发第一步撞终点圈产生秒级虚假成绩；
+ *   终点圈内的点不判完赛，防止出发第一步撞终点圈产生秒级虚假成绩；
  * 3. 寻找终点：先判终点（终点判定优先），未达终点而重新进入起点圆则重新计时；
- *    完赛点若同时在起点圆内（环形连续圈）立即作为下一次穿越的计时起点。
+ *   完赛点若同时在起点圆内（环形连续圈）立即作为下一次穿越的计时起点。
  *
  * 性能：同一穿越段（计时起点 → 完赛点）的路径校验结果以时间段为 key 缓存，
  * 盘山路折返场景反复撞终点圆时同一窗口只计算一次。
  *
  * @param segment 赛段几何
  * @param records 完整逐点数据（按时间升序）
- * @returns 多次穿越的最佳用时（秒）；未完整穿越返回 undefined
+ * @returns 最佳穿越（用时 + 窗口）；未完整穿越返回 undefined
  */
-export function matchSegmentEffort(
+export function matchSegmentEffortDetail(
   segment: SegmentGeometry,
   records: readonly ActivityRecord[],
-): number | undefined {
+): SegmentEffortMatch | undefined {
   // 两圆相交/同心（圆心距小于直径）时，出起点圈的点可能仍落在终点圈内
   const circlesOverlap =
     haversineMeters(
@@ -268,7 +293,7 @@ export function matchSegmentEffort(
 
   let startTimestamp: number | undefined
   let leftStartCircle = false
-  let best: number | undefined
+  let best: SegmentEffortMatch | undefined
 
   for (const record of records) {
     if (record.latitude === undefined || record.longitude === undefined) {
@@ -321,8 +346,8 @@ export function matchSegmentEffort(
       }
       if (segment.trackPoints === undefined || pathMatches === true) {
         const duration = record.timestamp - startTimestamp
-        if (best === undefined || duration < best) {
-          best = duration
+        if (best === undefined || duration < best.durationSeconds) {
+          best = { durationSeconds: duration, startTimestamp, endTimestamp: record.timestamp }
         }
       }
       startTimestamp = inStart ? record.timestamp : undefined
@@ -339,7 +364,24 @@ export function matchSegmentEffort(
 }
 
 /**
- * 构造赛段成绩榜：各活动最佳穿越的用时，按用时升序（最快在前）。
+ * 匹配单活动的赛段最佳成绩（用时）。
+ *
+ * @param segment 赛段几何
+ * @param records 完整逐点数据（按时间升序）
+ * @returns 多次穿越的最佳用时（秒）；未完整穿越返回 undefined
+ */
+export function matchSegmentEffort(
+  segment: SegmentGeometry,
+  records: readonly ActivityRecord[],
+): number | undefined {
+  return matchSegmentEffortDetail(segment, records)?.durationSeconds
+}
+
+/**
+ * 构造赛段成绩榜：各活动最佳穿越的用时与窗口指标，按用时升序（最快在前）。
+ *
+ * 指标（均速/均功率/均心率）在匹配出的穿越窗口内计算，
+ * 随榜单一起返回供成绩落库（segment_efforts，v6）使用。
  *
  * @param segment 赛段几何
  * @param inputs 参与匹配的活动列表
@@ -351,12 +393,16 @@ export function buildSegmentLeaderboard(
 ): SegmentEffort[] {
   const efforts: SegmentEffort[] = []
   for (const input of inputs) {
-    const durationSeconds = matchSegmentEffort(segment, input.records)
-    if (durationSeconds !== undefined) {
+    const match = matchSegmentEffortDetail(segment, input.records)
+    if (match !== undefined) {
+      const metrics = computeEffortMetrics(input.records, match.startTimestamp, match.endTimestamp)
       efforts.push({
         activityId: input.activityId,
         startTime: input.startTime,
-        durationSeconds,
+        durationSeconds: match.durationSeconds,
+        avgSpeed: metrics.avgSpeed,
+        avgPower: metrics.avgPower,
+        avgHeartRate: metrics.avgHeartRate,
       })
     }
   }

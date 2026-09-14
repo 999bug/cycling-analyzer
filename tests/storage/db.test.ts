@@ -1,5 +1,6 @@
 /**
- * 数据库定义测试（规格 §18）：库名、版本、七张表与索引结构（v2 segments，v3 tile_cache，v4 scan_cache）。
+ * 数据库定义测试（规格 §18）：库名、版本、九张表与索引结构
+ * （v2 segments，v3 tile_cache，v4 scan_cache，v6 segment_efforts）。
  */
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +13,7 @@ describe('CyclingDatabase', () => {
     expect(db.verno).toBe(DB_VERSION);
   });
 
-  it('打开后八张表齐全', async () => {
+  it('打开后九张表齐全', async () => {
     const db = new CyclingDatabase();
     await db.open();
     const tableNames = db.tables.map((table) => table.name).sort();
@@ -22,10 +23,24 @@ describe('CyclingDatabase', () => {
       'activity_records',
       'files',
       'scan_cache',
+      'segment_efforts',
       'segments',
       'settings',
       'tile_cache',
     ]);
+    await db.close();
+  });
+
+  it('segment_efforts 表（v6）有 segmentId/activityId 索引与 [segmentId+activityId] 唯一复合索引', async () => {
+    const db = new CyclingDatabase();
+    await db.open();
+    const schema = db.segment_efforts.schema;
+    expect(schema.primKey.auto).toBe(true);
+    const indexes = new Map(schema.indexes.map((index) => [index.name, index]));
+    expect(indexes.has('segmentId')).toBe(true);
+    expect(indexes.has('activityId')).toBe(true);
+    expect(indexes.has('[segmentId+activityId]')).toBe(true);
+    expect(indexes.get('[segmentId+activityId]')?.unique).toBe(true);
     await db.close();
   });
 

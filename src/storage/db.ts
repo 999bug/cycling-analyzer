@@ -20,9 +20,10 @@ export const DB_NAME = 'cycling-data';
 /**
  * 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表；
  * v4：新增 scan_cache 扫描缓存表；v5：新增 activity_blobs 逐点整活动存储表，
- * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空，v6 物理删除）。
+ * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空，v7 物理删除；
+ * v6：新增 segment_efforts 赛段成绩落库表，替代「每次进赛段页全量重扫」）。
  */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -265,6 +266,55 @@ export interface SegmentEntity {
 
   /** 赛段轨迹点（GPX 导入时存储，[纬度, 经度] 数组；非索引字段免升 DB_VERSION） */
   trackPoints?: [number, number][];
+
+  /**
+   * 赛段成绩最近一次全量扫描落库时间（ISO 8601；非索引字段免升 DB_VERSION）。
+   * 赛段详情页据此判断「无成绩」是「确实没人穿越」还是「从未扫描过」：
+   * 已扫描过则不再重复全量扫描（新活动导入后由赛段页扫描自动刷新全量成绩）。
+   */
+  effortsSyncedAt?: string;
+}
+
+/**
+ * 赛段成绩实体（segment_efforts 表，v6 新增）。
+ *
+ * 一次赛段穿越 = 某活动在赛段上的最佳用时（与 Strava 单活动最佳成绩口径一致）。
+ * 设计动机：旧实现每次进赛段页全量重扫所有活动逐点数据（仅靠 Web Worker 缓解），
+ * 详情页「本次赛段 vs 个人最好」也无 PR 可查。落库后：
+ * - 赛段页 / 详情页读库即得成绩榜与 PR；
+ * - 全量扫描只在活动集合指纹变化时发生一次，结果写回本表；
+ * - 详情页实时匹配本活动后增量回写（upsert，[segmentId+activityId] 唯一）。
+ *
+ * 指标字段（均速/均功率/均心率）为穿越窗口内的真实平均值，
+ * 缺失（无对应传感器数据）= undefined ≠ 0，UI 显示 —（与全站口径一致）。
+ */
+export interface SegmentEffortEntity {
+  /** 自增主键（写库时由 Dexie 生成） */
+  id?: number;
+
+  /** 所属赛段 ID（segments.id） */
+  segmentId: number;
+
+  /** 活动 ID（本地库 activityId 或作者快照活动 ID） */
+  activityId: string;
+
+  /** 活动开始时间（ISO 8601，榜单/趋势图展示用） */
+  startTime: string;
+
+  /** 穿越用时（秒） */
+  durationSeconds: number;
+
+  /** 穿越窗口平均速度（m/s，GPS 路径距离 / 用时；无 GPS 数据为 undefined） */
+  avgSpeed?: number;
+
+  /** 穿越窗口平均功率（W；无功率计为 undefined） */
+  avgPower?: number;
+
+  /** 穿越窗口平均心率（bpm；无心率带为 undefined） */
+  avgHeartRate?: number;
+
+  /** 落库时间（ISO 8601） */
+  createdAt: string;
 }
 
 /**
@@ -313,6 +363,8 @@ export interface ScanCacheEntity {
  * - activities.startTime 索引：按时间排序与范围聚合（summarizeByRange）
  * - activities.activityType 索引：类型筛选
  * - activity_blobs.activityId 主键：按活动加载/删除逐点数据（整活动一行）
+ * - segment_efforts.&[segmentId+activityId] 唯一复合索引：同活动同赛段一条最佳成绩，
+ *   upsert 与按赛段/按活动级联清理走 segmentId / activityId 单索引
  */
 export class CyclingDatabase extends Dexie {
   // 表属性用 declare 声明：Dexie 在 version().stores() 注册时动态定义 getter，
@@ -336,6 +388,9 @@ export class CyclingDatabase extends Dexie {
 
   /** 赛段表（v2 新增） */
   declare segments: EntityTable<SegmentEntity, 'id'>;
+
+  /** 赛段成绩表（v6 新增：穿越落库，替代全量重扫） */
+  declare segment_efforts: EntityTable<SegmentEffortEntity, 'id'>;
 
   /** 瓦片缓存表（v3 新增） */
   declare tile_cache: EntityTable<TileCacheEntry, 'url'>;
@@ -372,9 +427,15 @@ export class CyclingDatabase extends Dexie {
     // v5：新增逐点整活动存储表（activityId 主键，每活动一行）。
     // 旧数据不在此处迁移（阻塞升级事务 10~30s 体验差），由应用启动后的
     // 后台分批迁移完成（见 src/storage/recordsMigration.ts）；
-    // 旧 activity_records 表保留，迁移完成后由应用层清空，v6 物理删除。
+    // 旧 activity_records 表保留，迁移完成后由应用层清空，v7 物理删除。
     this.version(5).stores({
       activity_blobs: 'activityId',
+    });
+    // v6：新增赛段成绩落库表（每次进赛段页全量重扫的替代方案）。
+    // [segmentId+activityId] 唯一复合索引：同一活动在同一赛段只有一条最佳成绩，
+    // 详情页实时匹配回写按此 upsert；segmentId / activityId 单索引供榜单与级联清理。
+    this.version(6).stores({
+      segment_efforts: '++id, segmentId, activityId, &[segmentId+activityId]',
     });
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，

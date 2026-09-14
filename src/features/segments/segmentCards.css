@@ -29,6 +29,18 @@
   font-weight: 600;
 }
 
+/* 卡片标题链接（进入赛段详情页）：保持原字号，悬停亮主色 */
+.segment-card__name-link {
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.segment-card__name-link:hover .segment-card__name,
+.segment-card__name-link:focus-visible .segment-card__name {
+  color: var(--primary);
+}
+
 .segment-card__delete {
   background: transparent;
   border: 1px solid var(--border);
@@ -64,6 +76,27 @@
   color: var(--text);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 个人最好成绩高亮（与详情页 PR 金色一致） */
+.segment-card__stat-value--pr {
+  color: var(--warning);
+}
+
+/* 榜单封顶后的「查看全部」入口 */
+.segment-card__more {
+  font-size: 13px;
+  margin: 0;
+}
+
+.segment-card__more a {
+  color: var(--info);
+  text-decoration: none;
+}
+
+.segment-card__more a:hover,
+.segment-card__more a:focus-visible {
+  color: var(--primary);
 }
 
 /* 成绩排行列表：排名 + 日期 + 用时（整行链接） */

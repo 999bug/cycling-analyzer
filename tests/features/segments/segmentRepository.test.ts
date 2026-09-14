@@ -55,3 +55,84 @@ describe('DexieSegmentRepository', () => {
     expect(names).toEqual(['A', 'B'])
   })
 })
+
+/** 构造成绩字段（不含 id/createdAt/segmentId/activityId） */
+function makeEffort(durationSeconds: number) {
+  return {
+    startTime: '2026-08-01T08:00:00',
+    durationSeconds,
+    avgSpeed: 5.5,
+    avgPower: 220,
+    avgHeartRate: 155,
+  }
+}
+
+describe('DexieSegmentRepository 成绩落库（v6）', () => {
+  it('replaceSegmentEfforts 整体替换并按用时升序读出，附带打同步标记', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.replaceSegmentEfforts(id, [
+      { activityId: 'act-slow', ...makeEffort(800) },
+      { activityId: 'act-fast', ...makeEffort(600) },
+    ])
+
+    const efforts = await repository.listEffortsBySegment(id)
+    expect(efforts.map((e) => e.activityId)).toEqual(['act-fast', 'act-slow'])
+    expect(efforts[0]).toMatchObject({ durationSeconds: 600, avgPower: 220 })
+
+    const segment = await repository.getSegment(id)
+    expect(segment?.effortsSyncedAt).toBeTruthy()
+  })
+
+  it('再次 replace 清除旧成绩（幂等，不残留孤儿行）', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.replaceSegmentEfforts(id, [{ activityId: 'act-1', ...makeEffort(600) }])
+    await repository.replaceSegmentEfforts(id, [{ activityId: 'act-2', ...makeEffort(700) }])
+
+    const efforts = await repository.listEffortsBySegment(id)
+    expect(efforts).toHaveLength(1)
+    expect(efforts[0]?.activityId).toBe('act-2')
+  })
+
+  it('upsertActivityEffort 新增后更新同键成绩（[segmentId+activityId] 唯一）', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.upsertActivityEffort(id, 'act-1', makeEffort(700))
+    await repository.upsertActivityEffort(id, 'act-1', makeEffort(650))
+
+    const efforts = await repository.listEffortsBySegment(id)
+    expect(efforts).toHaveLength(1)
+    expect(efforts[0]).toMatchObject({ activityId: 'act-1', durationSeconds: 650 })
+  })
+
+  it('upsertActivityEffort 传 null 删除该活动成绩', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.upsertActivityEffort(id, 'act-1', makeEffort(700))
+    await repository.upsertActivityEffort(id, 'act-1', null)
+
+    expect(await repository.listEffortsBySegment(id)).toEqual([])
+  })
+
+  it('deleteSegment 级联删除该赛段全部成绩', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.replaceSegmentEfforts(id, [
+      { activityId: 'act-1', ...makeEffort(600) },
+      { activityId: 'act-2', ...makeEffort(700) },
+    ])
+    await repository.deleteSegment(id)
+
+    expect(await testDb.segment_efforts.toArray()).toEqual([])
+  })
+
+  it('deleteEffortsByActivity 按活动清理（跨赛段）', async () => {
+    const idA = await repository.addSegment(makeSegment('A'))
+    const idB = await repository.addSegment(makeSegment('B'))
+    await repository.upsertActivityEffort(idA, 'act-1', makeEffort(600))
+    await repository.upsertActivityEffort(idB, 'act-1', makeEffort(610))
+    await repository.upsertActivityEffort(idB, 'act-2', makeEffort(620))
+
+    await repository.deleteEffortsByActivity('act-1')
+
+    expect(await repository.listEffortsBySegment(idA)).toEqual([])
+    const left = await repository.listEffortsBySegment(idB)
+    expect(left.map((e) => e.activityId)).toEqual(['act-2'])
+  })
+})

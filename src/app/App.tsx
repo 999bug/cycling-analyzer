@@ -13,6 +13,7 @@ const ActivityDetailPage = lazy(() => import('@/pages/ActivityDetailPage'))
 const CalendarPage = lazy(() => import('@/pages/CalendarPage'))
 const HeatmapPage = lazy(() => import('@/pages/HeatmapPage'))
 const SegmentsPage = lazy(() => import('@/pages/SegmentsPage'))
+const SegmentDetailPage = lazy(() => import('@/pages/SegmentDetailPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'))
 const YearReviewPage = lazy(() => import('@/pages/YearReviewPage'))
@@ -49,6 +50,7 @@ function App() {
         <Route path={ROUTES[6]} element={<LazyPage><HeatmapPage /></LazyPage>} />
         <Route path={ROUTES[7]} element={<LazyPage><YearReviewPage /></LazyPage>} />
         <Route path={ROUTES[8]} element={<LazyPage><SegmentsPage /></LazyPage>} />
+        <Route path={ROUTES[14]} element={<LazyPage><SegmentDetailPage /></LazyPage>} />
         <Route path={ROUTES[9]} element={<LazyPage><RoutesMapPage /></LazyPage>} />
         <Route path={ROUTES[10]} element={<LazyPage><TrainingPlanPage /></LazyPage>} />
         <Route path={ROUTES[11]} element={<LazyPage><PerformancePage /></LazyPage>} />

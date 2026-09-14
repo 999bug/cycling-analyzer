@@ -154,6 +154,17 @@ function SegmentsPage() {
             boards.set(segment.id ?? 0, boardsBySegment.get(segment) ?? [])
           }
           leaderboardCache = { key: cacheKey, boards }
+          // 成绩落库（v6）：扫描结果写回 segment_efforts（含均速/功率/心率指标），
+          // 详情页「本次赛段」与赛段详情页免重扫直接读库；失败不影响本次展示
+          await Promise.all(
+            allSegments.map((segment) =>
+              segmentRepository
+                .replaceSegmentEfforts(segment.id ?? 0, boards.get(segment.id ?? 0) ?? [])
+                .catch((error: unknown) => {
+                  console.error('Failed to persist segment efforts', segment.id, error)
+                }),
+            ),
+          )
           setLeaderboards(boards)
           setState('ready')
         } finally {

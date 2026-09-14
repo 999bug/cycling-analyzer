@@ -1,8 +1,8 @@
 /**
- * 赛段卡片墙（后续工作项：完整 Segment）。
+ * 赛段卡片墙（赛段重设计一期升级版）。
  *
- * 每张卡片展示赛段名称、参与次数与完整成绩排行列表
- * （排名/日期/用时/详情链接，按用时升序 = 排名顺序），
+ * 每张卡片展示赛段名称（链接详情页）、关键统计（个人最好/参与次数/最近一次差值）
+ * 与成绩排行前 10（排名/日期/用时/详情链接），超过 10 条收进赛段详情页；
  * 附删除按钮；成绩扫描期间显示计算中文案。
  */
 import { Link } from 'react-router-dom'
@@ -12,6 +12,9 @@ import { SegmentMiniMap } from './SegmentMiniMap'
 import type { SegmentEffort } from '@/features/segments/segmentMatching'
 import { formatDate, formatDuration } from '@/utils/format'
 import '@/features/segments/segmentCards.css'
+
+/** 排行榜卡片内最多展示条数（完整榜单收进 /segments/:id 详情页） */
+const MAX_LEADERBOARD_ROWS = 10
 
 /**
  * 赛段卡片墙 props。
@@ -37,6 +40,19 @@ export interface SegmentCardsProps {
 }
 
 /**
+ * 差值文案：与个人最好的差值（正 = 慢，负 = 快，0 = 最新即最好）。
+ *
+ * @param diffSeconds 差值（秒）
+ */
+function formatDelta(diffSeconds: number): string {
+  if (diffSeconds === 0) {
+    return '最新即最好'
+  }
+  const sign = diffSeconds >= 0 ? '+' : '-'
+  return `${sign}${Math.round(Math.abs(diffSeconds))}s vs 最好`
+}
+
+/**
  * 赛段卡片墙。
  *
  * @param props 组件参数
@@ -47,6 +63,13 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
       {segments.map((segment) => {
         const id = segment.id ?? 0
         const leaderboard = leaderboards?.get(id)
+        const sorted = [...(leaderboard ?? [])].sort((a, b) => a.durationSeconds - b.durationSeconds)
+        const pr = sorted[0]
+        const latest = [...sorted].sort((a, b) => b.startTime.localeCompare(a.startTime))[0]
+        const latestDelta =
+          latest !== undefined && pr !== undefined
+            ? latest.durationSeconds - pr.durationSeconds
+            : undefined
         return (
           <div key={id} className="segment-card">
             <LazySegmentMap placeholderLabel={`${segment.name}迷你地图占位`}>
@@ -61,7 +84,13 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
               />
             </LazySegmentMap>
             <div className="segment-card__header">
-              <span className="segment-card__name">{segment.name}</span>
+              {id > 0 ? (
+                <Link className="segment-card__name-link" to={`/segments/${id}`}>
+                  <span className="segment-card__name">{segment.name}</span>
+                </Link>
+              ) : (
+                <span className="segment-card__name">{segment.name}</span>
+              )}
               {onDelete !== undefined && (
                 <button
                   type="button"
@@ -81,30 +110,53 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
               <>
                 <div className="segment-card__stats">
                   <div className="segment-card__stat">
+                    <span className="segment-card__stat-label">个人最好</span>
+                    <span className="segment-card__stat-value segment-card__stat-value--pr">
+                      {pr !== undefined ? formatDuration(pr.durationSeconds) : '—'}
+                    </span>
+                  </div>
+                  <div className="segment-card__stat">
                     <span className="segment-card__stat-label">参与次数</span>
-                    <span className="segment-card__stat-value">{leaderboard?.length ?? 0} 次</span>
+                    <span className="segment-card__stat-value">{sorted.length} 次</span>
+                  </div>
+                  <div className="segment-card__stat">
+                    <span className="segment-card__stat-label">
+                      最近{latest !== undefined ? `（${formatDate(latest.startTime)}）` : ''}
+                    </span>
+                    <span className="segment-card__stat-value">
+                      {latest !== undefined && latestDelta !== undefined
+                        ? formatDelta(latestDelta)
+                        : '—'}
+                    </span>
                   </div>
                 </div>
-                {(leaderboard?.length ?? 0) > 0 ? (
-                  <ol className="segment-card__leaderboard" aria-label={`${segment.name}成绩排行`}>
-                    {leaderboard!.map((effort, index) => {
-                      const rank = index + 1
-                      return (
-                        <li key={effort.activityId} className="segment-card__row">
-                          <span className="segment-card__rank">{rank}</span>
-                          <Link
-                            className="segment-card__effort"
-                            to={`/activities/${effort.activityId}`}
-                          >
-                            <span className="segment-card__date">{formatDate(effort.startTime)}</span>
-                            <span className="segment-card__duration">
-                              {formatDuration(effort.durationSeconds)}
-                            </span>
-                          </Link>
-                        </li>
-                      )
-                    })}
-                  </ol>
+                {sorted.length > 0 ? (
+                  <>
+                    <ol className="segment-card__leaderboard" aria-label={`${segment.name}成绩排行`}>
+                      {sorted.slice(0, MAX_LEADERBOARD_ROWS).map((effort, index) => {
+                        const rank = index + 1
+                        return (
+                          <li key={effort.activityId} className="segment-card__row">
+                            <span className="segment-card__rank">{rank}</span>
+                            <Link
+                              className="segment-card__effort"
+                              to={`/activities/${effort.activityId}`}
+                            >
+                              <span className="segment-card__date">{formatDate(effort.startTime)}</span>
+                              <span className="segment-card__duration">
+                                {formatDuration(effort.durationSeconds)}
+                              </span>
+                            </Link>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                    {sorted.length > MAX_LEADERBOARD_ROWS && (
+                      <p className="segment-card__more">
+                        <Link to={`/segments/${id}`}>查看全部 {sorted.length} 次成绩 →</Link>
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <p className="segment-card__hint">暂无穿越记录</p>
                 )}
@@ -118,4 +170,3 @@ function SegmentCards({ segments, leaderboards, failed = false, onDelete, source
 }
 
 export default SegmentCards
-
