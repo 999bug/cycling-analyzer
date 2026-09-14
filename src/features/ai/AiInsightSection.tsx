@@ -4,14 +4,16 @@
  * 2.88.1 起交互与 `AiEnhanceBlock` 完全对齐：控件行左侧固定标题「骑行解读」，
  * 右侧为 [本地|AI] 迷你分段 + ⟳ 重新生成（生成中额外给 ■ 终止）——本地模式
  * 展示顶部总结条（RideSummaryBanner，类型徽章 + 真实数据 + 质量短语），
- * AI 模式展示模型解读。未配置 AI 时只渲染总结条本身。
+ * AI 模式展示模型解读。未配置 AI 时只渲染总结条 + 配置引导。
  *
  * 行为约束：
- * - 未配置 AI 服务时**整行不渲染**（默认关闭，按需开启）；
+ * - 未配置 AI 服务时**不渲染任何 AI 控件**，只给本地总结条与一条引导
+ *   （链接到「更多 → AI 服务」配置页）；
  * - 完成后按活动缓存（insightCache），已生成过的活动直接展示，不重复计费；
  * - 终止/失败不影响页面其余功能。
  */
 import { useEffect, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import type { Activity } from '@/types/activity'
 import type { DistanceUnit } from '@/features/settings/settings'
 import { selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
@@ -70,8 +72,19 @@ function AiInsightSection({
   }, [agent.phase, agent.content, activity.id])
 
   if (!aiReady) {
-    // 未配置 AI：只显示本地内容（总结条），不渲染任何 AI 控件
-    return <>{localNode}</>
+    // 未配置 AI：只显示本地内容（总结条）+ 配置引导，不渲染任何 AI 控件
+    return (
+      <>
+        {localNode}
+        <p className="ai-insight__hint" role="status">
+          未配置 AI 服务，当前只显示本地确定性总结；
+          <Link className="ai-insight__link" to="/settings#ai-service">
+            去「更多 → AI 服务」添加供应商
+          </Link>
+          后可生成本次骑行的模型解读。
+        </p>
+      </>
+    )
   }
 
   const cachedText = getCachedInsight(activity.id)

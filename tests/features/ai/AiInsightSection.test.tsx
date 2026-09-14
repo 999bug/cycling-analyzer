@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import AiInsightSection from '@/features/ai/AiInsightSection'
 import { useAiConfigStore } from '@/features/ai/aiConfigStore'
 import type { Activity } from '@/types/activity'
@@ -35,17 +36,25 @@ beforeEach(() => {
 })
 
 describe('AiInsightSection', () => {
-  it('未配置 AI 服务时只渲染本地内容（总结条），无任何控件', () => {
+  it('未配置 AI 服务时只渲染本地内容与配置引导，无任何控件', () => {
     const { container } = render(
-      <AiInsightSection
-        activity={makeActivity()}
-        distanceUnit="km"
-        localNode={<p>本地总结条</p>}
-      />,
+      <MemoryRouter>
+        <AiInsightSection
+          activity={makeActivity()}
+          distanceUnit="km"
+          localNode={<p>本地总结条</p>}
+        />
+      </MemoryRouter>,
     )
     expect(screen.getByText('本地总结条')).toBeDefined()
     expect(screen.queryByRole('button')).toBeNull()
     expect(container.querySelector('.ai-miniseg')).toBeNull()
+    // 引导提示 + 直达配置页链接（用户没配 AI 时告知去哪里配）
+    expect(screen.getByText(/未配置 AI 服务/)).toBeDefined()
+    expect(screen.getByRole('link', { name: '去「更多 → AI 服务」添加供应商' })).toHaveAttribute(
+      'href',
+      '/settings#ai-service',
+    )
   })
 
   it('配置后可生成解读并写入活动缓存', async () => {

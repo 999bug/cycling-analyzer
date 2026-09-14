@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.88.3',
+    date: '2026-09-14',
+    features: [
+      '未配置 AI 服务时，详情页「骑行解读」下方给出引导提示：说明当前只显示本地确定性总结，并提供「去『更多 → AI 服务』添加供应商」直达链接',
+    ],
+  },
+  {
     version: '2.88.2',
     date: '2026-09-14',
     features: [
