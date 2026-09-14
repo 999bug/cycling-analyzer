@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.83.0',
+    date: '2026-09-14',
+    features: [
+      '赛段推荐接入 AI 起名（BYOK 可选）：配置了 AI Key 后，推荐卡可按路段特征（长度/经过次数）自动起名填入，只上行聚合指标、不含任何轨迹坐标；未配置 Key 时入口不显示，挖掘功能不受影响',
+    ],
+  },
+  {
     version: '2.82.0',
     date: '2026-09-14',
     features: [

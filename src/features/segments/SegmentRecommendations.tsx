@@ -22,6 +22,9 @@ import {
 import type { SegmentGeometry } from '@/features/segments/segmentMatching'
 import { computeLeaderboardsSync, createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
+import { buildSegmentNameRequest } from '@/features/ai/aiPrompts'
+import { chatComplete } from '@/features/ai/aiClient'
+import { resolveAiConfig, selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
 import { formatDistance } from '@/utils/format'
 import './segmentRecommendations.css'
 
@@ -73,6 +76,48 @@ function SegmentRecommendations({
   const [names, setNames] = useState<Record<string, string>>({})
   const [creatingKey, setCreatingKey] = useState<string | undefined>()
   const [error, setError] = useState<string | undefined>()
+  // AI 起名（BYOK 可选）：未配置 Key 时入口不渲染
+  const aiReady = useAiConfigStore(selectAiReady)
+  const [namingKey, setNamingKey] = useState<string | undefined>()
+
+  /**
+   * AI 起名：只上行候选段聚合特征（长度/共现次数），结果填入名称输入框。
+   *
+   * @param candidate 候选段
+   * @param key 列表键
+   */
+  async function handleAiName(candidate: RecommendationView, key: string) {
+    const config = resolveAiConfig(useAiConfigStore.getState())
+    if (config === null) {
+      return
+    }
+    setNamingKey(key)
+    setError(undefined)
+    try {
+      const request = buildSegmentNameRequest({
+        distanceKm: candidate.distanceMeters / 1000,
+        hitCount: candidate.hitCount,
+      })
+      const name = await chatComplete(config, {
+        system: request.system,
+        user: request.user,
+        maxTokens: request.maxTokens,
+        temperature: request.temperature,
+      })
+      const cleaned = name
+        .trim()
+        .replace(/^["'「『]+|["'」』.。]+$/g, '')
+        .slice(0, 20)
+      if (cleaned !== '') {
+        setNames((previous) => ({ ...previous, [key]: cleaned }))
+      }
+    } catch (err: unknown) {
+      console.error('Failed to name segment with AI', err)
+      setError('AI 起名失败，请稍后重试。')
+    } finally {
+      setNamingKey(undefined)
+    }
+  }
 
   const candidateKey = (candidate: SegmentCandidate, index: number): string =>
     `${candidate.startLatitude.toFixed(5)},${candidate.startLongitude.toFixed(5)}#${index}`
@@ -218,6 +263,17 @@ function SegmentRecommendations({
                     </span>
                   </div>
                   <div className="segment-recommendations__item-actions">
+                    {aiReady && (
+                      <button
+                        type="button"
+                        className="segment-recommendations__skip"
+                        disabled={namingKey === key}
+                        onClick={() => void handleAiName(candidate, key)}
+                        title="用 AI 根据路段特征起名（只上行距离与次数，不含轨迹）"
+                      >
+                        {namingKey === key ? '起名中…' : 'AI 起名'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="segment-recommendations__create"
