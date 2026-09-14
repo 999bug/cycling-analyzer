@@ -10,6 +10,7 @@ import { db, type SegmentEntity } from '@/storage/db'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import SegmentCards from '@/features/segments/SegmentCards'
 import SegmentAchievements from '@/features/segments/SegmentAchievements'
+import SegmentRecommendations from '@/features/segments/SegmentRecommendations'
 import {
   type SegmentActivityInput,
   type SegmentEffort,
@@ -475,6 +476,13 @@ function SegmentsPage() {
       {state === 'ready' && segments !== null && segments.length > 0 && (
         <>
           <SegmentAchievements leaderboards={leaderboards} />
+          {source === 'local' && (
+            <SegmentRecommendations
+              existingSegments={segments}
+              activityRepository={activityRepository}
+              onCreated={reload}
+            />
+          )}
           <SegmentCards
             segments={segments}
             leaderboards={leaderboards}

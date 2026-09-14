@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.82.0',
+    date: '2026-09-14',
+    features: [
+      '赛段推荐（本地挖掘）：分析你的历史骑行，自动找出被多次穿越的 0.3–1.2 km 高频路段并推荐建段——纯本地算法、离线可用、无任何在线依赖；推荐列表可改名一键创建或跳过，与既有赛段重合的自动过滤',
+    ],
+  },
+  {
     version: '2.81.1',
     date: '2026-09-14',
     features: [

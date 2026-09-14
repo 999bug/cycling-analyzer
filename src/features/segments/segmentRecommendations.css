@@ -1,0 +1,133 @@
+/**
+ * 高频路段推荐区块样式：折叠面板 + 推荐卡片列表，配色取主题语义令牌。
+ */
+.segment-recommendations {
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.segment-recommendations > summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  border-radius: var(--radius-lg);
+}
+
+.segment-recommendations > summary:hover {
+  color: var(--primary);
+}
+
+.segment-recommendations__body {
+  padding: 0 16px 16px;
+}
+
+.segment-recommendations__hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-sm);
+}
+
+.segment-recommendations__run {
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-primary);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: var(--space-md);
+}
+
+.segment-recommendations__run:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.segment-recommendations__message {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.segment-recommendations__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.segment-recommendations__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.segment-recommendations__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.segment-recommendations__name {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  max-width: 320px;
+}
+
+.segment-recommendations__meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.segment-recommendations__item-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.segment-recommendations__create {
+  background: var(--primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-primary);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.segment-recommendations__skip {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.segment-recommendations__create:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
