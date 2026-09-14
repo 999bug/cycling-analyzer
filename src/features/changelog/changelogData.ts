@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.87.0',
+    date: '2026-09-14',
+    features: [
+      '「本次赛段」的 AI 点评升级为与其他区块一致的交互：本地 / AI 迷你开关 + 重新生成按钮，生成中思考与正文流式展示',
+      '移除「一键解读全部」按钮（使用反馈：入口冗余），各区块独立按需生成',
+    ],
+  },
+  {
     version: '2.86.0',
     date: '2026-09-14',
     features: [
