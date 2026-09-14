@@ -247,14 +247,73 @@ function formatConclusions(conclusions: readonly AiLocalConclusion[]): string {
     .join('\n')
 }
 
-/** 叙事化改写的通用指令（v4 评审定稿的文风口径） */
+/** 富数据原料：本地已算好的确定性聚合指标（喂给 AI 找模式，而非复述结论） */
+export interface AiRichFacts {
+  /** 分段（按 5km 桶）：均速 / 平均心率 */
+  splits: readonly {
+    index: number
+    distanceKm: number
+    avgSpeedKmh: number | undefined
+    avgHeartRate: number | undefined
+  }[]
+
+  /** 爬坡段（最多取 5 段） */
+  climbs: readonly { distanceKm: number; gainM: number; avgGradePercent: number }[]
+
+  /** 近期基线一句话（如「近 5 次骑行平均速度 27.3 km/h」；样本不足时 undefined） */
+  recentBaselineText?: string
+
+  /** 本次活动均速（km/h，与基线对比用） */
+  activityAvgSpeedKmh?: number
+}
+
+/** 把富数据原料格式化成 prompt 数据段 */
+function formatRichFacts(rich: AiRichFacts): string {
+  const parts: string[] = []
+  if (rich.splits.length > 0) {
+    const lines = rich.splits
+      .map((split) => {
+        const speed =
+          split.avgSpeedKmh === undefined ? '无数据' : `${split.avgSpeedKmh.toFixed(1)} km/h`
+        const hr = split.avgHeartRate === undefined ? '' : `，平均心率 ${Math.round(split.avgHeartRate)} bpm`
+        const from = ((split.index - 1) * split.distanceKm).toFixed(0)
+        const to = (split.index * split.distanceKm).toFixed(0)
+        return `- 第 ${split.index} 段（${from}-${to} km）：均速 ${speed}${hr}`
+      })
+      .join('\n')
+    parts.push(`分段数据：\n${lines}`)
+  }
+  if (rich.climbs.length > 0) {
+    const lines = rich.climbs
+      .map((climb) => `- ${climb.distanceKm.toFixed(1)} km 爬升 ${Math.round(climb.gainM)} m，平均坡度 ${climb.avgGradePercent.toFixed(1)}%`)
+      .join('\n')
+    parts.push(`爬坡段：\n${lines}`)
+  }
+  if (rich.recentBaselineText !== undefined) {
+    parts.push(`近期基线：${rich.recentBaselineText}`)
+  }
+  return parts.join('\n')
+}
+
+/** 改写类提示词的通用硬约束（v5：喂原料、派任务，允许自由推导但禁编数值） */
 const NARRATIVE_CONSTRAINTS = [
   '硬性约束：',
-  '1. 只允许复述给定结论中的数字与事实，禁止编造、推算任何新数据；',
-  '2. 把干巴巴的指标连成有温度的叙事，像懂骑行的人在讲这次经历；',
-  '3. 禁止营销话术、浮夸形容词与 emoji；',
-  '4. 用简体中文口语书写。',
+  '1. 所有数值必须与「给定数据」一致，禁止编造或修改任何数值；',
+  '2. 允许（且鼓励）从数据中推导模式与因果联想，但要把推理依据点明；',
+  '3. 至少给出 2 条「本地结论」中没有提到的新观察（由分段/爬坡/基线等原始数据推导）；',
+  '4. 不要逐条复述本地结论——本地结论只是背景参考，重点是你自己从数据里发现的东西；',
+  '5. 禁止营销话术、浮夸形容词与 emoji；用简体中文口语书写。',
 ].join('\n')
+
+/** 洞察增强的切入视角（重新生成时轮换，让「换一版」真的换） */
+export type AiInsightPerspective = 'pacing' | 'body' | 'history'
+
+/** 视角的中文说明与任务指令 */
+const PERSPECTIVE_TASKS: Record<AiInsightPerspective, string> = {
+  pacing: '节奏策略：从分段配速与功率变化切入，分析这次骑行的节奏安排得失。',
+  body: '身体反应：从心率区间与漂移走势切入，分析心肺与体能在这次骑行中的表现。',
+  history: '历史对比：从与近期基线、个人最佳的差异切入，分析当前状态所处的位置。',
+}
 
 /** 洞察增强的输出 token 上限（3 段叙事，给思考型模型留余量） */
 const INSIGHT_ENHANCE_MAX_TOKENS = 4000
@@ -263,45 +322,52 @@ const INSIGHT_ENHANCE_MAX_TOKENS = 4000
 const SEGMENT_COMMENT_MAX_TOKENS = 2000
 
 /**
- * 骑行洞察增强请求（把本地规则结论改写成叙事版）。
+ * 骑行洞察增强请求（v5：喂原料、派任务——基于分段/爬坡/基线找模式，
+ * 要求至少 2 条本地结论之外的新观察；视角轮换驱动「换一版」差异）。
  *
  * @param activity 活动摘要
- * @param conclusions buildRideInsights 的本地结论
- * @param context 训练配置上下文
+ * @param conclusions buildRideInsights 的本地结论（背景参考）
+ * @param rich 富数据原料（分段/爬坡/基线）
+ * @param perspective 切入视角（重新生成时轮换）
  */
 export function buildInsightEnhanceRequest(
   activity: Activity,
   conclusions: readonly AiLocalConclusion[],
+  rich: AiRichFacts,
+  perspective: AiInsightPerspective = 'pacing',
 ): AiChatRequest {
   return {
-    system: `你是骑行数据解读员，把本地算好的骑行结论改写成更有温度的叙事版。${NARRATIVE_CONSTRAINTS}
+    system: `你是骑行数据解读员。任务：基于给定数据，讲出本地规则结论讲不出来的东西。${NARRATIVE_CONSTRAINTS}
+本次切入视角：${PERSPECTIVE_TASKS[perspective]}
 输出格式：3 段，段与段之间空一行，每段 1~3 句；每段开头用一个 2~4 字的主题词加冒号（如「节奏：」）。`,
-    user: `本地结论：\n${formatConclusions(conclusions)}\n\n活动：${activity.name ?? '骑行记录'}`,
+    user: `本地结论（背景参考，不要复述）：\n${formatConclusions(conclusions)}\n\n给定数据：\n${formatRichFacts(rich)}\n\n活动：${activity.name ?? '骑行记录'}`,
     maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
     temperature: CAPTION_TEMPERATURE,
   }
 }
 
 /**
- * 综合评分解读请求。
+ * 综合评分解读请求（v5：带富数据原料，解释分数构成 + 一个行动建议）。
  *
  * @param overall 综合分（0-100）
  * @param subScores 分项得分（label + score）
  * @param activity 活动摘要
- * @param context 训练配置上下文
+ * @param rich 富数据原料（可选；有则要求解读引用分段/爬坡事实）
  */
 export function buildScoreExplainRequest(
   overall: number,
   subScores: readonly { label: string; score: number | undefined }[],
   activity: Activity,
+  rich?: AiRichFacts,
 ): AiChatRequest {
   const dims = subScores
     .map((item) => `${item.label}：${item.score === undefined ? '无数据' : `${Math.round(item.score)}/100`}`)
     .join('\n')
+  const richText = rich !== undefined ? `\n\n给定数据：\n${formatRichFacts(rich)}` : ''
   return {
     system: `你是骑行数据解读员，解释一次骑行的综合评分是怎么构成的。${NARRATIVE_CONSTRAINTS}
 输出格式：1 段，2~4 句。说明分数高在哪、失分失在哪、这个分数对接下来训练节奏意味着什么（可建议恢复，不做医疗表述）。`,
-    user: `综合分：${Math.round(overall)}/100\n分项：\n${dims}\n\n活动：${activity.name ?? '骑行记录'}`,
+    user: `综合分：${Math.round(overall)}/100\n分项：\n${dims}${richText}\n\n活动：${activity.name ?? '骑行记录'}`,
     maxTokens: INSIGHT_ENHANCE_MAX_TOKENS,
     temperature: INSIGHT_TEMPERATURE,
   }

@@ -126,11 +126,31 @@ describe('内容面增强提示词（v4）', () => {
     { kind: '功率', title: '标准化功率 218 W', text: '达到 FTP（235 W）的 93%。' },
   ]
 
-  it('洞察增强：带本地结论与禁编造约束，不含任何 GPS 字段', () => {
-    const request = buildInsightEnhanceRequest(makeActivity(), conclusions)
+  it('洞察增强：喂原料派任务——带分段/爬坡数据、视角任务与禁编造约束，不含 GPS 字段', () => {
+    const rich = {
+      splits: [{ index: 1, distanceKm: 5, avgSpeedKmh: 27.3, avgHeartRate: 148 }],
+      climbs: [{ distanceKm: 3.2, gainM: 180, avgGradePercent: 5.8 }],
+      recentBaselineText: '近 5 次骑行平均速度 26.1 km/h',
+    }
+    const request = buildInsightEnhanceRequest(makeActivity(), conclusions, rich, 'pacing')
     expect(request.system).toContain('禁止编造')
+    expect(request.system).toContain('至少给出 2 条')
+    expect(request.system).toContain('节奏策略')
     expect(request.user).toContain('[强度] 心率处于 Z3 区间')
+    expect(request.user).toContain('第 1 段')
+    expect(request.user).toContain('27.3 km/h')
+    expect(request.user).toContain('平均坡度 5.8%')
+    expect(request.user).toContain('近 5 次骑行平均速度 26.1 km/h')
     expect(request.user).not.toMatch(/latitude|longitude|经纬|轨迹点/i)
+  })
+
+  it('洞察增强：视角轮换会改变任务指令', () => {
+    const rich = { splits: [], climbs: [] }
+    const pacing = buildInsightEnhanceRequest(makeActivity(), conclusions, rich, 'pacing')
+    const history = buildInsightEnhanceRequest(makeActivity(), conclusions, rich, 'history')
+    expect(pacing.system).toContain('节奏策略')
+    expect(history.system).toContain('历史对比')
+    expect(pacing.system).not.toBe(history.system)
   })
 
   it('评分解读：带综合分与分项', () => {

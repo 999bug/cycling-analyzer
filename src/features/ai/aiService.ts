@@ -24,6 +24,8 @@ import {
   type AiCaptionPlatform,
   type AiCaptionResult,
   type AiLocalConclusion,
+  type AiRichFacts,
+  type AiInsightPerspective,
   type AiSegmentView,
 } from '@/features/ai/aiPrompts'
 import type { AiRequestConfig } from '@/features/ai/aiClient'
@@ -147,9 +149,11 @@ export async function generateAiInsight(
 export function insightEnhanceStreamParams(
   activity: Activity,
   conclusions: readonly AiLocalConclusion[],
+  rich: AiRichFacts,
+  perspective: AiInsightPerspective = 'pacing',
 ): AgentStartParams {
   const config = requireAiConfig()
-  const request = buildInsightEnhanceRequest(activity, conclusions)
+  const request = buildInsightEnhanceRequest(activity, conclusions, rich, perspective)
   return {
     config,
     system: request.system,
@@ -171,9 +175,10 @@ export function scoreExplainStreamParams(
   overall: number,
   subScores: readonly { label: string; score: number | undefined }[],
   activity: Activity,
+  rich?: AiRichFacts,
 ): AgentStartParams {
   const config = requireAiConfig()
-  const request = buildScoreExplainRequest(overall, subScores, activity)
+  const request = buildScoreExplainRequest(overall, subScores, activity, rich)
   return {
     config,
     system: request.system,

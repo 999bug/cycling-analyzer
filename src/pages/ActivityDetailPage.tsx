@@ -67,9 +67,15 @@ import SplitsSection from '@/features/activity/SplitsSection'
 import SegmentsSection from '@/features/activity/SegmentsSection'
 import QualityScoreSection from '@/features/analysis/QualityScoreSection'
 import { computeQualityScore } from '@/features/analysis/qualityScore'
+import { buildSplits } from '@/features/activity/splits'
+import { buildClimbs } from '@/features/activity/climbs'
 import { buildRideInsights } from '@/features/insights/rideInsights'
 import AiEnhanceBlock, { AiEnhanceAllButton } from '@/features/ai/AiEnhanceBlock'
 import { insightEnhanceStreamParams, scoreExplainStreamParams } from '@/features/ai/aiService'
+import type { AiInsightPerspective } from '@/features/ai/aiPrompts'
+
+/** 洞察增强的视角轮换序列（重新生成时依次切换，驱动「换一版」差异） */
+const INSIGHT_PERSPECTIVES: readonly AiInsightPerspective[] = ['pacing', 'body', 'history']
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
@@ -485,11 +491,44 @@ function ActivityDetailPage() {
   const qualityOverall = useMemo(() => computeQualityScore(records).overall, [records])
   // 骑行质量各分项（AI 评分解读输入；须位于条件早退之前）
   const qualitySubScores = useMemo(() => computeQualityScore(records).subScores, [records])
+  // 洞察增强视角轮换计数（每次生成/重新生成递增）
+  const insightVariantRef = useRef(0)
   // 本地洞察结论（AI 洞察增强输入；须位于条件早退之前）
   const localConclusions = useMemo(
     () => (activity === undefined ? [] : buildRideInsights(activity, records, insightsOptions)),
     [activity, records, insightsOptions],
   )
+  // AI 富数据原料（v5）：分段 / 爬坡 / 近期基线——喂原料找模式，而非喂结论求润色
+  const aiRichFacts = useMemo(() => {
+    if (activity === undefined) {
+      return { splits: [], climbs: [] }
+    }
+    const splits = buildSplits(records, 5000).map((split) => ({
+      index: split.index,
+      distanceKm: (split.endDistance - split.startDistance) / 1000,
+      avgSpeedKmh: split.avgSpeed === undefined ? undefined : split.avgSpeed * 3.6,
+      avgHeartRate: split.avgHeartRate,
+    }))
+    const climbs = buildClimbs(records)
+      .slice(0, 5)
+      .map((climb) => ({
+        distanceKm: climb.distanceMeters / 1000,
+        gainM: climb.elevationGain,
+        avgGradePercent: climb.avgGradePercent,
+      }))
+    const recentBaselineText =
+      recentBaseline === undefined
+        ? undefined
+        : `近 ${recentBaseline.sampleCount} 次骑行平均速度${
+            recentBaseline.avgSpeed !== undefined ? ` ${(recentBaseline.avgSpeed * 3.6).toFixed(1)} km/h` : ''
+          }${recentBaseline.avgPower !== undefined ? `，平均功率 ${Math.round(recentBaseline.avgPower)} W` : ''}`
+    return {
+      splits,
+      climbs,
+      recentBaselineText,
+      activityAvgSpeedKmh: activity.avgSpeed === undefined ? undefined : activity.avgSpeed * 3.6,
+    }
+  }, [activity, records, recentBaseline])
   // 总结条参数（含质量分；对象引用稳定）
   const summaryOptions = useMemo(
     () => ({ ...insightsOptions, qualityScore: qualityOverall }),
@@ -1032,7 +1071,7 @@ function ActivityDetailPage() {
       {qualitySubScores.some((item) => item.score !== undefined) && qualityOverall !== undefined ? (
         <AiEnhanceBlock
           cacheKey={`score:${activity.id}`}
-          buildParams={() => scoreExplainStreamParams(qualityOverall, qualitySubScores, activity)}
+          buildParams={() => scoreExplainStreamParams(qualityOverall, qualitySubScores, activity, aiRichFacts)}
         >
           <QualityScoreSection records={records} />
         </AiEnhanceBlock>
@@ -1043,7 +1082,11 @@ function ActivityDetailPage() {
       {localConclusions.length > 0 ? (
         <AiEnhanceBlock
           cacheKey={`insights:${activity.id}`}
-          buildParams={() => insightEnhanceStreamParams(activity, localConclusions)}
+          buildParams={() => {
+          const perspective = INSIGHT_PERSPECTIVES[insightVariantRef.current % INSIGHT_PERSPECTIVES.length]
+          insightVariantRef.current += 1
+          return insightEnhanceStreamParams(activity, localConclusions, aiRichFacts, perspective)
+        }}
         >
           <RideInsightsSection
             activity={activity}
