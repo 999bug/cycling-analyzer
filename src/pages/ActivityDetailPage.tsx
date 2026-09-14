@@ -79,7 +79,6 @@ const INSIGHT_PERSPECTIVES: readonly AiInsightPerspective[] = ['pacing', 'body',
 import RideInsightsSection from '@/features/insights/RideInsightsSection'
 import { buildRecentBaseline } from '@/features/insights/recentBaseline'
 import RideSummaryBanner from '@/features/insights/RideSummaryBanner'
-import { buildRideSummary } from '@/features/insights/rideSummary'
 import AiInsightSection from '@/features/ai/AiInsightSection'
 import ShareStudioModal from '@/features/share/ShareStudioModal'
 import SimilarRidesSection from '@/features/activity/SimilarRidesSection'
@@ -537,11 +536,6 @@ function ActivityDetailPage() {
   const summaryOptions = useMemo(
     () => ({ ...insightsOptions, qualityScore: qualityOverall }),
     [insightsOptions, qualityOverall],
-  )
-  // 本地确定性一句话总结：顶部 AI 解读行的「本地」态文案（与总结条同源）
-  const localSummaryText = useMemo(
-    () => (activity === undefined ? undefined : buildRideSummary(activity, summaryOptions)?.headline),
-    [activity, summaryOptions],
   )
 
   // 强度因子（IF）：FTP 存在且可算出 NP 时才有意义
@@ -1030,15 +1024,13 @@ function ActivityDetailPage() {
         </div>
       </header>
 
-      <RideSummaryBanner activity={activity} options={summaryOptions} />
-
-      {/* AI 解读（AI 接入 v1）：未配置 AI 服务时不渲染，按活动缓存不重复计费 */}
+      {/* 骑行解读（AI 接入 v1）：本地态 = 顶部总结条，AI 态 = 模型解读；未配置 AI 时只显示总结条 */}
       <AiInsightSection
         activity={activity}
         ftp={ftp}
         maxHeartRate={maxHeartRate}
         distanceUnit={distanceUnit}
-        localText={localSummaryText}
+        localNode={<RideSummaryBanner activity={activity} options={summaryOptions} />}
       />
 
       <section className="activity-detail__stats" aria-label="核心指标">

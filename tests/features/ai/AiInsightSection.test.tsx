@@ -1,6 +1,7 @@
 /**
- * 详情页 AI 解读行测试（AiInsightSection）。
- * 契约：未配置 AI 服务整行不渲染；配置后可生成并写缓存；缓存命中时不再请求。
+ * 详情页骑行解读行测试（AiInsightSection）。
+ * 契约：未配置 AI 服务只渲染本地内容（总结条）；配置后可生成并写缓存；
+ * 缓存命中时不再请求；标题「骑行解读」本地 / AI 两态共存。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -34,9 +35,17 @@ beforeEach(() => {
 })
 
 describe('AiInsightSection', () => {
-  it('未配置 AI 服务时不渲染', () => {
-    const { container } = render(<AiInsightSection activity={makeActivity()} distanceUnit="km" />)
-    expect(container).toBeEmptyDOMElement()
+  it('未配置 AI 服务时只渲染本地内容（总结条），无任何控件', () => {
+    const { container } = render(
+      <AiInsightSection
+        activity={makeActivity()}
+        distanceUnit="km"
+        localNode={<p>本地总结条</p>}
+      />,
+    )
+    expect(screen.getByText('本地总结条')).toBeDefined()
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(container.querySelector('.ai-miniseg')).toBeNull()
   })
 
   it('配置后可生成解读并写入活动缓存', async () => {
@@ -137,7 +146,7 @@ describe('AiInsightSection', () => {
       <AiInsightSection
         activity={makeActivity()}
         distanceUnit="km"
-        localText="长距离，全程 207 公里，均速 21.2 公里每小时"
+        localNode={<p>长距离，全程 207 公里，均速 21.2 公里每小时</p>}
       />,
     )
     // 有缓存时默认进 AI 态；切本地可见确定性总结，再切 AI 回到解读
@@ -148,7 +157,7 @@ describe('AiInsightSection', () => {
     expect(screen.getByText('缓存里的解读')).toBeDefined()
   })
 
-  it('标题「AI 解读」在本地与 AI 两种模式下都在', () => {
+  it('标题「骑行解读」在本地与 AI 两种模式下都在', () => {
     useAiConfigStore.setState({
       profiles: [{
         id: 'p1',
@@ -164,9 +173,15 @@ describe('AiInsightSection', () => {
       'cycling-ai-insight-cache',
       JSON.stringify({ 'act-1': { text: '缓存里的解读', at: '2026-09-14T00:00:00.000Z' } }),
     )
-    render(<AiInsightSection activity={makeActivity()} distanceUnit="km" localText="本地总结" />)
-    expect(screen.getByRole('heading', { name: 'AI 解读' })).toBeDefined()
+    render(
+      <AiInsightSection
+        activity={makeActivity()}
+        distanceUnit="km"
+        localNode={<p>本地总结</p>}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: '骑行解读' })).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: '本地' }))
-    expect(screen.getByRole('heading', { name: 'AI 解读' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: '骑行解读' })).toBeDefined()
   })
 })

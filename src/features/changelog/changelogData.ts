@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.88.2',
+    date: '2026-09-14',
+    features: [
+      '顶部总结条（长距离徽章 + 全程数据 + 数据质量）挪进「骑行解读」区块，作为「本地」态内容：本地 = 确定性总结条，AI = 模型解读，未配置 AI 时照常显示总结条',
+      '各区块标题栏布局修正：标题固定最左，[本地|AI] 切换与 ⟳ 按钮整体靠右对齐，不再悬在中间',
+    ],
+  },
+  {
     version: '2.88.0',
     date: '2026-09-14',
     features: [

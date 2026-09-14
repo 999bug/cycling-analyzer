@@ -639,10 +639,15 @@
   color: var(--ai-accent);
 }
 
-/* 控件行左侧标题（本地 / AI 共用，2.88.0） */
+/* 控件行左侧标题（本地 / AI 共用）：标题居左，控件（[本地|AI] / 药丸 / ⟳）整体靠右 */
 .ai-enhance__bar--titled {
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
+}
+
+.ai-enhance__bar--titled .ai-miniseg,
+.ai-enhance__bar--titled .ai-pill {
+  margin-left: auto;
 }
 
 .ai-enhance__title {

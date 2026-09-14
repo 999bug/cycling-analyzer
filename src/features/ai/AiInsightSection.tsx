@@ -1,16 +1,17 @@
 /**
  * 详情页 AI 解读行（AI 接入 v3：agent 式流式生成）。
  *
- * 2.88.0 起交互与 `AiEnhanceBlock` 完全对齐：控件行左侧固定标题「AI 解读」，
+ * 2.88.1 起交互与 `AiEnhanceBlock` 完全对齐：控件行左侧固定标题「骑行解读」，
  * 右侧为 [本地|AI] 迷你分段 + ⟳ 重新生成（生成中额外给 ■ 终止）——本地模式
- * 展示本地确定性一句话总结（与顶部总结条同源），AI 模式展示模型解读。
+ * 展示顶部总结条（RideSummaryBanner，类型徽章 + 真实数据 + 质量短语），
+ * AI 模式展示模型解读。未配置 AI 时只渲染总结条本身。
  *
  * 行为约束：
  * - 未配置 AI 服务时**整行不渲染**（默认关闭，按需开启）；
  * - 完成后按活动缓存（insightCache），已生成过的活动直接展示，不重复计费；
  * - 终止/失败不影响页面其余功能。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Activity } from '@/types/activity'
 import type { DistanceUnit } from '@/features/settings/settings'
 import { selectAiReady, useAiConfigStore } from '@/features/ai/aiConfigStore'
@@ -35,12 +36,12 @@ export interface AiInsightSectionProps {
   /** 距离显示单位（规格 §27） */
   distanceUnit: DistanceUnit
 
-  /** 本地确定性一句话总结（「本地」模式展示；缺失时本地态为空） */
-  localText?: string
+  /** 本地态内容（顶部总结条等确定性展示；缺失时本地态为空） */
+  localNode?: ReactNode
 }
 
 /**
- * AI 解读行组件（未配置 AI 服务时不渲染）。
+ * 骑行解读行组件（未配置 AI 服务时只渲染本地内容，无任何控件）。
  *
  * @param props 组件参数
  */
@@ -49,7 +50,7 @@ function AiInsightSection({
   ftp,
   maxHeartRate,
   distanceUnit,
-  localText,
+  localNode,
 }: AiInsightSectionProps) {
   const aiReady = useAiConfigStore(selectAiReady)
   // 已有缓存 = 用户要的就是 AI 版，直接进 AI 态；否则先看本地总结
@@ -69,7 +70,8 @@ function AiInsightSection({
   }, [agent.phase, agent.content, activity.id])
 
   if (!aiReady) {
-    return null
+    // 未配置 AI：只显示本地内容（总结条），不渲染任何 AI 控件
+    return <>{localNode}</>
   }
 
   const cachedText = getCachedInsight(activity.id)
@@ -96,9 +98,9 @@ function AiInsightSection({
   }
 
   return (
-    <section className="ai-enhance" aria-label="AI 解读">
+    <section className="ai-enhance" aria-label="骑行解读">
       <div className="ai-enhance__bar ai-enhance__bar--titled">
-        <h2 className="ai-enhance__title">AI 解读</h2>
+        <h2 className="ai-enhance__title">骑行解读</h2>
         {hasAi ? (
           <>
             <div className="ai-miniseg" role="group" aria-label="结论来源切换">
@@ -185,7 +187,7 @@ function AiInsightSection({
         </div>
       ) : (
         <>
-          {localText !== undefined && <p className="ai-insight__text">{localText}</p>}
+          {localNode}
           {!hasAi && (
             <p className="ai-insight__hint">根据聚合指标写 1~2 句解读；仅上行汇总数字，不含轨迹</p>
           )}
