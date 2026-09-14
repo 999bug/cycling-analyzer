@@ -30,6 +30,7 @@
 | `build-env.md` | `npm run build` 失败、vitest 起不来、依赖缺失时 |
 | `workflow.md` | 改 UI/交互、写 effect、做折叠面板、地图悬浮控件前 |
 | `data-docs.md` | 用 `private-fixtures/` 真实数据、改算法口径、改云端教程文档前 |
+| `curate-routes.md` | 给 `src/features/curatedRoutes/` 补录全国路线（跑 curate-batch、调闸门、离线入库）前 |
 
 ## 维护规则
 

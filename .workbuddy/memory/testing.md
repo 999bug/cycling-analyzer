@@ -39,6 +39,15 @@
 - **前置自检**：涉及日期/时间/时长的用例，推送前用 `TZ=UTC node node_modules/vitest/vitest.mjs run <文件>`
   跑一遍（本机默认 +08:00，UTC 是 CI 环境，能提前抓到这类跨日问题）。
 
+## 时刻依赖：把活动固定在当天某个钟点会「早上挂、上午绿」（2026-09-14 实测）
+
+- `tests/pages/PerformancePage.test.tsx` 的「周综述」用例把所有样例活动固定在
+  `${当天}T08:00:00`。**在 08:00 之前跑，这些活动相对 now 属于未来数据**，被周聚合过滤掉，
+  页面显示 0，断言 `getAllByText('30.00 km')` 直接找不到元素。08:00 之后同一份代码全绿。
+- 判别：这类失败与数据无关、单跑也复现、` git status` 干净但 CI 也可能挂（CI 跑 UTC，
+  对应 00:00Z 才恢复）。看到「Unable to find an element with the text: 30.00 km」先看当前钟点。
+- 写这类用例时，把活动时间放成 `now` 之前若干小时（如 `now - 2h`），别写死当天某个钟点。
+
 ## 全局 mock
 
 - `tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`（避免全量渲染时真实发包）。需要真实实现的测试
