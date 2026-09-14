@@ -20,7 +20,7 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
-    version: '2.82.0',
+    version: '2.84.0',
     date: '2026-09-14',
     features: [
       'AI 解读质量升级：从「复述本地结论」改为「基于原始数据找模式」——把 5km 分段配速/心率、爬坡段、近期基线等确定性数据喂给 AI，要求至少给出 2 条本地结论之外的新观察（数值仍禁编造）',
