@@ -65,6 +65,35 @@ export interface SegmentRepository {
   listEffortsBySegment(segmentId: number): Promise<SegmentEffortEntity[]>
 
   /**
+   * 批量列出多个赛段的全部成绩（一次索引查询，避免 N 次往返）。
+   *
+   * 赛段页进入即读落库成绩直出用；各赛段内按用时升序，缺成绩返回空数组。
+   *
+   * @param segmentIds 赛段 id 列表
+   * @returns 赛段 id → 成绩列表
+   */
+  listEffortsBySegments(
+    segmentIds: readonly number[],
+  ): Promise<Map<number, SegmentEffortEntity[]>>
+
+  /**
+   * 合并某赛段在指定活动集合上的成绩（增量扫描落库）：
+   * 事务内先删这些活动的旧成绩，再写入本次扫描结果。
+   *
+   * 用于「只有部分活动变化（新导入 / 纠偏）」时刷新成绩——未涉及活动的
+   * 落库成绩保留，避免每次导入都全量重扫全部活动。
+   *
+   * @param segmentId 赛段 id
+   * @param activityIds 本次参与扫描的活动 id（这些活动的旧成绩先删）
+   * @param efforts 本次扫描产出的成绩（自带 activityId，不含 id/createdAt/segmentId）
+   */
+  mergeEffortsForActivities(
+    segmentId: number,
+    activityIds: readonly string[],
+    efforts: readonly ScannedSegmentEffort[],
+  ): Promise<void>
+
+  /**
    * 用全量扫描结果整体替换某赛段的成绩（事务内先删后加，幂等）。
    * 附带清除 effortsSyncedAt 之外无需调用方再打标记——写成绩即视为已同步。
    *
@@ -146,6 +175,58 @@ export class DexieSegmentRepository implements SegmentRepository {
       .equals(segmentId)
       .toArray()
     return efforts.sort((a, b) => a.durationSeconds - b.durationSeconds)
+  }
+
+  async listEffortsBySegments(
+    segmentIds: readonly number[],
+  ): Promise<Map<number, SegmentEffortEntity[]>> {
+    const grouped = new Map<number, SegmentEffortEntity[]>()
+    for (const id of segmentIds) {
+      grouped.set(id, [])
+    }
+    if (segmentIds.length === 0) {
+      return grouped
+    }
+    const rows = await this.database.segment_efforts
+      .where('segmentId')
+      .anyOf([...segmentIds])
+      .toArray()
+    for (const row of rows) {
+      const list = grouped.get(row.segmentId)
+      if (list !== undefined) {
+        list.push(row)
+      }
+    }
+    for (const list of grouped.values()) {
+      list.sort((a, b) => a.durationSeconds - b.durationSeconds)
+    }
+    return grouped
+  }
+
+  async mergeEffortsForActivities(
+    segmentId: number,
+    activityIds: readonly string[],
+    efforts: readonly ScannedSegmentEffort[],
+  ): Promise<void> {
+    const touched = new Set(activityIds)
+    await this.database.transaction('rw', this.database.segment_efforts, async () => {
+      const oldIds = await this.database.segment_efforts
+        .where('segmentId')
+        .equals(segmentId)
+        .filter((effort) => touched.has(effort.activityId))
+        .primaryKeys()
+      if (oldIds.length > 0) {
+        await this.database.segment_efforts.bulkDelete(oldIds)
+      }
+      if (efforts.length === 0) {
+        return
+      }
+      const now = new Date().toISOString()
+      await this.database.segment_efforts.bulkAdd(
+        efforts.map((effort) => ({ ...effort, segmentId, createdAt: now })),
+      )
+    })
+    await this.markEffortsSynced(segmentId)
   }
 
   async replaceSegmentEfforts(

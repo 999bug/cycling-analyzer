@@ -49,6 +49,9 @@ beforeEach(async () => {
   await testDb.activities.clear()
   await testDb.activity_records.clear()
   await testDb.segments.clear()
+  await testDb.segment_efforts.clear()
+  // 赛段扫描状态缓存（增量扫描判定依据）：逐用例清零，避免相互污染
+  await testDb.scan_cache.clear()
   // 数据源复位：默认有效源为本地
   localStorage.clear()
   useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
@@ -56,6 +59,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 /**
@@ -127,8 +131,8 @@ describe('赛段页面', () => {
     render(<SegmentsPage />, { wrapper: MemoryRouter })
 
     const card = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
-    // 参与 2 次（act-3 未穿越）
-    expect(within(card).getByText('2 次')).toBeInTheDocument()
+    // 参与 2 次（act-3 未穿越）：首次进入需等后台扫描落库
+    expect(await within(card).findByText('2 次')).toBeInTheDocument()
     // 完整成绩排行按用时升序：#1 = act-2（600s），#2 = act-1（800s）
     const rows = within(card).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
@@ -144,6 +148,52 @@ describe('赛段页面', () => {
       'href',
       '/activities/act-1',
     )
+  })
+
+  it('数据未变时再次进入复用落库成绩，不重新拉取逐点', async () => {
+    const activityRepository = new DexieActivityRepository(testDb)
+    await activityRepository.addActivities([
+      makeActivity('act-1', '2026-08-01T08:00:00', makeThroughRecords(100, 900)),
+    ])
+    await seedSegment()
+    const scanSpy = vi.spyOn(DexieActivityRepository.prototype, 'getRecordsByActivityIds')
+
+    const first = render(<SegmentsPage />, { wrapper: MemoryRouter })
+    const card = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
+    // 首次进入：走一次全量扫描并落库
+    expect(await within(card).findByText('1 次')).toBeInTheDocument()
+    expect(scanSpy).toHaveBeenCalledTimes(1)
+    first.unmount()
+    scanSpy.mockClear()
+
+    // 再次进入（模拟刷新页面后重进）：直接读落库成绩，不再拉任何逐点数据
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+    const second = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
+    expect(within(second).getByText('1 次')).toBeInTheDocument()
+    expect(scanSpy).not.toHaveBeenCalled()
+  })
+
+  it('新增活动后只扫描该活动（增量补扫）', async () => {
+    const activityRepository = new DexieActivityRepository(testDb)
+    await activityRepository.addActivities([
+      makeActivity('act-1', '2026-08-01T08:00:00', makeThroughRecords(100, 900)),
+    ])
+    await seedSegment()
+    const first = render(<SegmentsPage />, { wrapper: MemoryRouter })
+    const card = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
+    expect(await within(card).findByText('1 次')).toBeInTheDocument()
+    first.unmount()
+
+    // 新导入一条穿越同一赛段的活动：只应扫描这条新活动
+    await activityRepository.addActivities([
+      makeActivity('act-9', '2026-08-09T08:00:00', makeThroughRecords(100, 500)),
+    ])
+    const scanSpy = vi.spyOn(DexieActivityRepository.prototype, 'getRecordsByActivityIds')
+    render(<SegmentsPage />, { wrapper: MemoryRouter })
+    const second = (await screen.findByText('滨江线')).closest('.segment-card') as HTMLElement
+    expect(await within(second).findByText('2 次')).toBeInTheDocument()
+    expect(scanSpy).toHaveBeenCalledTimes(1)
+    expect(scanSpy.mock.calls[0]?.[0]).toEqual(['act-9'])
   })
 
   it('本地模式提供导出作者赛段 JSON 按钮（作者工作流）', async () => {

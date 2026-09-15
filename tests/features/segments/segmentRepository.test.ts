@@ -122,6 +122,56 @@ describe('DexieSegmentRepository 成绩落库（v6）', () => {
     expect(await testDb.segment_efforts.toArray()).toEqual([])
   })
 
+  it('listEffortsBySegments 一次取多个赛段成绩并各自按用时升序', async () => {
+    const idA = await repository.addSegment(makeSegment('A'))
+    const idB = await repository.addSegment(makeSegment('B'))
+    await repository.replaceSegmentEfforts(idA, [
+      { activityId: 'act-slow', ...makeEffort(800) },
+      { activityId: 'act-fast', ...makeEffort(600) },
+    ])
+    await repository.replaceSegmentEfforts(idB, [{ activityId: 'act-1', ...makeEffort(700) }])
+
+    const grouped = await repository.listEffortsBySegments([idA, idB])
+    expect(grouped.get(idA)?.map((e) => e.activityId)).toEqual(['act-fast', 'act-slow'])
+    expect(grouped.get(idB)?.map((e) => e.activityId)).toEqual(['act-1'])
+  })
+
+  it('mergeEffortsForActivities 只替换指定活动的成绩，其余保留', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.replaceSegmentEfforts(id, [
+      { activityId: 'act-1', ...makeEffort(600) },
+      { activityId: 'act-2', ...makeEffort(700) },
+    ])
+
+    // 只重扫 act-2（纠偏/重新导入）：act-1 的旧成绩继续保留
+    await repository.mergeEffortsForActivities(
+      id,
+      ['act-2'],
+      [{ activityId: 'act-2', ...makeEffort(650) }],
+    )
+
+    const efforts = await repository.listEffortsBySegment(id)
+    expect(efforts.map((e) => e.activityId)).toEqual(['act-1', 'act-2'])
+    expect(efforts.find((e) => e.activityId === 'act-2')?.durationSeconds).toBe(650)
+
+    const segment = await repository.getSegment(id)
+    expect(segment?.effortsSyncedAt).toBeTruthy()
+  })
+
+  it('mergeEffortsForActivities 传入空成绩即删除这些活动的旧成绩', async () => {
+    const id = await repository.addSegment(makeSegment('滨江爬坡'))
+    await repository.replaceSegmentEfforts(id, [
+      { activityId: 'act-1', ...makeEffort(600) },
+      { activityId: 'act-2', ...makeEffort(700) },
+    ])
+
+    // 重扫后 act-2 不再穿越该赛段：成绩移除，act-1 不受影响
+    await repository.mergeEffortsForActivities(id, ['act-2'], [])
+
+    const efforts = await repository.listEffortsBySegment(id)
+    expect(efforts.map((e) => e.activityId)).toEqual(['act-1'])
+  })
+
   it('deleteEffortsByActivity 按活动清理（跨赛段）', async () => {
     const idA = await repository.addSegment(makeSegment('A'))
     const idB = await repository.addSegment(makeSegment('B'))

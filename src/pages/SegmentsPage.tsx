@@ -6,7 +6,7 @@
  * 空态引导用户去骑行详情页「设为赛段」创建。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { db, type SegmentEntity } from '@/storage/db'
+import { db, type SegmentEffortEntity, type SegmentEntity } from '@/storage/db'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import SegmentCards from '@/features/segments/SegmentCards'
 import SegmentAchievements from '@/features/segments/SegmentAchievements'
@@ -17,10 +17,15 @@ import {
   SUSPICIOUS_RIDE_SEGMENT_SECONDS,
 } from '@/features/segments/segmentMatching'
 import { computeLeaderboardsSync, createLeaderboardRunner } from '@/features/segments/leaderboardClient'
+import {
+  buildSegmentScanState,
+  diffSegmentScanState,
+  loadSegmentScanState,
+  saveSegmentScanState,
+} from '@/storage/segmentScanState'
 import { useImportStore } from '@/stores/importStore'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { loadStoredSourceIndex, storeSourceIndex } from '@/map/tileSources'
-import { summariesScanKey } from '@/storage/scanCache'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import { downloadAuthorSegments } from '@/features/segments/authorSegmentsExport'
@@ -40,11 +45,33 @@ import '@/pages/SegmentsPage.css'
 const segmentRepository = new DexieSegmentRepository(db)
 
 /**
- * 成绩榜模块级缓存（性能优化）：key = 活动集合指纹 + 赛段 ID 列表。
- * 赛段创建后不可变（无编辑入口），活动逐点导入后不可变，
- * 两者任一变化（导入/删除活动、增删赛段）都会改变 key 自动失效。
+ * 落库成绩转展示用成绩榜（实体 → 领域对象，剔除落库字段）。
+ *
+ * @param segments 当前赛段列表（决定 Map 的键，无成绩也占位空数组）
+ * @param stored 落库成绩（赛段 id → 实体列表）
+ * @returns 赛段 id → 成绩榜
  */
-let leaderboardCache: { key: string; boards: ReadonlyMap<number, SegmentEffort[]> } | null = null
+function toBoards(
+  segments: readonly SegmentEntity[],
+  stored: ReadonlyMap<number, SegmentEffortEntity[]>,
+): Map<number, SegmentEffort[]> {
+  const boards = new Map<number, SegmentEffort[]>()
+  for (const segment of segments) {
+    const id = segment.id ?? 0
+    boards.set(
+      id,
+      (stored.get(id) ?? []).map((effort) => ({
+        activityId: effort.activityId,
+        startTime: effort.startTime,
+        durationSeconds: effort.durationSeconds,
+        avgSpeed: effort.avgSpeed,
+        avgPower: effort.avgPower,
+        avgHeartRate: effort.avgHeartRate,
+      })),
+    )
+  }
+  return boards
+}
 
 /** Strava 导入状态：idle / importing / done / error */
 type ImportState = 'idle' | 'importing' | 'done' | 'error'
@@ -67,6 +94,8 @@ function SegmentsPage() {
   const [segments, setSegments] = useState<SegmentEntity[] | null>(null)
   const [leaderboards, setLeaderboards] = useState<ReadonlyMap<number, SegmentEffort[]> | null>(null)
   const [state, setState] = useState<LoadState>('loading')
+  // 后台增量补扫中（页面已可读，仅提示成绩正在刷新）
+  const [refreshing, setRefreshing] = useState(false)
   // 订阅导入结果：导入新活动后重算成绩（规格 §8）
   const importSummary = useImportStore((s) => s.summary)
   // 当前数据源的活动仓库（源切换 → 实例变化 → 重新加载）
@@ -76,6 +105,98 @@ function SegmentsPage() {
 
   const reload = useCallback(() => {
     let cancelled = false
+
+    /**
+     * 后台增量补扫成绩：先与持久化的上次扫描状态 diff，
+     * 无变化（最常见的重复进入场景）直接返回，不拉任何逐点数据；
+     * 只有新增赛段才全量扫，仅活动增删/纠偏时只扫变化的那些活动。
+     *
+     * @param allSegments 当前赛段列表
+     * @param previous 已读取的上次扫描状态（null = 从未扫描过）
+     */
+    const refreshBoards = async (
+      allSegments: readonly SegmentEntity[],
+      previous: Awaited<ReturnType<typeof loadSegmentScanState>>,
+    ): Promise<void> => {
+      const summaries = await listCyclingSummaries(activityRepository)
+      const state = buildSegmentScanState(allSegments, summaries)
+      const diff = diffSegmentScanState(previous, state)
+      if (cancelled || !diff.needsScan) {
+        return
+      }
+      setRefreshing(true)
+      try {
+        const targetIds = new Set(diff.activityIds)
+        const targets = summaries.filter((summary) => targetIds.has(summary.id))
+        // 只取本次需要重扫的活动的逐点数据（增量场景下通常只有新导入的几条）
+        const recordsByActivity = await activityRepository.getRecordsByActivityIds(
+          targets.map((summary) => summary.id),
+        )
+        if (cancelled) {
+          return
+        }
+        const inputs: SegmentActivityInput[] = targets.map((summary) => ({
+          activityId: summary.id,
+          startTime: summary.startTime,
+          records: recordsByActivity.get(summary.id) ?? [],
+        }))
+
+        // 成绩榜在 Web Worker 一次批量计算（避免 N 赛段 × N 记录的结构化
+        // 克隆风暴，200 活动×8000 点×N 赛段会让页面卡数十秒）；
+        // jsdom/无 Worker 环境回退主线程同步纯函数；cancelled 时 terminate 终止
+        const runner = createLeaderboardRunner() ?? {
+          compute: async (request) => computeLeaderboardsSync(request),
+          cancel: () => {},
+        }
+        try {
+          const boardsBySegment = await runner.compute({
+            segments: allSegments,
+            inputs,
+          })
+          if (cancelled) {
+            return
+          }
+          // boardsBySegment 键为 SegmentGeometry 对象，转为按 id 索引的
+          // 业务 Map<number, SegmentEffort[]> 以便下游 SegmentCards 消费
+          const boards = new Map<number, SegmentEffort[]>()
+          for (const segment of allSegments) {
+            boards.set(segment.id ?? 0, boardsBySegment.get(segment) ?? [])
+          }
+          // 成绩落库（v6）：扫描结果合并进 segment_efforts（含均速/功率/心率指标），
+          // 详情页「本次赛段」与赛段详情页免重扫直接读库；失败不影响本次展示
+          await Promise.all(
+            allSegments.map((segment) => {
+              const id = segment.id ?? 0
+              return segmentRepository
+                .mergeEffortsForActivities(id, diff.activityIds, boards.get(id) ?? [])
+                .catch((error: unknown) => {
+                  console.error('Failed to persist segment efforts', id, error)
+                })
+            }),
+          )
+          if (cancelled) {
+            return
+          }
+          await saveSegmentScanState(state)
+          // 增量扫描只算变化的活动：榜单要合并落库里未涉及活动的旧成绩，
+          // 直接读回库即为合并结果（也保证与库内数据一致）
+          const persisted = await segmentRepository.listEffortsBySegments(
+            allSegments.map((segment) => segment.id ?? 0),
+          )
+          if (cancelled) {
+            return
+          }
+          setLeaderboards(toBoards(allSegments, persisted))
+        } finally {
+          runner.cancel()
+        }
+      } finally {
+        if (!cancelled) {
+          setRefreshing(false)
+        }
+      }
+    }
+
     void (async () => {
       try {
         if (source === 'author') {
@@ -109,69 +230,27 @@ function SegmentsPage() {
           return
         }
 
-        // 扫描全部活动轨迹：每个赛段独立匹配成绩榜（命中缓存跳过全量扫描）
-        const summaries = await listCyclingSummaries(activityRepository)
-        const cacheKey = `${summariesScanKey(summaries)}#${allSegments.map((segment) => segment.id ?? 0).join(',')}`
-        if (leaderboardCache !== null && leaderboardCache.key === cacheKey) {
-          if (!cancelled) {
-            setLeaderboards(leaderboardCache.boards)
-            setState('ready')
-          }
-          return
-        }
-
-        // 批量取活动逐点记录（一次 anyOf 索引查询替代 N 次串行 equals），
-        // 代替 N+1 的 for-await getRecords 循环
-        const recordsByActivity = await activityRepository.getRecordsByActivityIds(
-          summaries.map((s) => s.id),
-        )
+        // ① 进入即出内容：直接读落库成绩（上次扫描的产物）渲染，
+        // 不再等全量逐点重扫——此前每次进入都要重扫全部活动，是卡顿主因
+        const [previous, stored] = await Promise.all([
+          loadSegmentScanState(),
+          segmentRepository.listEffortsBySegments(allSegments.map((segment) => segment.id ?? 0)),
+        ])
         if (cancelled) {
           return
         }
-        const inputs: SegmentActivityInput[] = summaries.map((summary) => ({
-          activityId: summary.id,
-          startTime: summary.startTime,
-          records: recordsByActivity.get(summary.id) ?? [],
-        }))
-
-        // 成绩榜在 Web Worker 一次批量计算（避免 N 赛段 × N 记录的结构化
-        // 克隆风暴，200 活动×8000 点×N 赛段会让页面卡数十秒）；
-        // jsdom/无 Worker 环境回退主线程同步纯函数；cancelled 时 terminate 终止
-        const runner = createLeaderboardRunner() ?? {
-          compute: async (request) => computeLeaderboardsSync(request),
-          cancel: () => {},
-        }
-        try {
-          const boardsBySegment = await runner.compute({
-            segments: allSegments,
-            inputs,
-          })
-          if (cancelled) {
-            return
-          }
-          // boardsBySegment 键为 SegmentGeometry 对象，转为按 id 索引的
-          // 业务 Map<number, SegmentEffort[]> 以便下游 SegmentCards 消费
-          const boards = new Map<number, SegmentEffort[]>()
-          for (const segment of allSegments) {
-            boards.set(segment.id ?? 0, boardsBySegment.get(segment) ?? [])
-          }
-          leaderboardCache = { key: cacheKey, boards }
-          // 成绩落库（v6）：扫描结果写回 segment_efforts（含均速/功率/心率指标），
-          // 详情页「本次赛段」与赛段详情页免重扫直接读库；失败不影响本次展示
-          await Promise.all(
-            allSegments.map((segment) =>
-              segmentRepository
-                .replaceSegmentEfforts(segment.id ?? 0, boards.get(segment.id ?? 0) ?? [])
-                .catch((error: unknown) => {
-                  console.error('Failed to persist segment efforts', segment.id, error)
-                }),
-            ),
-          )
+        const boards = toBoards(allSegments, stored)
+        // 从未扫描过且落库无成绩（首次进入）→ 保留「成绩计算中…」，
+        // 避免先闪一帧空的成绩榜；扫过之后一律直出落库成绩
+        const hasCachedData =
+          previous !== null || [...boards.values()].some((list) => list.length > 0)
+        if (hasCachedData) {
           setLeaderboards(boards)
-          setState('ready')
-        } finally {
-          runner.cancel()
         }
+        setState('ready')
+
+        // ② 后台按数据变化增量补扫（多数情况无变化，什么都不做）
+        await refreshBoards(allSegments, previous)
       } catch (error: unknown) {
         if (!cancelled) {
           setState('error')
@@ -379,6 +458,7 @@ function SegmentsPage() {
   return (
     <>
       <h1>赛段</h1>
+      {refreshing && <p className="segments-page__refreshing">成绩更新中…</p>}
       {source === 'local' && (
         <details className="segments-page__strava">
           <summary>从 Strava 导入赛段</summary>

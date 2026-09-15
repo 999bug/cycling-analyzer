@@ -9,6 +9,7 @@
  */
 import type { Activity, ActivityRecord } from '@/types/activity';
 import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
+import { clearSegmentScanState, pruneSegmentScanState } from '@/storage/segmentScanState';
 import { localDateKeyFromIso } from '@/utils/format';
 import { normalizeActivityType } from '@/types/activityType';
 
@@ -732,6 +733,11 @@ export class DexieActivityRepository implements ActivityRepository {
         }
       },
     );
+    // 扫描状态同步剔除：否则同一活动重新导入时会被判成「无需扫描」，
+    // 而它的赛段成绩已在上面级联删除，永远补不回来
+    await pruneSegmentScanState([...ids]).catch((error: unknown) => {
+      console.error('Failed to prune segment scan state', error);
+    });
   }
 
   async deleteAll(): Promise<void> {
@@ -746,6 +752,10 @@ export class DexieActivityRepository implements ActivityRepository {
         await this.db.segment_efforts.clear();
       },
     );
+    // 活动集合已清空：扫描状态一并复位，避免后续导入被判成「无需扫描」
+    await clearSegmentScanState().catch((error: unknown) => {
+      console.error('Failed to clear segment scan state', error);
+    });
   }
 
   async summarizeByRange(startTime: string, endTime: string): Promise<ActivityRangeSummary> {

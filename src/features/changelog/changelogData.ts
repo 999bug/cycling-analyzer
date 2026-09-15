@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.89.0',
+    date: '2026-09-15',
+    features: [
+      '赛段页进入提速：成绩直接读取已落库结果即时渲染，不再每次进入都全量重扫全部骑行轨迹',
+      '仅在新建赛段或新增/纠偏骑行时后台补扫，且只扫变化的那几条骑行，期间顶部提示「成绩更新中…」，页面内容照常可读',
+    ],
+  },
+  {
     version: '2.88.3',
     date: '2026-09-14',
     features: [

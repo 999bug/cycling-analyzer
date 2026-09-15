@@ -5,6 +5,13 @@
   color: var(--text-secondary);
 }
 
+/* 后台增量补扫提示：小字，不打断已渲染的卡片 */
+.segments-page__refreshing {
+  margin: 0 0 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 /* Strava 导入面板：折叠卡片，与工具条同视觉层级 */
 .segments-page__strava {
   margin-bottom: var(--space-4, 16px);
