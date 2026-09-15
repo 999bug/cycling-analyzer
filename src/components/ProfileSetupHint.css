@@ -1,0 +1,15 @@
+/* 训练配置缺失提示条（ProfileSetupHint）：普通说明小字 + 可点链接 */
+
+.profile-setup-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.profile-setup-hint__link {
+  margin-left: 4px;
+  color: var(--accent, #4f8cff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

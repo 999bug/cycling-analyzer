@@ -122,6 +122,8 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 
 ---
 
+- **训练配置与数据缺失必须显式说明（v2.89.1 起，硬约束）**：依赖 `UserProfile`（FTP / 最大心率）的区块在配置缺失时按规格 §26 返回空结果，但**空结果必须配一句说明**，禁止整块 `return null` 让用户以为没有这个功能。统一走 `src/components/ProfileSetupHint.tsx`（`field` 指定缺哪一项，`source` 决定口径）：本地源给「未设置 X，…无法计算。」+ `<Link to="/settings#settings-profile">去「更多 → 个人信息」填写</Link>`；作者源 profile 来自快照（`features/settings/effectiveProfile`），改本地设置不会生效，故只说「作者数据未提供 X」且**不给跳转链接**。文案写整句常量、不要 JSX 插值拼接——插值会把一句话拆成多个文本节点，测试 `getByText(/未设置 FTP/)` 会匹配不到。另：「数据缺失」（本活动无心率/功率）与「配置缺失」是两回事，必须分开提示，不能共用一句笼统引导。已接入：详情页训练区间、仪表盘训练状态、表现趋势页 TSS、训练计划页 CTL。
+
 ## 6. UI 体验改造任务队列（2026-08-21 评审立项）
 
 > **背景**：用户提供外部评审《骑了么_网站改造评审 2026-08-20》（md 版 `E:\downloads\骑了么_网站改造评审.md`），

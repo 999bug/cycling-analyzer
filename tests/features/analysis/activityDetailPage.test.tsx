@@ -216,13 +216,14 @@ describe('活动详情页训练分析集成', () => {
     expect(npCardEmpty).toHaveTextContent('—')
   })
 
-  it('未配置 FTP/最大心率时训练区间区显示引导文案', async () => {
+  it('未配置 FTP/最大心率时训练区间区分别提示缺哪一项（带去设置入口）', async () => {
     await repo.addActivity(makeActivity('act-1', [100, 200, 300, 200, 100], [120, 140, 160, 150, 130]))
     renderPage()
 
-    expect(
-      await screen.findByText('在设置中配置 FTP 与最大心率后可查看区间分析'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/未设置最大心率/)).toBeInTheDocument()
+    expect(screen.getByText(/未设置 FTP/)).toBeInTheDocument()
+    // 引导直达设置页的个人信息区块
+    expect(screen.getAllByRole('link', { name: '去「更多 → 个人信息」填写' }).length).toBe(2)
     expect(screen.queryByText('心率区间')).not.toBeInTheDocument()
     expect(screen.queryByText('功率区间')).not.toBeInTheDocument()
   })
@@ -260,6 +261,8 @@ describe('活动详情页训练分析集成', () => {
 
     const zonesSection = await screen.findByRole('region', { name: '训练区间' })
     expect(within(zonesSection).queryByText(/平均心率/)).not.toBeInTheDocument()
+    // 数据缺失 ≠ 配置缺失：说明本活动无心率数据，而不是让用户去设置
+    expect(within(zonesSection).getByText('本次骑行没有心率数据')).toBeInTheDocument()
   })
 
   it('训练区间区块展示「计算方式说明」折叠块（含区间边界与 IF/TSS 公式）', async () => {
@@ -314,7 +317,9 @@ describe('活动详情页训练分析集成', () => {
       screen.getByRole('region', { name: '训练区间' }).textContent,
     ).toContain('区间划分基准：最大心率 180 bpm · FTP 200 W')
 
-    expect(screen.queryByText('在设置中配置 FTP 与最大心率后可查看区间分析')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/未设置最大心率/),
+    ).not.toBeInTheDocument()
   })
 
   it('配置 FTP/最大心率后显示 IF/TSS（恒 200W → IF 1.00、TSS 1）', async () => {
@@ -331,9 +336,7 @@ describe('活动详情页训练分析集成', () => {
     await repo.addActivity(makeActivity('act-1', [200, 200, 200, 200, 200], [120, 140, 160, 150, 130]))
 
     const first = renderPage()
-    expect(
-      await screen.findByText('在设置中配置 FTP 与最大心率后可查看区间分析'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/未设置最大心率/)).toBeInTheDocument()
 
     // 保存 FTP 与最大心率后重新挂载（设置只在挂载时读取）
     await saveSettings({ profile: { ftp: 200, maxHeartRate: 190 } })
@@ -342,7 +345,9 @@ describe('活动详情页训练分析集成', () => {
 
     expect(await screen.findByText('心率区间')).toBeInTheDocument()
     expect(screen.getByText('功率区间')).toBeInTheDocument()
-    expect(screen.queryByText('在设置中配置 FTP 与最大心率后可查看区间分析')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/未设置最大心率/),
+    ).not.toBeInTheDocument()
   })
 
   it('配置存在但数据无对应指标时显示引导文案（不伪造区间）', async () => {
@@ -353,9 +358,9 @@ describe('活动详情页训练分析集成', () => {
     await saveSettings({ profile: { ftp: 200 } })
     renderPage()
 
-    expect(
-      await screen.findByText('在设置中配置 FTP 与最大心率后可查看区间分析'),
-    ).toBeInTheDocument()
+    // 有心率数据但缺最大心率 → 配置引导；无功率数据 → 说明本活动无功率（两者分开提示）
+    expect(await screen.findByText(/未设置最大心率/)).toBeInTheDocument()
+    expect(screen.getByText('本次骑行没有功率数据')).toBeInTheDocument()
     expect(screen.queryByText('功率区间')).not.toBeInTheDocument()
     expect(screen.queryByText('心率区间')).not.toBeInTheDocument()
   })

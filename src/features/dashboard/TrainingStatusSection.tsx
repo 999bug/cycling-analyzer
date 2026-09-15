@@ -30,6 +30,7 @@ import {
 import { useImportStore } from '@/stores/importStore'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import MetricHelp from '@/components/MetricHelp'
+import ProfileSetupHint from '@/components/ProfileSetupHint'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
 import '@/features/dashboard/TrainingStatusSection.css'
 
@@ -87,10 +88,9 @@ const METRIC_HELP_ITEMS = [
 /** 加载状态机 */
 type LoadState = 'loading' | 'noFtp' | 'noData' | 'ready' | 'error'
 
-/** 状态文案映射（ready 不显示文案） */
-const STATE_MESSAGES: Record<Exclude<LoadState, 'ready'>, string> = {
+/** 状态文案映射（ready 不显示文案；noFtp 走 ProfileSetupHint 引导，带去设置的入口） */
+const STATE_MESSAGES: Record<Exclude<LoadState, 'ready' | 'noFtp'>, string> = {
   loading: '训练状态计算中…',
-  noFtp: '在设置中配置 FTP 后可查看训练状态',
   noData: '暂无功率数据，导入含功率计的骑行后展示训练状态',
   error: '训练状态加载失败',
 }
@@ -154,7 +154,11 @@ function TrainingStatusSection() {
     <section className="training-status" aria-label="训练状态">
       <h2 className="training-status__title">训练状态</h2>
       {state !== 'ready' ? (
-        <p className="training-status__message">{STATE_MESSAGES[state]}</p>
+        state === 'noFtp' ? (
+          <ProfileSetupHint field="ftp" source={source} />
+        ) : (
+          <p className="training-status__message">{STATE_MESSAGES[state]}</p>
+        )
       ) : (
         <>
           <StatusCards current={points[points.length - 1]} />

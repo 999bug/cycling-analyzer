@@ -97,6 +97,8 @@ import {
   type ZoneDistribution,
   type ZoneRange,
 } from '@/features/analysis/zones'
+import type { DataSource } from '@/stores/dataSourceStore'
+import ProfileSetupHint from '@/components/ProfileSetupHint'
 import type { ColoringMode } from '@/map/routeColoring'
 import { simplifyRoute } from '@/map/simplify'
 import { DEFAULT_MAP_MODE, type MapMode } from '@/map/tileSources'
@@ -123,8 +125,9 @@ const SIMPLIFY_TOLERANCE_METERS = 5
 /** 删除确认文案 */
 const DELETE_CONFIRM_TEXT = '确定删除这次骑行？删除后将从本地数据库中移除'
 
-/** 无 FTP/最大心率配置时训练区间区块的引导文案（规格 §26 不伪造计算） */
-const ZONES_GUIDE_TEXT = '在设置中配置 FTP 与最大心率后可查看区间分析'
+/** 无心率/功率数据时训练区间区块的说明文案（数据缺失 ≠ 配置缺失，分开提示） */
+const NO_HEART_RATE_DATA_TEXT = '本次骑行没有心率数据'
+const NO_POWER_DATA_TEXT = '本次骑行没有功率数据'
 
 /** 轨迹着色模式选项（规格 §16） */
 const COLORING_OPTIONS: ReadonlyArray<{ mode: 'none' | ColoringMode; label: string }> = [
@@ -1245,6 +1248,7 @@ function ActivityDetailPage() {
         heartRateRecords={chartRecords}
         heartRateBaseline={maxHeartRate}
         ftpBaseline={ftp}
+        profileSource={source}
       />
 
       {/* 社媒分享素材弹窗：Canvas 本地出图，无网络请求（规格外延伸功能） */}
@@ -1362,13 +1366,16 @@ interface TrainingZonesSectionProps {
 
   /** 功率区间基线（用户设置的 FTP W）：换算各区间功率范围 */
   ftpBaseline: number | undefined
+
+  /** 当前数据源（配置缺失引导用：作者源改本地设置无效） */
+  profileSource: DataSource
 }
 
 /**
  * 训练区间区块（规格 §26）：心率统计（平均/最大/最小）+ 心率折线图 +
  * 心率/功率区间分布条 + IF/TSS + 计算方式说明。
- * 仅当对应配置存在且数据含该指标时显示区间；无任何可显示内容时
- * 展示引导文案（无依据不伪造计算）。
+ * 仅当对应配置存在且数据含该指标时显示区间；否则按原因分别提示——
+ * 配置缺失给「缺什么 + 去哪设置」，数据缺失说明本活动无该指标（无依据不伪造计算）。
  *
  * @param props 组件参数
  */
@@ -1385,6 +1392,7 @@ function TrainingZonesSection({
   heartRateRecords,
   heartRateBaseline,
   ftpBaseline,
+  profileSource,
 }: TrainingZonesSectionProps) {
   const showHeartRate = heartRateZones !== null && hasHeartRateData
   const showPower = powerZones !== null && hasPowerData
@@ -1434,31 +1442,34 @@ function TrainingZonesSection({
           <HeartRateChart records={heartRateRecords} />
         </div>
       )}
-      {showHeartRate || showPower || metrics !== null ? (
-        <>
-          {showHeartRate && heartRateZones !== null && (
-            <ZoneGroup
-              title="心率区间"
-              zones={heartRateZones}
-              names={HEART_RATE_ZONE_NAMES}
-              ranges={heartRateRanges}
-              unit="bpm"
-            />
-          )}
-          {showPower && powerZones !== null && (
-            <ZoneGroup
-              title="功率区间"
-              zones={powerZones}
-              names={POWER_ZONE_NAMES}
-              ranges={powerRanges}
-              unit="W"
-            />
-          )}
-          {metrics}
-        </>
+      {/* 心率/功率各自说明原因：配置缺失给引导（可修复），数据缺失说明本活动无该指标 */}
+      {showHeartRate && heartRateZones !== null ? (
+        <ZoneGroup
+          title="心率区间"
+          zones={heartRateZones}
+          names={HEART_RATE_ZONE_NAMES}
+          ranges={heartRateRanges}
+          unit="bpm"
+        />
+      ) : hasHeartRateData ? (
+        <ProfileSetupHint field="maxHeartRate" source={profileSource} />
       ) : (
-        <p className="activity-detail__zones-guide">{ZONES_GUIDE_TEXT}</p>
+        <p className="activity-detail__zones-guide">{NO_HEART_RATE_DATA_TEXT}</p>
       )}
+      {showPower && powerZones !== null ? (
+        <ZoneGroup
+          title="功率区间"
+          zones={powerZones}
+          names={POWER_ZONE_NAMES}
+          ranges={powerRanges}
+          unit="W"
+        />
+      ) : hasPowerData ? (
+        <ProfileSetupHint field="ftp" source={profileSource} />
+      ) : (
+        <p className="activity-detail__zones-guide">{NO_POWER_DATA_TEXT}</p>
+      )}
+      {metrics}
       <details className="activity-detail__zones-help">
         <summary>计算方式说明</summary>
         <ul>

@@ -6,6 +6,7 @@
  * 计划卡片（阶段/目标 TSS/骑行次数/时长/训练重点）。纯计算无写操作。
  */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { buildTrainingPlan, type TrainingPhase, type TrainingPlanWeek } from '@/features/training/plan'
 import { buildDailyTss, buildTrainingStatus } from '@/features/analysis/trainingStatus'
 import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
@@ -39,6 +40,8 @@ function TrainingPlanPage() {
   const [eventDate, setEventDate] = useState('')
   const [ctlInput, setCtlInput] = useState('')
   const [ctlLoading, setCtlLoading] = useState(true)
+  /** 未配置 FTP：CTL 无法自动读取，需提示用户手动填写（否则输入框静默留空） */
+  const [ctlNoFtp, setCtlNoFtp] = useState(false)
   const [plan, setPlan] = useState<TrainingPlanWeek[] | null>(null)
   // 订阅导入结果：数据导入完成后刷新 CTL
   const repository = useActivityRepository()
@@ -56,9 +59,11 @@ function TrainingPlanPage() {
           return
         }
         if (ftp === undefined || ftp <= 0) {
+          setCtlNoFtp(true)
           setCtlLoading(false)
           return
         }
+        setCtlNoFtp(false)
         if (source === 'local') {
           await backfillNormalizedPower(getActivityRepository('local') as DexieActivityRepository)
         }
@@ -164,6 +169,14 @@ function TrainingPlanPage() {
           生成训练计划
         </button>
       </form>
+
+      {ctlNoFtp && (
+        <p className="training-plan__message" role="status">
+          {`未设置 FTP，当前体能（CTL）无法自动读取，请手动填写；`}
+          <Link to="/settings#settings-profile">「更多 → 个人信息」</Link>
+          {'配置 FTP 后可自动带入。'}
+        </p>
+      )}
 
       {plan !== null && plan.length === 0 && (
         <p className="training-plan__message">目标日期需晚于今天，请重新选择。</p>

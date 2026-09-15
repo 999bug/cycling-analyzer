@@ -7,6 +7,7 @@
  */
 import 'fake-indexeddb/auto'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
@@ -63,9 +64,10 @@ function makeActivity(id: string, overrides: Partial<Activity> = {}): Activity {
 
 describe('TrainingStatusSection', () => {
   it('未配置 FTP 时显示设置引导（不伪造计算）', async () => {
-    render(<TrainingStatusSection />)
+    render(<MemoryRouter><TrainingStatusSection /></MemoryRouter>)
 
-    expect(await screen.findByText(/配置 FTP 后可查看训练状态/)).toBeInTheDocument()
+    // 作者源不可用（authorAvailable=false）→ 有效源为本地，提示走「去设置」口径
+    expect(await screen.findByText(/未设置 FTP/)).toBeInTheDocument()
   })
 
   it('有 FTP 但无功率数据时显示导入提示', async () => {
@@ -73,7 +75,7 @@ describe('TrainingStatusSection', () => {
     const repo = new DexieActivityRepository(testDb)
     await repo.addActivity(makeActivity('a'))
 
-    render(<TrainingStatusSection />)
+    render(<MemoryRouter><TrainingStatusSection /></MemoryRouter>)
 
     expect(await screen.findByText(/暂无功率数据/)).toBeInTheDocument()
   })
@@ -84,7 +86,7 @@ describe('TrainingStatusSection', () => {
     // IF = 200/200 = 1，1 小时 TSS = 100
     await repo.addActivity(makeActivity('a', { normalizedPower: 200 }))
 
-    render(<TrainingStatusSection />)
+    render(<MemoryRouter><TrainingStatusSection /></MemoryRouter>)
 
     // 卡片标签
     expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)
@@ -116,7 +118,7 @@ describe('TrainingStatusSection', () => {
       }),
     )
 
-    render(<TrainingStatusSection />)
+    render(<MemoryRouter><TrainingStatusSection /></MemoryRouter>)
 
     // 回填后 IF = 150/150 = 1 → 正常显示卡片
     expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)
@@ -149,7 +151,7 @@ describe('TrainingStatusSection', () => {
     )
     useDataSourceStore.setState({ source: 'author', authorAvailable: true, authorName: 'Saul' })
 
-    render(<TrainingStatusSection />)
+    render(<MemoryRouter><TrainingStatusSection /></MemoryRouter>)
 
     // IF = 200/200 = 1 → 显示卡片（FTP 来自快照而非本地设置）
     expect(await screen.findAllByText('体能（CTL）')).not.toHaveLength(0)

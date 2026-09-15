@@ -23,8 +23,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
+import { selectEffectiveSource, useDataSourceStore, type DataSource } from '@/stores/dataSourceStore'
 import { getEffectiveProfile } from '@/features/settings/effectiveProfile'
+import ProfileSetupHint from '@/components/ProfileSetupHint'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
 import { useUnits } from '@/hooks/useUnits'
 import { PERFORMANCE_SERIES_COLORS } from '@/theme/colors'
@@ -193,6 +194,7 @@ function PerformancePage() {
             series={weeklySeries}
             distanceUnit={distanceUnit}
             hasFtp={ftp !== undefined}
+            profileSource={source}
           />
           {hasAeData && <AerobicTrendSection series={aeSeries} />}
           <TrendInsightsSection
@@ -293,15 +295,18 @@ function deltaLabel(value: number, previous: number): string {
  * @param series 周聚合序列
  * @param distanceUnit 距离显示单位
  * @param hasFtp 是否配置了 FTP（决定是否展示 TSS）
+ * @param profileSource 当前数据源（配置缺失引导用：作者源改本地设置无效）
  */
 function TrendSection({
   series,
   distanceUnit,
   hasFtp,
+  profileSource,
 }: {
   series: readonly WeekSummary[]
   distanceUnit: 'km' | 'mi'
   hasFtp: boolean
+  profileSource: DataSource
 }) {
   // 图表数据 + 4 周移动平均（distance 恒有值；EF 无值时该周移动平均为已有值均值）
   const chartData = useMemo(
@@ -326,9 +331,12 @@ function TrendSection({
         </p>
       )}
       {!hasFtp && (
-        <p className="performance-trend__hint">
-          柱：距离 · 绿线：效率因子 · 虚线：4 周移动平均（配置 FTP 后展示 TSS）
-        </p>
+        <>
+          <p className="performance-trend__hint">
+            柱：距离 · 绿线：效率因子 · 虚线：4 周移动平均（配置 FTP 后展示 TSS）
+          </p>
+          <ProfileSetupHint field="ftp" source={profileSource} />
+        </>
       )}
       <div className="performance-trend__plot" role="img" aria-label="近 12 周距离与效率因子图">
         <ResponsiveContainer width="100%" height={CHART_HEIGHT} initialDimension={INITIAL_DIMENSION}>
