@@ -1,9 +1,10 @@
 /**
  * IndexedDB 数据库定义（规格 §18）。
  *
- * 库名 cycling-data，当前 DB_VERSION = 6，表结构：
+ * 库名 cycling-data，当前 DB_VERSION 见下方 DB_VERSION 常量（升级历史亦见该常量注释），表结构：
  * - activities：活动摘要（不存 records/route，大数据拆表避免单条记录过大）
- * - activity_blobs：逐点数据，每活动一行（v5 起，替代逐点行表）
+ * - activity_chunks：逐点数据分片，每活动 N 片（v9 起的主存储，按 [activityId+seq] 范围读）
+ * - activity_blobs：逐点数据，每活动一行（v5~v8 的主存储；v9 起仅作分片迁移的源）
  * - activity_records：旧逐点行表（迁移兜底，迁移完成后不再写入）
  * - files：导入文件状态台账（重复检测、失败记录）
  * - settings：键值对设置
@@ -27,9 +28,11 @@ export const DB_NAME = 'cycling-data';
  * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空（表本体仍未删除）；
  * v6：新增 segment_efforts 赛段成绩落库表，替代「每次进赛段页全量重扫」；
  * v7：新增 error_logs 运行时错误日志表；
- * v8：activities 新增 localDate 本地日期索引，供年/月筛选缩候选集）。
+ * v8：activities 新增 localDate 本地日期索引，供年/月筛选缩候选集；
+ * v9：新增 activity_chunks 逐点分片表，替代 activity_blobs 整活动一行
+ * （blob 在按区间读逐点时必须整行解出，分页与分批导出都存在数倍反序列化放大）。
  */
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -190,6 +193,32 @@ export interface ActivityBlobEntity {
   activityId: string;
 
   /** 该活动全部逐点记录（数组序 = 原存储序 = 时间序） */
+  records: ActivityRecord[];
+}
+
+/**
+ * 逐点分片实体（activity_chunks 表，v9 新增）。
+ *
+ * 设计动机：v5 的「每活动一行」解决了删除/导入的痛点（旧逐点行表逐行删
+ * 约 0.22ms/行），但把读取变成了全有全无——按区间取点时也必须整行解出。
+ * 实测（`npm run bench:data-layer`，10 万点活动）：
+ * - 详情页只读 100 点，仍解出全部 10 万点 / 15.4MB；
+ * - 导出按 1 万点/批分 11 次读，每次都整行解出 → 反序列化放大 11 倍。
+ *
+ * 分片后按 [activityId+seq] 复合主键做范围查询，只解出覆盖目标区间的那几片，
+ * 上述两处分别回落到约 1/50 与 ≤1.2 倍。
+ *
+ * 与 activity_blobs 的关系：v9 起写入只落 chunks；存量 blobs 由启动后的
+ * 后台迁移按活动「写 chunks + 删 blob」同事务替换（见 chunksMigration.ts）。
+ */
+export interface ActivityChunkEntity {
+  /** 所属活动 ID（复合主键前半） */
+  activityId: string;
+
+  /** 片序号（0 起，连续；复合主键后半） */
+  seq: number;
+
+  /** 该片逐点记录（数组序 = 原存储序 = 时间序） */
   records: ActivityRecord[];
 }
 
@@ -422,7 +451,9 @@ export interface ErrorLogEntity {
  * - activities.activityType 索引：类型筛选
  * - activities.localDate 索引（v8）：年/月筛选按本地日期前缀缩候选集
  *   （startTime 是 UTC ISO，与本地日期不同源，不可互换）
- * - activity_blobs.activityId 主键：按活动加载/删除逐点数据（整活动一行）
+ * - activity_blobs.activityId 主键：v5~v8 的逐点整活动存储（v9 起仅作迁移源）
+ * - activity_chunks.[activityId+seq] 复合主键（v9）：按活动 + 片序范围读取，
+ *   只解出覆盖目标区间的片；activityId 单索引供级联删除（IndexedDB 无范围删除）
  * - segment_efforts.&[segmentId+activityId] 唯一复合索引：同活动同赛段一条最佳成绩，
  *   upsert 与按赛段/按活动级联清理走 segmentId / activityId 单索引
  */
@@ -437,8 +468,14 @@ export class CyclingDatabase extends Dexie {
   /** 逐点记录表（自增主键；v4 及之前的主存储，v5 起仅迁移兜底） */
   declare activity_records: EntityTable<ActivityRecordEntity, 'id'>;
 
-  /** 逐点整活动存储表（v5 新增：每活动一行，records 数组为主值） */
+  /** 逐点整活动存储表（v5 新增：每活动一行；v9 起仅作分片迁移的源） */
   declare activity_blobs: EntityTable<ActivityBlobEntity, 'activityId'>;
+
+  /** 逐点分片表（v9 新增：每活动 N 片，按 [activityId+seq] 范围读取）
+   *  注：主键实际是复合键 [activityId+seq]，但 Dexie 的 EntityTable 第二个类型参数
+   *  只能是 keyof T（无法表达复合键），故此处填 activityId。查询一律用
+   *  where('[activityId+seq]') —— where() 接受任意字符串索引名/键路径。 */
+  declare activity_chunks: EntityTable<ActivityChunkEntity, 'activityId'>;
 
   /** 导入文件台账表 */
   declare files: EntityTable<FileEntity, 'fingerprint'>;
@@ -518,6 +555,22 @@ export class CyclingDatabase extends Dexie {
     // db.open()，v5 已为此踩过坑），改由启动后一次性后台回填并落就绪标志。
     this.version(8).stores({
       activities: 'id, &fingerprint, startTime, activityType, localDate',
+    });
+
+    // v9：新增逐点分片表 activity_chunks（复合主键 [activityId+seq]）。
+    //
+    // 为什么不是继续用 activity_blobs：整活动一行在「按区间读」时也必须整行解出。
+    // 实测（scripts/bench-data-layer.ts）：详情页只读 100 点仍解 10 万点 / 15.4MB；
+    // 导出按 1 万点/批读 11 次 = 11 倍反序列化放大。分片后按复合主键做范围查询，
+    // 只解出覆盖目标区间的片。
+    //
+    // activityId 单索引是给级联删除用的：IndexedDB 没有范围删除 API，删活动时
+    // 需要先按索引取主键再 bulkDelete（与 segment_efforts 的处理一致）。
+    //
+    // 存量 blobs 不在此处迁移，由启动后的后台任务按活动原子替换
+    // （见 src/storage/chunksMigration.ts）；blobs 表保留不再写入。
+    this.version(9).stores({
+      activity_chunks: '[activityId+seq], activityId',
     });
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，

@@ -50,7 +50,11 @@ beforeEach(async () => {
   // 清空活动表而非删除数据库：vi.mock 共享单实例，delete() 后实例不可复用
   await testDb.activities.clear()
   // 逐点表独立清理：个人纪录的功率纪录扫描读取该表
+  // 逐点数据三种布局全部清理：v9 分片是当前主存储，blobs 与旧逐点行表是迁移残留，
+  // 只清其一会让上一条用例的数据从兜底路径漏进来
   await testDb.activity_records.clear()
+  await testDb.activity_blobs.clear()
+  await testDb.activity_chunks.clear()
   // 单位偏好影响显示层（§27）：用例间清理防泄漏
   await testDb.settings.clear()
   // 数据源复位：默认有效源为本地

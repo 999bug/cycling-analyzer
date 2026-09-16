@@ -702,22 +702,73 @@ describe('DexieActivityRepository', () => {
       expect(await db.activity_blobs.get(activity.id)).toBeUndefined();
     });
 
-    it('addActivity 以整活动一行写入 activity_blobs', async () => {
+    it('addActivity 以分片写入 activity_chunks', async () => {
       const activity = makeActivity({ records: [makeRecord(1), makeRecord(2), makeRecord(3)] });
       await repo.addActivity(activity);
 
-      const blob = await db.activity_blobs.get(activity.id);
-      expect(blob?.records).toHaveLength(3);
-      expect(blob?.records[0]).toEqual(makeRecord(1));
-      // 旧逐点行表不再写入
+      const chunks = await db.activity_chunks.where('activityId').equals(activity.id).toArray();
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].seq).toBe(0);
+      expect(chunks[0].records).toEqual([makeRecord(1), makeRecord(2), makeRecord(3)]);
+      // 旧布局不再写入：v5 整活动行与 v4 逐点行表在 v9 起只作迁移源
+      expect(await db.activity_blobs.count()).toBe(0);
       expect(await db.activity_records.count()).toBe(0);
+    });
+
+    it('getRecords 分页只解出覆盖区间的分片（真分页，不是取全量再切）', async () => {
+      const records = Array.from({ length: 10_000 }, (_, index) => makeRecord(index));
+      const activity = makeActivity({ records });
+      await repo.addActivity(activity);
+      // 2000 点/片 → 5 片
+      expect(await db.activity_chunks.where('activityId').equals(activity.id).count()).toBe(5);
+
+      // 统计「实际解出了哪几片」：跨片读取会解出多余的点，是分片收益被抵消的典型症状
+      const readSeqs: number[] = [];
+      const hook = (obj: { seq: number }): { seq: number } => {
+        readSeqs.push(obj.seq);
+        return obj;
+      };
+      db.activity_chunks.hook('reading', hook);
+      try {
+        // 取 5000~5099：只应解出第 2 片
+        expect(await repo.getRecords(activity.id, { offset: 5000, limit: 100 })).toEqual(
+          records.slice(5000, 5100),
+        );
+        expect(readSeqs).toEqual([2]);
+
+        // 跨片取 3900~4099：跨第 1、2 片，两片都解出后精确截取
+        readSeqs.length = 0;
+        expect(await repo.getRecords(activity.id, { offset: 3900, limit: 200 })).toEqual(
+          records.slice(3900, 4100),
+        );
+        expect(readSeqs).toEqual([1, 2]);
+
+        // 越界偏移：解出 0 片，返回空数组而不是全量
+        readSeqs.length = 0;
+        expect(await repo.getRecords(activity.id, { offset: 99_999, limit: 10 })).toEqual([]);
+        expect(readSeqs).toEqual([]);
+      } finally {
+        db.activity_chunks.hook('reading').unsubscribe(hook);
+      }
+    });
+
+    it('getRecords 兜底 v5 整活动行（分片迁移未跑到该活动）', async () => {
+      const activity = makeActivity();
+      await repo.addActivity(activity);
+      // 模拟 v5~v8 遗留布局：无分片、只有整活动一行
+      await db.activity_blobs.put({
+        activityId: activity.id,
+        records: [makeRecord(1), makeRecord(2)],
+      });
+
+      expect(await repo.getRecords(activity.id)).toEqual([makeRecord(1), makeRecord(2)]);
+      expect(await repo.getRecords(activity.id, { offset: 1, limit: 1 })).toEqual([makeRecord(2)]);
     });
 
     it('getRecords 迁移兜底：旧逐点行数据聚合返回并回填新表', async () => {
       const activity = makeActivity();
       await repo.addActivity(activity);
-      // 模拟迁移未完成：清掉新表行，往旧表插逐点行
-      await db.activity_blobs.delete(activity.id);
+      // 模拟迁移未完成：往旧表插逐点行（v9 起写入不再产生 blobs，故无需清理）
       await db.activity_records.bulkAdd([
         { ...makeRecord(1), activityId: activity.id },
         { ...makeRecord(2), activityId: activity.id },
@@ -726,9 +777,11 @@ describe('DexieActivityRepository', () => {
       const records = await repo.getRecords(activity.id);
 
       expect(records).toEqual([makeRecord(1), makeRecord(2)]);
-      // 回填：新表已有整活动行
-      expect((await db.activity_blobs.get(activity.id))?.records).toEqual(records);
-      // 后续读取走新表主键 get，返回一致
+      // 回填到**当前**布局（分片）：后续读取直接命中，不再走两跳兜底
+      const chunks = await db.activity_chunks.where('activityId').equals(activity.id).toArray();
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0].records).toEqual(records);
+      // 后续读取走分片，返回一致
       expect(await repo.getRecords(activity.id)).toEqual(records);
     });
 
@@ -736,7 +789,6 @@ describe('DexieActivityRepository', () => {
       const migrated = makeActivity({ records: [makeRecord(1)] });
       const legacy = makeActivity();
       await repo.addActivities([migrated, legacy]);
-      await db.activity_blobs.delete(legacy.id);
       await db.activity_records.bulkAdd([
         { ...makeRecord(1), activityId: legacy.id },
         { ...makeRecord(2), activityId: legacy.id },
@@ -746,7 +798,9 @@ describe('DexieActivityRepository', () => {
 
       expect(grouped.get(migrated.id)).toEqual([makeRecord(1)]);
       expect(grouped.get(legacy.id)).toEqual([makeRecord(1), makeRecord(2)]);
-      expect((await db.activity_blobs.get(legacy.id))?.records).toHaveLength(2);
+      expect(await db.activity_chunks.where('activityId').equals(legacy.id).count()).toBe(1);
+      // Map 迭代序 = 入参顺序（成绩榜并列名次、路线绘制层级依赖这一点）
+      expect([...grouped.keys()]).toEqual([migrated.id, legacy.id]);
     });
 
     it('deleteActivities 批量级联删除，未列入 ID 的活动不受影响', async () => {

@@ -26,7 +26,9 @@ beforeEach(async () => {
   // 对比展开经 useActivityRepository 读全局库：本地源 + 预置最好成绩活动
   useDataSourceStore.setState({ source: 'local', authorAvailable: false, authorName: null })
   await globalDb.activities.clear()
+  // 逐点数据三种布局全部清理（见下）
   await globalDb.activity_blobs.clear()
+  await globalDb.activity_chunks.clear()
 })
 
 /** 穿越测试赛段的轨迹：t=startTs 进起点圈，t=endTs 进终点圈 → endTs - startTs 秒 */

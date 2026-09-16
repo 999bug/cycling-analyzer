@@ -25,7 +25,11 @@ const testDb = db
 
 beforeEach(async () => {
   await testDb.activities.clear()
+  // 逐点数据三种布局全部清理：v9 分片是当前主存储，blobs 与旧逐点行表是迁移残留，
+  // 只清其一会让上一条用例的数据从兜底路径漏进来
   await testDb.activity_records.clear()
+  await testDb.activity_blobs.clear()
+  await testDb.activity_chunks.clear()
   localStorage.clear()
   useDataSourceStore.setState({ source: 'author', authorAvailable: false, authorName: null })
 })

@@ -242,8 +242,9 @@ describe('数据导入', () => {
 
     expect(second).toEqual({ newImported: 0, skipped: 2 })
     expect(await targetActivityRepo.countActivities()).toBe(2)
-    // v5 起逐点数据整活动一行落 activity_blobs
-    expect(await targetDb.activity_blobs.count()).toBe(2)
+    // v9 起逐点数据按 2000 点/片落 activity_chunks（旧 activity_blobs 仅作迁移源）。
+    // 只有 act-1 有逐点数据，act-2 无记录 → 不写片（读取语义同为「无逐点数据」）
+    expect(await targetDb.activity_chunks.count()).toBe(1)
   })
 
   it('部分重复导入：仅新增未导入的活动', async () => {

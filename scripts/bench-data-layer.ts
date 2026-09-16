@@ -14,6 +14,9 @@
  * 时触发。对 IndexedDB 游标而言，跳过 offset 的每一行同样会被解出（游标返回完整
  * 记录），因此该计数能直接暴露「假分页」——这正是本项目列表查询的历史问题。
  *
+ * 分片（v9）后本脚本同时计数 activity_chunks 与 activity_blobs：前者是当前主存储，
+ * 后者只应在迁移未完成的库上出现，正常应为 0。
+ *
  * 用法：npm run bench:data-layer [-- --scale small|default|large]
  *
  * 数据全部为合成数据（严禁使用 private-fixtures/ 真实骑行数据）。
@@ -21,6 +24,7 @@
 import 'fake-indexeddb/auto'
 import { CyclingDatabase } from '@/storage/db'
 import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import { ACTIVITY_CHUNK_SIZE } from '@/storage/activityChunks'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
 /** 规模档位：写入量与测量规模（default 为方案 §6 的目标量级） */
@@ -67,20 +71,23 @@ const SCALES: Record<ScaleName, ScalePreset> = {
 interface ReadMeter {
   /** activities 表解出的行数 */
   activityRows: number
-  /** activity_blobs 表解出的行数 */
-  blobs: number
-  /** activity_blobs 解出的逐点总数 */
+  /** activity_chunks 表解出的行数（片数） */
+  chunkRows: number
+  /** activity_blobs 表解出的行数（迁移残留，正常为 0） */
+  blobRows: number
+  /** 解出的逐点总数（分片 + 整活动行合计） */
   points: number
 }
 
-const meter: ReadMeter = { activityRows: 0, blobs: 0, points: 0 }
+const meter: ReadMeter = { activityRows: 0, chunkRows: 0, blobRows: 0, points: 0 }
 
 /**
  * 重置读取计数。
  */
 function resetMeter(): void {
   meter.activityRows = 0
-  meter.blobs = 0
+  meter.chunkRows = 0
+  meter.blobRows = 0
   meter.points = 0
 }
 
@@ -201,7 +208,7 @@ function report(
     const bytes = bpp > 0 ? ` / ${formatBytes(row.snapshot.points * bpp)}` : ''
     console.log(
       `  ${row.label.padEnd(38)} activities=${String(row.snapshot.activityRows).padStart(6)}` +
-        ` blobs=${String(row.snapshot.blobs).padStart(5)}` +
+        ` chunks=${String(row.snapshot.chunkRows).padStart(6)}` +
         ` points=${String(row.snapshot.points).padStart(8)}${bytes}` +
         `   [${row.elapsedMs.toFixed(1)}ms，内存实现仅供参考]`,
     )
@@ -242,16 +249,15 @@ async function benchList(
   report(`场景 A · 列表分页（${count} 活动，每活动 ${preset.listPointsPerActivity} 点）`, rows, 0)
 
   // 逐点不参与列表查询，故不计字节；此处给出口径说明即可
-  console.log('  说明：列表查询只解出 activities 表行，不触碰 activity_blobs')
+  console.log('  说明：列表查询只解出 activities 表行，不触碰逐点表')
 }
 
 /**
  * 详情页场景：按页读取逐点时解出多少点。
  *
- * 关注点：`getRecords(id, {limit:100})` 当前整行读出后 slice，
- * 因此解出点数恒等于活动总点数——分页不减少任何反序列化开销。
+ * 关注点：分片前 `getRecords(id, {limit:100})` 整行读出后 slice，解出点数恒等于
+ * 活动总点数；分片后应降到「一片」量级（`ACTIVITY_CHUNK_SIZE`）。
  *
- * @param db 数据库实例
  * @param repo 活动仓库
  * @param preset 规模档位
  */
@@ -279,16 +285,17 @@ async function benchDetail(
   ]
   report(`场景 B · 详情页按页读取（单活动 ${preset.detailPoints} 点）`, rows, bpp)
   console.log(`  口径：单点 JSON ≈ ${bpp.toFixed(1)} B（合成数据同构估算）`)
+  console.log(`  分片大小 = ${ACTIVITY_CHUNK_SIZE} 点/片；分页目标 = 只解出覆盖区间的片`)
 }
 
 /**
  * 批量扫描场景：热力图/路线图一次拉全部活动的逐点数据。
  *
- * 关注点：`getRecordsByActivityIds` 当前 bulkGet 全部整行 blob，
- * 解出点数 = 活动数 × 每活动点数，峰值内存即全部逐点数据。
- * 分片后理想值：解出点数 ≈ 片大小（按片流式迭代，同一时刻只驻留一片）。
+ * 关注点：`getRecordsByActivityIds` 的返回值是 Map<活动, 全量记录>，
+ * 因此**分片不能降低本场景的解出总量**（分片只降低单次调用的读取粒度）。
+ * 该场景的收益要从 P1-3（调用点改按片流式迭代）取，本项用于给出「未改调用点前」
+ * 的对照数字。
  *
- * @param db 数据库实例
  * @param repo 活动仓库
  * @param preset 规模档位
  */
@@ -310,13 +317,18 @@ async function benchScan(
     await measure(`getRecordsByActivityIds(全部 ${count} 个活动)`, () =>
       repo.getRecordsByActivityIds(ids),
     ),
+    await measure('对照：逐活动 getRecords（流式迭代的单活动粒度）', async () => {
+      for (const id of ids.slice(0, 20)) {
+        await repo.getRecords(id)
+      }
+    }),
   ]
   report(
     `场景 C · 批量扫描（${count} 活动 × ${preset.scanPointsPerActivity} 点）`,
     rows,
     bpp,
   )
-  console.log('  说明：该场景峰值内存 = 解出点数 × 单点开销；分片目标为「单片驻留」')
+  console.log('  说明：该场景峰值内存 = 解出点数 × 单点开销；P1-3 后应降到单活动/单片量级')
 }
 
 /** 导出路径的批大小（与 src/features/settings/exportImport.ts 的默认值一致） */
@@ -325,9 +337,10 @@ const EXPORT_RECORD_BATCH_SIZE = 10_000
 /**
  * 场景 D · 导出分批读取的放大倍数。
  *
- * 关注点：`exportImport.ts` 的 `iterateRecordBatches` 按 offset 递增、每批 1 万点读取，
- * 而 `getRecords` 每次调用都整行读出后 slice——于是 N 次调用解出 N 倍全量数据。
- * 这是「假分页」最恶劣的后果：不是不省，而是**放大**。
+ * 关注点：`exportImport.ts` 的 `iterateRecordBatches` 按 offset 递增、每批 1 万点读取。
+ * 分片前 `getRecords` 每次都整行读出后 slice，于是 N 次调用解出 N 倍全量数据——
+ * 这是「假分页」最恶劣的后果：不是不省，而是**放大**。分片后每批只解出覆盖该批的片，
+ * 放大倍数回落到片对齐带来的少量溢出（上限 = 片大小 / 批大小）。
  *
  * @param repo 活动仓库
  * @param preset 规模档位
@@ -368,7 +381,7 @@ async function benchExport(
   const amplification = snapshot.points / preset.detailPoints
   console.log(
     `  放大倍数 = 解出点数 / 全量点数 = ${snapshot.points} / ${preset.detailPoints}` +
-      ` = ${amplification.toFixed(2)}x（分片后目标 ≈ 1.0x）`,
+      ` = ${amplification.toFixed(2)}x（分片前实测 11.00x，目标 ≤1.2x）`,
   )
 }
 
@@ -392,26 +405,43 @@ async function main(): Promise<void> {
     meter.activityRows += 1
     return obj
   })
+  db.activity_chunks.hook('reading', (obj) => {
+    meter.chunkRows += 1
+    meter.points += obj?.records?.length ?? 0
+    return obj
+  })
+  // 迁移残留布局：正常应为 0，非 0 说明该库还没跑完分片迁移。
+  // 注：主键 get 未命中时 hook 会以 undefined 触发，需判空（否则脚本自身崩在这）
   db.activity_blobs.hook('reading', (obj) => {
-    meter.blobs += 1
+    if (obj === undefined) {
+      return obj
+    }
+    meter.blobRows += 1
     meter.points += obj.records?.length ?? 0
     return obj
   })
 
   // 清空遗留数据（同一 DB 名重复运行时保证起点一致）
-  await Promise.all([db.activities.clear(), db.activity_blobs.clear()])
+  const reset = async (): Promise<void> => {
+    await Promise.all([
+      db.activities.clear(),
+      db.activity_chunks.clear(),
+      db.activity_blobs.clear(),
+    ])
+  }
+  await reset()
 
   const repo = new DexieActivityRepository(db)
 
   await benchList(db, repo, preset)
 
-  await Promise.all([db.activities.clear(), db.activity_blobs.clear()])
+  await reset()
   await benchDetail(repo, preset)
 
-  await Promise.all([db.activities.clear(), db.activity_blobs.clear()])
+  await reset()
   await benchScan(repo, preset)
 
-  await Promise.all([db.activities.clear(), db.activity_blobs.clear()])
+  await reset()
   await benchExport(repo, preset)
 
   console.log('\n完成。数字解读见 docs/数据层重构方案.md §6。')

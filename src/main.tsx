@@ -9,6 +9,7 @@ import { initDataSource } from '@/stores/dataSourceStore'
 import { clearLegacyMapModeMemory } from '@/map/tileSources'
 import { negotiateTileCacheLimits } from '@/storage/tileCache'
 import { backfillLocalDates } from '@/storage/localDateBackfill'
+import { runChunksMigration } from '@/storage/chunksMigration'
 import { db } from '@/storage/db'
 import { installErrorLogging } from '@/features/logging/errorLog'
 import '@/index.css'
@@ -60,6 +61,13 @@ void initCyclingScope()
 // v8 存量数据回填：给缺少 localDate 的活动补上本地日期键并落就绪标志
 // （只补一次；未就绪时列表查询自动回退全量路径，不影响可用性）
 void backfillLocalDates(db)
+
+// v9 存量数据搬迁：把逐点数据从「每活动一行」换成分片（按区间只读需要的片）。
+// 纯后台行为，读取路径同时兼容新旧两种布局，因此无横幅、不需要完成后刷新；
+// 上一层（v4 逐点行 → v5 整活动行）仍在跑时本层自动让路，下次启动再续
+void runChunksMigration(db).catch((error: unknown) => {
+  console.error('Failed to run chunks migration', error)
+})
 
 // 启动时探测作者数据快照（manifest.json）：成功则默认展示作者数据，
 // 失败（本地 dev 未生成快照等）静默回退本地数据源

@@ -1,8 +1,12 @@
 /**
- * 活动仓库（activities + activity_records 表，规格 §18）。
+ * 活动仓库（activities + activity_chunks 表，规格 §18）。
  *
  * 职责：活动摘要与逐点数据的增删查、列表查询（排序/分页/筛选/搜索）、
  * 时间范围统计聚合。重复检测通过 fingerprint 唯一索引 + existsByFingerprint 完成。
+ *
+ * 逐点数据的存储布局由本模块内部封装（v9 起为 activity_chunks 分片；v5~v8 的
+ * activity_blobs 整活动行与更早的 activity_records 逐点行表仅作迁移兜底读取）。
+ * 对外契约始终是 `ActivityRecord[]`——布局变化不溢出到调用方。
  *
  * 说明：筛选与排序的**语义**始终由内存纯函数 `queryActivityList` 定义（作为
  * 最终一致性基准 / oracle），索引只负责缩小候选集：无筛选的按时间分页走
@@ -10,7 +14,13 @@
  * 一律内存精筛——这样「走不走索引」只影响性能，不影响结果。
  */
 import type { Activity, ActivityRecord } from '@/types/activity';
-import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
+import type {
+  ActivityChunkEntity,
+  ActivityEntity,
+  ActivityRecordEntity,
+  CyclingDatabase,
+} from '@/storage/db';
+import { chunkSeqRange, sliceChunks, toChunkEntities } from '@/storage/activityChunks';
 import { clearSegmentScanState, pruneSegmentScanState } from '@/storage/segmentScanState';
 import { isLocalDateIndexReady } from '@/storage/localDateBackfill';
 import { localDateKeyFromIso } from '@/utils/format';
@@ -176,8 +186,12 @@ export interface ActivityReadRepository {
   /**
    * 查询活动的逐点记录（分页可选，Phase 6 详情页按需加载）。
    *
+   * 分页是**真分页**：v9 起逐点数据分片存放，实现只解出覆盖目标区间的片。
+   * 调用方无需感知布局，但需注意 `offset` 过大时索引游标仍要遍历前置条目
+   * （解出的对象数不变，只是遍历时间略增）。
+   *
    * @param activityId 活动 ID
-   * @param options 分页选项
+   * @param options 分页选项（limit 为 0 或省略 = 取全部）
    * @returns 逐点记录（按存储序返回）
    */
   getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]>;
@@ -187,6 +201,10 @@ export interface ActivityReadRepository {
    *
    * 单次索引查询替代逐活动串行 getRecords（N 次 IndexedDB 事务 → 1 次），
    * 本地数据量增长时避免首次进入扫描页明显变慢。
+   *
+   * ⚠️ 返回值是**全量**记录：调用方的峰值内存约为「所有活动逐点数据之和」。
+   * 千级活动 × 万级点数的场景应改用分批流式读取（见 P1-3），本方法保留给
+   * 小规模或确定性已知的场景。Map 的迭代序 = 入参 id 的顺序。
    *
    * @param activityIds 活动 ID 列表（空列表返回空 Map）
    * @returns 活动ID → 逐点记录 分组映射
@@ -674,14 +692,18 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async addActivity(activity: Activity, name?: string, file?: ActivityFileRecord): Promise<void> {
     const entity = toActivityEntity(activity, name);
-    const blob = toBlobEntity(activity);
+    const chunks = toChunkEntities(activity.id, activity.records ?? []);
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.files],
+      [this.db.activities, this.db.activity_chunks, this.db.files],
       async () => {
         await this.db.activities.add(entity);
-        // 逐点数据整活动一行（v5）：写 1 行大 value，替代旧逐点 bulkAdd
-        await this.db.activity_blobs.put(blob);
+        // 逐点数据按片写入（v9）：读取时可按区间只取需要的片。
+        // 无记录的活动不写任何片——读取路径对「无片」会依次回退到旧表，
+        // 最终语义同样是空数组，不必写占位行
+        if (chunks.length > 0) {
+          await this.db.activity_chunks.bulkPut(chunks);
+        }
         // 台账同事务：与摘要同生同灭，避免「活动在、台账不在」的孤儿状态
         if (file !== undefined) {
           await this.db.files.put({
@@ -700,18 +722,17 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async addActivities(activities: Activity[]): Promise<void> {
     const entities = activities.map((activity) => toActivityEntity(activity));
-    const blobs = activities.map(toBlobEntity);
-    await this.db.transaction(
-      'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
-      async () => {
-        if (entities.length > 0) {
-          await this.db.activities.bulkAdd(entities);
-        }
-        // 每活动一行 put：导入写库从 N 行变 N 条大 value（实测快约 400 倍）
-        await this.db.activity_blobs.bulkPut(blobs);
-      },
+    const chunks = activities.flatMap((activity) =>
+      toChunkEntities(activity.id, activity.records ?? []),
     );
+    await this.db.transaction('rw', [this.db.activities, this.db.activity_chunks], async () => {
+      if (entities.length > 0) {
+        await this.db.activities.bulkAdd(entities);
+      }
+      if (chunks.length > 0) {
+        await this.db.activity_chunks.bulkPut(chunks);
+      }
+    });
   }
 
   async getById(id: string): Promise<ActivitySummary | undefined> {
@@ -738,20 +759,31 @@ export class DexieActivityRepository implements ActivityRepository {
 
   async getRecords(activityId: string, options?: RecordQueryOptions): Promise<ActivityRecord[]> {
     const { offset = 0, limit = 0 } = options ?? {};
-    // v5 主路径：整活动一行，主键 get 即取全部点
+    // v9 主路径：按 [activityId+seq] 复合主键做范围查询，只解出覆盖目标区间的片。
+    // 旧实现（v5 整活动一行）取 100 点也要把全部点解出来：实测 10 万点活动
+    // 一次 get 就是 15.4MB 的结构化克隆，按批读取时还会成倍放大
+    const { startSeq, endSeq } = chunkSeqRange(offset, limit);
+    const chunks = await this.db.activity_chunks
+      .where('[activityId+seq]')
+      .between([activityId, startSeq], [activityId, endSeq], true, true)
+      .toArray();
+    if (chunks.length > 0) {
+      return sliceChunks(chunks, offset, limit);
+    }
+    // 迁移兜底 ①：v5~v8 的整活动行仍在（后台分片迁移尚未跑到该活动）
     const blob = await this.db.activity_blobs.get(activityId);
     if (blob !== undefined) {
       return blob.records.slice(offset, limit > 0 ? offset + limit : undefined);
     }
-    // 迁移兜底：旧逐点行表仍有数据（后台迁移未完成），按旧路径读并回填新表，
-    // 让迁移任务与读取路径双向收敛。旧表无数据时不回填（防已删除活动留孤儿空行，
-    // 无 records 的活动由迁移任务补空行）
+    // 迁移兜底 ②：更早的 v4 逐点行表（v4→v5 迁移也未完成）。读到后按**当前**布局
+    // 回填分片，让迁移任务与读取路径双向收敛。旧表无数据时不回填（防已删除活动留孤儿行，
+    // 真无逐点数据由迁移任务负责推进，不由读路径造行）
     const legacy = await this.db.activity_records.where('activityId').equals(activityId).toArray();
     if (legacy.length === 0) {
       return [];
     }
     const records: ActivityRecord[] = legacy.map(stripEntityToRecord);
-    await this.db.activity_blobs.put({ activityId, records });
+    await this.backfillChunks(activityId, records);
     return records.slice(offset, limit > 0 ? offset + limit : undefined);
   }
 
@@ -762,47 +794,105 @@ export class DexieActivityRepository implements ActivityRepository {
     if (activityIds.length === 0) {
       return grouped;
     }
+    // 先按入参顺序建键：Map 迭代序 = 入参序，调用方依赖这一点做稳定的输出顺序
+    // （成绩榜同用时长的并列名次、路线绘制层级都取决于活动顺序）
     for (const id of activityIds) {
       grouped.set(id, []);
     }
-    // v5 主路径：主键批量取整活动行（一次事务）
-    const blobs = await this.db.activity_blobs.bulkGet([...activityIds]);
-    const missing: string[] = [];
-    blobs.forEach((blob, index) => {
-      const id = activityIds[index];
-      if (blob !== undefined) {
-        grouped.set(id, blob.records);
-      } else {
-        missing.push(id);
+
+    // v9 主路径：单次 activityId 索引查询取回全部相关分片
+    const found = new Set<string>();
+    const chunks = await this.db.activity_chunks
+      .where('activityId')
+      .anyOf([...activityIds])
+      .toArray();
+    if (chunks.length > 0) {
+      const byActivity = new Map<string, ActivityChunkEntity[]>();
+      for (const chunk of chunks) {
+        found.add(chunk.activityId);
+        const bucket = byActivity.get(chunk.activityId);
+        if (bucket === undefined) {
+          byActivity.set(chunk.activityId, [chunk]);
+        } else {
+          bucket.push(chunk);
+        }
       }
-    });
-    if (missing.length === 0) {
+      for (const [id, list] of byActivity) {
+        // 索引同键下按主键序返回（即片序升序），这里显式排序以免依赖实现细节
+        list.sort((a, b) => a.seq - b.seq);
+        const target = grouped.get(id);
+        if (target === undefined) {
+          continue;
+        }
+        for (const chunk of list) {
+          for (const record of chunk.records) {
+            target.push(record);
+          }
+        }
+      }
+    }
+
+    // 迁移兜底 ①：未命中的活动从 v5 整活动行取（单次批量事务）
+    const remaining = activityIds.filter((id) => !found.has(id));
+    if (remaining.length === 0) {
       return grouped;
     }
-    // 迁移兜底：未迁移的活动从旧逐点行表聚合（单次 anyOf 索引查询）并回填新表
-    const legacy = await this.db.activity_records
-      .where('activityId')
-      .anyOf(missing)
-      .toArray();
-    for (const id of missing) {
-      grouped.set(id, []);
+    const blobs = await this.db.activity_blobs.bulkGet([...remaining]);
+    const stillMissing: string[] = [];
+    blobs.forEach((blob, index) => {
+      const id = remaining[index];
+      if (blob === undefined) {
+        stillMissing.push(id);
+      } else {
+        grouped.set(id, [...blob.records]);
+      }
+    });
+    if (stillMissing.length === 0) {
+      return grouped;
     }
-    for (const record of legacy) {
-      const bucket = grouped.get(record.activityId);
-      if (bucket !== undefined) {
-        bucket.push(stripEntityToRecord(record));
+
+    // 迁移兜底 ②：仍未命中的从 v4 逐点行表聚合（单次 anyOf 索引查询）并按当前布局回填
+    const legacy = await this.db.activity_records.where('activityId').anyOf(stillMissing).toArray();
+    const legacyByActivity = new Map<string, ActivityRecord[]>();
+    for (const entity of legacy) {
+      const bucket = legacyByActivity.get(entity.activityId);
+      if (bucket === undefined) {
+        legacyByActivity.set(entity.activityId, [stripEntityToRecord(entity)]);
+      } else {
+        bucket.push(stripEntityToRecord(entity));
       }
     }
-    const backfill = missing
-      .map((id) => ({
-        activityId: id,
-        records: grouped.get(id) ?? [],
-      }))
-      .filter((blob) => blob.records.length > 0);
+    const backfill: ActivityChunkEntity[] = [];
+    for (const id of stillMissing) {
+      const records = legacyByActivity.get(id) ?? [];
+      grouped.set(id, records);
+      // 空记录不回填（防已删除活动留孤儿空行）
+      if (records.length > 0) {
+        backfill.push(...toChunkEntities(id, records));
+      }
+    }
     if (backfill.length > 0) {
-      await this.db.activity_blobs.bulkPut(backfill);
+      await this.db.activity_chunks.bulkPut(backfill);
     }
     return grouped;
+  }
+
+  /**
+   * 把逐点记录按当前布局（v9 分片）回填，供读取兜底路径收敛用。
+   *
+   * 空记录不写：写 0 片与不写等价，而留下孤儿行会让后续判断复杂化。
+   *
+   * @param activityId 活动 ID
+   * @param records 逐点记录
+   */
+  private async backfillChunks(
+    activityId: string,
+    records: readonly ActivityRecord[],
+  ): Promise<void> {
+    const chunks = toChunkEntities(activityId, records);
+    if (chunks.length > 0) {
+      await this.db.activity_chunks.bulkPut(chunks);
+    }
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {
@@ -939,10 +1029,26 @@ export class DexieActivityRepository implements ActivityRepository {
     }
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.segment_efforts],
+      [
+        this.db.activities,
+        this.db.activity_chunks,
+        this.db.activity_blobs,
+        this.db.activity_records,
+        this.db.segment_efforts,
+      ],
       async () => {
-        // v5 主路径：两个主键表 bulkDelete，每活动各删 1 行，毫秒级
         await this.db.activities.bulkDelete([...ids]);
+        // v9 主路径：分片按 activityId 索引取主键再批量删。IndexedDB 没有
+        // 「按索引范围删除」的 API，必须两趟（先取键、再 bulkDelete）——
+        // 直接 delete(activityId) 会退化成逐行 modify，失去批量语义
+        const chunkKeys = await this.db.activity_chunks
+          .where('activityId')
+          .anyOf([...ids])
+          .primaryKeys();
+        if (chunkKeys.length > 0) {
+          await this.db.activity_chunks.bulkDelete(chunkKeys);
+        }
+        // 迁移兜底 ①：v5~v8 的整活动行（每活动 1 行主键删除）
         await this.db.activity_blobs.bulkDelete([...ids]);
         // 赛段成绩级联清理（v6）：活动没了成绩无意义，按 activityId 索引删除
         const effortIds = await this.db.segment_efforts
@@ -952,7 +1058,7 @@ export class DexieActivityRepository implements ActivityRepository {
         if (effortIds.length > 0) {
           await this.db.segment_efforts.bulkDelete(effortIds);
         }
-        // 迁移兜底：旧逐点行表残留数据一并清理（迁移完成后此表为空，空操作）。
+        // 迁移兜底 ②：更早的 v4 逐点行表残留数据一并清理（迁移完成后此表为空，空操作）。
         // 先取主键再 bulkDelete，跳过 Dexie 二级索引 delete() 的 modify 回退
         const legacyKeys = await this.db.activity_records
           .where('activityId')
@@ -973,9 +1079,16 @@ export class DexieActivityRepository implements ActivityRepository {
   async deleteAll(): Promise<void> {
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.segment_efforts],
+      [
+        this.db.activities,
+        this.db.activity_chunks,
+        this.db.activity_blobs,
+        this.db.activity_records,
+        this.db.segment_efforts,
+      ],
       async () => {
         await this.db.activities.clear();
+        await this.db.activity_chunks.clear();
         await this.db.activity_blobs.clear();
         await this.db.activity_records.clear();
         // 赛段成绩一并清空（本地活动全没了，成绩自然不成立；赛段定义保留）
@@ -1123,28 +1236,6 @@ export function readRouteEndpoints(summary: ActivityEntity): RouteEndpoints | un
     start: { latitude: routeStartLatitude, longitude: routeStartLongitude },
     end: { latitude: routeEndLatitude, longitude: routeEndLongitude },
   };
-}
-
-/**
- * 将领域 Activity 的逐点记录转换为整活动一行实体（v5 activity_blobs）。
- * 仅保留规格 §18 字段清单的字段，grade 暂不落库。
- *
- * @param activity 领域活动
- */
-function toBlobEntity(activity: Activity): ActivityBlobEntity {
-  const records: ActivityRecord[] = (activity.records ?? []).map((record) => ({
-    timestamp: record.timestamp,
-    latitude: record.latitude,
-    longitude: record.longitude,
-    altitude: record.altitude,
-    distance: record.distance,
-    speed: record.speed,
-    heartRate: record.heartRate,
-    cadence: record.cadence,
-    power: record.power,
-    temperature: record.temperature,
-  }));
-  return { activityId: activity.id, records };
 }
 
 /**

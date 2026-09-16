@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.92.0',
+    date: '2026-09-16',
+    features: [
+      '逐点数据改分片存储：详情页按需读取，导出与分批读取不再重复解码',
+      '本地数据自动整理：老数据在后台分批换入新布局，期间可正常使用',
+    ],
+  },
+  {
     version: '2.91.2',
     date: '2026-09-16',
     features: [

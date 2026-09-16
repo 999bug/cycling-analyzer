@@ -31,7 +31,11 @@ const EMPTY_GUIDE = /还没有可展示的骑行轨迹/
 beforeEach(async () => {
   // 清空各表而非删除数据库：vi.mock 共享单实例，delete() 后实例不可复用
   await testDb.activities.clear()
+  // 逐点数据三种布局全部清理：v9 分片是当前主存储，blobs 与旧逐点行表是迁移残留，
+  // 只清其一会让上一条用例的数据从兜底路径漏进来
   await testDb.activity_records.clear()
+  await testDb.activity_blobs.clear()
+  await testDb.activity_chunks.clear()
   await testDb.scan_cache.clear()
   // 数据源复位：默认有效源为本地
   localStorage.clear()
