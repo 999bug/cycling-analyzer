@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "build:author-data": "tsx --tsconfig tsconfig.scripts.json scripts/build-author-data.ts",
     "check:replay": "tsx --tsconfig tsconfig.scripts.json scripts/check-replay-timeline.ts",
+    "bench:data-layer": "tsx --tsconfig tsconfig.scripts.json scripts/bench-data-layer.ts",
     "check": "node scripts/fast-check.mjs",
     "check:full": "node scripts/fast-check.mjs --full",
     "lint": "eslint .",
