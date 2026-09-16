@@ -9,6 +9,7 @@ import InstallBanner from '@/components/InstallBanner'
 import UpdateBanner from '@/components/UpdateBanner'
 import MigrationBanner from '@/components/MigrationBanner'
 import FeedbackButton from '@/components/FeedbackButton'
+import { RouteBoundary } from '@/components/SectionBoundary'
 import { switchSidebarMode } from '@/features/settings/sidebar'
 import { NAV_ITEMS, TAB_ITEMS } from '@/layouts/navItems'
 import { useUiStore } from '@/stores/uiStore'
@@ -311,7 +312,11 @@ function AppLayout() {
       <main id="main-content" className="app-layout__content" tabIndex={-1}>
         <AuthorBanner />
         <AuthorHiddenNotice />
-        <Outlet />
+        {/* 路由级错误边界：页面渲染失败只降级内容区，侧边栏/顶栏/TabBar 仍可用
+            （此前只有最外层全屏边界，单个图表报错会把整页变成「页面出错了」） */}
+        <RouteBoundary>
+          <Outlet />
+        </RouteBoundary>
       </main>
 
       {/* 移动端底部 TabBar（≤768px 显示）：高频页直达，「更多」打开抽屉收纳全部页面 */}

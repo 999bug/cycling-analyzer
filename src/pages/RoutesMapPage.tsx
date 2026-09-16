@@ -44,6 +44,7 @@ import {
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { SectionBoundary } from '@/components/SectionBoundary'
 import { formatDistance } from '@/utils/format'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
@@ -428,31 +429,34 @@ function RoutesMapPage() {
         >
           {/* 主列：地图 +（我的路线：统计格 / 热门路线：地区 chips + 卡片网格） */}
           <div className="routes-map-page__primary">
-            <div className="routes-map-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
-              <MapContainer
-                className="routes-map-page__map"
-                center={visibleTracks[0]?.[0] ?? [31.2, 121.5]}
-                zoom={12}
-                scrollWheelZoom
-              >
-                <FallbackTileLayer
-                  sourceIndex={sourceIndex}
-                  mapMode={mapMode}
-                  onFallback={handleFallback}
+            {/* 地图区块独立兜底：地图异常不影响右侧列表/筛选区 */}
+            <SectionBoundary scope="路线图地图" title="地图渲染失败" description="路线数据已加载，但地图组件出错。重试通常可恢复。">
+              <div className="routes-map-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
+                <MapContainer
+                  className="routes-map-page__map"
+                  center={visibleTracks[0]?.[0] ?? [31.2, 121.5]}
+                  zoom={12}
+                  scrollWheelZoom
+                >
+                  <FallbackTileLayer
+                    sourceIndex={sourceIndex}
+                    mapMode={mapMode}
+                    onFallback={handleFallback}
+                  />
+                  {displayRoutes.map(renderRoutePolylines)}
+                  <FitAllBounds tracks={visibleTracks} />
+                  <ResizeSync targetRef={wrapperRef} />
+                  <FullscreenSync />
+                  <ZoomControlBottomRight />
+                </MapContainer>
+                <MapFullscreenButton targetRef={wrapperRef} />
+                <MapModeSwitcher
+                  value={mapMode}
+                  onChange={setMapMode}
+                  enabled={isGcjSource(sourceIndex)}
                 />
-                {displayRoutes.map(renderRoutePolylines)}
-                <FitAllBounds tracks={visibleTracks} />
-                <ResizeSync targetRef={wrapperRef} />
-                <FullscreenSync />
-                <ZoomControlBottomRight />
-              </MapContainer>
-              <MapFullscreenButton targetRef={wrapperRef} />
-              <MapModeSwitcher
-                value={mapMode}
-                onChange={setMapMode}
-                enabled={isGcjSource(sourceIndex)}
-              />
-            </div>
+              </div>
+            </SectionBoundary>
             {tab === 'mine' && (
               <div className="routes-map-page__stats">
                 <span className="routes-map-page__stat">

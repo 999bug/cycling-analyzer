@@ -31,6 +31,7 @@ import {
   ZoomControlBottomRight,
 } from '@/map/mapFullscreen'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
+import { SectionBoundary } from '@/components/SectionBoundary'
 import { selectEffectiveSource, useDataSourceStore } from '@/stores/dataSourceStore'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
 import { listCyclingSummaries } from '@/features/activity/cyclingScope'
@@ -228,35 +229,38 @@ function HeatmapPage() {
             共 {tracks.length} 条轨迹，已探索 {coverage.cellCount} 个 1km 网格（约{' '}
             {coverage.areaKm2} km²），骑得越多的路段颜色越深
           </p>
-          <div className="heatmap-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
-            <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
-              <FallbackTileLayer
-                sourceIndex={sourceIndex}
-                mapMode={mapMode}
-                onFallback={handleFallback}
-              />
-              {displayTracks.map((track, index) => (
-                <Polyline
-                  key={index}
-                  positions={track}
-                  pathOptions={{
-                    color: isSatellite ? TRACK_COLOR_SATELLITE : TRACK_COLOR,
-                    weight: TRACK_WEIGHT,
-                    opacity: isSatellite ? TRACK_OPACITY_SATELLITE : TRACK_OPACITY,
-                  }}
+          {/* 地图区块独立兜底：Leaflet 渲染/瓦片异常只降级这块，页面标题与摘要仍在 */}
+          <SectionBoundary scope="热力图地图" title="地图渲染失败" description="轨迹数据已加载，但地图组件出错。重试通常可恢复。">
+            <div className="heatmap-page__map-wrapper map-fullscreen-wrapper" ref={wrapperRef}>
+              <MapContainer className="heatmap-page__map" center={tracks[0][0]} zoom={12} scrollWheelZoom>
+                <FallbackTileLayer
+                  sourceIndex={sourceIndex}
+                  mapMode={mapMode}
+                  onFallback={handleFallback}
                 />
-              ))}
-              <FitAllBounds tracks={displayTracks} />
-              <FullscreenSync />
-              <ZoomControlBottomRight />
-            </MapContainer>
-            <MapFullscreenButton targetRef={wrapperRef} />
-            <MapModeSwitcher
-              value={mapMode}
-              onChange={setMapMode}
-              enabled={isGcjSource(sourceIndex)}
-            />
-          </div>
+                {displayTracks.map((track, index) => (
+                  <Polyline
+                    key={index}
+                    positions={track}
+                    pathOptions={{
+                      color: isSatellite ? TRACK_COLOR_SATELLITE : TRACK_COLOR,
+                      weight: TRACK_WEIGHT,
+                      opacity: isSatellite ? TRACK_OPACITY_SATELLITE : TRACK_OPACITY,
+                    }}
+                  />
+                ))}
+                <FitAllBounds tracks={displayTracks} />
+                <FullscreenSync />
+                <ZoomControlBottomRight />
+              </MapContainer>
+              <MapFullscreenButton targetRef={wrapperRef} />
+              <MapModeSwitcher
+                value={mapMode}
+                onChange={setMapMode}
+                enabled={isGcjSource(sourceIndex)}
+              />
+            </div>
+          </SectionBoundary>
         </>
       )}
     </div>

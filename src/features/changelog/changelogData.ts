@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.91.1',
+    date: '2026-09-16',
+    features: [
+      '单个图表/地图出错时不再让整页变成错误页：只有出问题的区域显示提示并可单独重试，侧边栏和其它内容继续可用',
+      '页面内容出错后切换到其它页面会自动恢复，不必刷新整个网站',
+    ],
+  },
+  {
     version: '2.91.0',
     date: '2026-09-16',
     features: [

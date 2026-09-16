@@ -70,3 +70,49 @@
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* ===== 区块级（variant="section"）=====
+ * 不遮挡页面其余部分：去掉 fixed 全屏与遮罩背景，卡片内联在内容流里，
+ * 「重试 / 刷新页面」并排。此前的单一全屏降级会让单个图表报错
+ * 把整页（含侧边栏）都变成错误页。 */
+.error-boundary--section {
+  position: static;
+  inset: auto;
+  display: block;
+  padding: 0;
+  background-color: transparent;
+  z-index: auto;
+}
+
+.error-boundary--section .error-boundary__card {
+  max-width: none;
+  padding: var(--space-lg);
+  text-align: left;
+}
+
+.error-boundary--section .error-boundary__title {
+  margin-bottom: var(--space-sm);
+  font-size: 1.05rem;
+}
+
+.error-boundary--section .error-boundary__message {
+  margin-bottom: var(--space-md);
+}
+
+.error-boundary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.error-boundary__action--secondary {
+  color: var(--text-secondary);
+  background-color: transparent;
+  border-color: var(--border);
+}
+
+.error-boundary__action--secondary:hover {
+  color: var(--text);
+  background-color: var(--bg-elevated);
+}
+
