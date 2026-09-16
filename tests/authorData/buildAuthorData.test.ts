@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile, copyFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gzipSync } from 'fflate'
 import { buildAuthorData } from '../../scripts/buildAuthorData'
 import type { AuthorSnapshotManifest, TracksFile } from '@/storage/authorData/snapshotTypes'
@@ -70,7 +70,7 @@ describe('buildAuthorData', () => {
     layout = await setupTemp({ 'ride.fit': 'cycling-gps.fit' })
     const stats = await buildAuthorData({ fitDir: layout.fitDir, outDir: layout.outDir, author: AUTHOR })
 
-    expect(stats).toEqual({ files: 1, parsed: 1, duplicates: 0 })
+    expect(stats).toEqual({ files: 1, parsed: 1, duplicates: 0, skipped: [] })
 
     const manifest = await readOutJson<AuthorSnapshotManifest>(layout.outDir, 'manifest.json')
     expect(manifest.snapshotVersion).toBe(1)
@@ -102,7 +102,7 @@ describe('buildAuthorData', () => {
       'b.fit': 'cycling-gps.fit',
     })
     const stats = await buildAuthorData({ fitDir: layout.fitDir, outDir: layout.outDir, author: AUTHOR })
-    expect(stats).toEqual({ files: 2, parsed: 1, duplicates: 1 })
+    expect(stats).toEqual({ files: 2, parsed: 1, duplicates: 1, skipped: [] })
 
     const manifest = await readOutJson<AuthorSnapshotManifest>(layout.outDir, 'manifest.json')
     expect(manifest.activityCount).toBe(1)
@@ -202,14 +202,69 @@ describe('buildAuthorData', () => {
     expect(Array.isArray(routeGroups)).toBe(true)
   })
 
-  it('任一文件解析失败即抛错（fail-fast，不静默少数据）', async () => {
+  it('onParseError=fail 时任一文件解析失败即抛错（严格模式）', async () => {
     layout = await setupTemp({ 'bad.fit': 'cycling-gps.fit' })
     // 破坏内容：截断文件使其无法通过 FIT 校验
     const broken = readFixtureBytes('cycling-gps.fit').slice(0, 20)
     await writeFile(join(layout.fitDir, 'bad.fit'), new Uint8Array(broken))
 
     await expect(
-      buildAuthorData({ fitDir: layout.fitDir, outDir: layout.outDir, author: AUTHOR }),
+      buildAuthorData({
+        fitDir: layout.fitDir,
+        outDir: layout.outDir,
+        author: AUTHOR,
+        onParseError: 'fail',
+      }),
     ).rejects.toThrow(/bad\.fit/)
+  })
+
+  it('默认跳过坏文件并告警，好文件照常入库（坏文件不阻塞整站发布）', async () => {
+    layout = await setupTemp({ 'good.fit': 'cycling-gps.fit', 'bad.fit': 'power-only.fit' })
+    const broken = readFixtureBytes('power-only.fit').slice(0, 20)
+    await writeFile(join(layout.fitDir, 'bad.fit'), new Uint8Array(broken))
+
+    const stats = await buildAuthorData({
+      fitDir: layout.fitDir,
+      outDir: layout.outDir,
+      author: AUTHOR,
+    })
+
+    expect(stats.files).toBe(2)
+    expect(stats.parsed).toBe(1)
+    // 跳过必须留痕：文件名与原因都要能追到
+    expect(stats.skipped).toHaveLength(1)
+    expect(stats.skipped[0].file).toBe('bad.fit')
+    expect(stats.skipped[0].reason.length).toBeGreaterThan(0)
+
+    // 快照仍然产出且可用，坏文件不写入任何 records
+    const manifest = await readOutJson<AuthorSnapshotManifest>(layout.outDir, 'manifest.json')
+    expect(manifest.activityCount).toBe(1)
+  })
+
+  it('全部文件都解析失败时抛错（不发布空快照）', async () => {
+    layout = await setupTemp({ 'bad.fit': 'cycling-gps.fit' })
+    const broken = readFixtureBytes('cycling-gps.fit').slice(0, 20)
+    await writeFile(join(layout.fitDir, 'bad.fit'), new Uint8Array(broken))
+
+    // 一个都没成功 = 环境/格式层面出了问题，此时发布空快照会让线上作者模式整个消失
+    await expect(
+      buildAuthorData({ fitDir: layout.fitDir, outDir: layout.outDir, author: AUTHOR }),
+    ).rejects.toThrow(/No author activity could be parsed/)
+  })
+
+  it('skip 模式下 segments.json 缺失也要告警（不允许静默少产物）', async () => {
+    layout = await setupTemp({ 'ride.fit': 'cycling-gps.fit' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await buildAuthorData({
+        fitDir: layout.fitDir,
+        outDir: layout.outDir,
+        author: AUTHOR,
+        segmentsPath: join(layout.root, 'not-exists.json'),
+      })
+      expect(warn.mock.calls.flat().join('\n')).toMatch(/赛段定义文件不存在/)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

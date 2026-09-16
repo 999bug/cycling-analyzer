@@ -6,8 +6,13 @@
  *
  * 设计要点：
  * - 活动 ID = 文件内容指纹（确定性）：重复构建 ID 不变，详情页深链跨部署存活
- * - 任一文件解析失败即抛错（fail-fast），由 CLI 入口转 exit 1，不静默少数据
+ * - 解析失败默认**跳过并告警**（`onParseError: 'skip'`）：单个坏文件不应让整站发不出去，
+ *   但必须留下日志与 CI 注解，不允许静默少数据；本地排查可传 'fail' 走 fail-fast
  * - 解析完全复用 src 的浏览器侧纯函数（fflate/@garmin/fitsdk 均跨环境）
+ *
+ * 不做增量构建的理由（2026-09-16 实测）：全量构建 87 个 FIT / 12MB 输入只需 **7.0s**，
+ * 而缓存 157MB 产物在 CI 上的上传/下载时间显著超过重建成本，纯属负优化。
+ * 数据量再涨一个数量级（~900 个活动、~70s）时重新评估。
  */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
@@ -71,6 +76,34 @@ export interface BuildAuthorDataOptions {
 
   /** 可选：作者赛段定义 JSON 路径（透传 + 预计算成绩榜） */
   segmentsPath?: string
+
+  /**
+   * 解析失败策略。
+   *
+   * 缺省 `'skip'`：跳过坏文件并**大声**告警，构建继续完成。
+   * 理由：单个坏 FIT 让整站发不出去，代价远大于「少一条活动」——站点会一直停在
+   * 上一版，作者的新内容全部上不去。但跳过的文件必须有痕迹（日志 + CI 注解），
+   * 否则就成了「静默少数据」，那是本脚本明确要避免的失败模式。
+   *
+   * `'fail'`：立即抛错。本地排查坏文件、或需要保证快照完整性时使用。
+   */
+  onParseError?: ParseFailureStrategy
+}
+
+/** 解析失败策略 */
+export type ParseFailureStrategy =
+  /** 跳过并告警（默认） */
+  | 'skip'
+  /** 立即抛错（fail-fast） */
+  | 'fail'
+
+/** 被跳过的 FIT 文件 */
+export interface SkippedFitFile {
+  /** 相对 fitDir 的路径 */
+  file: string
+
+  /** 失败原因（解析器给出的错误消息） */
+  reason: string
 }
 
 /** 快照构建统计 */
@@ -83,6 +116,9 @@ export interface BuildAuthorDataStats {
 
   /** 因内容指纹重复跳过的文件数 */
   duplicates: number
+
+  /** 解析失败被跳过的文件（onParseError='skip' 时可能非空） */
+  skipped: readonly SkippedFitFile[]
 }
 
 /** 热力图轨迹抽稀阈值（米）：与 HeatmapPage 本地口径一致 */
@@ -103,11 +139,13 @@ const TRACK_COORDINATE_DECIMALS = 5
  */
 export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<BuildAuthorDataStats> {
   const { fitDir, outDir, author } = options
+  const strategy: ParseFailureStrategy = options.onParseError ?? 'skip'
   const files = await scanFitFiles(fitDir)
   const metas = await loadMetaLookup(options.csvPath)
 
   const seen = new Set<string>()
   const activities: Array<{ summary: ActivitySummary; records: ActivityRecord[] }> = []
+  const skipped: SkippedFitFile[] = []
   let duplicates = 0
 
   for (const file of files) {
@@ -127,7 +165,12 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
       activity = parseFitBytes({ fileName: file.name, bytes: content, fingerprint })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      throw new Error(`Failed to parse author FIT file ${file.relPath}: ${reason}`, { cause: error })
+      if (strategy === 'fail') {
+        throw new Error(`Failed to parse author FIT file ${file.relPath}: ${reason}`, { cause: error })
+      }
+      skipped.push({ file: file.relPath, reason })
+      emitWarning(`跳过无法解析的 FIT 文件 ${file.relPath}：${reason}`)
+      continue
     }
     // 确定性 ID = 内容指纹（覆盖 parseFitBytes 的随机 UUID），重建深链不变
     const normalizedPower = calculateNormalizedPower(activity.records ?? [])
@@ -147,6 +190,14 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
   }
 
   activities.sort((a, b) => b.summary.startTime.localeCompare(a.summary.startTime))
+
+  // 全军覆没时不要发布空快照：那会让线上的作者模式整个消失，比「少几条」严重得多。
+  // 一个都没解析成功，说明环境/格式层面出了问题，应当中止
+  if (files.length > 0 && activities.length === 0) {
+    throw new Error(
+      `No author activity could be parsed (${files.length} files scanned, ${skipped.length} failed)`,
+    )
+  }
 
   await mkdir(join(outDir, 'records'), { recursive: true })
   await mkdir(join(outDir, 'precomputed'), { recursive: true })
@@ -168,7 +219,25 @@ export async function buildAuthorData(options: BuildAuthorDataOptions): Promise<
   await writeSegments(outDir, options.segmentsPath, activities)
   await writePrecomputed(outDir, activities)
 
-  return { files: files.length, parsed: activities.length, duplicates }
+  return { files: files.length, parsed: activities.length, duplicates, skipped }
+}
+
+/**
+ * 输出告警。
+ *
+ * 在 GitHub Actions 下额外发一条 workflow command 注解：跳过的文件必须出现在
+ * 运行页顶部，而不是被上千行构建日志淹没——P2 把「坏文件阻塞发布」改成
+ * 「跳过并继续」的代价就是必须让跳过足够显眼。
+ *
+ * @param message 告警文本
+ */
+function emitWarning(message: string): void {
+  console.warn(`[author-data] ${message}`)
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    // workflow command 需转义 %、CR、LF，否则注解会被截断
+    const escaped = message.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')
+    console.log(`::warning title=author-data::${escaped}`)
+  }
 }
 
 /** 扫描到的单个 FIT 文件 */
@@ -326,8 +395,8 @@ async function writeSegments(
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       // 缺失必须留下痕迹：静默 return 会让「产物没生成」与「本来就没有赛段数据」
-      // 在前端表现完全一致，与本脚本其它环节的 fail-fast 口径不一致
-      console.warn(`[author-data] 赛段定义文件不存在，跳过赛段与成绩榜产物：${segmentsPath}`)
+      // 在前端表现完全一致，与本脚本其它环节的告警口径不一致
+      emitWarning(`赛段定义文件不存在，跳过赛段与成绩榜产物：${segmentsPath}`)
       return
     }
     throw error

@@ -1,11 +1,28 @@
 # GitHub Pages 自动部署工作流
-# 流程：git push → npm ci → lint → test → build → 发布 GitHub Pages
+#
+# 流程：git push → npm ci → lint → test → 快照构建 → 体积门禁 → build → 发布 GitHub Pages
+#
+# ## 回滚到历史版本
+# Actions → Deploy GitHub Pages → Run workflow → ref 填**上一个正常发布的提交 SHA**
+# （或标签），再运行。Pages 会重新发布那一版的产物，无需改代码、无需 revert 提交。
+# 提交 SHA 可从 `git log`、或在某个历史 run 的标题里拿到。
+#
+# ## 已知取舍
+# - `npm audit` 刻意**不阻塞发布**：新披露的传递依赖漏洞会让一次与它无关的提交
+#   无法上线，这是比漏洞本身更常见的故障。它仍然每次运行并打印结论。
+# - e2e 只有 2 条冒烟用例（路由可达 + 深链渲染），跑之前先构建作者快照，
+#   这样测的是站点真实的作者模式而不是「无快照的降级模式」。
 name: Deploy GitHub Pages
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: '要部署的提交/标签（留空 = 当前分支头）。回滚时填上一个正常发布的提交 SHA'
+        required: false
+        type: string
 
 # 赋予 GitHub Pages 发布权限（官方 actions/deploy-pages 要求）
 permissions:
@@ -19,12 +36,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 构建任务：安装依赖、静态检查、测试、产物构建
-  build:
+  # 静态检查与单元测试（与构建分离：失败时能一眼看出是哪一类问题）
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       # 使用 Node 22：jsdom 30 依赖的 undici 8 需要 Node 22+ 的 webidl API，Node 20 下测试会报错
       - name: Setup Node
@@ -42,10 +61,76 @@ jobs:
       - name: Test
         run: npm run test
 
-      # 作者数据快照：解析 author-data/fit/ 下的 FIT 文件生成 public/author-data/，
-      # 必须在 Build 前执行（快照随 dist 一起发布）
+      # 非阻塞：见文件头「已知取舍」
+      - name: Audit dependencies (non-blocking)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  # 端到端冒烟：先构建作者快照，测的是站点真实的作者模式
+  e2e:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Build author data
         run: npm run build:author-data
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  # 构建任务：快照 + 体积门禁 + 站点产物
+  build:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 作者数据快照：解析 author-data/fit/ 下的 FIT 文件生成 public/author-data/，
+      # 必须在 Build 前执行（快照随 dist 一起发布）。
+      # 单个坏 FIT 会跳过并告警，不再阻塞整站发布；全部失败才 exit 1
+      - name: Build author data
+        run: npm run build:author-data
+
+      # 体积门禁：快照是发布产物，每次部署都要整体上传。
+      # 阈值取自实测基线 + 约 1.5~2 倍余量（见 scripts/check-snapshot-size.mjs）
+      - name: Check snapshot size
+        run: npm run check:snapshot-size
 
       - name: Build
         run: npm run build
@@ -55,13 +140,13 @@ jobs:
         with:
           path: dist
 
-  # 部署任务：等待构建完成后发布产物到 GitHub Pages
+  # 部署任务：等待构建与冒烟都通过后发布产物到 GitHub Pages
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, e2e]
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
