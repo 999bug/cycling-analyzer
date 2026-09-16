@@ -28,18 +28,17 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { StaleWhileRevalidate } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
+import {
+  HTML_SHELL_CACHE_NAME,
+  HTML_SHELL_MAX_ENTRIES,
+  isPrunableCache,
+  LAZY_ASSETS_CACHE_NAME,
+  LAZY_ASSETS_MAX_ENTRIES,
+  trimCache,
+} from './swCache'
 
 /** 导航请求网络响应超时（毫秒）：弱网/挂起时 3 秒后回退缓存，不让用户干等 */
 const NAV_TIMEOUT_MS = 3000
-
-/** 导航 HTML 运行时缓存名：只存 200 响应（每次刷新被最新 HTML 覆盖） */
-const HTML_CACHE_NAME = 'html-shell'
-
-/** 懒加载 chunk 运行时缓存名：与旧 generateSW 配置一致（SWR 静默更新） */
-const LAZY_ASSETS_CACHE_NAME = 'lazy-assets'
-
-/** 懒加载 chunk 缓存条目上限，防止长期使用后无限膨胀 */
-const LAZY_ASSETS_MAX_ENTRIES = 60
 
 // 预缓存应用壳资源（清单由构建注入；author-data 与大体积懒加载 chunk
 // 已在 vite.config injectManifest.globIgnores 排除，运行时按需请求）
@@ -54,7 +53,7 @@ const serveShell = createHandlerBoundToURL('index.html')
 registerRoute(
   // 所有页面导航（含刷新/深链/首次加载）走网络优先
   new NavigationRoute(async ({ event, request, url }) => {
-    const cache = await caches.open(HTML_CACHE_NAME)
+    const cache = await caches.open(HTML_SHELL_CACHE_NAME)
     const cached = await cache.match(request.url)
     try {
       // AbortSignal.timeout 需 Safari 16+/Chrome 103+：旧浏览器不传超时
@@ -68,6 +67,9 @@ registerRoute(
         // 最新 HTML 入缓存（以 URL 字符串为键，规避 navigate 模式 Request 的
         // Cache.put 限制）；每次在线刷新都会覆盖为最新版本
         await cache.put(request.url, network.clone())
+        // 写入后裁剪：每访问一个不同 URL 的页面就多一条（深链会让 URL 持续增长），
+        // 不设上限等于把缓存当无限容器用
+        await trimCache(cache, HTML_SHELL_MAX_ENTRIES)
         return network
       }
     } catch {
@@ -77,9 +79,10 @@ registerRoute(
     // 缓存已被最新 HTML 覆盖，下次刷新即是新版——发版后最多"旧一次"
     event.waitUntil(
       fetch(request)
-        .then((res) => {
+        .then(async (res) => {
           if (res.status === 200) {
-            return cache.put(request.url, res.clone())
+            await cache.put(request.url, res.clone())
+            await trimCache(cache, HTML_SHELL_MAX_ENTRIES)
           }
         })
         .catch(() => {}),
@@ -117,5 +120,20 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     void self.skipWaiting()
   }
+})
+// 激活时清理旧版本遗留的运行时缓存（如缓存重命名后的旧名）。
+// 只清本应用自有前缀的缓存：GitHub Pages 用户站同源共享 CacheStorage，
+// 无差别删除「不认识的缓存」会连累同源的其它应用（见 src/swCache.ts 说明）。
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((names) =>
+        Promise.all(
+          names.filter((name) => isPrunableCache(name)).map((name) => caches.delete(name)),
+        ),
+      )
+      .catch(() => {}),
+  )
 })
 clientsClaim()

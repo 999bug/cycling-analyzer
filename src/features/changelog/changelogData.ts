@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.91.2',
+    date: '2026-09-16',
+    features: [
+      '离线可用的页面缓存改为按上限保留最近访问的页面，长期使用不会再无限占用存储空间；升级新版本时自动清掉旧版本遗留的缓存',
+    ],
+  },
+  {
     version: '2.91.1',
     date: '2026-09-16',
     features: [
