@@ -153,6 +153,35 @@ describe('AuthorActivityRepository 与 DexieActivityRepository 行为对齐', ()
     expect(await author.existsByFingerprint('fp-a1')).toBe(false)
     expect(await dexie.existsByFingerprint('fp-a1')).toBe(true)
   })
+
+  it('iterateRecordBatches 作者源给出空记录，但批次切分与入参顺序与 Dexie 一致', async () => {
+    // 作者源的批量逐点扫描走 CI 预计算产物，本方法刻意返回空记录
+    // （与本类 getRecordsByActivityIds 同语义）。赛段创建预览与赛段挖掘两个调用点
+    // 没有作者源分支，若这里返回真实记录会让访客本地库被写入「由站主快照推导的成绩」
+    const authorBatches: string[][] = []
+    await author.iterateRecordBatches(
+      ['a1', 'a2', 'a3'],
+      (batch) => {
+        authorBatches.push([...batch.keys()])
+        for (const records of batch.values()) {
+          expect(records).toEqual([])
+        }
+      },
+      { batchSize: 2 },
+    )
+    expect(authorBatches).toEqual([['a1', 'a2'], ['a3']])
+
+    // Dexie 侧同一入参的批次切分必须一致（顺序语义是调用方的依赖）
+    const dexieBatches: string[][] = []
+    await dexie.iterateRecordBatches(
+      ['a1', 'a2', 'a3'],
+      (batch) => {
+        dexieBatches.push([...batch.keys()])
+      },
+      { batchSize: 2 },
+    )
+    expect(dexieBatches).toEqual(authorBatches)
+  })
 })
 
 describe('queryActivityList 纯函数', () => {

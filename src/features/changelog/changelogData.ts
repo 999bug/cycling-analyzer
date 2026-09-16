@@ -20,6 +20,13 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.93.0',
+    date: '2026-09-16',
+    features: [
+      '热力图、路线图与赛段扫描改分批读取：大数据量下内存占用大幅下降，不再一次性载入全部轨迹',
+    ],
+  },
+  {
     version: '2.92.0',
     date: '2026-09-16',
     features: [

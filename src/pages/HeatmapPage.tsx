@@ -140,34 +140,44 @@ function HeatmapPage() {
         return
       }
 
-      // 单次批量查询替代逐活动串行读（N 次 IndexedDB 事务 → 1 次）
-      const recordsByActivity = await repository.getRecordsByActivityIds(
-        summaries.map((summary) => summary.id),
-      )
+      // 分批流式读取：一次只驻留一批活动的原始逐点数据，抽稀完立即丢弃。
+      // 旧写法一次 bulkGet 全部活动的逐点（实测 500 活动 × 2000 点 = 154MB 峰值），
+      // 抽稀后的轨迹仍要全量保留（渲染需要），但原始记录不必
+      const summaryById = new Map(summaries.map((summary) => [summary.id, summary]))
       const loaded: LatLng[][] = []
-      for (const summary of summaries) {
-        const points = simplifyRoute(
-          recordsByActivity.get(summary.id) ?? [],
-          HEATMAP_SIMPLIFY_TOLERANCE_METERS,
-        )
-        if (points.length >= MIN_TRACK_POINTS) {
-          // 先按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：不同来源的
-          // 活动可能用不同坐标系（行者 GCJ-02 / Garmin WGS-84），统一口径后叠加才不会互相错位
-          loaded.push(
-            points.map((point) => {
-              const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
-              const shifted = applyOffsetMeters(
-                normalized,
-                summary.trackOffset?.northMeters ?? 0,
-                summary.trackOffset?.eastMeters ?? 0,
-              )
-              return [shifted.latitude, shifted.longitude] as LatLng
-            }),
-          )
-        }
-        if (cancelled) {
-          return
-        }
+      await repository.iterateRecordBatches(
+        summaries.map((summary) => summary.id),
+        (batch) => {
+          if (cancelled) {
+            return false
+          }
+          for (const [activityId, records] of batch) {
+            const summary = summaryById.get(activityId)
+            if (summary === undefined) {
+              continue
+            }
+            const points = simplifyRoute(records, HEATMAP_SIMPLIFY_TOLERANCE_METERS)
+            if (points.length < MIN_TRACK_POINTS) {
+              continue
+            }
+            // 先按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：不同来源的
+            // 活动可能用不同坐标系（行者 GCJ-02 / Garmin WGS-84），统一口径后叠加才不会互相错位
+            loaded.push(
+              points.map((point) => {
+                const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
+                const shifted = applyOffsetMeters(
+                  normalized,
+                  summary.trackOffset?.northMeters ?? 0,
+                  summary.trackOffset?.eastMeters ?? 0,
+                )
+                return [shifted.latitude, shifted.longitude] as LatLng
+              }),
+            )
+          }
+        },
+      )
+      if (cancelled) {
+        return
       }
       trackScanCache = { key: scanKey, tracks: loaded }
       // 抽稀产物持久化：刷新后首次进入免重扫（写入失败不阻塞展示）

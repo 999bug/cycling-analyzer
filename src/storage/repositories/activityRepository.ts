@@ -44,6 +44,27 @@ export interface RecordQueryOptions {
 }
 
 /**
+ * 分批流式读取选项。
+ */
+export interface RecordBatchOptions {
+  /** 每批活动数（缺省 DEFAULT_RECORD_BATCH_SIZE） */
+  batchSize?: number;
+
+  /** 进度回调（每批一次，参数为已处理活动数与总数） */
+  onProgress?: (done: number, total: number) => void;
+}
+
+/**
+ * 分批流式读取的默认批大小。
+ *
+ * 取 16 的依据：典型活动 2000~10000 点，16 个活动约 3.2 万~16 万点
+ * （按实测单点 ≈ 161.5 B 估算约 5~26MB），相比「全部活动一次驻留」
+ * （500 活动 × 2000 点 = 154MB）已降一个数量级；再调小会让批次数与
+ * 索引事务数明显上升（赛段场景还要按批往返 Worker）。
+ */
+export const DEFAULT_RECORD_BATCH_SIZE = 16;
+
+/**
  * 轨迹首尾有效坐标（路线分组用）。
  * 两端均取「首个/最后一个带坐标的记录」，缺坐标的活动视为无端点。
  */
@@ -210,6 +231,31 @@ export interface ActivityReadRepository {
    * @returns 活动ID → 逐点记录 分组映射
    */
   getRecordsByActivityIds(activityIds: readonly string[]): Promise<Map<string, ActivityRecord[]>>;
+
+  /**
+   * 分批流式读取多个活动的逐点记录（全量轨迹扫描类页面的**首选**方式）。
+   *
+   * 与 `getRecordsByActivityIds` 的唯一区别是**峰值内存**：后者返回
+   * `Map<活动, 全量记录>`，峰值 = 所有活动逐点之和（实测 500 活动 × 2000 点
+   * = 154MB，iOS 上必被杀）；本方法每批只驻留 `batchSize` 个活动的记录，
+   * 回调返回后即可被回收。
+   *
+   * 回调**串行**调用（不并发），因此调用方可以安全地在回调里做重计算、
+   * 提交给 Web Worker 或累加结果——但**不得**把 batch 里的记录长期持有，
+   * 否则退化回全量驻留。
+   *
+   * 顺序保证：批内 Map 的迭代序 = 入参顺序；跨批顺序 = 入参顺序。
+   * 返回值 `false` 表示提前结束遍历（页面卸载等的短路用）。
+   *
+   * @param activityIds 活动 ID 列表（空列表不触发任何回调）
+   * @param visit 批回调（返回 false 时停止遍历）
+   * @param options 批大小与进度回调
+   */
+  iterateRecordBatches(
+    activityIds: readonly string[],
+    visit: (batch: ReadonlyMap<string, ActivityRecord[]>) => void | boolean | Promise<void | boolean>,
+    options?: RecordBatchOptions,
+  ): Promise<void>;
 
   /**
    * 读取活动的路线首尾有效坐标（路线分组 / 相似骑行用）。
@@ -875,6 +921,32 @@ export class DexieActivityRepository implements ActivityRepository {
       await this.db.activity_chunks.bulkPut(backfill);
     }
     return grouped;
+  }
+
+  async iterateRecordBatches(
+    activityIds: readonly string[],
+    visit: (
+      batch: ReadonlyMap<string, ActivityRecord[]>,
+    ) => void | boolean | Promise<void | boolean>,
+    options?: RecordBatchOptions,
+  ): Promise<void> {
+    const total = activityIds.length;
+    if (total === 0) {
+      return;
+    }
+    const requested = options?.batchSize ?? DEFAULT_RECORD_BATCH_SIZE;
+    // batchSize <= 0 视为一批到底（调用方明确不要分批）
+    const batchSize = requested > 0 ? requested : total;
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const slice = activityIds.slice(offset, offset + batchSize);
+      // 复用 getRecordsByActivityIds：批内仍是一次索引查询，且沿用同一套兜底链
+      const batch = await this.getRecordsByActivityIds(slice);
+      const keepGoing = await visit(batch);
+      options?.onProgress?.(Math.min(offset + batchSize, total), total);
+      if (keepGoing === false) {
+        return;
+      }
+    }
   }
 
   /**

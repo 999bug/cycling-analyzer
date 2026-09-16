@@ -803,6 +803,101 @@ describe('DexieActivityRepository', () => {
       expect([...grouped.keys()]).toEqual([migrated.id, legacy.id]);
     });
 
+    it('iterateRecordBatches 按批回调，批内与跨批顺序均等于入参顺序', async () => {
+      const ids = ['a', 'b', 'c', 'd', 'e'];
+      await repo.addActivities(
+        ids.map((id) =>
+          makeActivity({ id, fingerprint: `fp-${id}`, records: [makeRecord(1), makeRecord(2)] }),
+        ),
+      );
+
+      const batches: string[][] = [];
+      await repo.iterateRecordBatches(
+        ids,
+        (batch) => {
+          batches.push([...batch.keys()]);
+        },
+        { batchSize: 2 },
+      );
+      expect(batches).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+
+      // 顺序必须跟随入参而非活动 id 的字典序
+      const reversed: string[][] = [];
+      await repo.iterateRecordBatches(
+        [...ids].reverse(),
+        (batch) => {
+          reversed.push([...batch.keys()]);
+        },
+        { batchSize: 2 },
+      );
+      expect(reversed).toEqual([['e', 'd'], ['c', 'b'], ['a']]);
+    });
+
+    it('iterateRecordBatches 峰值受批大小约束（每批只驻留 batchSize 个活动的记录）', async () => {
+      const ids = Array.from({ length: 5 }, (_, i) => `flow-${i}`);
+      await repo.addActivities(
+        ids.map((id) =>
+          makeActivity({
+            id,
+            fingerprint: `fp-${id}`,
+            records: Array.from({ length: 10 }, (_, i) => makeRecord(i)),
+          }),
+        ),
+      );
+
+      // 每次回调记录「本批持有的活动数」——这正是峰值内存的决定因素
+      const batchSizes: number[] = [];
+      await repo.iterateRecordBatches(
+        ids,
+        (batch) => {
+          batchSizes.push(batch.size);
+        },
+        { batchSize: 2 },
+      );
+
+      expect(batchSizes).toEqual([2, 2, 1]);
+      expect(Math.max(...batchSizes)).toBeLessThan(ids.length);
+    });
+
+    it('iterateRecordBatches 回调返回 false 立即停止（不再读后续批次）', async () => {
+      const ids = ['a', 'b', 'c', 'd'];
+      await repo.addActivities(
+        ids.map((id) => makeActivity({ id, fingerprint: `fp-${id}`, records: [makeRecord(1)] })),
+      );
+
+      const seen: string[][] = [];
+      await repo.iterateRecordBatches(
+        ids,
+        (batch) => {
+          seen.push([...batch.keys()]);
+          return false;
+        },
+        { batchSize: 2 },
+      );
+
+      expect(seen).toEqual([['a', 'b']]);
+    });
+
+    it('iterateRecordBatches 空列表不触发回调；进度回调单调到总数', async () => {
+      const ids = ['a', 'b', 'c'];
+      await repo.addActivities(
+        ids.map((id) => makeActivity({ id, fingerprint: `fp-${id}`, records: [makeRecord(1)] })),
+      );
+
+      let calls = 0;
+      await repo.iterateRecordBatches([], () => {
+        calls += 1;
+      });
+      expect(calls).toBe(0);
+
+      const progress: number[] = [];
+      await repo.iterateRecordBatches(ids, () => undefined, {
+        batchSize: 2,
+        onProgress: (done) => progress.push(done),
+      });
+      expect(progress).toEqual([2, 3]);
+    });
+
     it('deleteActivities 批量级联删除，未列入 ID 的活动不受影响', async () => {
       const keep = makeActivity({ records: [makeRecord(1)] });
       const gone1 = makeActivity({ records: [makeRecord(1), makeRecord(2), makeRecord(3)] });

@@ -242,9 +242,6 @@ function SegmentCreatorDialog({
         const since = new Date(Date.now() - PREVIEW_WINDOW_MS).toISOString()
         const all = await listCyclingSummaries(activityRepository)
         const recent = all.filter((summary) => summary.startTime >= since)
-        const recordsByActivity = await activityRepository.getRecordsByActivityIds(
-          recent.map((summary) => summary.id),
-        )
         if (cancelled) {
           return
         }
@@ -255,38 +252,47 @@ function SegmentCreatorDialog({
         const oppositeGeometry = reversed ? draft : reverseSegmentDraft(draft)
         let total = 0
         let forward = 0
-        for (const summary of recent) {
-          const activityRecords = recordsByActivity.get(summary.id) ?? []
-          const shownMatch = matchSegmentEffortDetail(shownGeometry, activityRecords)
-          const oppositeMatch = matchSegmentEffortDetail(oppositeGeometry, activityRecords)
-          // 同向穿越默认记正向、反向穿越默认记反向；净位移能判定时以判定为准
-          if (shownMatch !== undefined) {
-            total += 1
-            if (
-              effortMatchesDirection(
-                shownGeometry,
-                activityRecords,
-                shownMatch.startTimestamp,
-                shownMatch.endTimestamp,
-              ) !== false
-            ) {
-              forward += 1
+        // 分批流式读取：近 90 天的活动可能有上百条，一次全量取回会占数百 MB；
+        // 命中计数是纯累加，天然可按批处理（每批处理完原始逐点即可回收）
+        await activityRepository.iterateRecordBatches(
+          recent.map((summary) => summary.id),
+          (batch) => {
+            if (cancelled) {
+              return false
             }
-          }
-          if (oppositeMatch !== undefined) {
-            total += 1
-            if (
-              effortMatchesDirection(
-                shownGeometry,
-                activityRecords,
-                oppositeMatch.startTimestamp,
-                oppositeMatch.endTimestamp,
-              ) === true
-            ) {
-              forward += 1
+            for (const activityRecords of batch.values()) {
+              const shownMatch = matchSegmentEffortDetail(shownGeometry, activityRecords)
+              const oppositeMatch = matchSegmentEffortDetail(oppositeGeometry, activityRecords)
+              // 同向穿越默认记正向、反向穿越默认记反向；净位移能判定时以判定为准
+              if (shownMatch !== undefined) {
+                total += 1
+                if (
+                  effortMatchesDirection(
+                    shownGeometry,
+                    activityRecords,
+                    shownMatch.startTimestamp,
+                    shownMatch.endTimestamp,
+                  ) !== false
+                ) {
+                  forward += 1
+                }
+              }
+              if (oppositeMatch !== undefined) {
+                total += 1
+                if (
+                  effortMatchesDirection(
+                    shownGeometry,
+                    activityRecords,
+                    oppositeMatch.startTimestamp,
+                    oppositeMatch.endTimestamp,
+                  ) === true
+                ) {
+                  forward += 1
+                }
+              }
             }
-          }
-        }
+          },
+        )
         if (!cancelled) {
           setPreview({ total, forward })
         }

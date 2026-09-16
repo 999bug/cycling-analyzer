@@ -8,12 +8,14 @@
  */
 import type { ActivityRecord } from '@/types/activity'
 import {
+  DEFAULT_RECORD_BATCH_SIZE,
   queryActivityList,
   type ActivityListOptions,
   type ActivityListResult,
   type ActivityRangeSummary,
   type ActivityReadRepository,
   type ActivitySummary,
+  type RecordBatchOptions,
   type RecordQueryOptions,
   type RouteEndpoints,
 } from '@/storage/repositories/activityRepository'
@@ -47,6 +49,38 @@ export class AuthorActivityRepository implements ActivityReadRepository {
     // 接口完整性起见返回空映射（调用方不应在作者源下依赖此方法）
     void activityIds
     return new Map()
+  }
+
+  async iterateRecordBatches(
+    activityIds: readonly string[],
+    visit: (
+      batch: ReadonlyMap<string, ActivityRecord[]>,
+    ) => void | boolean | Promise<void | boolean>,
+    options?: RecordBatchOptions,
+  ): Promise<void> {
+    // **刻意不返回快照里的真实逐点数据**，与本类 getRecordsByActivityIds 的既有语义一致：
+    // 作者源的全量轨迹扫描走 CI 预计算产物（getTracks / getRouteTracks），不逐点拉取。
+    // 而赛段创建预览与赛段挖掘这两个调用点**没有作者源分支**，若这里返回真实记录，
+    // 访客的本地库会被写入「由站主快照推导出的成绩」——那是本次重构之外的行为变化。
+    // 因此这里按活动逐条给出空记录，让调用方走与改造前完全相同的路径。
+    const total = activityIds.length
+    if (total === 0) {
+      return
+    }
+    const requested = options?.batchSize ?? DEFAULT_RECORD_BATCH_SIZE
+    const batchSize = requested > 0 ? requested : total
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const slice = activityIds.slice(offset, offset + batchSize)
+      const batch = new Map<string, ActivityRecord[]>()
+      for (const id of slice) {
+        batch.set(id, [])
+      }
+      const keepGoing = await visit(batch)
+      options?.onProgress?.(Math.min(offset + batchSize, total), total)
+      if (keepGoing === false) {
+        return
+      }
+    }
   }
 
   async getRouteEndpoints(activityId: string): Promise<RouteEndpoints | undefined> {

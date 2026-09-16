@@ -235,42 +235,52 @@ function RoutesMapPage() {
 
       const routeItems: RouteActivityInput[] = []
       const trackById = new Map<string, LatLng[]>()
-      // 单次批量查询替代逐活动串行读（与热力图页同优化）
-      const recordsByActivity = await repository.getRecordsByActivityIds(
+      // 分批流式读取（与热力图页同口径）：抽稀与端点提取完即丢弃原始逐点，
+      // 避免一次 bulkGet 全部活动记录造成的百 MB 级峰值
+      const summaryById = new Map(summaries.map((summary) => [summary.id, summary]))
+      await repository.iterateRecordBatches(
         summaries.map((summary) => summary.id),
-      )
-      for (const summary of summaries) {
-        const records = recordsByActivity.get(summary.id) ?? []
-        if (cancelled) {
-          return
-        }
-        const points = simplifyRoute(records, ROUTES_SIMPLIFY_TOLERANCE_METERS)
-        if (points.length >= MIN_TRACK_POINTS) {
-          // 按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：与热力图页同口径，
-          // 国内 App（行者等 GCJ-02）导入的活动不做归一化会整体偏移数百米
-          trackById.set(
-            summary.id,
-            points.map((point) => {
-              const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
-              const shifted = applyOffsetMeters(
-                normalized,
-                summary.trackOffset?.northMeters ?? 0,
-                summary.trackOffset?.eastMeters ?? 0,
+        (batch) => {
+          if (cancelled) {
+            return false
+          }
+          for (const [activityId, records] of batch) {
+            const summary = summaryById.get(activityId)
+            if (summary === undefined) {
+              continue
+            }
+            const points = simplifyRoute(records, ROUTES_SIMPLIFY_TOLERANCE_METERS)
+            if (points.length >= MIN_TRACK_POINTS) {
+              // 按各活动自身坐标系归一化到 WGS-84（含手动微调）再缓存：与热力图页同口径，
+              // 国内 App（行者等 GCJ-02）导入的活动不做归一化会整体偏移数百米
+              trackById.set(
+                activityId,
+                points.map((point) => {
+                  const normalized = toWgs84(point, summary.coordinateSystem ?? 'wgs84')
+                  const shifted = applyOffsetMeters(
+                    normalized,
+                    summary.trackOffset?.northMeters ?? 0,
+                    summary.trackOffset?.eastMeters ?? 0,
+                  )
+                  return [shifted.latitude, shifted.longitude] as LatLng
+                }),
               )
-              return [shifted.latitude, shifted.longitude] as LatLng
-            }),
-          )
-        }
-        const endpoints = extractEndpoints(records)
-        routeItems.push({
-          id: summary.id,
-          name: summary.name,
-          startTime: summary.startTime,
-          distance: summary.distance,
-          duration: summary.duration,
-          start: endpoints?.start,
-          end: endpoints?.end,
-        })
+            }
+            const endpoints = extractEndpoints(records)
+            routeItems.push({
+              id: activityId,
+              name: summary.name,
+              startTime: summary.startTime,
+              distance: summary.distance,
+              duration: summary.duration,
+              start: endpoints?.start,
+              end: endpoints?.end,
+            })
+          }
+        },
+      )
+      if (cancelled) {
+        return
       }
       const built = buildRouteMapRoutes(buildRouteGroups(routeItems), trackById)
       routeScanCache = { key: scanKey, routes: built }

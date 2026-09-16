@@ -24,7 +24,7 @@ import {
 import { db, type SegmentEntity } from '@/storage/db'
 import { DexieSegmentRepository } from '@/storage/repositories/segmentRepository'
 import { defaultSnapshotClient } from '@/storage/authorData/snapshotClient'
-import type { SegmentEffort } from '@/features/segments/segmentMatching'
+import type { SegmentActivityInput, SegmentEffort } from '@/features/segments/segmentMatching'
 import { segmentDistanceMeters } from '@/features/segments/segmentStats'
 import { computeLeaderboardsSync, createLeaderboardRunner } from '@/features/segments/leaderboardClient'
 import { useActivityRepository } from '@/hooks/useActivityRepository'
@@ -165,22 +165,41 @@ function SegmentDetailPage() {
         // 由赛段页全量扫描统一刷新。
         if (list.length === 0 && found.effortsSyncedAt === undefined) {
           const summaries = await listCyclingSummaries(activityRepository)
-          const recordsByActivity = await activityRepository.getRecordsByActivityIds(
-            summaries.map((item) => item.id),
-          )
-          const inputs = summaries.map((item) => ({
-            activityId: item.id,
-            startTime: item.startTime,
-            records: recordsByActivity.get(item.id) ?? [],
-          }))
+          const summaryById = new Map(summaries.map((item) => [item.id, item]))
           const runner = createLeaderboardRunner() ?? {
             compute: computeLeaderboardsSync,
             cancel: () => {},
           }
           try {
-            const boards = await runner.compute({ segments: [found], inputs })
-            const board = boards.get(found) ?? []
-            await repository.replaceSegmentEfforts(segmentId, board)
+            // 分批流式扫描：一次只把一批活动的逐点数据交给 Worker，避免
+            // 「全部活动一次驻留 + 一份结构化克隆」的双份峰值。
+            // 结果先累加，最后一次性整体替换落库——replaceSegmentEfforts 的语义是
+            // 全量替换，不能按批调用（按批调用会让后一批覆盖前一批）
+            const collected: SegmentEffort[] = []
+            await activityRepository.iterateRecordBatches(
+              summaries.map((item) => item.id),
+              async (batch) => {
+                if (cancelled) {
+                  return false
+                }
+                const inputs: SegmentActivityInput[] = []
+                for (const [activityId, records] of batch) {
+                  const summary = summaryById.get(activityId)
+                  if (summary === undefined) {
+                    continue
+                  }
+                  inputs.push({ activityId, startTime: summary.startTime, records })
+                }
+                const boards = await runner.compute({ segments: [found], inputs })
+                collected.push(...(boards.get(found) ?? []))
+              },
+            )
+            if (cancelled) {
+              return
+            }
+            // 每批内部已按用时升序；跨批拼接后需整体再排一次
+            collected.sort((a, b) => a.durationSeconds - b.durationSeconds)
+            await repository.replaceSegmentEfforts(segmentId, collected)
           } finally {
             runner.cancel()
           }

@@ -128,20 +128,9 @@ function SegmentsPage() {
       try {
         const targetIds = new Set(diff.activityIds)
         const targets = summaries.filter((summary) => targetIds.has(summary.id))
-        // 只取本次需要重扫的活动的逐点数据（增量场景下通常只有新导入的几条）
-        const recordsByActivity = await activityRepository.getRecordsByActivityIds(
-          targets.map((summary) => summary.id),
-        )
-        if (cancelled) {
-          return
-        }
-        const inputs: SegmentActivityInput[] = targets.map((summary) => ({
-          activityId: summary.id,
-          startTime: summary.startTime,
-          records: recordsByActivity.get(summary.id) ?? [],
-        }))
+        const summaryById = new Map(targets.map((summary) => [summary.id, summary]))
 
-        // 成绩榜在 Web Worker 一次批量计算（避免 N 赛段 × N 记录的结构化
+        // 成绩榜在 Web Worker 批量计算（避免 N 赛段 × N 记录的结构化
         // 克隆风暴，200 活动×8000 点×N 赛段会让页面卡数十秒）；
         // jsdom/无 Worker 环境回退主线程同步纯函数；cancelled 时 terminate 终止
         const runner = createLeaderboardRunner() ?? {
@@ -149,30 +138,43 @@ function SegmentsPage() {
           cancel: () => {},
         }
         try {
-          const boardsBySegment = await runner.compute({
-            segments: allSegments,
-            inputs,
-          })
-          if (cancelled) {
-            return
-          }
-          // boardsBySegment 键为 SegmentGeometry 对象，转为按 id 索引的
-          // 业务 Map<number, SegmentEffort[]> 以便下游 SegmentCards 消费
-          const boards = new Map<number, SegmentEffort[]>()
-          for (const segment of allSegments) {
-            boards.set(segment.id ?? 0, boardsBySegment.get(segment) ?? [])
-          }
-          // 成绩落库（v6）：扫描结果合并进 segment_efforts（含均速/功率/心率指标），
-          // 详情页「本次赛段」与赛段详情页免重扫直接读库；失败不影响本次展示
-          await Promise.all(
-            allSegments.map((segment) => {
-              const id = segment.id ?? 0
-              return segmentRepository
-                .mergeEffortsForActivities(id, diff.activityIds, boards.get(id) ?? [])
-                .catch((error: unknown) => {
-                  console.error('Failed to persist segment efforts', id, error)
-                })
-            }),
+          // 只取本次需要重扫的活动的逐点数据（增量场景下通常只有新导入的几条）。
+          // 分批流式：一次只把一批活动交给 Worker，峰值从「全部活动逐点」降到单批量级。
+          // 落库按批提交是安全的——mergeEffortsForActivities 以传入的 activityIds 为
+          // 作用边界（删该范围内旧成绩 + 写新成绩），各批的活动集互不相交
+          await activityRepository.iterateRecordBatches(
+            targets.map((summary) => summary.id),
+            async (batch) => {
+              if (cancelled) {
+                return false
+              }
+              const batchIds: string[] = []
+              const inputs: SegmentActivityInput[] = []
+              for (const [activityId, records] of batch) {
+                const summary = summaryById.get(activityId)
+                if (summary === undefined) {
+                  continue
+                }
+                batchIds.push(activityId)
+                inputs.push({ activityId, startTime: summary.startTime, records })
+              }
+              const boardsBySegment = await runner.compute({
+                segments: allSegments,
+                inputs,
+              })
+              // 成绩落库（v6）：扫描结果合并进 segment_efforts（含均速/功率/心率指标），
+              // 详情页「本次赛段」与赛段详情页免重扫直接读库；失败不影响本次展示
+              await Promise.all(
+                allSegments.map((segment) => {
+                  const id = segment.id ?? 0
+                  return segmentRepository
+                    .mergeEffortsForActivities(id, batchIds, boardsBySegment.get(segment) ?? [])
+                    .catch((error: unknown) => {
+                      console.error('Failed to persist segment efforts', id, error)
+                    })
+                }),
+              )
+            },
           )
           if (cancelled) {
             return

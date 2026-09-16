@@ -23,7 +23,10 @@
  */
 import 'fake-indexeddb/auto'
 import { CyclingDatabase } from '@/storage/db'
-import { DexieActivityRepository } from '@/storage/repositories/activityRepository'
+import {
+  DEFAULT_RECORD_BATCH_SIZE,
+  DexieActivityRepository,
+} from '@/storage/repositories/activityRepository'
 import { ACTIVITY_CHUNK_SIZE } from '@/storage/activityChunks'
 import type { Activity, ActivityRecord } from '@/types/activity'
 
@@ -314,21 +317,41 @@ async function benchScan(
   const bpp = bytesPerPoint(sample)
 
   const rows = [
-    await measure(`getRecordsByActivityIds(全部 ${count} 个活动)`, () =>
+    await measure(`旧路径：getRecordsByActivityIds(全部 ${count})`, () =>
       repo.getRecordsByActivityIds(ids),
     ),
-    await measure('对照：逐活动 getRecords（流式迭代的单活动粒度）', async () => {
-      for (const id of ids.slice(0, 20)) {
-        await repo.getRecords(id)
-      }
-    }),
   ]
   report(
     `场景 C · 批量扫描（${count} 活动 × ${preset.scanPointsPerActivity} 点）`,
     rows,
     bpp,
   )
-  console.log('  说明：该场景峰值内存 = 解出点数 × 单点开销；P1-3 后应降到单活动/单片量级')
+
+  // 新路径：按批流式迭代。关注点不是「总共解出多少点」（总量不变），
+  // 而是**同一时刻驻留多少点**——峰值决定 iOS 上会不会被杀进程
+  resetMeter()
+  const started = performance.now()
+  let peakPoints = 0
+  let streamedPoints = 0
+  await repo.iterateRecordBatches(ids, (batch) => {
+    let batchPoints = 0
+    for (const records of batch.values()) {
+      batchPoints += records.length
+    }
+    peakPoints = Math.max(peakPoints, batchPoints)
+    streamedPoints += batchPoints
+  })
+  const elapsedMs = performance.now() - started
+  const totalPoints = count * preset.scanPointsPerActivity
+  console.log(
+    `\n  ── 新路径：iterateRecordBatches（batchSize=${DEFAULT_RECORD_BATCH_SIZE}）\n` +
+      `     累计解出 ${streamedPoints} 点（与旧路径同量，总量本来就不变）\n` +
+      `     峰值驻留 ${peakPoints} 点 / ${formatBytes(peakPoints * bpp)}` +
+      `，旧路径为 ${totalPoints} 点 / ${formatBytes(totalPoints * bpp)}` +
+      ` → 峰值降 ${(totalPoints / peakPoints).toFixed(1)}x\n` +
+      `     [${elapsedMs.toFixed(1)}ms，内存实现仅供参考]`,
+  )
+  console.log('  说明：该项收益来自调用点改流式（P1-3），非分片本身')
 }
 
 /** 导出路径的批大小（与 src/features/settings/exportImport.ts 的默认值一致） */
