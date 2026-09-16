@@ -6,7 +6,8 @@
  * - 实时显示路段距离与推荐长度提示（Strava 经验值 0.4–1 km，过长 GPS
  *   匹配误差大，仅提示不拦截）；
  * - 两点齐后自动做历史命中预览：扫描近 90 天骑行活动，给出命中次数与
- *   正/反方向分布（正向 = 穿越 Net 位移与「起点 → 终点」一致）；
+ *   正/反方向分布（正向 = 穿越方向与「起点 → 终点」一致）；匹配器只认
+ *   单向穿越，故正反两个方向各匹配一次，往返 / 折返骑行都能统计到；
  * - 地图右上角支持全屏（桌面原生 Fullscreen API，移动端 / PWA 独立窗口
  *   自动降级伪全屏，见 mapFullscreen.tsx）：框选长路段时看得更清；
  * - 创建写入 segments 表（轨迹切片存 trackPoints 供路径校验），并把当前
@@ -29,6 +30,7 @@ import {
   buildSegmentDraft,
   effortMatchesDirection,
   nearestProjectedIndex,
+  reverseSegmentDraft,
   PICK_SNAP_REJECT_METERS,
   type SegmentDraft,
 } from '@/features/segments/segmentCreator'
@@ -246,29 +248,43 @@ function SegmentCreatorDialog({
         if (cancelled) {
           return
         }
+        // 展示方向几何（起点 → 终点 = 展示起点 → 展示终点）与反向几何：
+        // 匹配器只认「起点圆 → 终点圆」单向穿越，两个方向各匹配一次
+        // 才统计得到往返 / 折返骑行（此前只算同向穿越，命中数偏少）
+        const shownGeometry = reversed ? reverseSegmentDraft(draft) : draft
+        const oppositeGeometry = reversed ? draft : reverseSegmentDraft(draft)
         let total = 0
         let forward = 0
         for (const summary of recent) {
           const activityRecords = recordsByActivity.get(summary.id) ?? []
-          const match = matchSegmentEffortDetail(draft, activityRecords)
-          if (match === undefined) {
-            continue
+          const shownMatch = matchSegmentEffortDetail(shownGeometry, activityRecords)
+          const oppositeMatch = matchSegmentEffortDetail(oppositeGeometry, activityRecords)
+          // 同向穿越默认记正向、反向穿越默认记反向；净位移能判定时以判定为准
+          if (shownMatch !== undefined) {
+            total += 1
+            if (
+              effortMatchesDirection(
+                shownGeometry,
+                activityRecords,
+                shownMatch.startTimestamp,
+                shownMatch.endTimestamp,
+              ) !== false
+            ) {
+              forward += 1
+            }
           }
-          total += 1
-          // 方向判定相对「展示起点 → 展示终点」：反向赛段换基准
-          const base = reversed
-            ? {
-                startLatitude: draft.endLatitude,
-                startLongitude: draft.endLongitude,
-                endLatitude: draft.startLatitude,
-                endLongitude: draft.startLongitude,
-              }
-            : draft
-          if (
-            effortMatchesDirection(base, activityRecords, match.startTimestamp, match.endTimestamp) ===
-            true
-          ) {
-            forward += 1
+          if (oppositeMatch !== undefined) {
+            total += 1
+            if (
+              effortMatchesDirection(
+                shownGeometry,
+                activityRecords,
+                oppositeMatch.startTimestamp,
+                oppositeMatch.endTimestamp,
+              ) === true
+            ) {
+              forward += 1
+            }
           }
         }
         if (!cancelled) {
@@ -444,7 +460,7 @@ function SegmentCreatorDialog({
         </div>
 
         <div className="segment-creator__body">
-          <div className="segment-creator__map">
+          <div className="segment-creator__map map-fullscreen-wrapper" ref={mapWrapperRef}>
             {center !== undefined && (
               <MapContainer
                 center={center}

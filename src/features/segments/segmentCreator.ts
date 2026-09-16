@@ -170,6 +170,28 @@ export function buildSegmentDraft(
 }
 
 /**
+ * 交换起终点得到同一段路的反向几何。
+ *
+ * 匹配器只认「起点圆 → 终点圆」单向穿越，反向骑行（先到终点圆再到起点圆）
+ * 用原几何匹配不到。命中预览要统计「这段路被经过几次」，必须用反向几何
+ * 再匹配一次，否则往返/折返路线的命中数只含同向穿越（约少一半）。
+ *
+ * @param draft 原草稿
+ * @returns 起终点互换、轨迹切片倒序的反向草稿
+ */
+export function reverseSegmentDraft(draft: SegmentDraft): SegmentDraft {
+  return {
+    startLatitude: draft.endLatitude,
+    startLongitude: draft.endLongitude,
+    endLatitude: draft.startLatitude,
+    endLongitude: draft.startLongitude,
+    trackPoints: [...draft.trackPoints].reverse(),
+    distanceMeters: draft.distanceMeters,
+    direction: draft.direction === 'forward' ? 'reverse' : 'forward',
+  }
+}
+
+/**
  * 判断一次穿越与草稿的方向一致性：穿越窗口首末 GPS 点的净位移
  * 与「起点 → 终点」方向的点积为正 = 正向。
  *

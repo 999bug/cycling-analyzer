@@ -41,21 +41,22 @@ function App() {
     <ErrorBoundary>
       <Routes>
       <Route element={<AppLayout />}>
-        <Route path={ROUTES[0]} element={<DashboardPage />} />
-        <Route path={ROUTES[1]} element={<ActivitiesPage />} />
-        <Route path={ROUTES[2]} element={<LazyPage><ActivityDetailPage /></LazyPage>} />
-        <Route path={ROUTES[3]} element={<LazyPage><StatisticsPage /></LazyPage>} />
-        <Route path={ROUTES[4]} element={<LazyPage><CalendarPage /></LazyPage>} />
-        <Route path={ROUTES[5]} element={<LazyPage><SettingsPage /></LazyPage>} />
-        <Route path={ROUTES[6]} element={<LazyPage><HeatmapPage /></LazyPage>} />
-        <Route path={ROUTES[7]} element={<LazyPage><YearReviewPage /></LazyPage>} />
-        <Route path={ROUTES[8]} element={<LazyPage><SegmentsPage /></LazyPage>} />
-        <Route path={ROUTES[14]} element={<LazyPage><SegmentDetailPage /></LazyPage>} />
-        <Route path={ROUTES[9]} element={<LazyPage><RoutesMapPage /></LazyPage>} />
-        <Route path={ROUTES[10]} element={<LazyPage><TrainingPlanPage /></LazyPage>} />
-        <Route path={ROUTES[11]} element={<LazyPage><PerformancePage /></LazyPage>} />
-        <Route path={ROUTES[12]} element={<LazyPage><ChangelogPage /></LazyPage>} />
-        <Route path={ROUTES[13]} element={<LazyPage><AcknowledgmentsPage /></LazyPage>} />
+          {/* 路径一律用具名常量（ROUTES.xxx）：下标引用会在插入新路由时整体错位 */}
+        <Route path={ROUTES.home} element={<DashboardPage />} />
+        <Route path={ROUTES.activities} element={<ActivitiesPage />} />
+        <Route path={ROUTES.activityDetail} element={<LazyPage><ActivityDetailPage /></LazyPage>} />
+        <Route path={ROUTES.statistics} element={<LazyPage><StatisticsPage /></LazyPage>} />
+        <Route path={ROUTES.calendar} element={<LazyPage><CalendarPage /></LazyPage>} />
+        <Route path={ROUTES.settings} element={<LazyPage><SettingsPage /></LazyPage>} />
+        <Route path={ROUTES.heatmap} element={<LazyPage><HeatmapPage /></LazyPage>} />
+        <Route path={ROUTES.yearReview} element={<LazyPage><YearReviewPage /></LazyPage>} />
+        <Route path={ROUTES.segments} element={<LazyPage><SegmentsPage /></LazyPage>} />
+        <Route path={ROUTES.segmentDetail} element={<LazyPage><SegmentDetailPage /></LazyPage>} />
+        <Route path={ROUTES.routesMap} element={<LazyPage><RoutesMapPage /></LazyPage>} />
+        <Route path={ROUTES.trainingPlan} element={<LazyPage><TrainingPlanPage /></LazyPage>} />
+        <Route path={ROUTES.performance} element={<LazyPage><PerformancePage /></LazyPage>} />
+        <Route path={ROUTES.changelog} element={<LazyPage><ChangelogPage /></LazyPage>} />
+        <Route path={ROUTES.acknowledgments} element={<LazyPage><AcknowledgmentsPage /></LazyPage>} />
       </Route>
     </Routes>
     </ErrorBoundary>

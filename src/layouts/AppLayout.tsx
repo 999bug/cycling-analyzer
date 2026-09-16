@@ -10,47 +10,10 @@ import UpdateBanner from '@/components/UpdateBanner'
 import MigrationBanner from '@/components/MigrationBanner'
 import FeedbackButton from '@/components/FeedbackButton'
 import { switchSidebarMode } from '@/features/settings/sidebar'
+import { NAV_ITEMS, TAB_ITEMS } from '@/layouts/navItems'
 import { useUiStore } from '@/stores/uiStore'
 import type { SidebarMode } from '@/features/settings/settings'
 import '@/layouts/AppLayout.css'
-
-/**
- * 侧边导航项：路径与中文名称。
- * end 仅对根路径生效，避免其他路径命中所有链接。
- */
-interface NavItem {
-  to: string
-  label: string
-  end?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: '仪表盘', end: true },
-  { to: '/activities', label: '骑行记录' },
-  { to: '/statistics', label: '统计' },
-  { to: '/calendar', label: '日历' },
-  { to: '/heatmap', label: '热力图' },
-  { to: '/routes-map', label: '路线图' },
-  { to: '/year-review', label: '年度回顾' },
-  { to: '/segments', label: '赛段' },
-  { to: '/training-plan', label: '训练计划' },
-  { to: '/performance', label: '表现趋势' },
-  // 2.64.0 起「更多」= 原设置页：更新日志与鸣谢移入其中（/changelog、
-  // /acknowledgments 路由保留兼容旧链接）
-  { to: '/settings', label: '更多' },
-]
-
-/**
- * 移动端底部 TabBar 的高频页（2026-09-11 手机端体验优化）：
- * 4 个高频页 1 击直达，次级页全部收进「更多」（点击打开抽屉）。
- * 桌面端不渲染该导航（CSS ≤768px 显示），侧边栏行为完全不变。
- */
-const TAB_ITEMS: NavItem[] = [
-  { to: '/', label: '仪表盘', end: true },
-  { to: '/activities', label: '记录' },
-  { to: '/statistics', label: '统计' },
-  { to: '/routes-map', label: '路线' },
-]
 
 /** TabBar 页签图标（线性风格统一描边，颜色跟随 currentColor） */
 function TabIcon({ name }: { name: string }) {

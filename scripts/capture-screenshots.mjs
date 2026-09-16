@@ -64,7 +64,8 @@ const DEMO_AI_CONFIG = JSON.stringify({
  *
  * 为什么不直接深链跳各页面：GitHub Pages 上没有 history fallback，深链要先经 404.html
  * 还原、还会被 SW 缓存影响，实测线上多处深链会落到**错误的页面**（/routes-map 渲染出
- * 训练计划）。站内导航点击走 React Router，不经过还原逻辑，稳定且正确。
+ * 训练计划；该错位源于 App.tsx 用 ROUTES[下标] 引用路径，2026-09-16 已改为具名常量修复）。
+ * 站内导航点击走 React Router，不经过还原逻辑，稳定且正确。
  */
 const DETAIL_READY = 'section[aria-label="核心指标"]'
 
@@ -78,19 +79,17 @@ const STEPS = [
   { file: '7-统计页面.png', nav: '统计', title: '统计', ready: 'h1', settle: 3000 },
   { file: '8-日历.png', nav: '日历', title: '日历', ready: '.calendar-heatmap', hover: '.calendar-heatmap [role="button"]', settle: 2500 },
   { file: '9-骑行热力图.png', nav: '热力图', title: '骑行热力图', ready: '.leaflet-container', tiles: true, settle: 4000 },
-  // ⚠️ 临时绕行：App.tsx 的路由索引错位（ROUTES[9] 是 '/segments/:id' 却挂了 RoutesMapPage），
-  // 导致 '/routes-map' 实际渲染训练计划页、'/training-plan' 渲染表现趋势页。
-  // 修好 App.tsx 的索引后，下面三条应改回 nav: '路线图' / nav: '训练计划' / nav: '表现趋势'。
-  { file: '10-路线图.png', path: '/segments/routes-map', title: '骑行路线图', ready: '.routes-map-page', tiles: true, settle: 5000 },
+  // 2026-09-16：App.tsx 路由错位（ROUTES[9] 挂错组件）已修，下面三条改回站内 nav 点击
+  { file: '10-路线图.png', nav: '路线图', title: '骑行路线图', ready: '.routes-map-page', tiles: true, settle: 5000 },
   { file: '11-年度回顾.png', nav: '年度回顾', title: '年度回顾', ready: 'h1', settle: 3000 },
   { file: '12-同步骑行数据.png', nav: '骑行记录', title: '骑行记录', click: '同步骑行数据', settle: 1800 },
   { file: '13-在线回放.png', path: 'detail', ready: DETAIL_READY, click: '在线回放', tiles: true, settle: 3500 },
   { file: '14-导出GPX和导出回放视频.png', path: 'detail', ready: DETAIL_READY, click: '生成竖屏视频', settle: 2000 },
   { file: '15-分享素材.png', path: 'detail', ready: DETAIL_READY, click: '分享', tiles: true, settle: 4000 },
-  { file: '17-热门路线.png', path: '/segments/routes-map', title: '骑行路线图', ready: '.routes-map-page__switch', click: '热门路线', tiles: true, settle: 5000 },
+  { file: '17-热门路线.png', nav: '路线图', title: '骑行路线图', ready: '.routes-map-page__switch', click: '热门路线', tiles: true, settle: 5000 },
   { file: '18-赛段页面.png', nav: '赛段', title: '赛段', ready: 'h1', settle: 6000 },
-  { file: '19-训练计划.png', path: '/routes-map', title: '训练计划', ready: 'h1', settle: 2500 },
-  { file: '20-表现趋势.png', path: '/training-plan', title: '表现趋势', ready: 'h1', settle: 3000 },
+  { file: '19-训练计划.png', nav: '训练计划', title: '训练计划', ready: 'h1', settle: 2500 },
+  { file: '20-表现趋势.png', nav: '表现趋势', title: '表现趋势', ready: 'h1', settle: 3000 },
   { file: '21-更多设置页.png', nav: '更多', title: '更多', ready: 'h1', settle: 2000 },
 ]
 
