@@ -32,6 +32,7 @@
 | `data-docs.md` | 用 `private-fixtures/` 真实数据、改算法口径、改云端教程文档前 |
 | `curate-routes.md` | 给 `src/features/curatedRoutes/` 补录全国路线（跑 curate-batch、调闸门、离线入库）前 |
 | `docs-screenshots.md` | 要重拍/新增 README 界面预览图（`scripts/capture-screenshots.mjs`、编号命名、选择器与沙箱坑）时 |
+| `data-layer.md` | 改 `src/storage/**`、动 Dexie schema/迁移、改快照构建脚本或 CI 流水线、**想「优化查询/性能」之前**（含基线测量口径与三项被实测否掉的优化） |
 
 ## 维护规则
 
