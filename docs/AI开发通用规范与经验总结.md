@@ -259,7 +259,7 @@ Subject 一句话；细节全在 body bullet；测试/版本号进 body 不进�
 ## 7. 测试策略：分级 + 数字说话
 
 - **三级隔离**：纯单测（无外部依赖，日常跑）→ 集成测试（`@Tag("integration")` 显式标注，
-  `-Dgroups='!integration'` 排除）→ E2E（Playwright 本地跑不进 CI）。
+  `-Dgroups='!integration'` 排除）→ E2E（cycling-analyzer 的 Playwright 冒烟 2026-09 起已进 CI）。
   kudo 的集成测试需要 Kudu 集群 + Kerberos，靠 tag 与单测完全隔离。
 - **DB 测试模式**：fake-indexeddb 全局注册 + 真 Dexie 实例注入——mock 掉的是浏览器
   不是被测库。
@@ -789,7 +789,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   调用（read 消费 stream 后误报 false）
 - src/fit/normalizer：SDK 结构 → 领域模型（半周→十进制度、Date→Unix 秒）
 - src/fit/calculator：统计计算（爬升=相邻正增量、平均速度=距离/时长）
-- src/storage：Dexie 库 cycling-data（activities 摘要 / activity_records 逐点分表）
+- src/storage：Dexie 库 cycling-data（activities 摘要 / activity_chunks 逐点分片——2026-09 前为 activity_records 逐点行、后经 activity_blobs 演进为分片）
 - src/features/*：业务功能域；src/pages、src/charts、src/map：页面与展示组件
 
 约束：React 组件禁止直接调用 @garmin/fitsdk；UI 只依赖 src/types/activity.ts
@@ -799,7 +799,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 
 - 领域模型是唯一跨层契约（src/types/activity.ts）：单位固定（米/m/s/bpm/rpm/W、
   Unix 秒、十进制度）；缺失字段 = undefined ≠ 0（规格 §25），UI 显示 —
-- 摘要与逐点分表：activities 表不存 records；getById 返回摘要，getRecords 按需加载
+- 摘要与逐点分表：activities 表不存 records；getById 返回摘要，getRecords 按需加载。**布局封装在 repository 内**，对外契约不变：同一份数据换过三次存储布局（逐点行 → 整活动一行 → 2000 点/片分片），每次都是因为实测出「按区间读要整行解出」的放大效应
 - 去重指纹基于解压后内容（.fit 与 .fit.gz 同一活动判重一致）
 - SPA 路由：main.tsx basename 生产 /cycling-analyzer、dev /
 - 导入在 Web Worker 解析（jsdom 自动降级主线程），失败进台账可重试

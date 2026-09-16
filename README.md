@@ -253,17 +253,21 @@ npm run dev
 ```bash
 npm run check               # 提交前快速验证（tsc -b + 改动文件 lint + 相关测试，约 30s）
 npm run check -- --full     # 全量 lint + 全量测试（大改动 / 排查时用）
-npm run test                # 全量测试（Vitest，约 170 个文件 / 1600+ 用例）
+npm run test                # 全量测试（Vitest，181 个文件 / 1745 用例）
 npx vitest run <file>       # 单文件测试
 npm run lint                # ESLint
-npm run build:author-data   # 作者数据快照（解析 author-data/fit/ → public/author-data/）
+npm run build:author-data   # 作者数据快照（解析 author-data/fit/ → public/author-data/，实测约 7s）
+npm run check:snapshot-size # 快照产物体积门禁
+npm run bench:data-layer    # 数据层基线测量（IndexedDB 实际解出多少行/点数）
 npm run build               # tsc + vite build（本地通常不需要，构建由 CI 兜底）
 npm run test:e2e            # E2E（Playwright，首次需 npx playwright install chromium）
 ```
 
 ## 部署
 
-推送 main 分支自动触发 GitHub Actions：lint → 全量测试 → 构建作者数据快照 → build → 部署到 GitHub Pages（SPA 路由经 404.html 还原深链；失败时线上保持旧版）。
+推送 main 分支自动触发 GitHub Actions：verify（lint + 全量测试 + 依赖漏洞扫描）与 e2e 并行 → 构建作者数据快照 → **体积门禁** → build → 部署到 GitHub Pages（SPA 路由经 404.html 还原深链；失败时线上保持旧版）。
+
+**回滚**：Actions → Deploy GitHub Pages → Run workflow → `ref` 填上一个正常发布的提交 SHA，即可重新发布那一版（无需 revert 提交）。
 
 ## 项目文档
 

@@ -10,12 +10,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev                 # 本地开发（默认 5173 端口）
 npm run check               # 提交前快速验证（tsc -b + 改动文件 lint + 相关测试，约 30s）
 npm run check -- --full     # 全量 lint + 全量测试（大改动 / 排查时用）
-npm run test                # 全量测试（vitest run，约 170 个文件 / 1600+ 用例）
+npm run test                # 全量测试（vitest run，181 个文件 / 1745 用例）
 npx vitest run tests/fit/decoder.test.ts   # 单文件测试
 npm run lint                # ESLint（flat config）
-npm run build:author-data   # 作者数据快照全量重建（fail-fast，任一 FIT 解析失败即报错）
+npm run build:author-data   # 作者数据快照全量重建（实测约 7s；坏 FIT 跳过并告警，--fail-fast 才是严格模式）
 npm run build               # tsc -b + vite build（本地通常不需要，构建由 CI 兜底）
-npm run test:e2e            # Playwright e2e（本地跑，不进 CI）
+npm run test:e2e            # Playwright e2e（已进 CI，失败即阻断发布）
+npm run bench:data-layer    # 数据层基线测量（口径：IndexedDB 实际解出多少行/点数，非耗时）
+npm run check:snapshot-size # 快照产物体积门禁
 npm run curate -- --spec <需求单.json>     # 精选路线半自动添加（--dry 试运行不落盘）
 ```
 
@@ -32,7 +34,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - `src/fit/decoder`：封装 @garmin/fitsdk。**Stream 的 isFIT/checkIntegrity 必须在 read() 前调用**（read 消费 stream 后误报 false）
 - `src/fit/normalizer`：SDK 结构 → 领域模型（半周→十进制度、Date→Unix 秒）
 - `src/fit/calculator`：统计计算（爬升=相邻正增量、平均速度=距离/时长、移动时长口径见下）
-- `src/storage`：Dexie 库 `cycling-data`（`DB_VERSION = 6`）：`activities` 摘要 / `activity_blobs` 逐点整活动行（v5）+ `activity_records` 旧逐点行表（迁移兜底）、`files` 台账、`settings`、`segments`、`segment_efforts`；缓存表 `tile_cache` / `scan_cache`
+- `src/storage`：Dexie 库 `cycling-data`（`DB_VERSION = 9`）：`activities` 摘要 / `activity_chunks` **逐点分片主存储**（v9，每活动 N 片、2000 点/片，复合主键 `[activityId+seq]`）+ `activity_blobs`（v5~v8 整活动行，**只作迁移源，不再写入**）+ `activity_records`（v4 逐点行表，迁移兜底）、`files` 台账、`settings`、`segments`、`segment_efforts`；缓存表 `tile_cache` / `scan_cache`；两层迁移共用 `migrationLock.ts`
 - `src/features/*`：业务功能域，共 19 个（import / activity / analysis / ai / share / dashboard / statistics / segments / heatmap / routes / curatedRoutes / calendar / records / insights / training / yearReview / settings / pwa / changelog）
 - `src/pages`、`src/charts`、`src/map`：页面与展示组件（15 条路由）
 
@@ -41,7 +43,9 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 ### 关键设计决策
 
 - **领域模型是唯一跨层契约**（`src/types/activity.ts`）：单位固定（米/m/s/bpm/rpm/W、Unix 秒、十进制度）；**缺失字段 = undefined ≠ 0**（规格 §25），UI 显示 `—`
-- **摘要与逐点分表**：activities 表不存 records；`getById` 返回摘要，`getRecords` 按需加载。v5 起逐点数据**每活动一行**（`activity_blobs`，主键 activityId）：IndexedDB 无批量/范围删除 API，逐点一行时删除/导入是 N×万行级操作（实测 0.22ms/行），整活动一行后均毫秒级。旧表数据由后台分批迁移（`recordsMigration.ts`，幂等续传 + 心跳锁），迁移完成前读取新表优先、旧表兜底
+- **摘要与逐点分表**：activities 表不存 records；`getById` 返回摘要，`getRecords` 按需加载。逐点数据的**存储布局封装在 repository 内部**，对外契约始终是 `ActivityRecord[]`：v5 曾用「每活动一行」（`activity_blobs`，解决了 IndexedDB 无批量删除导致的逐行慢删），但「按区间读」时也得整行解出——详情页读 100 点解出 15.4MB、导出分批读放大 11 倍；**v9 改分片**（`activity_chunks`，按 `[activityId+seq]` 复合主键范围查询，只取覆盖目标区间的片）。读取顺序 chunks → blobs → records，后两级命中时按**当前**布局回填，与后台迁移双向收敛。迁移分两层（`recordsMigration.ts` v4→v5、`chunksMigration.ts` v5→v9），**共用 `migrationLock.ts` 的 CAS 锁 + 心跳续期**——这套并发语义写错一次就丢数据，不得复制成两份
+- **大范围逐点扫描一律用 `iterateRecordBatches(ids, visit, { batchSize })`**（默认 16 活动/批）：`getRecordsByActivityIds` 的返回值是 `Map<活动, 全量记录>`，峰值 = 所有活动逐点之和（实测 500 活动 × 2000 点 = 154MB）；分批流式后 4.9MB。回调**串行**、返回 `false` 可提前终止，**不要在回调里长期持有 batch**。作者源实现刻意返回空记录（与本类既有语义一致），改动它等于改变访客侧行为
+- **性能改动必须先有基线数字**：涉及查询 / IO / 构建的优化，先用 `npm run bench:data-layer`（数据层，口径是「IndexedDB 实际解出多少行/点数」而非耗时）或直接实测取证，不接受「应该会更快」。本项目已有**三项**计划优化被实测否掉（keyset 分页、快照增量构建、产物 gzip / 按年分片），省下的返工多于省下的代码
 - **去重指纹基于解压后内容**（`.fit` 与 `.fit.gz` 同一活动判重一致）
 - **Strava 标题还原**：CSV 文件名匹配（`src/features/import/stravaExport.ts`），跨行引号感知
 - **佳明 GDPR 导出包适配**：FIT 封装在包内层 `UploadedFiles_*.zip`，扫描器 `expandArchives` 递归展开 zip（fflate，深度 2）；标题还原按摘要 JSON `startTimeGmt` 与 FIT 开始时间 ±2s 匹配（`src/features/import/garminExport.ts`，与文件名无键关联）
@@ -61,6 +65,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - FIT 样例在 `tests/fixtures/`（Garmin 官方公开样例 + 合成带 GPS 文件，不包含个人真实数据）
 - 纯函数优先可测；页面测试用 MemoryRouter；数据加载支持注入；mock `getBoundingClientRect` 让 Recharts 可渲染
 - `tests/setup.ts` 全局 mock 了 `@/map/CachingTileLayer`，需要真实实现的测试须用 `vi.mock(..., importOriginal)` 覆盖
+- **逐点数据的 `beforeEach` 必须把三种布局全清**（`activity_chunks` + `activity_blobs` + `activity_records`）：只清其一时，上一条用例的轨迹会从兜底读路径漏进本条用例（已踩过）
 - **`private-fixtures/` 为用户真实骑行数据，gitignored，严禁提交或引用进测试**
 
 ## 代码与提交规范

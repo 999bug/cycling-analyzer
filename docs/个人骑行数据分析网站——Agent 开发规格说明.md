@@ -660,6 +660,12 @@ Tooltip
 
 # 18. 本地数据库
 
+> **实现注记（2026-09-16 补，非规格原文）**：本节是初版需求描述。实际实现已演进到
+> `DB_VERSION = 9`，表结构与读取契约以 `docs/架构总览.md` §6 为准：摘要与逐点已分表，
+> 逐点数据 v9 起为 `activity_chunks` **分片**（2000 点/片，按 `[activityId+seq]` 范围读），
+> 下文列出的 `activity_records` 是 v4 的旧逐点行表、仅作迁移兜底。
+> 下方「表：activities / activity_records / files / settings」保留为设计原意，勿照此实现。
+
 使用 IndexedDB。
 
 推荐：

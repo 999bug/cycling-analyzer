@@ -18,8 +18,10 @@ npm run check -- --full     # 全量版（大改动/排查时用：全仓库 lin
 npx vitest run <file>       # 单文件测试
 npm run test                # 全量测试（常规提交不用，CI 兜底）
 npm run build              # tsc -b + vite build（本地通常不需要跑，见下方说明）
-npm run build:author-data   # 快照构建（tsx 脚本，全量重建，fail-fast 解析失败即报错）
-npm run test:e2e            # Playwright（本地跑，不进 CI；首次需 npx playwright install chromium）
+npm run build:author-data   # 快照构建（tsx 脚本，全量重建，实测约 7s；坏 FIT 跳过并告警，--fail-fast 才是严格模式）
+npm run test:e2e            # Playwright e2e（已进 CI；首次需 npx playwright install chromium）
+npm run bench:data-layer    # 数据层基线测量（口径：IndexedDB 实际解出多少行/点数，非耗时）
+npm run check:snapshot-size # 快照产物体积门禁
 npm run curate -- --spec <需求单.json>   # 精选路线半自动添加（--dry 试运行不落盘）
 node scripts/curate-batch.mjs            # 批量跑需求单数组（--only/--from/--dry/--delay）
 node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
@@ -27,7 +29,8 @@ node tests/fixtures/generate-samples.mjs   # 重新生成合成 FIT 样例
 
 ## 提交与发布流程（提速约定，2026-09-11）
 
-- **提交前只跑 `npm run check`**（半分钟内），不跑全量测试、不跑 vite build——CI（`deploy.yml`）在 push 后自动 lint + 全量测试 + build 并发布 Pages，失败时线上保持旧版
+- **提交前只跑 `npm run check`**（半分钟内），不跑全量测试、不跑 vite build——CI（`deploy.yml`）在 push 后自动跑 verify（lint + 全量测试 + `npm audit` 非阻塞）与 e2e，再 build 并发布 Pages，失败时线上保持旧版
+- **回滚**：Actions → Deploy GitHub Pages → Run workflow → `ref` 填上一个正常发布的提交 SHA，即可重新发布那一版（无需 revert 提交）
 - **push 后必须盯 CI**（`gh run watch` 或 Actions 页）：失败立即修复补提交，保证「发布成功」闭环；改动 tsconfig/vite.config/tests setup 等全局文件时本地改用 `npm run check -- --full`
 - 大改动/大规模重构在推送前额外跑一次 `npm run check -- --full`，把失败发现提前到本地
 
@@ -57,12 +60,14 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 
 - **Stream 校验顺序**：`isFitFile`/`checkFitIntegrity` 必须在 `read()` 前调用，read 消费 stream 后会误报 false
 - **Dexie 非索引字段免升版本**（如 `FileEntity.data`、`ActivityEntity.description`）；改索引列才需要 `db.ts` 升 `DB_VERSION`
-- `activities` 表只存摘要，逐点数据在 `activity_blobs`（每活动一行，v5；旧 `activity_records` 逐点行表由后台迁移完成后清空、v6 删除；`getRecords` 按需加载，迁移完成前新表优先旧表兜底）；导入时摘要需含 `normalizedPower`（训练状态聚合依赖）
+- `activities` 表只存摘要，逐点数据在 `activity_chunks`（**v9 分片**，2000 点/片、复合主键 `[activityId+seq]`，按范围查询只取覆盖目标区间的片）；v5~v8 的 `activity_blobs` 与更早的 `activity_records` **只作迁移源**，读取按 chunks → blobs → records 依次兜底。导入时摘要需含 `normalizedPower`（训练状态聚合依赖）
+- **大范围逐点扫描用 `iterateRecordBatches()`，不要用 `getRecordsByActivityIds()`**：后者返回值是 `Map<活动, 全量记录>`，峰值 = 所有活动逐点之和（实测 154MB）
+- **测试的 `beforeEach` 要把逐点数据三种布局全清**（chunks + blobs + records）：只清其一会让上一条用例的轨迹从兜底路径漏进来
 - 活动 ID = 文件内容指纹（快照确定性深链）；`.fit` 与 `.fit.gz` 同一活动判重一致
 - Strava 标题还原：CSV「文件名」列匹配（批量导出数字 ID），未命中时文件名兜底（手动下载文件名=标题，纯数字跳过）；描述/估算功率仅 CSV 有对应行时生效
 - 测试：Vitest + jsdom；`tests/setup.ts` 全局注册 fake-indexeddb，DB 测试用真 Dexie 实例注入；FIT 样例在 `tests/fixtures/`；**`private-fixtures/` 用户真实数据 gitignored，严禁提交**
 - 组件渲染测试用 MemoryRouter；页面数据加载支持注入；mock `getBoundingClientRect` 让 Recharts 正常渲染
-- 构建产物 `public/author-data/`、`dist/` gitignored，CI 重建；快照任一 FIT 解析失败 CI 即失败
+- 构建产物 `public/author-data/`、`dist/` gitignored，CI 重建；快照构建**默认跳过坏 FIT 并告警**（`::warning` 注解 + 清单，不阻塞整站发布），全部解析失败才中止；体积门禁 `npm run check:snapshot-size` 超限即阻断
 - **本地验证不要跑 `vite build`**（2026-09-11 用户确认：本地 dist 根本不用）：提交前的验证标准是 `npm run lint` + `npx tsc -b` + `npm run test` 全绿，构建由 CI 兜底；确需本地构建时（排查构建本身的问题）先把旧 dist 挪走再 build（见项目记忆 build-env.md）
 
 ## 提交规范
@@ -78,5 +83,7 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
 - 改动前先读 `docs/PROGRESS.md` 确认现状，避免与进行中的任务冲突
 - **每完成一个功能/阶段必须同步更新 `docs/PROGRESS.md`**（状态与文件清单）再提交代码，保持文档与代码同步
 - 完成后 `codegraph sync`（如环境可用）
-- **版本策略**：每次提交都必须前进版本号（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）——功能改动 `[NF]` 升中间位（如 2.28.0 → 2.29.0），其余提交（`[BF]`/`[IM]`/`[DOC]`/`[CU]`）升末尾位（如 2.28.0 → 2.28.1）；changelog 同步追加条目
+- **版本策略**：改动产品代码或面向用户的文档时前进版本号（`__APP_VERSION__` 由 vite define 自动读取，侧边栏底部显示）——功能改动 `[NF]` 升中间位（如 2.28.0 → 2.29.0），其余提交（`[BF]`/`[IM]`/`[DOC]`/`[CU]`）升末尾位；changelog 同步追加条目
+  - **例外一（已固化）**：纯 agent 记忆同步（只改 `.workbuddy/memory/`）不升——那是本机笔记、不进 dist，升版本会往用户可见的更新日志灌进大量无内容的版本号（先例：`5b6a28b`、`607d9a4`、`61b531e`）
+  - **例外二（与原始约定有出入，需用户确认）**：纯开发工具与 CI 提交（`scripts/*`、`.github/workflows/*`）目前也不升（先例：`47b4b17` 基线脚本、`a158fbd` P2 工具链）。理由是用户可见行为无变化；但本条与「每次提交都必须前进版本号」的原始约定不一致，**遇到时按当时的用户指示定**
 

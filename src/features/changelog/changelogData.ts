@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.93.1',
+    date: '2026-09-16',
+    features: [
+      '文档对齐 2.93.0：架构总览重写存储模型章节（逐点数据改分片存储、读取路径与两层迁移说明、索引设计的两个坑），并补上 CI 流水线结构与回滚操作说明',
+      'README 与开发约定补全新增命令（快照体积门禁、数据层基线测量）与部署流程说明',
+    ],
+  },
+  {
     version: '2.93.0',
     date: '2026-09-16',
     features: [
