@@ -24,11 +24,12 @@ export const DB_NAME = 'cycling-data';
 /**
  * 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表；
  * v4：新增 scan_cache 扫描缓存表；v5：新增 activity_blobs 逐点整活动存储表，
- * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空，v7 物理删除；
+ * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空（表本体仍未删除）；
  * v6：新增 segment_efforts 赛段成绩落库表，替代「每次进赛段页全量重扫」；
- * v7：新增 error_logs 运行时错误日志表）。
+ * v7：新增 error_logs 运行时错误日志表；
+ * v8：activities 新增 localDate 本地日期索引，供年/月筛选缩候选集）。
  */
-export const DB_VERSION = 7;
+export const DB_VERSION = 8;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -70,8 +71,21 @@ export interface ActivityEntity {
    */
   typeConfirmedAt?: number;
 
-  /** 开始时间（ISO 8601，索引字段） */
+  /** 开始时间（ISO 8601 UTC，索引字段） */
   startTime: string;
+
+  /**
+   * 本地日期键（YYYY-MM-DD，v8 新增索引字段）。
+   *
+   * 年/月筛选按**用户本地时区**的日期前缀匹配，而 `startTime` 是 UTC ISO 字符串，
+   * 两者在时区边界上不可互换（UTC 的 23:30 可能是本地次日），所以必须单独存一份
+   * 本地日期键供索引使用。
+   *
+   * 可选：v8 之前写入的存量数据没有该字段，由启动时的后台回填补齐
+   * （见 `src/storage/localDateBackfill.ts`，就绪标志 `localDateIndexReady`）。
+   * 未就绪时列表查询自动回退全量路径，不做「索引一定在」的隐式假设。
+   */
+  localDate?: string;
 
   /** 结束时间（ISO 8601） */
   endTime: string;
@@ -406,6 +420,8 @@ export interface ErrorLogEntity {
  * - activities.fingerprint 唯一索引（& 前缀），重复导入检测走主键级查重
  * - activities.startTime 索引：按时间排序与范围聚合（summarizeByRange）
  * - activities.activityType 索引：类型筛选
+ * - activities.localDate 索引（v8）：年/月筛选按本地日期前缀缩候选集
+ *   （startTime 是 UTC ISO，与本地日期不同源，不可互换）
  * - activity_blobs.activityId 主键：按活动加载/删除逐点数据（整活动一行）
  * - segment_efforts.&[segmentId+activityId] 唯一复合索引：同活动同赛段一条最佳成绩，
  *   upsert 与按赛段/按活动级联清理走 segmentId / activityId 单索引
@@ -490,6 +506,18 @@ export class CyclingDatabase extends Dexie {
     // source / level 索引供筛选（UI 与导出用）。
     this.version(7).stores({
       error_logs: '++id, createdAt, source, level',
+    });
+    // v8：activities 新增 localDate 索引（本地日期键，供年/月筛选走索引缩候选集）。
+    //
+    // 为什么不是 [activityType+startTime] 复合索引：库里 activityType 存的是各平台
+    // 原始写法（road_biking / 骑行），而筛选传入的是归一化后的值（cycling），
+    // 复合索引只能命中字面量相等的行，会**静默漏掉**其余写法——比不走索引更糟。
+    // 类型筛选由内存精筛负责（归一化后比对），索引只做它擅长的事。
+    //
+    // 存量行的 localDate 不在此处回填（升级事务内做全表异步重写会长时间阻塞
+    // db.open()，v5 已为此踩过坑），改由启动后一次性后台回填并落就绪标志。
+    this.version(8).stores({
+      activities: 'id, &fingerprint, startTime, activityType, localDate',
     });
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，

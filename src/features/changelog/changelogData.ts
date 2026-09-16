@@ -20,6 +20,15 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.91.0',
+    date: '2026-09-16',
+    features: [
+      '活动列表翻页改为只读取当前页的数据（此前每翻一页都要把全部活动读进内存再截取），活动攒到上千条后翻页与首屏会明显更跟得上',
+      '按年份/月份筛选活动改为走专用索引，不再需要遍历全部活动',
+      '按日期筛选统一以「你所在时区的当天」为准，跨时区查看时不会因为日期归属漂移而漏掉或误收活动',
+    ],
+  },
+  {
     version: '2.90.2',
     date: '2026-09-16',
     features: [

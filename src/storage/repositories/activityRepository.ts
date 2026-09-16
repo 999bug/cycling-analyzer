@@ -4,12 +4,15 @@
  * 职责：活动摘要与逐点数据的增删查、列表查询（排序/分页/筛选/搜索）、
  * 时间范围统计聚合。重复检测通过 fingerprint 唯一索引 + existsByFingerprint 完成。
  *
- * 说明：排序与筛选在内存中完成（个人本地数据量级小，全量过滤保证一致性与
- * 正确性，避免多索引组合的复杂度；数据量增长后可切换到索引路径）。
+ * 说明：筛选与排序的**语义**始终由内存纯函数 `queryActivityList` 定义（作为
+ * 最终一致性基准 / oracle），索引只负责缩小候选集：无筛选的按时间分页走
+ * startTime 索引游标，年/月筛选走 localDate 索引。数值区间组合无法用索引表达，
+ * 一律内存精筛——这样「走不走索引」只影响性能，不影响结果。
  */
 import type { Activity, ActivityRecord } from '@/types/activity';
 import type { ActivityBlobEntity, ActivityEntity, ActivityRecordEntity, CyclingDatabase } from '@/storage/db';
 import { clearSegmentScanState, pruneSegmentScanState } from '@/storage/segmentScanState';
+import { isLocalDateIndexReady } from '@/storage/localDateBackfill';
 import { localDateKeyFromIso } from '@/utils/format';
 import { normalizeActivityType } from '@/types/activityType';
 
@@ -371,9 +374,30 @@ const DEFAULT_SORT_BY = 'startTime';
 const DEFAULT_SORT_ORDER = 'desc';
 
 /**
+ * 活动本地日期键（YYYY-MM-DD）。
+ *
+ * 优先取摘要上已存的 `localDate`（v8 索引字段，写入/回填时算好）：它与
+ * `localDate` 索引路径**同源**，避免出现「索引按存储值筛、内存按当前时区重算」
+ * 在用户跨时区后给出不同结果——同一份数据必须只有一个答案。
+ *
+ * 旧数据（未回填）与作者快照没有该字段，回退按 `startTime` 现算。
+ * 注：快照**刻意不写** localDate——那个值会在 CI 机器的时区下算出来，
+ * 与访问者本地时区不符，反而会污染年/月筛选口径。
+ *
+ * @param activity 活动摘要
+ * @returns 本地日期键，无法计算时 undefined
+ */
+function localDateKeyOf(activity: ActivitySummary): string | undefined {
+  return activity.localDate ?? localDateKeyFromIso(activity.startTime);
+}
+
+/**
  * 活动列表内存查询（筛选/排序/分页）。
  * Dexie 与作者快照两个仓库实现共用本函数，保证任一数据源行为一致
  * （个人数据量级小，全量过滤 + 内存排序保证多条件组合正确）。
+ *
+ * 本函数同时是索引路径的 **oracle**：索引只缩候选集，最终结果一律由这里定义，
+ * 因此「走不走索引」不影响返回内容。
  *
  * @param all 全量活动摘要
  * @param options 查询选项（数值条件含边界，组合语义 AND；avgPower 缺失不满足功率条件）
@@ -410,10 +434,10 @@ export function queryActivityList(
 
   let items = [...all];
   if (year) {
-    items = items.filter((a) => localDateKeyFromIso(a.startTime)?.startsWith(String(year)) === true);
+    items = items.filter((a) => localDateKeyOf(a)?.startsWith(String(year)) === true);
   }
   if (month) {
-    items = items.filter((a) => localDateKeyFromIso(a.startTime)?.startsWith(month) === true);
+    items = items.filter((a) => localDateKeyOf(a)?.startsWith(month) === true);
   }
   if (activityType) {
     // 按归一化后的类型比对：库里可能存有各平台的原始写法
@@ -434,13 +458,13 @@ export function queryActivityList(
   // 日期区间筛选（按活动本地日期 YYYY-MM-DD 比较，含边界；自定义筛选日期条件）
   if (startTimeFrom !== undefined) {
     items = items.filter((a) => {
-      const dateKey = localDateKeyFromIso(a.startTime);
+      const dateKey = localDateKeyOf(a);
       return dateKey !== undefined && dateKey >= startTimeFrom;
     });
   }
   if (startTimeTo !== undefined) {
     items = items.filter((a) => {
-      const dateKey = localDateKeyFromIso(a.startTime);
+      const dateKey = localDateKeyOf(a);
       return dateKey !== undefined && dateKey <= startTimeTo;
     });
   }
@@ -488,31 +512,151 @@ export function queryActivityList(
   // 排序（数字字段按值序，缺失按 0 参与即沉底；字符串字段 startTime/name 按字典序）
   const direction = sortOrder === 'asc' ? 1 : -1;
   items.sort((a, b) => {
+    let compared = 0;
     if (sortBy === 'name' || sortBy === 'startTime') {
       const left = sortBy === 'name' ? (a.name ?? '') : a.startTime;
       const right = sortBy === 'name' ? (b.name ?? '') : b.startTime;
       if (left < right) {
-        return -direction;
+        compared = -direction;
+      } else if (left > right) {
+        compared = direction;
       }
-      if (left > right) {
-        return direction;
+    } else {
+      const left = a[sortBy] ?? 0;
+      const right = b[sortBy] ?? 0;
+      if (left < right) {
+        compared = -direction;
+      } else if (left > right) {
+        compared = direction;
       }
+    }
+    if (compared !== 0) {
+      return compared;
+    }
+    // 同值兜底按 id 比较，方向与主排序一致：与 IndexedDB 索引扫描的次序
+    // （键升序、同键按主键升序；倒序扫描时两者同时倒序）对齐，使「索引快路径」
+    // 与「内存 oracle」在存在同值行时仍返回同一结果——一致性测试才有意义。
+    // 不补这层兜底，排序结果依赖实现路径，测试会随机飘。
+    if (a.id === b.id) {
       return 0;
     }
-    const left = a[sortBy] ?? 0;
-    const right = b[sortBy] ?? 0;
-    if (left < right) {
-      return -direction;
-    }
-    if (left > right) {
-      return direction;
-    }
-    return 0;
+    return a.id < b.id ? -direction : direction;
   });
 
   const total = items.length;
   const page = limit > 0 ? items.slice(offset, offset + limit) : items.slice(offset);
   return { items: page, total };
+}
+
+/** 无法用索引表达的数值区间筛选字段 */
+const NUMERIC_FILTER_KEYS = [
+  'minDistance',
+  'maxDistance',
+  'minElevationGain',
+  'maxElevationGain',
+  'minDuration',
+  'maxDuration',
+  'minAvgSpeed',
+  'maxAvgSpeed',
+  'minAvgHeartRate',
+  'maxAvgHeartRate',
+  'minAvgPower',
+  'maxAvgPower',
+] as const satisfies readonly (keyof ActivityListOptions)[];
+
+/** 列表查询的执行策略 */
+export type ActivityQueryStrategy =
+  /** 无筛选 + 按 startTime 排序 + 分页：由索引游标直接取当前页（不 materialize 全量） */
+  | 'index-startTime'
+  /** 年/月筛选且 localDate 索引就绪：只取该年/月的候选集，再内存精筛 */
+  | 'index-localDate'
+  /** 全量读出后内存精筛（正确性由 queryActivityList 保证） */
+  | 'full-scan';
+
+/** 查询规划所需的能力状态 */
+export interface ActivityQueryContext {
+  /** localDate 索引是否已就绪（未就绪时不得走 localDate 路径，否则漏掉未回填的行） */
+  localDateIndexReady: boolean;
+}
+
+/**
+ * 是否存在「索引无法表达」的筛选条件。
+ *
+ * 数值区间筛选有 12 个字段、任意组合，建索引也覆盖不了
+ * `minDistance AND maxElevationGain AND minAvgPower` 这类组合，选择性通常也低——
+ * 所以索引只做「缩候选集」的预筛，精筛仍在内存。这是刻意取舍，不是遗漏。
+ *
+ * 空值判定与 `queryActivityList` 保持同口径（空串/纯空白不算筛选条件），
+ * 否则会出现「规划器认为无筛选走快路径、oracle 认为有筛选」的错配。
+ *
+ * @param options 查询选项
+ * @returns 是否存在只能内存精筛的条件
+ */
+function hasInMemoryOnlyFilters(options: ActivityListOptions): boolean {
+  if (NUMERIC_FILTER_KEYS.some((key) => options[key] !== undefined)) {
+    return true;
+  }
+  if (options.startTimeFrom !== undefined || options.startTimeTo !== undefined) {
+    return true;
+  }
+  if (options.activityType !== undefined && options.activityType !== '') {
+    return true;
+  }
+  if (options.search !== undefined && options.search.trim() !== '') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 年/月筛选的日期前缀（month 优先：`2026-08` 的前缀已隐含年份）。
+ *
+ * @param options 查询选项
+ * @returns 日期前缀，无年/月筛选时 undefined
+ */
+function datePrefixOf(options: ActivityListOptions): string | undefined {
+  if (options.month !== undefined && options.month !== '') {
+    return options.month;
+  }
+  if (options.year !== undefined && options.year !== '') {
+    return options.year;
+  }
+  return undefined;
+}
+
+/**
+ * 列表查询规划：决定走索引快路径还是全量精筛。
+ *
+ * 拆成纯函数是为了可单测（不需要真 IndexedDB 就能覆盖全部分支），
+ * 也让「哪些查询真的走了索引」这件事有单一出处、可被评审。
+ *
+ * @param options 查询选项
+ * @param context 能力状态（localDate 索引是否就绪）
+ * @returns 执行策略
+ */
+export function planActivityQuery(
+  options: ActivityListOptions,
+  context: ActivityQueryContext,
+): ActivityQueryStrategy {
+  const { sortBy = DEFAULT_SORT_BY, limit = DEFAULT_PAGE_SIZE } = options;
+  const datePrefix = datePrefixOf(options);
+
+  // ① 无任何筛选 + 按 startTime 排序 + 分页请求：排序字段与索引同序，
+  //    直接让 IndexedDB 走索引游标跳页，只读当前页（真正的分页，非假分页）
+  if (
+    sortBy === DEFAULT_SORT_BY &&
+    limit > 0 &&
+    datePrefix === undefined &&
+    !hasInMemoryOnlyFilters(options)
+  ) {
+    return 'index-startTime';
+  }
+  // ② 年/月筛选且索引就绪：先按本地日期前缀缩到大半年份的候选集
+  if (datePrefix !== undefined && context.localDateIndexReady) {
+    return 'index-localDate';
+  }
+  // ③ 其余组合：全量读出后内存精筛
+  return 'full-scan';
 }
 
 /**
@@ -662,8 +806,53 @@ export class DexieActivityRepository implements ActivityRepository {
   }
 
   async listActivities(options?: ActivityListOptions): Promise<ActivityListResult> {
-    // 内存过滤：个人本地数据量级小，全量过滤 + 内存排序保证多条件组合正确
-    return queryActivityList(await this.db.activities.toArray(), options);
+    const opts = options ?? {};
+    const strategy = planActivityQuery(opts, {
+      localDateIndexReady: await isLocalDateIndexReady(this.db),
+    });
+
+    if (strategy === 'index-startTime') {
+      // 旧实现是 toArray() 取全量再内存排序切片：分页不减少任何 IO，
+      // 活动上千后首屏线性劣化。无筛选时排序字段与索引同序，
+      // 交给 IndexedDB 游标跳页，只读当前页。
+      const {
+        sortOrder = DEFAULT_SORT_ORDER,
+        offset = 0,
+        limit = DEFAULT_PAGE_SIZE,
+      } = opts;
+      const total = await this.db.activities.count();
+      const ordered = this.db.activities.orderBy('startTime');
+      const items = await (sortOrder === 'asc' ? ordered : ordered.reverse())
+        .offset(offset)
+        .limit(limit)
+        .toArray();
+      return { items, total };
+    }
+
+    const candidates =
+      strategy === 'index-localDate'
+        ? await this.yearMonthCandidates(opts)
+        : await this.db.activities.toArray();
+    // 候选集可能是命中集的超集，精确筛选与排序仍交给 oracle：
+    // 索引只优化性能，语义永远以 queryActivityList 为准
+    return queryActivityList(candidates, opts);
+  }
+
+  /**
+   * 用 localDate 索引取年/月候选集。
+   *
+   * 返回的是命中集的**超集**（例如 month 前缀筛选时 year 条件尚未应用），
+   * 精确筛选由调用方的内存精筛完成。
+   *
+   * @param options 查询选项（需含 year 或 month）
+   * @returns 候选活动摘要
+   */
+  private async yearMonthCandidates(options: ActivityListOptions): Promise<ActivitySummary[]> {
+    const prefix = datePrefixOf(options);
+    if (prefix === undefined) {
+      return this.db.activities.toArray();
+    }
+    return this.db.activities.where('localDate').startsWith(prefix).toArray();
   }
 
   async countActivities(): Promise<number> {
@@ -843,6 +1032,9 @@ function toActivityEntity(activity: Activity, name?: string): ActivityEntity {
     fingerprint: activity.fingerprint,
     activityType: activity.activityType,
     startTime: activity.startTime,
+    // 本地日期键（v8 索引字段）：写入时顺带算好，供年/月筛选走索引；
+    // startTime 非法时无法算，留空（该行也不会被年/月筛选命中，与 oracle 口径一致）
+    localDate: localDateKeyFromIso(activity.startTime),
     endTime: activity.endTime,
     duration: activity.duration,
     elapsedTime: activity.elapsedTime,

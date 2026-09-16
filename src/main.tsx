@@ -8,6 +8,8 @@ import { initCyclingScope } from '@/features/activity/cyclingScope'
 import { initDataSource } from '@/stores/dataSourceStore'
 import { clearLegacyMapModeMemory } from '@/map/tileSources'
 import { negotiateTileCacheLimits } from '@/storage/tileCache'
+import { backfillLocalDates } from '@/storage/localDateBackfill'
+import { db } from '@/storage/db'
 import { installErrorLogging } from '@/features/logging/errorLog'
 import '@/index.css'
 
@@ -54,6 +56,10 @@ void negotiateTileCacheLimits()
 // 启动时恢复统计口径偏好：默认只统计骑行，非骑行活动（跑步/散步等）
 // 不进统计页、仪表盘、热力图等骑行语义页面（列表页始终可见可按类型筛选）
 void initCyclingScope()
+
+// v8 存量数据回填：给缺少 localDate 的活动补上本地日期键并落就绪标志
+// （只补一次；未就绪时列表查询自动回退全量路径，不影响可用性）
+void backfillLocalDates(db)
 
 // 启动时探测作者数据快照（manifest.json）：成功则默认展示作者数据，
 // 失败（本地 dev 未生成快照等）静默回退本地数据源

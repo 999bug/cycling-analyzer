@@ -5,7 +5,17 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Activity, ActivityRecord } from '@/types/activity';
 import { CyclingDatabase } from '@/storage/db';
-import { DexieActivityRepository } from '@/storage/repositories/activityRepository';
+import {
+  DexieActivityRepository,
+  planActivityQuery,
+  queryActivityList,
+  type ActivityListOptions,
+} from '@/storage/repositories/activityRepository';
+import {
+  isLocalDateIndexReady,
+  LOCAL_DATE_READY_KEY,
+} from '@/storage/localDateBackfill';
+import { localDateKeyFromIso } from '@/utils/format';
 
 describe('DexieActivityRepository', () => {
   let db: CyclingDatabase;
@@ -534,6 +544,131 @@ describe('DexieActivityRepository', () => {
       const result = await repo.listActivities({ minDistance: 100000 });
       expect(result.items).toHaveLength(0);
       expect(result.total).toBe(0);
+    });
+  });
+
+  describe('planActivityQuery 查询规划（纯函数，无需真 IndexedDB）', () => {
+    const ready = { localDateIndexReady: true };
+    const notReady = { localDateIndexReady: false };
+
+    it('无筛选 + 按 startTime 排序 + 分页 → 走 startTime 索引分页', () => {
+      expect(planActivityQuery({}, ready)).toBe('index-startTime');
+      expect(planActivityQuery({}, notReady)).toBe('index-startTime');
+      expect(planActivityQuery({ sortOrder: 'asc', offset: 20, limit: 10 }, ready)).toBe(
+        'index-startTime',
+      );
+    });
+
+    it('按其它字段排序 / 不分页 → 全量精筛（排序与索引不同序，无法跳页）', () => {
+      expect(planActivityQuery({ sortBy: 'distance' }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ sortBy: 'name' }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ limit: 0 }, ready)).toBe('full-scan');
+    });
+
+    it('存在只能内存精筛的条件时不走索引分页', () => {
+      expect(planActivityQuery({ minDistance: 1000 }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ maxAvgPower: 200 }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ search: '晨骑' }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ activityType: 'cycling' }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ startTimeFrom: '2026-01-01' }, ready)).toBe('full-scan');
+      expect(planActivityQuery({ startTimeTo: '2026-12-31' }, ready)).toBe('full-scan');
+    });
+
+    it('空串/纯空白筛选不算条件（与 oracle 口径一致，否则规划器与执行结果会错配）', () => {
+      expect(planActivityQuery({ search: '   ' }, ready)).toBe('index-startTime');
+      expect(planActivityQuery({ activityType: '' }, ready)).toBe('index-startTime');
+    });
+
+    it('年/月筛选：索引就绪走 localDate，未就绪回退全量；可与精筛条件叠加', () => {
+      expect(planActivityQuery({ year: '2026' }, ready)).toBe('index-localDate');
+      expect(planActivityQuery({ month: '2026-08' }, ready)).toBe('index-localDate');
+      expect(planActivityQuery({ year: '2026' }, notReady)).toBe('full-scan');
+      expect(planActivityQuery({ year: '2026', minDistance: 1000 }, ready)).toBe('index-localDate');
+    });
+  });
+
+  describe('索引路径与 oracle 一致性（本重构的关键保险）', () => {
+    /**
+     * 读回全部摘要作为 oracle 输入。
+     */
+    async function allSummaries() {
+      return repo.listAllSummaries();
+    }
+
+    it('索引分页与全量 oracle 结果完全一致（含同值行）', async () => {
+      // 刻意造同值 startTime：索引倒序扫描时同键按主键倒序，内存排序若不补
+      // id 兜底会与索引路径给出不同页序，这条用例就是防它飘
+      await seed([
+        { startTime: '2026-08-17T08:00:00.000Z' },
+        { startTime: '2026-08-17T08:00:00.000Z' },
+        { startTime: '2026-07-01T08:00:00.000Z' },
+        { startTime: '2026-06-01T08:00:00.000Z' },
+        { startTime: '2025-12-31T08:00:00.000Z' },
+        { startTime: '2026-09-01T08:00:00.000Z' },
+        { startTime: '2026-08-17T08:00:00.000Z' },
+      ]);
+      const all = await allSummaries();
+
+      const optionList: ActivityListOptions[] = [
+        {},
+        { sortOrder: 'asc' },
+        { offset: 0, limit: 2 },
+        { offset: 2, limit: 2 },
+        { offset: 5, limit: 2 },
+        { offset: 6, limit: 5 },
+        { offset: 100, limit: 5 },
+        { limit: 1 },
+      ];
+      for (const options of optionList) {
+        expect(await repo.listActivities(options), JSON.stringify(options)).toEqual(
+          queryActivityList(all, options),
+        );
+      }
+    });
+
+    it('localDate 索引就绪时年/月筛选与 oracle 一致（索引只缩候选集，不改变结果）', async () => {
+      await seed([
+        { startTime: '2026-08-05T08:00:00.000Z', distance: 30000 },
+        { startTime: '2026-08-25T08:00:00.000Z', distance: 90000 },
+        { startTime: '2026-09-01T08:00:00.000Z', distance: 50000 },
+        { startTime: '2025-08-05T08:00:00.000Z', distance: 70000 },
+      ]);
+      await db.settings.put({ key: LOCAL_DATE_READY_KEY, value: true });
+      const all = await allSummaries();
+
+      const optionList: ActivityListOptions[] = [
+        { year: '2026' },
+        { month: '2026-08' },
+        { year: '2026', sortBy: 'distance', sortOrder: 'asc' },
+        { year: '2026', minDistance: 40000 },
+        { month: '2027-01' },
+      ];
+      for (const options of optionList) {
+        expect(await repo.listActivities(options), JSON.stringify(options)).toEqual(
+          queryActivityList(all, options),
+        );
+      }
+    });
+
+    it('localDate 未就绪时年/月筛选回退全量，结果同样正确', async () => {
+      await seed([
+        { startTime: '2026-08-05T08:00:00.000Z' },
+        { startTime: '2025-08-05T08:00:00.000Z' },
+      ]);
+      expect(await isLocalDateIndexReady(db)).toBe(false);
+
+      const result = await repo.listActivities({ year: '2026' });
+
+      expect(result.total).toBe(1);
+      expect(result.items[0].startTime).toBe('2026-08-05T08:00:00.000Z');
+    });
+
+    it('导入时写入 localDate 本地日期键', async () => {
+      const [activity] = await seed([{ startTime: '2026-08-17T08:00:00.000Z' }]);
+
+      const stored = await repo.getById(activity.id);
+
+      expect(stored?.localDate).toBe(localDateKeyFromIso('2026-08-17T08:00:00.000Z'));
     });
   });
 
