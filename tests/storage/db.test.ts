@@ -1,6 +1,6 @@
 /**
- * 数据库定义测试（规格 §18）：库名、版本、九张表与索引结构
- * （v2 segments，v3 tile_cache，v4 scan_cache，v6 segment_efforts）。
+ * 数据库定义测试（规格 §18）：库名、版本、十张表与索引结构
+ * （v2 segments，v3 tile_cache，v4 scan_cache，v6 segment_efforts，v7 error_logs）。
  */
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,7 @@ describe('CyclingDatabase', () => {
     expect(db.verno).toBe(DB_VERSION);
   });
 
-  it('打开后九张表齐全', async () => {
+  it('打开后十张表齐全', async () => {
     const db = new CyclingDatabase();
     await db.open();
     const tableNames = db.tables.map((table) => table.name).sort();
@@ -21,6 +21,7 @@ describe('CyclingDatabase', () => {
       'activities',
       'activity_blobs',
       'activity_records',
+      'error_logs',
       'files',
       'scan_cache',
       'segment_efforts',

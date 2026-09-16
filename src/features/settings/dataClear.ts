@@ -4,6 +4,9 @@
  * 清空范围：activities（含逐点 records）、files 台账、settings 设置、segments 赛段、
  * tile_cache 瓦片缓存、scan_cache 全量扫描缓存（热力图/路线图产物）。
  * 页面层负责二次确认，本模块只执行清空。
+ *
+ * error_logs（错误日志）**不在**清空范围内：清空数据后仍需能查到出错记录，
+ * 需要清除时在「更多 → 错误日志」单独点清空。
  */
 import type { CyclingDatabase } from '@/storage/db'
 import { db } from '@/storage/db'

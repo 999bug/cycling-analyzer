@@ -9,6 +9,7 @@
  * - settings：键值对设置
  * - segments / segment_efforts：赛段定义与成绩落库（v2 / v6）
  * - tile_cache / scan_cache：离线瓦片与导入扫描结果缓存
+ * - error_logs：运行时错误日志（v7，本地留存便于事后定位）
  *
  * 单位约定与领域模型一致（src/types/activity.ts，规格 §11）：
  * 距离米、速度 m/s、海拔米、心率 bpm、踏频 rpm、功率 W。
@@ -24,9 +25,10 @@ export const DB_NAME = 'cycling-data';
  * 数据库版本号（v2：新增 segments 赛段表；v3：新增 tile_cache 瓦片缓存表；
  * v4：新增 scan_cache 扫描缓存表；v5：新增 activity_blobs 逐点整活动存储表，
  * 旧 activity_records 逐点行表保留至数据后台迁移完成后由应用层清空，v7 物理删除；
- * v6：新增 segment_efforts 赛段成绩落库表，替代「每次进赛段页全量重扫」）。
+ * v6：新增 segment_efforts 赛段成绩落库表，替代「每次进赛段页全量重扫」；
+ * v7：新增 error_logs 运行时错误日志表）。
  */
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 
 /**
  * 活动摘要实体（activities 表）。
@@ -359,6 +361,45 @@ export interface ScanCacheEntity {
 }
 
 /**
+ * 运行时错误日志实体（error_logs 表，v7 新增）。
+ *
+ * 用途：把「用户操作中报的错」落到本地 IndexedDB，事后可在「更多 → 错误日志」
+ * 查看与导出（此前错误只在控制台一闪而过，用户报障时无从查证）。
+ * 来源涵盖 console.error、window.onerror、未处理的 Promise 拒绝、React
+ * 错误边界，以及业务代码主动记录的失败（见 features/logging/errorLog.ts）。
+ *
+ * 仅本机留存，不上传；写失败一律静默——日志系统本身不得影响业务流程。
+ */
+export interface ErrorLogEntity {
+  /** 自增主键（写库时由 Dexie 生成） */
+  id?: number;
+
+  /** 发生时间（ISO 8601，索引：按时间倒序展示与清理） */
+  createdAt: string;
+
+  /** 级别：error / warn */
+  level: 'error' | 'warn';
+
+  /** 来源标识：console / window / promise / boundary / import / ui 等 */
+  source: string;
+
+  /** 错误消息（已字符串化，≤2000 字符） */
+  message: string;
+
+  /** 错误堆栈（可缺省） */
+  stack?: string;
+
+  /** 附加上下文（JSON 字符串，可缺省；序列化失败退化为 String） */
+  context?: string;
+
+  /** 发生时的页面路径（可缺省） */
+  path?: string;
+
+  /** 发生时的应用版本（可缺省） */
+  appVersion?: string;
+}
+
+/**
  * cycling-data 数据库（规格 §18）。
  *
  * 索引设计：
@@ -401,6 +442,9 @@ export class CyclingDatabase extends Dexie {
   /** 全量扫描持久化缓存表（v4 新增：热力图/路线图抽稀结果） */
   declare scan_cache: EntityTable<ScanCacheEntity, 'name'>;
 
+  /** 运行时错误日志表（v7 新增：错误留档便于事后定位） */
+  declare error_logs: EntityTable<ErrorLogEntity, 'id'>;
+
   /**
    * 构造数据库实例。
    *
@@ -439,6 +483,11 @@ export class CyclingDatabase extends Dexie {
     // 详情页实时匹配回写按此 upsert；segmentId / activityId 单索引供榜单与级联清理。
     this.version(6).stores({
       segment_efforts: '++id, segmentId, activityId, &[segmentId+activityId]',
+    });
+    // v7：新增运行时错误日志表。createdAt 索引供倒序展示与按时间清理，
+    // source / level 索引供筛选（UI 与导出用）。
+    this.version(7).stores({
+      error_logs: '++id, createdAt, source, level',
     });
 
     // 多标签页防死锁：旧标签持数据库连接时升级会被 IndexedDB 阻塞，

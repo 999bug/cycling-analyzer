@@ -1,0 +1,176 @@
+/**
+ * 错误日志面板样式（设置页区块内）。
+ * 颜色全部取主题语义令牌，深浅主题自适应。
+ */
+.error-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.error-log__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.error-log__count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.error-log__actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.error-log__button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 12px;
+}
+
+.error-log__button:hover:not(:disabled) {
+  border-color: var(--text-secondary);
+}
+
+.error-log__button--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.error-log__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-log__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.error-log__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.error-log__item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.error-log__summary {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: baseline;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.error-log__summary:hover {
+  background-color: var(--bg);
+}
+
+.error-log__level {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.error-log__level--error {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.error-log__level--warn {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+
+.error-log__time {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.error-log__source {
+  color: var(--primary);
+}
+
+.error-log__message {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.error-log__detail {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.error-log__meta {
+  display: flex;
+  gap: var(--space-md);
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.error-log__meta div {
+  display: flex;
+  gap: 4px;
+}
+
+.error-log__meta dt,
+.error-log__meta dd {
+  margin: 0;
+}
+
+.error-log__block {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  background-color: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 窄屏：时间换行到第二行，避免四列挤压 */
+@media (max-width: 768px) {
+  .error-log__summary {
+    grid-template-columns: auto 1fr;
+  }
+
+  .error-log__message {
+    grid-column: 1 / -1;
+  }
+}

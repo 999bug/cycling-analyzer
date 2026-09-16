@@ -1,7 +1,7 @@
 # 项目进度与功能状态
 
 > 本文档记录骑行数据分析网站（cycling-analyzer）的功能实现状态、架构边界与接口约定，
-> 供后续开发（含 AI agent）继续工作参考。**最后更新：2026-09-14（版本 2.88.3）**——版本功能摘要看 `src/features/changelog/changelogData.ts`（版本倒序，面向用户的权威摘要）；历史实现细节看 `docs/archive/`；整体架构与分层/数据流图看 `docs/架构总览.md`。
+> 供后续开发（含 AI agent）继续工作参考。**最后更新：2026-09-16（版本 2.90.0）**——版本功能摘要看 `src/features/changelog/changelogData.ts`（版本倒序，面向用户的权威摘要）；历史实现细节看 `docs/archive/`；整体架构与分层/数据流图看 `docs/架构总览.md`。
 >
 > **维护规则**：每完成一个功能/阶段必须同步更新本文档（状态与文件清单），
 > 再提交代码；进行中的任务标注"🔄 运行中"并注明负责 agent。
@@ -54,7 +54,14 @@ FIT Decoder → Normalizer → Calculator → Storage Repository → UI
   - `fit/calculator` 的 `estimateMovingDuration` → GPX 等无 session 数据的「计时时长」（即均速分母）；
   - `map/replayCore` 的 `buildMovingTimeline` → 在线回放与回放视频导出的时间轴（暂停段压缩为 0 长度，只重映射 timestamp、几何点不丢）。
   由此回放总时长等于记录的移动时长（GPX 等无 session 数据即活动计时时长）——**但判定源必须是密集逐点记录**：详情页展示点经 Douglas-Peucker 抽稀，采样间隔可达分钟级（实测 2102 条记录抽成 54 点、相邻间隔中位 29s 最大 155s），直接拿它判定会把正常骑行段误判成暂停（>60s 规则），实测一份 35 分钟骑行被折掉 1047s、光标横跨 1010m 瞬移。因此 `TrackReplay` 的 `motionSource` / `ActivityMap` 的 `replayMotionSource` 必须传未抽稀的 `cleanedRecords.cleaned`
-- **路由路径一律用具名常量（v2.89.2 起，硬约束）**：`src/app/router.tsx` 的 `ROUTES` 是**具名对象**（`ROUTES.routesMap` 等），不是数组；`App.tsx` 注册路由与 `src/layouts/navItems.ts` 的导航清单都引用同一常量。禁止再写 `ROUTES[9]` 这类下标引用，也禁止在别处硬编码路径字符串另起一份清单——2026-09-16 前正是下标引用导致插入新路由后整体错位（「路线图」打开训练计划页、「训练计划」打开表现趋势页、「表现趋势」打开更新日志，赛段详情页 `/segments/:id` 还被挂成了路线图页）。新增页面：先在 `ROUTES` 加具名字段 → `App.tsx` 注册 → 需要入口时加进 `NAV_ITEMS`，并跑 `tests/app/router.test.ts`
+- **错误日志（v2.90.0 起）**：`src/features/logging/errorLog.ts` 是运行时错误留档的唯一入口，
+  落 IndexedDB `error_logs` 表（DB v7）。`installErrorLogging()` 在 `main.tsx` 装一次，采集
+  `console.error` / `window error` / `unhandledrejection`；`ErrorBoundary` 与业务代码主动调
+  `logError(level, source, error, context)`。三条自保约束：**写库失败静默**（不得再 console.error，
+  否则与采集递归）、连续重复 2 秒去重（瓦片失败会刷屏）、总量 500 条上限淘汰最旧。
+  面板 `ErrorLogPanel` 挂在设置页「错误日志」区块（可展开堆栈/上下文、导出 JSON、清空）。
+  日志**不属于用户数据**：导出备份不含它，`clearAllData()` 也不清它（清空后仍需能查出错记录）
+：`src/app/router.tsx` 的 `ROUTES` 是**具名对象**（`ROUTES.routesMap` 等），不是数组；`App.tsx` 注册路由与 `src/layouts/navItems.ts` 的导航清单都引用同一常量。禁止再写 `ROUTES[9]` 这类下标引用，也禁止在别处硬编码路径字符串另起一份清单——2026-09-16 前正是下标引用导致插入新路由后整体错位（「路线图」打开训练计划页、「训练计划」打开表现趋势页、「表现趋势」打开更新日志，赛段详情页 `/segments/:id` 还被挂成了路线图页）。新增页面：先在 `ROUTES` 加具名字段 → `App.tsx` 注册 → 需要入口时加进 `NAV_ITEMS`，并跑 `tests/app/router.test.ts`
 - **回放覆盖层禁止用内联 props（v2.52.3 起，硬约束）**：React 组件**不得**直接命令式操作 Leaflet 图层后，又给该图层传内联的 `positions={[]}` / `center={[...]}` / `pathOptions={{...}}`——react-leaflet 对 `positions`/`center` 做 `!==` 身份比较，新对象会触发 `setLatLngs([])` / `setLatLng(起点)`，把帧广播写入的状态**打回初始态**（播放中 10Hz 快照重渲染 + 拖动进度暂停态都会命中，实测拖动后圆点弹回起点、橙线消失）。覆盖层的这些 props 一律用模块级常量或 `useMemo` 稳定引用，几何状态只经帧广播命令式更新
 - **回放时间轴的两条不变量（v2.52.6 起）**：`buildMovingTimeline` 的单段时钟增量 = `clamp(位移 / MAX_CURSOR_SPEED_MPS, 运动时长, 该段真实间隔)`，因此恒有 **运动时长 ≤ 回放总时长 ≤ 活动总耗时**。下限折叠暂停；上限保证光标不瞬移——设备停记/丢 GPS 期间真骑出去的距离会落在「被判为暂停的记录缺口」里（实测单段最大 3153m），补时后光标平滑滑过，且 GPS 抖出的假位移因真实间隔极短而不会被补时。全量 165 份真实轨迹回归：异常段（等效光标速度 >30m/s 或时钟增量为 0）旧 8640 → 新 0；最大单段跳 3153m → 38.9m（唯一残留为 1 秒内 38.9m 的 GPS 飞点，真实间隔已用满无从补时）
 - **底图与定位合规（v2.53.0 起，硬约束）**：合规白名单＝**腾讯 / 高德 / 百度 / 天地图**；OSM、OpenTopoMap、Google、Bing 海外版、Mapbox 等一律不作为面向用户的主底图。现状：默认源与全部地图模式都用高德（GCJ-02），OSM 仅作「高德连续 3 次瓦片失败」时的可用性兜底（**用户 2026-09-10 决定保留**，面向国内发布时需重新评估）。地图模式 `MAP_MODES`（`src/map/tileSources.ts`）三档，全部同坐标系，**切换模式不触发轨迹重新投影**：

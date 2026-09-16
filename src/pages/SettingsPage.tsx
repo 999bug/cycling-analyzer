@@ -33,6 +33,7 @@ import { switchTheme, applyTheme } from '@/features/settings/theme'
 import { switchSidebarMode } from '@/features/settings/sidebar'
 import InstallSection from '@/features/pwa/InstallSection'
 import AiSettingsSection from '@/features/ai/AiSettingsSection'
+import ErrorLogPanel from '@/features/logging/ErrorLogPanel'
 import {
   useDataSourceStore,
   type AuthorDataVisibility,
@@ -98,6 +99,7 @@ const SETTINGS_SECTIONS: Array<{ id: string; label: string }> = [
   { id: 'settings-import', label: '导入' },
   { id: 'author-data', label: '作者数据' },
   { id: 'settings-data', label: '数据管理' },
+  { id: 'settings-error-log', label: '错误日志' },
   { id: 'settings-install', label: '安装应用' },
   { id: 'changelog', label: '更新日志' },
   { id: 'acknowledgments', label: '鸣谢' },
@@ -1120,6 +1122,19 @@ function SettingsPage({ db: dbProp, activityRepository, fileRepository, settings
                   {clearing ? '清空中…' : '清空全部本地数据'}
                 </button>
               </div>
+            </section>
+            )}
+
+            {activeSectionId === 'settings-error-log' && (
+            <section className="settings-section" aria-label="错误日志" id="settings-error-log">
+              <h2 className="settings-section__title">错误日志</h2>
+              <p className="settings-section__hint">
+                运行中的报错（解析失败、网络异常、界面崩溃等）会自动记在本浏览器里，最多保留 500 条。
+              </p>
+              <p className="settings-section__hint">
+                日志只存在本机、不上传；反馈问题时导出 JSON 一并发给开发者即可定位，不必守着浏览器控制台。
+              </p>
+              <ErrorLogPanel db={context.db} />
             </section>
             )}
 

@@ -16,6 +16,7 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { reloadPage } from '@/utils/navigation'
+import { logError } from '@/features/logging/errorLog'
 import './ErrorBoundary.css'
 
 interface ErrorBoundaryProps {
@@ -43,6 +44,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     // 英文日志便于日志聚合检索；堆栈信息由浏览器自动附在 Error 上
     console.error('ErrorBoundary caught an error', error, info.componentStack)
+    // 同步落库：控制台一关就查不到，留档供「更多 → 错误日志」查看与导出
+    void logError('error', 'boundary', error, { componentStack: info.componentStack })
   }
 
   /**

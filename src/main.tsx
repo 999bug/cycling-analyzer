@@ -7,6 +7,7 @@ import { initSidebarMode } from '@/features/settings/sidebar'
 import { initCyclingScope } from '@/features/activity/cyclingScope'
 import { initDataSource } from '@/stores/dataSourceStore'
 import { clearLegacyMapModeMemory } from '@/map/tileSources'
+import { installErrorLogging } from '@/features/logging/errorLog'
 import '@/index.css'
 
 // GitHub Pages 部署在子路径（仓库名）下，路由需带前缀；
@@ -36,6 +37,10 @@ void initTheme()
 
 // 启动时恢复侧边栏行为偏好（默认固定常驻；自动收回时延迟收起）
 void initSidebarMode()
+
+// 全局错误采集：console.error / window error / 未处理的 Promise 拒绝
+// 一并落到本地日志（「更多 → 错误日志」可查看与导出），此前错误只在控制台一闪而过
+installErrorLogging()
 
 // 清掉历史版本留下的底图模式记忆：2.62.0 起底图模式改为页面内生效，
 // 旧键 cycling-map-mode 不再被读取（不清理会一直留在用户浏览器里）
