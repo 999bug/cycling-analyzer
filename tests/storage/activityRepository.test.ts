@@ -104,6 +104,38 @@ describe('DexieActivityRepository', () => {
   }
 
   describe('addActivity / getById / getRecords', () => {
+    it('传入台账条目时与摘要同事务落库', async () => {
+      const activity = makeActivity({ records: [makeRecord(1)] });
+
+      await repo.addActivity(activity, '晨骑', {
+        fingerprint: activity.fingerprint,
+        fileName: activity.fileName,
+        fileSize: 2048,
+      });
+
+      const file = await db.files.get(activity.fingerprint);
+      expect(file?.status).toBe('imported');
+      expect(file?.fileSize).toBe(2048);
+      expect(await db.activities.count()).toBe(1);
+    });
+
+    it('台账写失败时活动一并回滚（不留下「有活动无台账」的孤儿）', async () => {
+      const activity = makeActivity({ records: [makeRecord(1)] });
+      vi.spyOn(db.files, 'put').mockRejectedValue(new Error('ledger failed'));
+
+      await expect(
+        repo.addActivity(activity, '晨骑', {
+          fingerprint: activity.fingerprint,
+          fileName: activity.fileName,
+          fileSize: 1024,
+        }),
+      ).rejects.toThrow('ledger failed');
+
+      expect(await db.activities.count()).toBe(0);
+      expect(await db.activity_blobs.count()).toBe(0);
+      vi.restoreAllMocks();
+    });
+
     it('写入摘要与逐点记录，getById 不含 records', async () => {
       const activity = makeActivity({ records: [makeRecord(1), makeRecord(2)] });
       await repo.addActivity(activity, '晨骑绕圈');

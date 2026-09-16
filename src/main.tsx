@@ -7,6 +7,7 @@ import { initSidebarMode } from '@/features/settings/sidebar'
 import { initCyclingScope } from '@/features/activity/cyclingScope'
 import { initDataSource } from '@/stores/dataSourceStore'
 import { clearLegacyMapModeMemory } from '@/map/tileSources'
+import { negotiateTileCacheLimits } from '@/storage/tileCache'
 import { installErrorLogging } from '@/features/logging/errorLog'
 import '@/index.css'
 
@@ -45,6 +46,10 @@ installErrorLogging()
 // 清掉历史版本留下的底图模式记忆：2.62.0 起底图模式改为页面内生效，
 // 旧键 cycling-map-mode 不再被读取（不清理会一直留在用户浏览器里）
 clearLegacyMapModeMemory()
+
+// 启动时按浏览器实际配额协商瓦片缓存上限：iOS/Safari 的配额常远低于硬编码的
+// 100MB，不协商会让淘汰阈值形同虚设，直到写爆配额才发现
+void negotiateTileCacheLimits()
 
 // 启动时恢复统计口径偏好：默认只统计骑行，非骑行活动（跑步/散步等）
 // 不进统计页、仪表盘、热力图等骑行语义页面（列表页始终可见可按类型筛选）

@@ -158,11 +158,10 @@ export class CachingTileLayer extends LeafletTileLayer {
         throw new Error(`HTTP ${response.status}`)
       }
       const blob = await response.blob()
-      // 空响应体不缓存（如 204）
+      // 空响应体不缓存（如 204）。
+      // 写库失败由 putCachedTile 内部消化（配额溢出会熔断本会话写入，不逐张刷日志）
       if (blob.size > 0) {
-        void putCachedTile(db, url, blob).catch((error: unknown) => {
-          console.error('Failed to write tile cache', error)
-        })
+        void putCachedTile(db, url, blob)
       }
       this.setTileSource(tile, url, blob)
     } catch (error) {

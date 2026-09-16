@@ -325,6 +325,9 @@ async function writeSegments(
     raw = JSON.parse(await readFile(segmentsPath, 'utf8'))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      // 缺失必须留下痕迹：静默 return 会让「产物没生成」与「本来就没有赛段数据」
+      // 在前端表现完全一致，与本脚本其它环节的 fail-fast 口径不一致
+      console.warn(`[author-data] 赛段定义文件不存在，跳过赛段与成绩榜产物：${segmentsPath}`)
       return
     }
     throw error

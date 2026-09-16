@@ -55,20 +55,6 @@ export interface MigrationProgress {
 }
 
 /**
- * 读取迁移状态（无记录视为 pending）。
- *
- * @param db 数据库实例
- */
-async function readState(db: CyclingDatabase): Promise<MigrationState> {
-  const entry = await db.settings.get(MIGRATION_SETTINGS_KEY);
-  const value = entry?.value as Partial<MigrationState> | undefined;
-  return {
-    status: value?.status ?? 'pending',
-    heartbeatAt: value?.heartbeatAt ?? 0,
-  };
-}
-
-/**
  * 写入迁移状态。
  *
  * @param db 数据库实例
@@ -76,6 +62,58 @@ async function readState(db: CyclingDatabase): Promise<MigrationState> {
  */
 async function writeState(db: CyclingDatabase, status: MigrationStatus): Promise<void> {
   await db.settings.put({ key: MIGRATION_SETTINGS_KEY, value: { status, heartbeatAt: Date.now() } });
+}
+
+/** 抢锁结果 */
+type LockResult =
+  /** 抢到锁，本调用负责迁移 */
+  | 'acquired'
+  /** 此前会话已完成，调用方应静默跳过 */
+  | 'already-done'
+  /** 另一标签页持有有效锁，本调用应让路 */
+  | 'busy';
+
+/**
+ * 以 CAS 方式抢占迁移锁。
+ *
+ * 检查与写入必须在**同一个读写事务**内完成：旧实现先 readState 再 writeState，
+ * 两步之间另一标签同样能通过检查，两个标签会同时进入迁移（双写竞争，
+ * 且旧表清理时机会互相踩踏）。IndexedDB 的读写事务保证这两步之间无其它事务插入。
+ *
+ * @param db 数据库实例
+ * @returns 抢锁结果
+ */
+async function tryAcquireLock(db: CyclingDatabase): Promise<LockResult> {
+  return db.transaction('rw', db.settings, async () => {
+    const entry = await db.settings.get(MIGRATION_SETTINGS_KEY);
+    const value = entry?.value as Partial<MigrationState> | undefined;
+    const status = value?.status ?? 'pending';
+    const heartbeatAt = value?.heartbeatAt ?? 0;
+    if (status === 'done') {
+      return 'already-done';
+    }
+    if (status === 'running' && Date.now() - heartbeatAt < HEARTBEAT_TTL_MS) {
+      return 'busy';
+    }
+    // 接管过期锁（持有方崩溃）或从 pending 起跑
+    await db.settings.put({
+      key: MIGRATION_SETTINGS_KEY,
+      value: { status: 'running', heartbeatAt: Date.now() },
+    });
+    return 'acquired';
+  });
+}
+
+/**
+ * 刷新心跳（只能在调用方已开启的事务上下文中调用，会自动并入该事务）。
+ *
+ * @param db 数据库实例
+ */
+async function refreshHeartbeat(db: CyclingDatabase): Promise<void> {
+  await db.settings.put({
+    key: MIGRATION_SETTINGS_KEY,
+    value: { status: 'running', heartbeatAt: Date.now() },
+  });
 }
 
 /**
@@ -111,19 +149,17 @@ export async function runRecordsMigration(
   db: CyclingDatabase,
   onProgress?: (progress: MigrationProgress) => void,
 ): Promise<MigrationOutcome> {
-  const state = await readState(db);
-  if (state.status === 'done') {
+  const lock = await tryAcquireLock(db);
+  if (lock === 'already-done') {
     // 早已完成：返回 already-done 而非 done——否则每次启动都被误判为
     // 「本次刚完成」，横幅触发刷新造成无限刷新循环（2.47.0 线上事故）
     return 'already-done';
   }
-  if (state.status === 'running' && Date.now() - state.heartbeatAt < HEARTBEAT_TTL_MS) {
+  if (lock === 'busy') {
     // 另一标签页持有心跳锁：让路，避免双写竞争
     return 'busy';
   }
 
-  // 抢锁（含接管过期锁的场景）
-  await writeState(db, 'running');
   try {
     const activityIds = (await db.activities.toCollection().primaryKeys()) as string[];
     const total = activityIds.length;
@@ -131,12 +167,16 @@ export async function runRecordsMigration(
 
     for (let offset = 0; offset < activityIds.length; offset += BATCH_SIZE) {
       const batch = activityIds.slice(offset, offset + BATCH_SIZE);
-      // 每批独立事务：批间让出主线程，且单批失败不拖垮已完成批次
+      // 每批独立事务：批间让出主线程，且单批失败不拖垮已完成批次。
+      // settings 一并纳入事务范围：心跳需随处理进度续期（见循环内 refreshHeartbeat）
       await db.transaction(
         'rw',
-        [db.activities, db.activity_blobs, db.activity_records],
+        [db.activities, db.activity_blobs, db.activity_records, db.settings],
         async () => {
           for (const activityId of batch) {
+            // 心跳随处理进度续期：旧实现只在批间续期，单批耗时超过 TTL
+            // （慢设备上一个大活动就可能）会被其它标签误判崩溃并接管
+            await refreshHeartbeat(db);
             // 防删除竞态：活动在迁移过程中被删则跳过（旧表行已随删除清理）
             if ((await db.activities.get(activityId)) === undefined) {
               migrated += 1;
@@ -156,16 +196,22 @@ export async function runRecordsMigration(
           }
         },
       );
-      // 心跳续期 + 进度上报 + 让出主线程（setTimeout 0 落回事件循环）
-      await writeState(db, 'running');
+      // 进度上报 + 让出主线程（setTimeout 0 落回事件循环）
       onProgress?.({ migrated, total });
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    // 全部完成：清空旧表数据（整表 clear 为原生批量操作，快），
-    // store 本体留待 v6 升级时物理删除
-    await db.activity_records.clear();
-    await writeState(db, 'done');
+    // 全部完成：清旧表与标记 done 必须在**同一事务**内——
+    // 旧实现分两步，中间失败会留下「旧表已清空、状态却没写成 done」的窗口：
+    // 重跑时旧表已无数据可补，兜底读路径（getRecords 的旧表回填）也补不回来，
+    // 结果是逐点数据永久丢失。
+    await db.transaction('rw', [db.activity_records, db.settings], async () => {
+      await db.activity_records.clear();
+      await db.settings.put({
+        key: MIGRATION_SETTINGS_KEY,
+        value: { status: 'done', heartbeatAt: Date.now() },
+      });
+    });
     return 'done';
   } catch (error: unknown) {
     // 释放锁：下次启动自动续跑（幂等，无副作用）

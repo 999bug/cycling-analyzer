@@ -34,6 +34,120 @@ export const TILE_CACHE_ACCESS_REFRESH_MS = 60_000
 /** 淘汰检查写入计数（模块级：同一页面所有写入共享节流） */
 let writesSinceEvict = 0
 
+/** 缓存上限（字节 / 条数） */
+export interface TileCacheLimits {
+  /** 字节上限 */
+  maxBytes: number
+  /** 条数上限 */
+  maxEntries: number
+}
+
+/**
+ * 生效中的缓存上限。
+ *
+ * 硬编码 100MB 在 iOS/Safari 上常远超浏览器实际配额（部分环境下限仅几十 MB），
+ * 因此启动时按 `navigator.storage.estimate()` 的配额下调（见 negotiateTileCacheLimits）。
+ */
+let effectiveLimits: TileCacheLimits = {
+  maxBytes: TILE_CACHE_MAX_BYTES,
+  maxEntries: TILE_CACHE_MAX_ENTRIES,
+}
+
+/** 瓦片缓存占用浏览器总配额的比例上限：给活动数据与逐点序列留足空间 */
+export const TILE_CACHE_QUOTA_RATIO = 0.2
+
+/** 字节下限：即便浏览器配额极小也保留一点离线能力 */
+export const TILE_CACHE_MIN_BYTES = 8 * 1024 * 1024
+
+/**
+ * 写入熔断标志：配额写满后本会话不再尝试写库。
+ *
+ * 不熔断的话，每张新瓦片都会走一次注定失败的写事务（含整表淘汰扫描），
+ * 在配额耗尽的设备上表现为持续卡顿且日志刷屏。
+ */
+let writesDisabled = false
+
+/**
+ * 瓦片缓存当前是否可写（配额写满后为 false）。
+ *
+ * @returns 是否仍应尝试写入缓存
+ */
+export function isTileCacheWritable(): boolean {
+  return !writesDisabled
+}
+
+/**
+ * 恢复瓦片缓存写入（清空缓存后调用：配额已释放，可重新尝试）。
+ */
+export function resumeTileCacheWrites(): void {
+  writesDisabled = false
+}
+
+/**
+ * 取生效中的缓存上限。
+ *
+ * @returns 当前上限（未协商过则为硬上限）
+ */
+export function getTileCacheLimits(): TileCacheLimits {
+  return { ...effectiveLimits }
+}
+
+/**
+ * 读取浏览器存储配额（字节）；不可用时返回 undefined。
+ */
+async function readStorageQuota(): Promise<number | undefined> {
+  if (typeof navigator === 'undefined' || typeof navigator.storage?.estimate !== 'function') {
+    return undefined
+  }
+  try {
+    const estimate = await navigator.storage.estimate()
+    if (typeof estimate.quota === 'number' && estimate.quota > 0) {
+      return estimate.quota
+    }
+  } catch {
+    // 配额 API 被隐私模式/权限策略禁用：沿用硬上限，不影响缓存能力本身
+  }
+  return undefined
+}
+
+/**
+ * 按浏览器实际配额协商缓存上限（启动时调用一次）。
+ *
+ * 取「配额 × 比例」与硬上限的较小值，并用下限兜底，避免配额极小时缓存完全失效。
+ *
+ * @returns 协商后的上限
+ */
+export async function negotiateTileCacheLimits(): Promise<TileCacheLimits> {
+  const quota = await readStorageQuota()
+  const maxBytes =
+    quota === undefined
+      ? TILE_CACHE_MAX_BYTES
+      : Math.min(TILE_CACHE_MAX_BYTES, Math.max(TILE_CACHE_MIN_BYTES, quota * TILE_CACHE_QUOTA_RATIO))
+  effectiveLimits = { maxBytes, maxEntries: TILE_CACHE_MAX_ENTRIES }
+  return getTileCacheLimits()
+}
+
+/**
+ * 判断是否为配额溢出错误。
+ *
+ * 各浏览器写法不一：Chrome/Firefox 给 name，Safari 老版本只给 code，
+ * 故两者都认（22 = QUOTA_EXCEEDED_ERR，1014 = NS_ERROR_DOM_QUOTA_REACHED）。
+ *
+ * @param error 写库抛出的错误
+ */
+export function isQuotaExceededError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const candidate = error as { name?: unknown; code?: unknown }
+  return (
+    candidate.name === 'QuotaExceededError' ||
+    candidate.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    candidate.code === 22 ||
+    candidate.code === 1014
+  )
+}
+
 /** OSM 子域前缀（a/b/c） */
 const OSM_SUBDOMAIN = /^https:\/\/[abc]\.tile\.openstreetmap\.org\//
 
@@ -85,8 +199,24 @@ export async function getCachedTile(db: CyclingDatabase, url: string): Promise<B
  * @param blob 瓦片二进制
  */
 export async function putCachedTile(db: CyclingDatabase, url: string, blob: Blob): Promise<void> {
+  // 熔断：配额写满后不再尝试，避免每张瓦片都走一次注定失败的写事务
+  if (writesDisabled) {
+    return
+  }
   const key = tileCacheKey(url)
-  await db.tile_cache.put({ url: key, blob, size: blob.size, lastAccess: Date.now() })
+  try {
+    await db.tile_cache.put({ url: key, blob, size: blob.size, lastAccess: Date.now() })
+  } catch (error) {
+    // 缓存写失败不影响瓦片显示：静默降级为「本次不缓存」。
+    // 配额溢出则熔断整个会话的写入，其它错误（如数据库关闭）只跳过本次。
+    if (isQuotaExceededError(error)) {
+      writesDisabled = true
+      console.warn('Tile cache quota exceeded, cache writes disabled until the cache is cleared')
+      return
+    }
+    console.warn('Failed to write tile cache', error)
+    return
+  }
   writesSinceEvict += 1
   if (writesSinceEvict >= TILE_CACHE_EVICT_INTERVAL) {
     writesSinceEvict = 0
@@ -101,6 +231,8 @@ export async function putCachedTile(db: CyclingDatabase, url: string, blob: Blob
  */
 export async function clearTileCache(db: CyclingDatabase): Promise<void> {
   await db.tile_cache.clear()
+  // 清空后配额已释放，恢复写入（否则清空操作反而让缓存永久停摆）
+  resumeTileCacheWrites()
 }
 
 /**
@@ -142,8 +274,8 @@ export async function evictIfNeeded(
   db: CyclingDatabase,
   limits?: { maxBytes: number; maxEntries: number },
 ): Promise<void> {
-  const maxBytes = limits?.maxBytes ?? TILE_CACHE_MAX_BYTES
-  const maxEntries = limits?.maxEntries ?? TILE_CACHE_MAX_ENTRIES
+  const maxBytes = limits?.maxBytes ?? effectiveLimits.maxBytes
+  const maxEntries = limits?.maxEntries ?? effectiveLimits.maxEntries
   const ordered: { url: string; size: number }[] = []
   let count = 0
   let bytes = 0

@@ -11,7 +11,11 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FallbackTileLayer } from '@/map/FallbackTileLayer'
-import { FALLBACK_TILE_ERROR_THRESHOLD, TILE_SOURCES } from '@/map/tileSources'
+import {
+  FALLBACK_TILE_ERROR_THRESHOLD,
+  FALLBACK_TILE_ERROR_WINDOW_MS,
+  TILE_SOURCES,
+} from '@/map/tileSources'
 
 /** 假 Leaflet map：记录监听器，支持手动触发事件（vi.mock 提升所需，用 vi.hoisted） */
 const { fakeMap } = vi.hoisted(() => {
@@ -110,6 +114,30 @@ describe('降级瓦片层', () => {
     // 再加一次失败才达连续 3 次
     fakeMap.fire('tileerror')
     expect(onFallback).toHaveBeenCalledTimes(1)
+  })
+
+  it('失败计数只在时间窗口内累计（窗口外的零星失败不会攒到阈值）', () => {
+    // 用可控时钟而非 fake timers：组件只读 Date.now()，无需接管整个定时器
+    let base = 1_700_000_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => base)
+    try {
+      const onFallback = vi.fn()
+      render(<FallbackTileLayer sourceIndex={0} onFallback={onFallback} />)
+
+      // 两次失败 → 时间推进到窗口外 → 再两次失败：窗口内累计不足阈值，不降级
+      fakeMap.fire('tileerror')
+      fakeMap.fire('tileerror')
+      base += FALLBACK_TILE_ERROR_WINDOW_MS + 1
+      fakeMap.fire('tileerror')
+      fakeMap.fire('tileerror')
+      expect(onFallback).not.toHaveBeenCalled()
+
+      // 窗口内累计到第三次才触发
+      fakeMap.fire('tileerror')
+      expect(onFallback).toHaveBeenCalledTimes(1)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('降级单向防重：触发后继续失败不重复回调', () => {

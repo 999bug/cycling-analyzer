@@ -474,7 +474,9 @@ export class CyclingDatabase extends Dexie {
     // v5：新增逐点整活动存储表（activityId 主键，每活动一行）。
     // 旧数据不在此处迁移（阻塞升级事务 10~30s 体验差），由应用启动后的
     // 后台分批迁移完成（见 src/storage/recordsMigration.ts）；
-    // 旧 activity_records 表保留，迁移完成后由应用层清空，v7 物理删除。
+    // 旧 activity_records 表保留，迁移完成后由应用层清空（数据清、表本体仍在）。
+    // 注：早期注释写的是「v7 物理删除」，但 v7 只新增了 error_logs 并未删表，
+    // 属注释与实现不符，已按实现修正；真正删表需单独升版本并评估老用户升级路径。
     this.version(5).stores({
       activity_blobs: 'activityId',
     });

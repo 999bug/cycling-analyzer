@@ -3,7 +3,7 @@
  * 覆盖：正常聚合迁移、幂等续传、空库、busy 心跳锁、过期锁接管、删除竞态跳过。
  */
 import 'fake-indexeddb/auto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CyclingDatabase } from '@/storage/db';
 import { MIGRATION_SETTINGS_KEY, runRecordsMigration, type MigrationProgress } from '@/storage/recordsMigration';
 import type { ActivityRecord } from '@/types/activity';
@@ -104,6 +104,50 @@ describe('runRecordsMigration', () => {
     expect(outcome).toBe('done');
     expect(await db.activity_blobs.count()).toBe(1);
     expect(await db.activity_records.count()).toBe(0);
+  });
+
+  // 说明：CAS 的互斥由 IndexedDB 读写事务保证，单线程测试无法构造真实交错，
+  // 这里验证的是「后到调用看到 running 就必须让路」这一契约不回退
+  it('持锁期间后到的调用让路（busy），不重复迁移', async () => {
+    await seedLegacyActivity(db, 'act-1', [makeRecord(1)]);
+    let release!: () => void;
+    const gate = new Promise<string[]>((resolve) => {
+      release = () => resolve(['act-1']);
+    });
+    // 卡在「取活动主键」这一步：此时锁已写入，后到的调用必须看到 running 并让路
+    vi.spyOn(db.activities, 'toCollection').mockReturnValue({
+      primaryKeys: () => gate,
+    } as never);
+
+    const first = runRecordsMigration(db);
+    // 轮询等到锁真正落库，再发起第二个调用（避免依赖微任务时序）
+    for (let i = 0; i < 100; i += 1) {
+      const entry = await db.settings.get(MIGRATION_SETTINGS_KEY);
+      if ((entry?.value as { status?: string } | undefined)?.status === 'running') {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const second = await runRecordsMigration(db);
+    expect(second).toBe('busy');
+
+    release();
+    expect(await first).toBe('done');
+  });
+
+  it('清表失败时不标记 done（旧实现会留下「旧表已清、状态未 done」的丢数据窗口）', async () => {
+    await seedLegacyActivity(db, 'act-1', [makeRecord(1)]);
+    vi.spyOn(db.activity_records, 'clear').mockRejectedValue(new Error('clear failed'));
+
+    await expect(runRecordsMigration(db)).rejects.toThrow('clear failed');
+
+    // 旧表数据仍在：下次重跑可续跑（整活动行已在，跳过迁移后重新清表）
+    // 旧实现此时旧表已被清空、状态也没写成 done，逐点数据永久丢失
+    expect(await db.activity_records.count()).toBe(1);
+    expect((await db.activity_blobs.get('act-1'))?.records).toEqual([makeRecord(1)]);
+    const state = await db.settings.get(MIGRATION_SETTINGS_KEY);
+    expect((state?.value as { status?: string }).status).not.toBe('done');
   });
 
   it('迁移期间活动被删除：跳过该活动，不写孤儿行', async () => {

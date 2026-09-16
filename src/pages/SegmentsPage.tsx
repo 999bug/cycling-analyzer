@@ -200,8 +200,11 @@ function SegmentsPage() {
     void (async () => {
       try {
         if (source === 'author') {
-          // 作者源：赛段定义与成绩榜均为 CI 预计算产物（免全量逐点下载）；
-          // 快照缺赛段文件时回退空列表空榜（显示空态）
+          // 作者源：赛段定义与成绩榜均为 CI 预计算产物（免全量逐点下载）。
+          // 快照缺这两个文件时回退空列表空榜（显示空态）——这是预期分支：
+          // 构建脚本在没有赛段定义时会打印明确告警（见 buildAuthorData.ts 的
+          // writeSegments），此处不再重复记错误日志，否则每次进页面都落一条
+          // 「无赛段」记录，反而把有效错误淹没掉
           const [authorSegments, results] = await Promise.all([
             defaultSnapshotClient.getSegments().catch(() => [] as SegmentEntity[]),
             defaultSnapshotClient.getSegmentResults().catch(() => ({}) as Record<string, SegmentEffort[]>),

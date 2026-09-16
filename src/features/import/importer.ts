@@ -246,14 +246,21 @@ export async function importFiles(
           // GPX 内部 <trk><name>（如 Strava 导出的骑行标题），FIT 无此字段恒 undefined
           activity.name ||
           titleFromFileName(entry.name);
-        await activityRepository.addActivity(activity, title);
+        // 台账随摘要一起落库（同一事务）：
+        // 分开写时「活动写成功、台账写失败」会留下一个进了 activities 却没进
+        // files 台账的活动——判重走指纹、失败重试走台账，两边不一致时用户会
+        // 看到「导入成功但重试不了」。合并后二者同生同灭。
+        //
+        // 说明：这里按文件逐个提交而非整批积压。批量写能省事务数，但解析是逐
+        // 文件进行的，积压会让已解析的逐点数据（单活动可达数 MB）长时间驻留
+        // 内存，且批量失败时无法定位到具体文件，与「逐文件失败可重试」冲突。
         // 规格 §19：开启「保存原始 FIT 文件」时解压后字节随台账落库
-        await fileRepository.recordImported(
+        await activityRepository.addActivity(activity, title, {
           fingerprint,
-          entry.name,
-          content.byteLength,
-          options.saveOriginalFit === true ? content : undefined,
-        );
+          fileName: entry.name,
+          fileSize: content.byteLength,
+          ...(options.saveOriginalFit === true ? { data: content } : {}),
+        });
         newImported++;
       }
     } catch (error) {

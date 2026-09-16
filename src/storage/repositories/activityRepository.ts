@@ -241,6 +241,27 @@ export interface ActivityReadRepository {
  * 活动仓库接口。
  * Phase 4-7（导入、列表、详情、统计）依赖此接口，不直接触碰 Dexie。
  */
+/**
+ * 随活动一并落库的文件台账条目。
+ *
+ * 与活动摘要**同事务**写入：分开写时「活动写成功、台账写失败」会留下一个
+ * 进了 activities 却没进 files 台账的活动——判重走指纹、失败重试走台账，
+ * 两边不一致时用户会看到「导入成功但重试不了」。
+ */
+export interface ActivityFileRecord {
+  /** 内容指纹（files 表主键） */
+  fingerprint: string;
+
+  /** 原始文件名 */
+  fileName: string;
+
+  /** 解压后字节数 */
+  fileSize: number;
+
+  /** 原始文件字节（仅开启「保存原始 FIT 文件」时提供） */
+  data?: ArrayBuffer;
+}
+
 export interface ActivityRepository extends ActivityReadRepository {
   /**
    * 写入单个活动（摘要 + 逐点记录，事务保证原子性）。
@@ -248,8 +269,9 @@ export interface ActivityRepository extends ActivityReadRepository {
    *
    * @param activity 活动（records 可选，为 undefined 时不写逐点表）
    * @param name 活动标题（Strava CSV 还原，可为空）
+   * @param file 文件台账条目（传入时与摘要同事务落库，见 ActivityFileRecord）
    */
-  addActivity(activity: Activity, name?: string): Promise<void>;
+  addActivity(activity: Activity, name?: string, file?: ActivityFileRecord): Promise<void>;
 
   /**
    * 批量写入多个活动（单事务）。
@@ -506,16 +528,28 @@ export class DexieActivityRepository implements ActivityRepository {
     this.db = db;
   }
 
-  async addActivity(activity: Activity, name?: string): Promise<void> {
+  async addActivity(activity: Activity, name?: string, file?: ActivityFileRecord): Promise<void> {
     const entity = toActivityEntity(activity, name);
     const blob = toBlobEntity(activity);
     await this.db.transaction(
       'rw',
-      [this.db.activities, this.db.activity_blobs, this.db.activity_records],
+      [this.db.activities, this.db.activity_blobs, this.db.activity_records, this.db.files],
       async () => {
         await this.db.activities.add(entity);
         // 逐点数据整活动一行（v5）：写 1 行大 value，替代旧逐点 bulkAdd
         await this.db.activity_blobs.put(blob);
+        // 台账同事务：与摘要同生同灭，避免「活动在、台账不在」的孤儿状态
+        if (file !== undefined) {
+          await this.db.files.put({
+            fingerprint: file.fingerprint,
+            fileName: file.fileName,
+            fileSize: file.fileSize,
+            importedAt: new Date().toISOString(),
+            status: 'imported',
+            // 仅开启「保存原始 FIT 文件」时传入；undefined 不写入该字段
+            ...(file.data !== undefined ? { data: file.data } : {}),
+          });
+        }
       },
     );
   }
@@ -678,12 +712,19 @@ export class DexieActivityRepository implements ActivityRepository {
    */
   async clearTypeConfirmations(): Promise<number> {
     const confirmed = await this.db.activities.filter((row) => row.typeConfirmedAt !== undefined).toArray()
-    for (const row of confirmed) {
-      // 用 modify + delete 真正移除字段（update 传 undefined 会留下空键）
-      await this.db.activities.where(':id').equals(row.id).modify((entity) => {
-        delete entity.typeConfirmedAt
-      })
+    if (confirmed.length === 0) {
+      return 0
     }
+    // 单事务内批量清理：旧实现每条一次独立事务（N 次往返），确认过类型的活动
+    // 一多，设置页点一次「清除确认」就要等 N 个事务排队
+    await this.db.transaction('rw', this.db.activities, async () => {
+      for (const row of confirmed) {
+        // 用 modify + delete 真正移除字段（update 传 undefined 会留下空键）
+        await this.db.activities.where(':id').equals(row.id).modify((entity) => {
+          delete entity.typeConfirmedAt
+        })
+      }
+    })
     return confirmed.length
   }
 

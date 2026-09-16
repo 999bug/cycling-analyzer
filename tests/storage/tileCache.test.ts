@@ -7,15 +7,22 @@
  * - clearTileCache 清空 / getTileCacheStats 统计
  */
 import 'fake-indexeddb/auto'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CyclingDatabase } from '@/storage/db'
 import {
   clearTileCache,
   evictIfNeeded,
   getCachedTile,
+  getTileCacheLimits,
   getTileCacheStats,
+  isQuotaExceededError,
+  isTileCacheWritable,
+  negotiateTileCacheLimits,
   putCachedTile,
+  resumeTileCacheWrites,
   TILE_CACHE_ACCESS_REFRESH_MS,
+  TILE_CACHE_MAX_BYTES,
+  TILE_CACHE_MIN_BYTES,
   tileCacheKey,
 } from '@/storage/tileCache'
 
@@ -182,5 +189,89 @@ describe('LRU 淘汰', () => {
     await evictIfNeeded(db, { maxEntries: 3, maxBytes: 100 })
 
     expect(await db.tile_cache.count()).toBe(2)
+  })
+})
+
+describe('配额协商与写入熔断（P0 止血）', () => {
+  let db: CyclingDatabase
+
+  /** 造一个配额溢出错误（Chrome/Firefox 给 name，Safari 老版本只给 code） */
+  function quotaError(): Error {
+    const error = new Error('Quota exceeded')
+    error.name = 'QuotaExceededError'
+    return error
+  }
+
+  beforeEach(() => {
+    db = new CyclingDatabase()
+    resumeTileCacheWrites()
+  })
+
+  afterEach(async () => {
+    // 熔断标志与协商结果都是模块级状态，必须复位避免污染其它用例
+    resumeTileCacheWrites()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    await db.delete()
+  })
+
+  it('配额较小时按占比下调上限（50MB 配额 → 10MB）', async () => {
+    vi.stubGlobal('navigator', { storage: { estimate: async () => ({ quota: 50 * 1024 * 1024 }) } })
+    const limits = await negotiateTileCacheLimits()
+    expect(limits.maxBytes).toBe(10 * 1024 * 1024)
+    expect(getTileCacheLimits().maxBytes).toBe(10 * 1024 * 1024)
+  })
+
+  it('配额极小时不低于下限（保留基本离线能力）', async () => {
+    vi.stubGlobal('navigator', { storage: { estimate: async () => ({ quota: 1024 }) } })
+    const limits = await negotiateTileCacheLimits()
+    expect(limits.maxBytes).toBe(TILE_CACHE_MIN_BYTES)
+  })
+
+  it('配额 API 不可用（隐私模式 / 老浏览器）时保持硬上限', async () => {
+    vi.stubGlobal('navigator', {})
+    const limits = await negotiateTileCacheLimits()
+    expect(limits.maxBytes).toBe(TILE_CACHE_MAX_BYTES)
+  })
+
+  it('写库抛配额错误后熔断本会话写入，后续瓦片不再尝试写库', async () => {
+    const putSpy = vi.spyOn(db.tile_cache, 'put').mockRejectedValue(quotaError())
+    await putCachedTile(db, 'https://tile.openstreetmap.org/1/1/1.png', new Blob(['a']))
+    expect(isTileCacheWritable()).toBe(false)
+
+    putSpy.mockClear()
+    await putCachedTile(db, 'https://tile.openstreetmap.org/1/1/2.png', new Blob(['b']))
+    // 熔断后连 put 都不再调用（旧实现会每张瓦片重复一次失败的写事务）
+    expect(putSpy).not.toHaveBeenCalled()
+  })
+
+  it('非配额的写失败只跳过本次，不熔断整个会话', async () => {
+    const putSpy = vi
+      .spyOn(db.tile_cache, 'put')
+      .mockRejectedValueOnce(new Error('database closed'))
+
+    await putCachedTile(db, 'https://tile.openstreetmap.org/1/1/3.png', new Blob(['c']))
+    expect(isTileCacheWritable()).toBe(true)
+
+    putSpy.mockRestore()
+    await putCachedTile(db, 'https://tile.openstreetmap.org/1/1/4.png', new Blob(['d']))
+    expect(await db.tile_cache.count()).toBe(1)
+  })
+
+  it('清空缓存后恢复写入（配额已释放）', async () => {
+    vi.spyOn(db.tile_cache, 'put').mockRejectedValue(quotaError())
+    await putCachedTile(db, 'https://tile.openstreetmap.org/1/1/5.png', new Blob(['e']))
+    expect(isTileCacheWritable()).toBe(false)
+
+    await clearTileCache(db)
+    expect(isTileCacheWritable()).toBe(true)
+  })
+
+  it('配额错误识别兼容 name 与 code 两种写法', () => {
+    expect(isQuotaExceededError({ name: 'QuotaExceededError' })).toBe(true)
+    expect(isQuotaExceededError({ name: 'NS_ERROR_DOM_QUOTA_REACHED' })).toBe(true)
+    expect(isQuotaExceededError({ code: 22 })).toBe(true)
+    expect(isQuotaExceededError(new Error('boom'))).toBe(false)
+    expect(isQuotaExceededError(null)).toBe(false)
   })
 })

@@ -10,6 +10,7 @@ import { useOfflinePreferences } from '@/hooks/useOfflinePreferences'
 import { CachingTileLayerComponent } from '@/map/CachingTileLayer'
 import {
   FALLBACK_TILE_ERROR_THRESHOLD,
+  FALLBACK_TILE_ERROR_WINDOW_MS,
   isGcjSource,
   mapModeOf,
   TILE_SOURCES,
@@ -53,8 +54,9 @@ export interface FallbackTileLayerProps {
 export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback, crossOrigin = false }: FallbackTileLayerProps) {
   const map = useMap()
   const { tileCacheEnabled } = useOfflinePreferences()
-  // 连续失败计数（任一瓦片成功加载后清零，避免网络抖动误判）
-  const failCountRef = useRef(0)
+  // 窗口内的失败时间戳（毫秒）：计数只在该窗口内累计，窗口外的失败自动失效。
+  // 用时间戳而非计数器，是为了让「很久之前的零星失败」不再把计数推向阈值
+  const failTimesRef = useRef<number[]>([])
   // 已降级标记（单向防重：降级后不再重复回调）
   const fallenBackRef = useRef(false)
 
@@ -63,8 +65,13 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback,
       if (fallenBackRef.current) {
         return
       }
-      failCountRef.current += 1
-      if (failCountRef.current >= FALLBACK_TILE_ERROR_THRESHOLD) {
+      const now = Date.now()
+      // 先丢弃窗口外的历史失败，再计入本次
+      failTimesRef.current = failTimesRef.current.filter(
+        (ts) => now - ts < FALLBACK_TILE_ERROR_WINDOW_MS,
+      )
+      failTimesRef.current.push(now)
+      if (failTimesRef.current.length >= FALLBACK_TILE_ERROR_THRESHOLD) {
         fallenBackRef.current = true
         onFallback()
       }
@@ -72,7 +79,7 @@ export function FallbackTileLayer({ sourceIndex, mapMode = 'normal', onFallback,
 
     // 任一瓦片加载成功说明网络可达，重置失败计数
     const onTileLoad = () => {
-      failCountRef.current = 0
+      failTimesRef.current = []
     }
 
     map.on('tileerror', onTileError)

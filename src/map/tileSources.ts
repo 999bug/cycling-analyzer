@@ -29,6 +29,14 @@ export interface TileSource {
 /** 连续瓦片加载失败达该次数后触发降级（期间有瓦片成功则重新计数） */
 export const FALLBACK_TILE_ERROR_THRESHOLD = 3
 
+/**
+ * 失败计数的有效时间窗口（毫秒）。
+ *
+ * 计数只在窗口内累计：弱网下「2 失败 → 1 成功 → 2 失败」的抖动若按全局累计，
+ * 成功间隙里的历史失败会把计数一路攒到阈值，最终误判降级、长期停在空白底图。
+ */
+export const FALLBACK_TILE_ERROR_WINDOW_MS = 60_000
+
 /** 瓦片降级状态记忆 key（sessionStorage：本会话内直接使用降级源，不再重试默认源） */
 export const TILE_FALLBACK_STORAGE_KEY = 'cycling-map-tile-fallback'
 
