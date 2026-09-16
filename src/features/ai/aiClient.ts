@@ -22,6 +22,19 @@ import { hostOf, logAiDebug } from '@/features/ai/aiDebugLog'
 
 const REQUEST_TIMEOUT_MS = 30_000
 
+/**
+ * 流式首字节超时（毫秒）：建连成功但服务端迟迟不吐第一个字节时终止。
+ * 思考型模型也需在此窗口内给出首个 token，否则判定为连接假死
+ * ——旧实现无任何总超时，服务端静默时 UI 会永久停在「正在生成」。
+ */
+const STREAM_FIRST_BYTE_TIMEOUT_MS = 15_000
+
+/** 流式静默超时（毫秒）：已开始输出但长时间无新字节（连接假死） */
+const STREAM_IDLE_TIMEOUT_MS = 20_000
+
+/** 默认重试退避（毫秒）：最多重试两次，只对可重试错误生效 */
+const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [500, 2_000]
+
 /** 连接测试的最大输出 token（思考型模型会先产出 reasoning，需留余量） */
 const TEST_MAX_TOKENS = 64
 
@@ -59,6 +72,20 @@ export interface ChatCompleteOptions {
 
   /** 超时毫秒数（缺省 REQUEST_TIMEOUT_MS） */
   timeoutMs?: number
+
+  /**
+   * 流式空闲超时覆盖（缺省走模块常量）：`first` 首字节、`idle` 静默。
+   * 个别供应商建连耗时差异大，允许调用方按需收紧或放宽；测试也据此跳过真实等待。
+   */
+  streamTimeoutsMs?: { first?: number; idle?: number }
+
+  /**
+   * 重试退避毫秒数组（缺省 [500, 2000]，即最多重试两次）。
+   * 只对可重试错误生效（限流 / 5xx / 网络层 / 超时）；
+   * 业务性失败（Key 无效、模型不存在、空内容等）一律不重试。
+   * 注入 [0, 0] 可在测试中跳过等待。
+   */
+  retryDelaysMs?: readonly number[]
 
   /** 外部中断信号（可选，弹窗关闭等场景） */
   signal?: AbortSignal
@@ -106,6 +133,61 @@ export class AiRequestError extends Error {
     this.name = 'AiRequestError'
     this.cause = cause
   }
+}
+
+/**
+ * 可重试的 AI 请求失败：限流 / 5xx / 网络层失败 / 超时。
+ * 与 AiRequestError 的唯一区别是重试策略——业务性失败（Key 无效、模型不存在、
+ * 空内容）重试没有意义，故仍抛普通 AiRequestError。
+ */
+class AiRetryableError extends AiRequestError {}
+
+/** HTTP 状态码是否值得重试：限流与服务端异常可自愈，4xx 业务错误重试无意义 */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500
+}
+
+/** 按可重试性构造请求错误，调用点只传布尔不必关心具体 class */
+function requestError(message: string, retryable: boolean, cause?: unknown): AiRequestError {
+  return retryable ? new AiRetryableError(message, cause) : new AiRequestError(message, cause)
+}
+
+/** 等待指定毫秒（重试退避用） */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 带退避的重试执行器。
+ *
+ * 只重试 AiRetryableError；业务性失败、外部已中断、重试次数用尽时直接抛出最后一次错误。
+ *
+ * @param task 单次执行体
+ * @param delays 每次重试前的等待毫秒（长度即最大重试次数）
+ * @param signal 外部中断信号（已中断则不再重试）
+ */
+async function runWithRetry<T>(
+  task: () => Promise<T>,
+  delays: readonly number[],
+  signal?: AbortSignal,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      return await task()
+    } catch (error) {
+      lastError = error
+      if (
+        !(error instanceof AiRetryableError) ||
+        attempt === delays.length ||
+        signal?.aborted === true
+      ) {
+        break
+      }
+      await delay(delays[attempt])
+    }
+  }
+  throw lastError
 }
 
 /**
@@ -159,9 +241,10 @@ async function executeRequest(
   url: string,
   body: unknown,
   signal?: AbortSignal,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const onExternalAbort = () => controller.abort()
   signal?.addEventListener('abort', onExternalAbort)
   try {
@@ -172,12 +255,15 @@ async function executeRequest(
       signal: controller.signal,
     })
   } catch (error) {
-    // fetch 的网络层失败统一翻译：CORS 拦截 / 断网 / 超时共用 TypeError
+    // fetch 的网络层失败统一翻译：CORS 拦截 / 断网 / 超时共用 TypeError。
+    // 超时与网络错误都可由重试自愈（断网恢复 / 退避后限流解除），标为可重试；
+    // 用户主动中断（外部 signal 已 aborted）不重试。
     if (controller.signal.aborted) {
-      throw new AiRequestError('请求超时或已取消，请重试', error)
+      throw requestError('请求超时或已取消，请重试', signal?.aborted !== true, error)
     }
-    throw new AiRequestError(
+    throw requestError(
       '网络请求失败：可能是该服务商不允许浏览器直接调用（CORS），可改用「自定义」填写兼容接口或中转站地址',
+      true,
       error,
     )
   } finally {
@@ -232,6 +318,17 @@ async function chatCompleteInternal(
   config: AiRequestConfig,
   options: ChatCompleteOptions,
 ): Promise<string> {
+  return runWithRetry(
+    () => chatCompleteOnce(config, options),
+    options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
+    options.signal,
+  )
+}
+
+async function chatCompleteOnce(
+  config: AiRequestConfig,
+  options: ChatCompleteOptions,
+): Promise<string> {
   const response = await executeRequest(
     config,
     `${config.baseUrl}/chat/completions`,
@@ -246,6 +343,7 @@ async function chatCompleteInternal(
       stream: false,
     },
     options.signal,
+    options.timeoutMs,
   )
 
   let payload: ChatCompletionResponse
@@ -257,7 +355,7 @@ async function chatCompleteInternal(
     } catch {
       // 非 JSON 错误体：保留状态码提示即可
     }
-    throw new AiRequestError(statusMessage(response.status, detail))
+    throw requestError(statusMessage(response.status, detail), isRetryableStatus(response.status))
   }
 
   payload = (await response.json()) as ChatCompletionResponse
@@ -359,12 +457,16 @@ export async function fetchAiModelList(config: AiRequestConfig): Promise<string[
  * 与 chatComplete 的区别：
  * - `stream: true`，思考（reasoning）与正文（content）delta 逐段经回调吐出，
  *   供 UI 实时展示思考过程（v3 交互核心）
- * - **无总超时**：思考型模型输出 30 秒以上是常态，终止只由外部 signal 驱动；
+ * - **无总时长上限**（思考型模型输出 30 秒以上是常态），但有两道空闲闸门：
+ *   首字节超时（15s，建连后迟迟不吐第一个字节）与静默超时（20s，已开始输出但长时间无新字节）。
+ *   静默超时若已产出内容则按「保留部分」返回，一个字节都没有才算失败并允许重试——
+ *   旧实现没有任何超时，服务端静默时 UI 会永久停在「正在生成」
  * - 外部中断（用户点「终止」）**不抛错**，返回已收到的部分内容——
- *   已产生部分保留进编辑框、按实际用量计费（v3 原型定稿行为）。
+ *   已产生部分保留进编辑框、按实际用量计费（v3 原型定稿行为）
+ * - 只在尚未产出任何内容时才重试（已回调 delta 再重发会重复拼接正文且重复计费）
  *
  * @param config 请求配置（extraHeaders 照常合并）
- * @param options 对话参数（timeoutMs 字段被忽略）
+ * @param options 对话参数（timeoutMs 对流式的总时长无效，空闲闸门另计）
  * @param handlers delta 回调（可选）
  * @returns 全量 content 与 reasoning（用户中断时为已收到部分）
  * @throws AiRequestError 用户可读的失败原因
@@ -406,6 +508,21 @@ async function streamChatCompleteInternal(
   options: ChatCompleteOptions,
   handlers: AgentStreamHandlers,
 ): Promise<AgentStreamResult> {
+  // 流式只在「尚未产出任何内容」时才允许重试：一旦回调过 delta，用户已看到部分输出，
+  // 重发会重复拼接正文（且重复计费），故 attemptStream 产出后抛出的都是不可重试错误
+  return runWithRetry(
+    () => attemptStream(config, options, handlers),
+    options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS,
+    options.signal,
+  )
+}
+
+/** 单次流式尝试：首字节超时与静默超时任一触发即中断读取，不再无限等待 */
+async function attemptStream(
+  config: AiRequestConfig,
+  options: ChatCompleteOptions,
+  handlers: AgentStreamHandlers,
+): Promise<AgentStreamResult> {
   const controller = new AbortController()
   const onExternalAbort = () => controller.abort()
   options.signal?.addEventListener('abort', onExternalAbort)
@@ -432,8 +549,9 @@ async function streamChatCompleteInternal(
     if (controller.signal.aborted) {
       return { content: '', reasoning: '' }
     }
-    throw new AiRequestError(
+    throw requestError(
       '网络请求失败：可能是该服务商不允许浏览器直接调用（CORS），可改用「自定义」填写兼容接口或中转站地址',
+      true,
       error,
     )
   }
@@ -452,7 +570,7 @@ async function streamChatCompleteInternal(
       } catch {
         // 非 JSON 错误体：保留状态码提示即可
       }
-      throw new AiRequestError(statusMessage(response.status, detail))
+      throw requestError(statusMessage(response.status, detail), isRetryableStatus(response.status))
     }
     const payload = (await response.json()) as ChatCompletionResponse
     if (payload.error !== undefined) {
@@ -470,6 +588,19 @@ async function streamChatCompleteInternal(
     return { content: fullContent, reasoning: fullReasoning }
   }
 
+  // HTTP 错误响应但带响应体（限流 / 5xx 的错误体）：按状态码直接抛出，不走流式解析
+  if (!response.ok) {
+    options.signal?.removeEventListener('abort', onExternalAbort)
+    let detail = ''
+    try {
+      const payload = (await response.json()) as ChatCompletionResponse
+      detail = payload.error?.message ?? ''
+    } catch {
+      // 非 JSON 错误体：保留状态码提示即可
+    }
+    throw requestError(statusMessage(response.status, detail), isRetryableStatus(response.status))
+  }
+
   let content = ''
   let reasoning = ''
   let sawData = false
@@ -478,8 +609,42 @@ async function streamChatCompleteInternal(
   // 全量原始响应（非 SSE 兜底解析用；SSE 分行只从行缓冲取，避免碎片错位）
   let rawAll = ''
   let lineBuf = ''
+  /** 空闲超时已触发（首字节超时或静默超时），用于区分「超时」与「用户主动中断」 */
+  let timedOut = false
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
+
+  /**
+   * 读一段流并带空闲超时。
+   *
+   * 超时用独立的 timer 与 read() 竞速实现，**不**依赖 reader 响应 abort：
+   * 自定义 reader 桩可能不响应 abort 信号，只等 read() 自行 resolve 会让超时形同虚设。
+   *
+   * @param idleMs 本次允许的最长等待（首字节前用首字节超时，之后用静默超时）
+   */
+  const readChunk = (idleMs: number): Promise<{ done: boolean; value?: Uint8Array } | 'timeout'> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        timedOut = true
+        controller.abort()
+        resolve('timeout')
+      }, idleMs)
+      reader.read().then(
+        (result) => {
+          clearTimeout(timer)
+          resolve(result as { done: boolean; value?: Uint8Array })
+        },
+        (error) => {
+          clearTimeout(timer)
+          // 超时触发的 abort 会让 read 失败，此时按超时处理而不是抛错
+          if (timedOut) {
+            resolve('timeout')
+            return
+          }
+          reject(error)
+        },
+      )
+    })
 
   /** 处理一条 data: 事件；返回是否收到 [DONE] */
   const handleDataEvent = (data: string): boolean => {
@@ -513,12 +678,20 @@ async function streamChatCompleteInternal(
 
   try {
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) {
+      const chunk = await readChunk(
+        sawData
+          ? (options.streamTimeoutsMs?.idle ?? STREAM_IDLE_TIMEOUT_MS)
+          : (options.streamTimeoutsMs?.first ?? STREAM_FIRST_BYTE_TIMEOUT_MS),
+      )
+      if (chunk === 'timeout' || chunk.done) {
         break
       }
-      const text = decoder.decode(value, { stream: true })
-      rawAll += text
+      const text = decoder.decode(chunk.value, { stream: true })
+      // 全量原始响应只在「非 SSE 兜底」场景用得到，确认是 SSE 后停止累积，
+      // 避免长输出时字符串线性占内存
+      if (!sawData) {
+        rawAll += text
+      }
       lineBuf += text
       // 按 \n 切完整行（半行留缓冲），逐行处理 SSE 事件
       let newlineIndex = lineBuf.indexOf('\n')
@@ -548,6 +721,18 @@ async function streamChatCompleteInternal(
       }
     }
 
+    // 超时：已产出内容则保留已收到部分（与用户主动中断同语义，不丢已生成内容、
+    // 也不重复计费）；一个字节都没有才算失败，并允许重试
+    if (timedOut) {
+      if (content.length > 0 || reasoning.length > 0) {
+        return { content, reasoning }
+      }
+      throw requestError(
+        sawData ? '长时间没有收到新内容，连接可能已中断，请重试' : '服务商迟迟没有响应，请重试',
+        true,
+      )
+    }
+
     // 非 SSE 响应体兜底（个别厂商忽略 stream 参数返回普通 JSON）：整体解析并一次性回调
     if (!sawData) {
       let payload: ChatCompletionResponse
@@ -572,6 +757,10 @@ async function streamChatCompleteInternal(
       }
     }
   } catch (error) {
+    // 超时是本函数主动抛出的失败，不能被下面「已中断则静默返回部分内容」的逻辑吞掉
+    if (timedOut) {
+      throw error
+    }
     if (!controller.signal.aborted) {
       throw new AiRequestError(
         error instanceof AiRequestError ? error.message : '流式读取中断，请重试',

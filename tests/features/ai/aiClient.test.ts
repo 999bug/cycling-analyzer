@@ -64,13 +64,55 @@ describe('chatComplete', () => {
   it('429 → 限流提示；5xx → 服务商异常提示', async () => {
     vi.mocked(fetch).mockImplementation(async () => jsonResponse({}, 429))
     await expect(
-      chatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
+      chatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
     ).rejects.toThrow('请求过于频繁')
 
     vi.mocked(fetch).mockImplementation(async () => jsonResponse({}, 503))
     await expect(
-      chatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
+      chatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
     ).rejects.toThrow('服务商服务异常（503）')
+  })
+
+  it('限流与 5xx 重试两次后仍失败（共三次请求）', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}, 429))
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    await expect(
+      chatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
+    ).rejects.toThrow('请求过于频繁')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('业务性失败（401）不重试，只发一次请求', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ error: { message: 'bad key' } }, 401))
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    await expect(
+      chatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
+    ).rejects.toThrow('Key 无效')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('fetch 抛 TypeError（CORS/断网）→ 指向自定义接口的提示', async () => {
@@ -78,7 +120,13 @@ describe('chatComplete', () => {
       throw new TypeError('Failed to fetch')
     })
     await expect(
-      chatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
+      chatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
     ).rejects.toThrow('浏览器直接调用')
   })
 
@@ -319,5 +367,118 @@ describe('streamChatComplete 非 SSE 响应体兜底（2.80.1 回归）', () => 
     await expect(
       streamChatComplete(CONFIG, { system: '', user: '', maxTokens: 1, temperature: 0 }),
     ).rejects.toThrow('服务商未返回流式数据')
+  })
+})
+
+describe('streamChatComplete 空闲超时（P0 止血）', () => {
+  /** 建连成功但一个字节都不吐的响应桩（模拟服务端假死，旧实现会永久挂起） */
+  function silentStream(): Response {
+    return {
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () => new Promise<{ done: boolean; value?: Uint8Array }>(() => {}),
+          releaseLock: () => {},
+        }),
+      },
+    } as unknown as Response
+  }
+
+  it('首字节超时：服务端建连后不吐字节 → 明确报错而不是永久挂起', async () => {
+    const fetchMock = vi.fn(async () => silentStream())
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    await expect(
+      streamChatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        // 关掉重试：本例只验证超时会被触发，不验证重试次数
+        retryDelaysMs: [],
+        streamTimeoutsMs: { first: 10 },
+      }),
+    ).rejects.toThrow('服务商迟迟没有响应')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('首字节超时后可重试：退避耗尽后共发起三次请求', async () => {
+    const fetchMock = vi.fn(async () => silentStream())
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    await expect(
+      streamChatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+        streamTimeoutsMs: { first: 10 },
+      }),
+    ).rejects.toThrow('服务商迟迟没有响应')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('静默超时但已产出内容 → 保留已收到部分（与用户主动中断同语义）', async () => {
+    const encoder = new TextEncoder()
+    const chunks = ['data: {"choices":[{"delta":{"content":"部分"}}]}\n\n']
+    let index = 0
+    vi.mocked(fetch).mockImplementation(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          body: {
+            getReader: () => ({
+              // 吐出一个 delta 后永久挂起，模拟输出中途连接假死
+              read: () =>
+                index < chunks.length
+                  ? Promise.resolve({ done: false, value: encoder.encode(chunks[index++]) })
+                  : new Promise<{ done: boolean; value?: Uint8Array }>(() => {}),
+              releaseLock: () => {},
+            }),
+          },
+        }) as unknown as Response,
+    )
+    await expect(
+      streamChatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [],
+        streamTimeoutsMs: { first: 200, idle: 10 },
+      }),
+    ).resolves.toMatchObject({ content: '部分' })
+  })
+
+  it('HTTP 错误响应（429 带响应体）→ 按状态码报错，不再被当成垃圾流式数据', async () => {
+    vi.mocked(fetch).mockImplementation(async () => {
+      const encoder = new TextEncoder()
+      let sent = false
+      return {
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { message: 'slow down' } }),
+        body: {
+          getReader: () => ({
+            read: () =>
+              sent
+                ? Promise.resolve({ done: true, value: undefined })
+                : ((sent = true),
+                  Promise.resolve({ done: false, value: encoder.encode('{"error":{}}') })),
+            releaseLock: () => {},
+          }),
+        },
+      } as unknown as Response
+    })
+    await expect(
+      streamChatComplete(CONFIG, {
+        system: '',
+        user: '',
+        maxTokens: 1,
+        temperature: 0,
+        retryDelaysMs: [0, 0],
+      }),
+    ).rejects.toThrow('请求过于频繁')
   })
 })

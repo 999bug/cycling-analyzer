@@ -20,6 +20,14 @@ export interface ChangelogEntry {
 /** 版本更新日志（倒序：最新在前）。 */
 export const CHANGELOG: readonly ChangelogEntry[] = [
   {
+    version: '2.90.1',
+    date: '2026-09-16',
+    features: [
+      'AI 生成不再会无限等待：服务商连上却迟迟不出字时会给出明确提示（首字节 15 秒、出字后 20 秒无新内容），已生成的部分内容仍会保留',
+      'AI 请求遇到限流或服务商临时异常会自动重试最多两次；Key 无效、模型不存在这类问题不重试，直接给出原因',
+    ],
+  },
+  {
     version: '2.90.0',
     date: '2026-09-16',
     features: [
